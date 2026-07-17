@@ -104,6 +104,7 @@ frontend/src/
 ├── constants/    # local mirror: roles, statuses, plan catalog (backend = source of truth)
 ├── types/        # local mirror of API shapes
 ├── hooks/  stores/  lib/  styles/
+├── assets/ 
 ```
 
 - Route groups: `/` marketing (public) · `/app/*` portal (authenticated) ·

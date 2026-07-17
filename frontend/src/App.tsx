@@ -1,10 +1,12 @@
+import { RouterProvider } from 'react-router-dom'
+
 import { Providers } from './app/providers'
-import { ContactPage } from './marketing/pages/ContactPage'
+import { router } from './app/router'
 
 export default function App() {
   return (
     <Providers>
-      <ContactPage />
+      <RouterProvider router={router} />
     </Providers>
   )
 }
