@@ -1,13 +1,9 @@
-import { useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import logoWhite from '@/assets/Marty-Logo-White.png';
 import logoColor from '@/assets/Marty-Logo-Color.PNG';
 import {
   ArrowLeftIcon,
-  EyeIcon,
-  EyeOffIcon,
-  KeyIcon,
   ShieldAlertIcon,
   StarIcon,
 } from './components/icons';
@@ -15,10 +11,10 @@ import {
 const LOGIN_ROUTE = '/login';
 
 /*
- * Password reset — the Figma frames split the flow across breakpoints:
- * desktop & tablet request a reset link by email, while mobile sets a new
- * password (key badge + two password fields). Both variants are rendered and
- * toggled by breakpoint so each surface matches its design exactly.
+ * Password reset — step 1 ("Request a reset link"). The user enters their email
+ * and we dispatch a reset link. Choosing the new password happens on
+ * SetNewPasswordPage after the emailed link is followed. One request form
+ * renders across all breakpoints; only the surrounding chrome changes.
  */
 export function ResetPasswordPage() {
   return (
@@ -81,7 +77,7 @@ function TrustCard() {
       </div>
 
       <p className="text-body italic leading-[22px] text-white">
-        &quot;Setting up our US entity through Mart Global was incredibly seamless.
+        &quot;Setting up our US entity through Marty Global was incredibly seamless.
         Their dashboard makes compliance and international trade simple.&quot;
       </p>
 
@@ -92,7 +88,7 @@ function TrustCard() {
           <p className="text-body font-semibold">10,000+ Businesses</p>
           <p className="text-small opacity-60">Managed globally across USA, UK &amp; EU</p>
         </div>
-        <span className="rounded-pill bg-[#10b981] px-2.5 py-1 text-caption font-semibold text-white">
+        <span className="rounded-pill bg-success px-2.5 py-1 text-caption font-semibold text-white">
           SECURE
         </span>
       </div>
@@ -134,9 +130,6 @@ function RightPanel() {
           />
 
           <div className="flex w-full max-w-[480px] flex-col gap-7 md:gap-8 lg:w-[480px] lg:max-w-none">
-            {/* Mobile: set-new-password variant */}
-            <SetPasswordForm />
-            {/* Tablet & desktop: request-reset-link variant */}
             <RequestResetForm />
           </div>
         </div>
@@ -150,13 +143,13 @@ function RightPanel() {
 }
 
 /*
- * Tablet & desktop — email entry that dispatches a reset link. Header is
- * left-aligned on desktop and centered on tablet per the respective frames.
+ * Email entry that dispatches a reset link — rendered at every breakpoint.
+ * Header is left-aligned on desktop and centered below (mobile & tablet).
  */
 function RequestResetForm() {
   return (
     <form
-      className="hidden w-full flex-col gap-8 md:flex"
+      className="flex w-full flex-col gap-8"
       onSubmit={(e) => e.preventDefault()}
     >
       <div className="flex flex-col gap-2 text-center lg:text-left">
@@ -192,61 +185,6 @@ function RequestResetForm() {
   );
 }
 
-/*
- * Mobile — set a new password (key badge, new + confirm fields). Hidden from
- * tablet up (md:hidden).
- */
-function SetPasswordForm() {
-  const [showNew, setShowNew] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
-
-  return (
-    <form
-      className="flex w-full flex-col items-center gap-6 md:hidden"
-      onSubmit={(e) => e.preventDefault()}
-    >
-      <div className="flex size-14 items-center justify-center rounded-full bg-primary-light">
-        <KeyIcon className="size-6 text-primary" />
-      </div>
-
-      <div className="flex w-full flex-col items-center gap-2 text-center">
-        <h2 className="text-2xl font-semibold leading-none text-text">
-          Reset Your Password
-        </h2>
-        <p className="text-body leading-[1.4] text-text-secondary">
-          Enter your new password below to secure your account.
-        </p>
-      </div>
-
-      <div className="flex w-full flex-col gap-4">
-        <PasswordField
-          id="new-password"
-          label="New Password"
-          visible={showNew}
-          onToggle={() => setShowNew((v) => !v)}
-        />
-        <PasswordField
-          id="confirm-password"
-          label="Confirm New Password"
-          visible={showConfirm}
-          onToggle={() => setShowConfirm((v) => !v)}
-        />
-      </div>
-
-      <button
-        type="submit"
-        className="btn btn-primary h-12 w-full rounded-lg text-[15px]"
-      >
-        Reset Password
-      </button>
-
-      <div className="h-px w-full bg-gray-200" />
-
-      <BackToLogIn />
-    </form>
-  );
-}
-
 function BackToLogIn() {
   return (
     <Link
@@ -268,39 +206,6 @@ function SecureTrust({ className }: SecureTrustProps) {
       <p className="text-[13px] leading-none text-text-secondary md:text-small">
         Your information is encrypted and secure.
       </p>
-    </div>
-  );
-}
-
-type PasswordFieldProps = {
-  id: string;
-  label: string;
-  visible: boolean;
-  onToggle: () => void;
-};
-
-function PasswordField({ id, label, visible, onToggle }: PasswordFieldProps) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-[13px] font-medium leading-none text-gray-700">
-        {label}
-      </label>
-      <div className="relative">
-        <input
-          id={id}
-          type={visible ? 'text' : 'password'}
-          placeholder="••••••••••••"
-          className="h-11 w-full rounded-lg border border-gray-300 bg-white px-3 pr-11 text-[15px] text-text outline-none placeholder:text-gray-400 focus:border-primary focus:shadow-[0_0_0_1px_var(--color-primary)]"
-        />
-        <button
-          type="button"
-          onClick={onToggle}
-          aria-label={visible ? 'Hide password' : 'Show password'}
-          className="absolute right-3 top-1/2 flex size-4 -translate-y-1/2 items-center justify-center text-gray-500"
-        >
-          {visible ? <EyeIcon className="size-full" /> : <EyeOffIcon className="size-full" />}
-        </button>
-      </div>
     </div>
   );
 }

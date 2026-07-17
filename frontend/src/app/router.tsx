@@ -1,11 +1,5 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 
-import { CheckYourEmailPage } from '@/auth/CheckYourEmailPage';
-import { LogInPage } from '@/auth/LogInPage';
-import { ResetPasswordPage } from '@/auth/ResetPasswordPage';
-import { SetNewPasswordPage } from '@/auth/SetNewPasswordPage';
-import { SignUpPage } from '@/auth/SignUpPage';
-
 export const router = createBrowserRouter([
   {
     path: '/',
@@ -13,23 +7,38 @@ export const router = createBrowserRouter([
   },
   {
     path: '/login',
-    element: <LogInPage />,
+    lazy: async () => {
+      const { LogInPage } = await import('@/auth/LogInPage');
+      return { Component: LogInPage };
+    },
   },
   {
     path: '/signup',
-    element: <SignUpPage />,
+    lazy: async () => {
+      const { SignUpPage } = await import('@/auth/SignUpPage');
+      return { Component: SignUpPage };
+    },
   },
   {
     path: '/reset-password',
-    element: <ResetPasswordPage />,
+    lazy: async () => {
+      const { ResetPasswordPage } = await import('@/auth/ResetPasswordPage');
+      return { Component: ResetPasswordPage };
+    },
   },
   {
     path: '/reset-password/new',
-    element: <SetNewPasswordPage />,
+    lazy: async () => {
+      const { SetNewPasswordPage } = await import('@/auth/SetNewPasswordPage');
+      return { Component: SetNewPasswordPage };
+    },
   },
   {
     path: '/check-your-email',
-    element: <CheckYourEmailPage />,
+    lazy: async () => {
+      const { CheckYourEmailPage } = await import('@/auth/CheckYourEmailPage');
+      return { Component: CheckYourEmailPage };
+    },
   },
   {
     path: '*',

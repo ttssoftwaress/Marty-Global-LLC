@@ -42,7 +42,7 @@ function LeftPanel() {
         <div className="flex flex-col gap-4 text-white">
           <h1 className="text-marketing-h2">Setting Global Corporate Standards</h1>
           <p className="text-body-lg leading-[26px] opacity-80">
-            Unlock corporate potential from anywhere. Mart Global manages your
+            Unlock corporate potential from anywhere. Marty Global manages your
             business structure so you can focus on expansion.
           </p>
         </div>
@@ -80,7 +80,7 @@ function TrustCard() {
       </div>
 
       <p className="text-body italic leading-[22px] text-white">
-        &quot;Setting up our US entity through Mart Global was incredibly seamless.
+        &quot;Setting up our US entity through Marty Global was incredibly seamless.
         Their dashboard makes compliance and international trade simple.&quot;
       </p>
 
@@ -91,7 +91,7 @@ function TrustCard() {
           <p className="text-body font-semibold">10,000+ Businesses</p>
           <p className="text-small opacity-60">Managed globally across USA, UK &amp; EU</p>
         </div>
-        <span className="rounded-pill bg-[#10b981] px-2.5 py-1 text-caption font-semibold text-white">
+        <span className="rounded-pill bg-success px-2.5 py-1 text-caption font-semibold text-white">
           SECURE
         </span>
       </div>

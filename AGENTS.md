@@ -80,7 +80,7 @@ test it.**
 
 - **UI task:** analyze the attached design images or Figma MCP context first →
   replicate the design exactly (layout, spacing, type hierarchy, colors,
-  radius, shadows — no approximating, no simplifying) → build → summary.
+  radius, shadows — no approximating, no simplifying) → build → summary. Make sure to use the setup Deisgn System before trying any custom css or tailwind ok.
 - **Backend / logic task:** understand the prompt → read this file and follow
   it strictly → build → summary.
 - No plan-approval step — build directly. If something is unclear or a better
@@ -312,3 +312,4 @@ Critical paths only — do not chase coverage.
 - Stripe holds the card, we hold the token. Never invent marketing claims or
   legal advice.
 - End every task with the summary: what was built, what changed, how to test.
+- You always need to kill any server that you start for yourself ok.

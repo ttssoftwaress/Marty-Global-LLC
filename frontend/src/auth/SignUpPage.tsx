@@ -58,7 +58,7 @@ function LeftPanel() {
         <div className="flex flex-col gap-4 text-white">
           <h1 className="text-marketing-h2">Launch Your Business Across Borders</h1>
           <p className="text-body-lg leading-[26px] opacity-80">
-            Start your journey with Mart Global. Form your entity, set up banking,
+            Start your journey with Marty Global. Form your entity, set up banking,
             and manage compliance across the USA, UK, Canada, and Europe.
           </p>
         </div>
@@ -96,7 +96,7 @@ function TrustCard() {
       </div>
 
       <p className="text-body italic leading-[22px] text-white">
-        &quot;Setting up our US entity through Mart Global was incredibly seamless.
+        &quot;Setting up our US entity through Marty Global was incredibly seamless.
         Their dashboard makes compliance and international trade simple.&quot;
       </p>
 
@@ -127,7 +127,7 @@ function RightPanel() {
               Create Your Account
             </h2>
             <p className="text-body leading-[1.5] text-text-secondary">
-              Start your journey with Mart Global LLC in just a few minutes.
+              Start your journey with Marty Global LLC in just a few minutes.
             </p>
           </div>
 
@@ -141,13 +141,16 @@ function RightPanel() {
 function SignUpForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-  const [agreed, setAgreed] = useState(true);
+  const [agreed, setAgreed] = useState(false);
   const [country, setCountry] = useState('');
 
   return (
     <form
       className="flex flex-col gap-5 md:gap-6 lg:gap-8"
-      onSubmit={(e) => e.preventDefault()}
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!agreed) return;
+      }}
     >
       <div className="flex flex-col gap-3 md:gap-4 lg:gap-5">
         <Field label="Full Name" htmlFor="fullName">
@@ -246,7 +249,8 @@ function SignUpForm() {
       <div className="flex flex-col gap-3 md:gap-4 lg:gap-5">
         <button
           type="submit"
-          className="btn btn-primary h-[52px] w-full rounded-xl shadow-[0px_8px_10px_rgba(3,18,109,0.15)] md:h-11 md:rounded-input md:shadow-[0px_4px_6px_rgba(3,18,109,0.1)] lg:h-12"
+          disabled={!agreed}
+          className="btn btn-primary h-[52px] w-full rounded-xl shadow-[0px_8px_10px_rgba(3,18,109,0.15)] disabled:cursor-not-allowed disabled:opacity-50 md:h-11 md:rounded-input md:shadow-[0px_4px_6px_rgba(3,18,109,0.1)] lg:h-12"
         >
           Create Account
         </button>

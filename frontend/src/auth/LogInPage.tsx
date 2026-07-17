@@ -94,7 +94,7 @@ function TrustCard() {
       </div>
 
       <p className="text-body italic leading-[22px] text-white">
-        &quot;Setting up our US entity through Mart Global was incredibly seamless.
+        &quot;Setting up our US entity through Marty Global was incredibly seamless.
         Their dashboard makes compliance and international trade simple.&quot;
       </p>
 
