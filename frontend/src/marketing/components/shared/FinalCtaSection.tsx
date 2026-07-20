@@ -8,6 +8,8 @@
  * outside the shared shadow scale, so they stay as arbitrary values here.
  */
 
+import { Link } from 'react-router-dom';
+
 export function FinalCtaSection() {
   return (
     <section className="flex w-full flex-col items-center gap-8 bg-secondary px-4 py-16 shadow-[0px_12px_24px_rgba(3,18,109,0.2)] md:gap-7 md:px-10 md:py-[72px] lg:gap-8 lg:px-20 lg:py-24">
@@ -22,18 +24,18 @@ export function FinalCtaSection() {
       </div>
 
       <div className="flex w-full flex-col items-stretch gap-3 md:w-auto md:flex-row md:items-center md:gap-4">
-        <a
-          href="/get-started"
+        <Link
+          to="/get-started"
           className="flex items-center justify-center rounded-input bg-accent px-6 py-3.5 text-[15px] font-semibold text-white shadow-[0px_4px_6px_rgba(228,32,97,0.2)] transition-colors hover:bg-accent-hover md:py-3 lg:px-8 lg:text-[16px]"
         >
           Get Started Today
-        </a>
-        <a
-          href="/contact"
+        </Link>
+        <Link
+          to="/contact"
           className="flex items-center justify-center rounded-input border-2 border-white px-6 py-3.5 text-[15px] font-semibold text-white transition-colors hover:bg-white/10 md:py-3 lg:px-8 lg:text-[16px]"
         >
           Talk to Our Team
-        </a>
+        </Link>
       </div>
     </section>
   );

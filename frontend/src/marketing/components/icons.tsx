@@ -137,6 +137,37 @@ export function MailOpenIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+/*
+ * Timeline glyphs — Lucide outline mail (closed envelope) and credit-card for
+ * the How-It-Works process steps. Same inlined-Lucide convention; parent sets
+ * color/size.
+ */
+export function MailIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...lineIconProps(props)}>
+      <rect width="20" height="16" x="2" y="4" rx="2" />
+      <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+    </svg>
+  );
+}
+
+export function CreditCardIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...lineIconProps(props)}>
+      <rect width="20" height="14" x="2" y="5" rx="2" />
+      <path d="M2 10h20" />
+    </svg>
+  );
+}
+
+export function PhoneIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...lineIconProps(props)}>
+      <path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.132 6.131" />
+    </svg>
+  );
+}
+
 export function ShieldCheckIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg {...lineIconProps(props)}>
@@ -204,6 +235,42 @@ export function ShuffleIcon(props: SVGProps<SVGSVGElement>) {
 }
 
 /*
+ * Values glyphs — Lucide outline eye and shield for the About "What We Stand
+ * For" cards (globe and users are shared with the sets above). Same
+ * inlined-Lucide convention; parent sets color/size.
+ */
+export function EyeIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...lineIconProps(props)}>
+      <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+export function ShieldIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...lineIconProps(props)}>
+      <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
+    </svg>
+  );
+}
+
+/*
+ * Country-variance glyph — Lucide outline clock for the "average timeline" line
+ * on each destination card. Same inlined-Lucide convention as the other glyphs;
+ * parent sets color/size.
+ */
+export function ClockIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...lineIconProps(props)}>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 6v6l4 2" />
+    </svg>
+  );
+}
+
+/*
  * FAQ glyph — Lucide chevron-down for the accordion toggle. Same inlined-Lucide
  * convention as the other glyphs; parent sets color/size and rotates it open.
  */
@@ -220,7 +287,9 @@ export function ChevronDownIcon(props: SVGProps<SVGSVGElement>) {
  * Paths are the exact vectors from the design, drawn in a 17-unit box with a
  * 2px stroke; `currentColor` lets the parent set the color.
  */
-function socialIconProps(props: SVGProps<SVGSVGElement>): SVGProps<SVGSVGElement> {
+function socialIconProps(
+  props: SVGProps<SVGSVGElement>,
+): SVGProps<SVGSVGElement> {
   return {
     viewBox: '0 0 17 17',
     fill: 'none',

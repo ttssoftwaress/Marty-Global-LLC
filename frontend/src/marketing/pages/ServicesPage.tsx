@@ -1,5 +1,3 @@
-import { useEffect } from 'react';
-
 import { JurisdictionsStripSection } from '../components/services/JurisdictionsStripSection';
 import { ServicesGridSection } from '../components/services/ServicesGridSection';
 import { ServicesHeroSection } from '../components/services/ServicesHeroSection';
@@ -8,13 +6,13 @@ import { FaqSection, type Faq } from '../components/shared/FaqSection';
 import { FinalCtaSection } from '../components/shared/FinalCtaSection';
 import { Footer } from '../components/shared/Footer';
 import { Navbar } from '../components/shared/Navbar';
+import { Seo } from '../components/shared/Seo';
 import { TestimonialsSection } from '../components/shared/TestimonialsSection';
 
 /*
  * Services — marketing page (`/services`). Built section by section; the hero
  * leads, the service grid follows, then the jurisdictions strip and the "why
  * one partner" value props. Navbar and Footer are the shared marketing chrome.
- * A dedicated <Seo> component will replace this inline title once it lands.
  */
 
 // Service-specific FAQ copy — the shared FaqSection defaults to the home page's
@@ -53,13 +51,13 @@ const SERVICES_FAQS: Faq[] = [
 ];
 
 export function ServicesPage() {
-  useEffect(() => {
-    document.title =
-      'Services — Marty Global LLC';
-  }, []);
-
   return (
     <div className="flex min-h-screen flex-col bg-white">
+      <Seo
+        title="Services — Marty Global LLC"
+        description="Company formation, virtual mail room, banking support, and e-commerce account setup across US states, the UK, Canada, and the EU — handled by one filing partner."
+        path="/services"
+      />
       <Navbar />
       <main className="flex-1">
         <ServicesHeroSection />

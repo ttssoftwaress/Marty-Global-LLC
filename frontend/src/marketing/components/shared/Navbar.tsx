@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 
 import logoColor from '@/assets/Marty-Logo-Color.PNG';
 import { MenuIcon } from '../icons';
@@ -40,13 +40,13 @@ export function Navbar() {
 
   return (
     <header className="relative flex h-[72px] w-full items-center justify-between border-b border-gray-200 bg-white px-5 md:h-[88px] md:px-10 lg:px-20">
-      <a href="/" className="shrink-0" aria-label="Marty Global LLC — Home">
+      <Link to="/" className="shrink-0" aria-label="Marty Global LLC — Home">
         <img
           src={logoColor}
           alt="Marty Global LLC"
           className="h-10 w-[120px] object-contain md:h-[50px] md:w-[140px]"
         />
-      </a>
+      </Link>
 
       <nav className="hidden items-center md:flex md:gap-5 lg:gap-8">
         {NAV_LINKS.map((link) => (
@@ -54,12 +54,12 @@ export function Navbar() {
         ))}
       </nav>
 
-      <a
-        href="/get-started"
+      <Link
+        to="/get-started"
         className="btn btn-primary hidden h-auto shrink-0 rounded-lg px-5 py-2.5 text-body md:inline-flex lg:rounded-input lg:px-6 lg:py-3 lg:text-button"
       >
         Get Started
-      </a>
+      </Link>
 
       <button
         type="button"
@@ -78,9 +78,10 @@ export function Navbar() {
           className="absolute inset-x-0 top-full z-50 flex flex-col gap-1 border-b border-gray-200 bg-white px-5 py-4 shadow-lg md:hidden"
         >
           {NAV_LINKS.map((link) => (
-            <a
+            <Link
               key={link.label}
-              href={link.href}
+              to={link.href}
+              onClick={() => setMenuOpen(false)}
               className={
                 isActive(link.href, pathname)
                   ? 'rounded-lg px-3 py-2.5 text-body font-semibold text-primary'
@@ -88,14 +89,15 @@ export function Navbar() {
               }
             >
               {link.label}
-            </a>
+            </Link>
           ))}
-          <a
-            href="/get-started"
+          <Link
+            to="/get-started"
+            onClick={() => setMenuOpen(false)}
             className="btn btn-primary mt-2 h-auto rounded-lg px-5 py-2.5 text-body"
           >
             Get Started
-          </a>
+          </Link>
         </nav>
       )}
     </header>
@@ -106,23 +108,23 @@ function NavItem({ link, active }: { link: NavLink; active: boolean }) {
   if (active) {
     return (
       <div className="flex flex-col items-center gap-1">
-        <a
-          href={link.href}
+        <Link
+          to={link.href}
           className="whitespace-nowrap text-[13px] font-semibold text-primary lg:text-[14px] lg:font-medium"
         >
           {link.label}
-        </a>
+        </Link>
         <span className="h-0.5 w-3 rounded-[1px] bg-accent lg:w-4" />
       </div>
     );
   }
 
   return (
-    <a
-      href={link.href}
+    <Link
+      to={link.href}
       className="whitespace-nowrap text-[13px] font-medium text-gray-700 lg:text-[14px] lg:font-normal"
     >
       {link.label}
-    </a>
+    </Link>
   );
 }

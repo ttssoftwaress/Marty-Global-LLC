@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom';
+
 import {
   FacebookIcon,
   LinkedInIcon,
@@ -134,13 +136,13 @@ function LinkColumn({
         {title}
       </h3>
       {links.map((link) => (
-        <a
+        <Link
           key={link.label}
-          href={link.href}
+          to={link.href}
           className="text-[13px] font-normal text-gray-400 transition-colors hover:text-white lg:text-body"
         >
           {link.label}
-        </a>
+        </Link>
       ))}
     </nav>
   );
@@ -194,15 +196,15 @@ function BottomBar() {
       </p>
       <nav className="flex items-center gap-4 whitespace-nowrap text-[12px] md:justify-center md:gap-5 lg:gap-6 lg:text-[13px]">
         {LEGAL.map((link, i) => (
-          <a
+          <Link
             key={link.label}
-            href={link.href}
+            to={link.href}
             className={`transition-colors hover:text-white ${
               i === LEGAL.length - 1 ? 'hidden md:inline' : ''
             }`}
           >
             {link.label}
-          </a>
+          </Link>
         ))}
       </nav>
     </div>
