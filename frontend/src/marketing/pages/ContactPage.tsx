@@ -1,5 +1,6 @@
 import { ContactForm } from '../features/leads/ContactForm';
 import { LeadList } from '../features/leads/LeadList';
+import { Footer } from '../components/shared/Footer';
 
 export function ContactPage() {
   return (
@@ -24,6 +25,8 @@ export function ContactPage() {
           <LeadList />
         </section>
       </div>
+        <Footer />
     </main>
+
   );
 }

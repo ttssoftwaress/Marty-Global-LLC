@@ -1,9 +1,19 @@
-import { createBrowserRouter, Navigate } from 'react-router-dom';
+import { createBrowserRouter } from 'react-router-dom';
 
 export const router = createBrowserRouter([
   {
     path: '/',
-    element: <Navigate to="/login" replace />,
+    lazy: async () => {
+      const { HomePage } = await import('@/marketing/pages/HomePage');
+      return { Component: HomePage };
+    },
+  },
+  {
+    path: '/services',
+    lazy: async () => {
+      const { ServicesPage } = await import('@/marketing/pages/ServicesPage');
+      return { Component: ServicesPage };
+    },
   },
   {
     path: '/login',
@@ -42,6 +52,9 @@ export const router = createBrowserRouter([
   },
   {
     path: '*',
-    element: <Navigate to="/login" replace />,
+    lazy: async () => {
+      const { HomePage } = await import('@/marketing/pages/HomePage');
+      return { Component: HomePage };
+    },
   },
 ]);

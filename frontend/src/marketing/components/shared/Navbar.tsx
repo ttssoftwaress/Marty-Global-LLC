@@ -1,7 +1,8 @@
 import { useState } from 'react';
+import { useLocation } from 'react-router-dom';
 
 import logoColor from '@/assets/Marty-Logo-Color.PNG';
-import { MenuIcon } from './icons';
+import { MenuIcon } from '../icons';
 
 /*
  * Marketing navbar — shared chrome across every public marketing page. Three
@@ -25,13 +26,20 @@ const NAV_LINKS: NavLink[] = [
   { label: 'Contact', href: '/contact' },
 ];
 
-const ACTIVE_LINK = 'Home';
+// The active link is the one whose href matches the current path. '/' only
+// matches exactly (the home page); every other link matches its own subtree so
+// nested routes keep the correct tab underlined.
+function isActive(href: string, pathname: string) {
+  if (href === '/') return pathname === '/';
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
 
 export function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const { pathname } = useLocation();
 
   return (
-    <header className="flex h-[72px] w-full items-center justify-between border-b border-gray-200 bg-white px-5 md:h-[88px] md:px-10 lg:px-20">
+    <header className="relative flex h-[72px] w-full items-center justify-between border-b border-gray-200 bg-white px-5 md:h-[88px] md:px-10 lg:px-20">
       <a href="/" className="shrink-0" aria-label="Marty Global LLC — Home">
         <img
           src={logoColor}
@@ -42,7 +50,7 @@ export function Navbar() {
 
       <nav className="hidden items-center md:flex md:gap-5 lg:gap-8">
         {NAV_LINKS.map((link) => (
-          <NavItem key={link.label} link={link} active={link.label === ACTIVE_LINK} />
+          <NavItem key={link.label} link={link} active={isActive(link.href, pathname)} />
         ))}
       </nav>
 
@@ -56,12 +64,40 @@ export function Navbar() {
       <button
         type="button"
         onClick={() => setMenuOpen((v) => !v)}
-        aria-label="Open menu"
+        aria-label={menuOpen ? 'Close menu' : 'Open menu'}
         aria-expanded={menuOpen}
+        aria-controls="mobile-nav"
         className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-gray-50 md:hidden"
       >
         <MenuIcon className="size-5 text-text" />
       </button>
+
+      {menuOpen && (
+        <nav
+          id="mobile-nav"
+          className="absolute inset-x-0 top-full z-50 flex flex-col gap-1 border-b border-gray-200 bg-white px-5 py-4 shadow-lg md:hidden"
+        >
+          {NAV_LINKS.map((link) => (
+            <a
+              key={link.label}
+              href={link.href}
+              className={
+                isActive(link.href, pathname)
+                  ? 'rounded-lg px-3 py-2.5 text-body font-semibold text-primary'
+                  : 'rounded-lg px-3 py-2.5 text-body font-medium text-gray-700'
+              }
+            >
+              {link.label}
+            </a>
+          ))}
+          <a
+            href="/get-started"
+            className="btn btn-primary mt-2 h-auto rounded-lg px-5 py-2.5 text-body"
+          >
+            Get Started
+          </a>
+        </nav>
+      )}
     </header>
   );
 }

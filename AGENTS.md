@@ -80,7 +80,7 @@ test it.**
 
 - **UI task:** analyze the attached design images or Figma MCP context first →
   replicate the design exactly (layout, spacing, type hierarchy, colors,
-  radius, shadows — no approximating, no simplifying) → build → summary. Make sure to use the setup Deisgn System before trying any custom css or tailwind ok.
+  radius, shadows — no approximating, no simplifying) → build → summary. Make sure to use the setup Design System before trying any custom CSS or TAILWIND ok.
 - **Backend / logic task:** understand the prompt → read this file and follow
   it strictly → build → summary.
 - No plan-approval step — build directly. If something is unclear or a better
