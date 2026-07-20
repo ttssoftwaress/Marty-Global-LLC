@@ -80,16 +80,7 @@ test it.**
 
 - **UI task:** analyze the attached design images or Figma MCP context first →
   replicate the design exactly (layout, spacing, type hierarchy, colors,
-  radius, shadows — no approximating, no simplifying) → build → summary. Make sure to use the setup Design System before trying any custom CSS or TAILWIND ok.
-- **Responsive UI task (three Figma links):** when given **three** Figma MCP
-  context links for the same design — desktop, mobile, and tablet — build all
-  three viewports to match their respective link **exactly** (layout, spacing,
-  type hierarchy, colors, radius, shadows). It is one responsive design across
-  breakpoints, not three unrelated screens. **Text copy comes from the desktop
-  link only:** whenever the copy differs across all three or between any two
-  links, the desktop link is the single source of truth for wording — mirror
-  its text on mobile and tablet, and treat the differing mobile/tablet copy as
-  a design artifact to ignore, not a variation to reproduce.
+  radius, shadows — no approximating, no simplifying) → build → summary. Make sure to use the setup Deisgn System before trying any custom css or tailwind ok.
 - **Backend / logic task:** understand the prompt → read this file and follow
   it strictly → build → summary.
 - No plan-approval step — build directly. If something is unclear or a better
