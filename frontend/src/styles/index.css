@@ -1,1 +1,425 @@
+/* Inter — app UI (all surfaces). Poppins — marketing headings only. */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700&display=swap');
 @import 'tailwindcss';
+
+/*
+ * Marty Global LLC — Color System
+ *
+ * The single source of truth for brand color. Every token here becomes a
+ * Tailwind utility (e.g. `bg-primary`, `text-accent`, `border-gray-300`) and a
+ * CSS variable (`var(--color-primary)`). Never hardcode a hex in a component —
+ * reference a token so the palette stays consistent and changes in one place.
+ *
+ * Source: Design System — Color System (July 2026).
+ */
+@theme {
+  /* Brand — deep navy primary, magenta accent */
+  --color-primary: #03126d;
+  --color-primary-hover: #051b8a;
+  --color-primary-light: #eef2ff;
+  --color-secondary: #353a7f;
+  --color-accent: #e42061;
+  --color-accent-hover: #c81b54;
+  --color-accent-light: #fff0f6;
+  --color-soft-pink: #fce8f0;
+
+  /* Neutral scale — Gray 50 → 900 */
+  --color-gray-50: #fafafa;
+  --color-gray-100: #f5f5f5;
+  --color-gray-200: #e5e7eb;
+  --color-gray-300: #d1d5db;
+  --color-gray-400: #9ca3af;
+  --color-gray-500: #6b7280;
+  --color-gray-600: #4b5563;
+  --color-gray-700: #374151;
+  --color-gray-800: #1f2937;
+  --color-gray-900: #111827;
+
+  /* Text */
+  --color-text: #1e1e1e;
+  --color-text-secondary: #5b6472;
+  --color-text-light: #eae6ee;
+
+  /* Surfaces */
+  --color-white: #ffffff;
+
+  /* Status */
+  --color-success: #16a34a;
+  --color-warning: #f59e0b;
+  --color-error: #dc2626;
+  --color-info: #0284c7;
+}
+
+/*
+ * Marty Global LLC — Typography System
+ *
+ * The single source of truth for type. Inter drives all app UI; Poppins is used
+ * for marketing website headings only. Built on an 8-point grid.
+ *
+ * Font families and weights become Tailwind utilities (`font-sans`,
+ * `font-marketing`, `font-semibold`) and CSS variables (`var(--font-sans)`).
+ * Each named text style below (`.text-display`, `.text-h1` … `.text-caption`,
+ * `.text-button`, `.text-form-label`, plus the `.text-marketing-*` variants)
+ * bundles size + weight + line-height in one class — apply the class instead of
+ * restacking utilities so the scale stays consistent and changes in one place.
+ *
+ * Source: Design System — Typography System (July 2026).
+ */
+@theme {
+  /* Font families */
+  --font-sans:
+    'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  --font-marketing: 'Poppins', var(--font-sans);
+
+  /* Font weights */
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* Type scale — sizes */
+  --text-display: 3.5rem; /* 56px — Hero sections, large feature text */
+  --text-h1: 3rem; /* 48px — Page titles */
+  --text-h2: 2.5rem; /* 40px — Section titles */
+  --text-h3: 2rem; /* 32px — Subsection titles */
+  --text-h4: 1.5rem; /* 24px — Card titles, widget headers */
+  --text-h5: 1.25rem; /* 20px — Small section headers */
+  --text-h6: 1.125rem; /* 18px — List headers, labels */
+  --text-body-lg: 1rem; /* 16px — Prominent body text */
+  --text-body: 0.875rem; /* 14px — Default body text */
+  --text-small: 0.75rem; /* 12px — Captions, helper text */
+  --text-caption: 0.6875rem; /* 11px — Labels, metadata */
+
+  /* Type scale — line heights (8-point grid) */
+  --text-display--line-height: 4rem; /* 64px */
+  --text-h1--line-height: 3.5rem; /* 56px */
+  --text-h2--line-height: 3rem; /* 48px */
+  --text-h3--line-height: 2.5rem; /* 40px */
+  --text-h4--line-height: 2rem; /* 32px */
+  --text-h5--line-height: 1.75rem; /* 28px */
+  --text-h6--line-height: 1.5rem; /* 24px */
+  --text-body-lg--line-height: 1.5rem; /* 24px */
+  --text-body--line-height: 1.25rem; /* 20px */
+  --text-small--line-height: 1rem; /* 16px */
+  --text-caption--line-height: 1rem; /* 16px */
+}
+
+/* Global default — app UI type. Marketing headings opt into Poppins. */
+:root {
+  font-family: var(--font-sans);
+  color: var(--color-text);
+}
+
+/*
+ * Named text styles. Each bundles size + weight + line-height for one style in
+ * the scale. Prefer these over stacking `text-*`/`font-*` utilities so type
+ * stays consistent across the app.
+ */
+@layer components {
+  /* Inter — app UI */
+  .text-display {
+    font-size: var(--text-display);
+    line-height: var(--text-display--line-height);
+    font-weight: var(--font-weight-bold);
+  }
+  .text-h1 {
+    font-size: var(--text-h1);
+    line-height: var(--text-h1--line-height);
+    font-weight: var(--font-weight-bold);
+  }
+  .text-h2 {
+    font-size: var(--text-h2);
+    line-height: var(--text-h2--line-height);
+    font-weight: var(--font-weight-bold);
+  }
+  .text-h3 {
+    font-size: var(--text-h3);
+    line-height: var(--text-h3--line-height);
+    font-weight: var(--font-weight-semibold);
+  }
+  .text-h4 {
+    font-size: var(--text-h4);
+    line-height: var(--text-h4--line-height);
+    font-weight: var(--font-weight-semibold);
+  }
+  .text-h5 {
+    font-size: var(--text-h5);
+    line-height: var(--text-h5--line-height);
+    font-weight: var(--font-weight-semibold);
+  }
+  .text-h6 {
+    font-size: var(--text-h6);
+    line-height: var(--text-h6--line-height);
+    font-weight: var(--font-weight-semibold);
+  }
+  .text-body-lg {
+    font-size: var(--text-body-lg);
+    line-height: var(--text-body-lg--line-height);
+    font-weight: var(--font-weight-regular);
+  }
+  .text-body {
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
+    font-weight: var(--font-weight-regular);
+  }
+  .text-small {
+    font-size: var(--text-small);
+    line-height: var(--text-small--line-height);
+    font-weight: var(--font-weight-regular);
+  }
+  .text-caption {
+    font-size: var(--text-caption);
+    line-height: var(--text-caption--line-height);
+    font-weight: var(--font-weight-medium);
+  }
+  .text-button {
+    font-size: var(--text-body-lg); /* 16px */
+    line-height: var(--text-body-lg--line-height);
+    font-weight: var(--font-weight-semibold);
+  }
+  .text-form-label {
+    font-size: var(--text-body); /* 14px */
+    line-height: var(--text-body--line-height);
+    font-weight: var(--font-weight-medium);
+  }
+
+  /* Poppins — marketing website headings only */
+  .text-marketing-display {
+    font-family: var(--font-marketing);
+    font-size: var(--text-display);
+    line-height: var(--text-display--line-height);
+    font-weight: var(--font-weight-bold);
+  }
+  .text-marketing-h1 {
+    font-family: var(--font-marketing);
+    font-size: var(--text-h1);
+    line-height: var(--text-h1--line-height);
+    font-weight: var(--font-weight-bold);
+  }
+  .text-marketing-h2 {
+    font-family: var(--font-marketing);
+    font-size: var(--text-h2);
+    line-height: var(--text-h2--line-height);
+    font-weight: var(--font-weight-semibold);
+  }
+}
+
+/*
+ * Marty Global LLC — Spacing & Effects System
+ *
+ * The single source of truth for spatial rhythm, corner rounding, and
+ * elevation. Everything here is registered in a real Tailwind namespace so it
+ * emits utilities and a CSS variable:
+ *   - `--radius-*` → `rounded-input`, `rounded-card`, `rounded-modal`,
+ *     `rounded-pill` (and `var(--radius-card)`).
+ *   - `--shadow-*` → `shadow-sm-elevation`, `shadow-md-elevation`,
+ *     `shadow-lg-elevation` (and `var(--shadow-md-elevation)`).
+ *
+ * Spacing: the layout rhythm is an 8-point grid. Tailwind's numeric utilities
+ * (`p-1`=4px … `p-24`=96px) already emit from its default `--spacing` base, so
+ * those are the working utilities — do not redefine them. The named `--space-*`
+ * tokens below document the scale and let non-utility CSS reference a step by
+ * name (`var(--space-6)`); they intentionally mirror the numeric utilities so
+ * the rhythm stays consistent whether referenced by class or by variable.
+ *
+ * Never hardcode a px radius, shadow, or gap in a component — reference a token
+ * so the system changes in one place.
+ *
+ * Source: Design System — Spacing & Effects (July 2026).
+ */
+@theme {
+  /* Spacing scale — 8-point grid. Mirrors Tailwind's numeric utilities;
+   * reference by name in raw CSS via `var(--space-*)`. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
+
+  /* Border radius — role-named → `rounded-input`, `rounded-card`,
+   * `rounded-modal`, `rounded-pill`. */
+  --radius-input: 10px; /* form inputs & fields */
+  --radius-card: 16px; /* cards & content containers */
+  --radius-modal: 20px; /* modals & overlay dialogs */
+  --radius-pill: 999px; /* tags, badges & pill buttons */
+
+  /* Elevation — layered shadows → `shadow-sm-elevation`,
+   * `shadow-md-elevation`, `shadow-lg-elevation`. */
+  --shadow-sm-elevation: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-md-elevation: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg-elevation: 0 10px 30px rgba(0, 0, 0, 0.1);
+}
+
+/*
+ * Marty Global LLC — Components & Layout System
+ *
+ * The single source of truth for component styling and dashboard layout.
+ * Radii and layout sizes are registered in real Tailwind namespaces, so they
+ * emit utilities: `--radius-*` → `rounded-control`/`rounded-table`;
+ * `--spacing-*` → `w-sidebar`, `h-navbar`, `p-content`, `p-card`, `h-input`,
+ * `h-table-row` (and every other spacing utility). Values that are not
+ * utility-shaped (input border, focus ring, table header bg, icon stroke) and
+ * the status bg/text pairs stay as plain CSS variables — reference `var(--…)`.
+ * The named component classes below (`.btn-primary`, `.input-field`, and
+ * `.status-badge` + one `.status-*` state) bundle a full component style so it
+ * stays consistent and changes in one place — use them instead of restacking
+ * utilities. Brand and status hues reference the color tokens above rather
+ * than repeating hexes.
+ *
+ * Source: Design System — Components & Layout (July 2026).
+ */
+@theme {
+  /* Radii → `rounded-control`, `rounded-table` */
+  --radius-control: 10px; /* buttons, inputs */
+  --radius-table: 16px; /* data tables */
+
+  /* Dashboard layout sizes → `w-sidebar`, `h-navbar`, `p-content`, `p-card`,
+   * `h-input`, `h-table-row` (spacing namespace, so also gap/margin/etc.) */
+  --spacing-input: 48px; /* input & button height */
+  --spacing-sidebar: 280px; /* sidebar width */
+  --spacing-navbar: 72px; /* top navbar height */
+  --spacing-content: 32px; /* content padding */
+  --spacing-card: 24px; /* card padding */
+  --spacing-table-row: 56px; /* table row height */
+
+  /* Non-utility component values — reference via var() */
+  --border-input: #d1d5db; /* input default border (Gray 300) */
+  --ring-focus: #03126d; /* 2px focus ring — brand primary */
+  --table-header-bg: #f8fafc; /* table header background */
+  --icon-stroke: 1.75px; /* icon stroke width (Lucide / Heroicons) */
+
+  /* Status indicators — soft background + solid text per state */
+  --color-status-draft-bg: #f3f4f6;
+  --color-status-draft-text: #4b5563;
+  --color-status-submitted-bg: #e0e7ff;
+  --color-status-submitted-text: #4338ca;
+  --color-status-review-bg: #fef3c7;
+  --color-status-review-text: #b45309;
+  --color-status-missing-bg: #fee2e2;
+  --color-status-missing-text: #dc2626;
+  --color-status-approved-bg: #dcfce7;
+  --color-status-approved-text: #16a34a;
+  --color-status-completed-bg: #03126d;
+  --color-status-completed-text: #ffffff;
+}
+
+@layer components {
+  /*
+   * Buttons — 48px tall, 10px radius, semibold 16px label. Four variants:
+   * primary (navy), secondary (outline), accent (magenta CTA), danger (red).
+   */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: var(--spacing-input);
+    padding-inline: 1.5rem;
+    border-radius: var(--radius-control);
+    font-size: var(--text-body-lg);
+    line-height: var(--text-body-lg--line-height);
+    font-weight: var(--font-weight-semibold);
+    transition:
+      background-color 150ms ease,
+      border-color 150ms ease,
+      color 150ms ease;
+  }
+  .btn-primary {
+    background-color: var(--color-primary);
+    color: var(--color-white);
+  }
+  .btn-primary:hover {
+    background-color: var(--color-primary-hover);
+  }
+  .btn-secondary {
+    background-color: var(--color-white);
+    color: var(--color-primary);
+    border: 1px solid var(--color-primary);
+  }
+  .btn-secondary:hover {
+    background-color: var(--color-primary-light);
+  }
+  .btn-accent {
+    background-color: var(--color-accent);
+    color: var(--color-white);
+  }
+  .btn-accent:hover {
+    background-color: var(--color-accent-hover);
+  }
+  .btn-danger {
+    background-color: var(--color-error);
+    color: var(--color-white);
+  }
+  .btn-danger:hover {
+    background-color: #b91c1c;
+  }
+
+  /*
+   * Input fields — 48px tall, 10px radius, 1px Gray-300 border. Focus swaps to
+   * a 2px brand-primary border (rendered as a ring so height stays fixed).
+   */
+  .input-field {
+    height: var(--spacing-input);
+    width: 100%;
+    padding-inline: 1rem;
+    border: 1px solid var(--border-input);
+    border-radius: var(--radius-control);
+    background-color: var(--color-white);
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
+    color: var(--color-text);
+    outline: none;
+  }
+  .input-field::placeholder {
+    color: var(--color-gray-400);
+  }
+  .input-field:focus {
+    border-color: var(--ring-focus);
+    box-shadow: 0 0 0 1px var(--ring-focus);
+  }
+
+  /*
+   * Status indicators — pill badge, 11px medium label. Pair `.status-badge`
+   * with one `.status-*` state class for its color.
+   */
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: var(--text-caption);
+    line-height: var(--text-caption--line-height);
+    font-weight: var(--font-weight-medium);
+  }
+  .status-draft {
+    background-color: var(--color-status-draft-bg);
+    color: var(--color-status-draft-text);
+  }
+  .status-submitted {
+    background-color: var(--color-status-submitted-bg);
+    color: var(--color-status-submitted-text);
+  }
+  .status-review {
+    background-color: var(--color-status-review-bg);
+    color: var(--color-status-review-text);
+  }
+  .status-missing {
+    background-color: var(--color-status-missing-bg);
+    color: var(--color-status-missing-text);
+  }
+  .status-approved {
+    background-color: var(--color-status-approved-bg);
+    color: var(--color-status-approved-text);
+  }
+  .status-completed {
+    background-color: var(--color-status-completed-bg);
+    color: var(--color-status-completed-text);
+  }
+}
