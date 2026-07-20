@@ -13,7 +13,7 @@ export function AboutHeroSection() {
   return (
     <section className="flex w-full flex-col items-center gap-5 bg-white px-4 pb-10 pt-12 text-center md:gap-6 md:px-10 md:py-20 lg:gap-8 lg:px-20 lg:py-24">
       <span className="inline-flex items-center rounded-pill bg-primary-light px-4 py-1.5 text-[11px] font-semibold uppercase text-primary">
-        About Mart Global LLC
+        About Marty Global LLC
       </span>
 
       <h1 className="w-full font-marketing text-[30px] font-bold leading-[38px] text-text md:text-[38px] md:leading-[48px] lg:max-w-[960px] lg:text-[48px] lg:leading-[58px]">

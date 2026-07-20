@@ -38,7 +38,7 @@ export function FounderQuoteSection() {
             Marcus Aurelius
           </p>
           <p className="text-[12px] font-normal text-text-secondary md:text-[13px] lg:text-[14px]">
-            Founder &amp; CEO, Mart Global LLC
+            Founder &amp; CEO, Marty Global LLC
           </p>
         </div>
       </div>

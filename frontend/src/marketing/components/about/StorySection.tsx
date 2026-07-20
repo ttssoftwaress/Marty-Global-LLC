@@ -35,7 +35,7 @@ export function StorySection() {
             Our Story
           </h2>
           <p className="w-full text-[14px] font-normal leading-[22px] text-text-secondary md:text-[15px] md:leading-6 lg:text-[16px] lg:leading-[26px]">
-            Mart Global LLC was founded by international builders who experienced
+            Marty Global LLC was founded by international builders who experienced
             first-hand the steep uphill battle of incorporating a business and
             getting reliable corporate bank accounts from outside the
             traditional financial hubs. The process was slow, opaque, expensive,

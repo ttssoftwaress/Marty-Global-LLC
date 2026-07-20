@@ -26,7 +26,7 @@ type Testimonial = {
 const TESTIMONIALS: Testimonial[] = [
   {
     quote:
-      '“As a non-resident builder, setting up a US entity was initially intimidating. Mart Global LLC handled our Delaware registration and bank integration in record time.”',
+      '“As a non-resident builder, setting up a US entity was initially intimidating. Marty Global LLC handled our Delaware registration and bank integration in record time.”',
     avatar: amaraAvatar,
     name: 'Amara Van De Berg',
     role: 'CEO & Founder, ScaleFlow EU',

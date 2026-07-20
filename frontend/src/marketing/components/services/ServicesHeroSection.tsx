@@ -21,7 +21,7 @@ export function ServicesHeroSection() {
       </h1>
 
       <p className="w-full text-[14px] font-normal leading-[1.5] text-text-secondary md:text-[15px] lg:max-w-[800px] lg:text-[16px] lg:leading-[1.6]">
-        From company formation to e-commerce account setup — Mart Global LLC
+        From company formation to e-commerce account setup — Marty Global LLC
         provides end-to-end business services across the USA, UK, Canada, and
         Europe.
       </p>

@@ -25,6 +25,7 @@ model User {
   country       String?
   createdAt     DateTime  @default(now()) @db.Timestamptz(3)
   updatedAt     DateTime  @updatedAt @db.Timestamptz(3)
+  deletedAt     DateTime? @db.Timestamptz(3)
   sessions      Session[]
   accounts      Account[]
 
@@ -65,6 +66,7 @@ model Account {
   updatedAt             DateTime  @updatedAt @db.Timestamptz(3)
   user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([providerId, accountId])
   @@index([userId])
   @@map("account")
 }
@@ -77,6 +79,7 @@ model Verification {
   createdAt  DateTime @default(now()) @db.Timestamptz(3)
   updatedAt  DateTime @updatedAt @db.Timestamptz(3)
 
+  @@unique([identifier, value])
   @@index([identifier])
   @@map("verification")
 }
