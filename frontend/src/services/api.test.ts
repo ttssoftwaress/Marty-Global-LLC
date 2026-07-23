@@ -16,10 +16,10 @@ afterEach(() => {
 
 describe('apiFetch', () => {
   it('unwraps a successful response body', async () => {
-    vi.stubGlobal('fetch', mockFetch(201, { data: { id: 'lead_1' } }))
+    vi.stubGlobal('fetch', mockFetch(201, { data: { id: 'rec_1' } }))
 
-    const result = await apiFetch<{ data: { id: string } }>('/leads')
-    expect(result.data.id).toBe('lead_1')
+    const result = await apiFetch<{ data: { id: string } }>('/health')
+    expect(result.data.id).toBe('rec_1')
   })
 
   it('throws an ApiError carrying the backend field errors', async () => {
@@ -28,16 +28,16 @@ describe('apiFetch', () => {
       mockFetch(400, {
         error: {
           code: 'VALIDATION_FAILED',
-          message: 'Invalid lead payload',
+          message: 'Invalid payload',
           details: { email: ['A valid email is required'] },
         },
       }),
     )
 
-    await expect(apiFetch('/leads', { method: 'POST' })).rejects.toThrow(ApiError)
+    await expect(apiFetch('/health', { method: 'POST' })).rejects.toThrow(ApiError)
 
     try {
-      await apiFetch('/leads', { method: 'POST' })
+      await apiFetch('/health', { method: 'POST' })
       expect.unreachable('should have thrown')
     } catch (err) {
       const error = err as ApiError
@@ -56,7 +56,7 @@ describe('apiFetch', () => {
     )
 
     try {
-      await apiFetch('/leads', { method: 'POST' })
+      await apiFetch('/health', { method: 'POST' })
       expect.unreachable('should have thrown')
     } catch (err) {
       const error = err as ApiError
@@ -72,7 +72,7 @@ describe('apiFetch', () => {
     )
 
     try {
-      await apiFetch('/leads')
+      await apiFetch('/health')
       expect.unreachable('should have thrown')
     } catch (err) {
       const error = err as ApiError

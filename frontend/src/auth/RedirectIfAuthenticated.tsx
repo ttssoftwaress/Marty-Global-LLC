@@ -3,9 +3,8 @@ import { Navigate } from 'react-router-dom';
 
 import { useSession } from '@/auth/client';
 
-// No portal/dashboard route exists yet, so an authenticated visitor lands home.
-// Update this to the portal root once `/app` is built.
-const DEFAULT_AUTHENTICATED_ROUTE = '/';
+// The portal dashboard is every signed-in customer's landing screen.
+const DEFAULT_AUTHENTICATED_ROUTE = '/app';
 
 // Keeps a logged-in visitor out of the auth screens. A persistent "Remember Me"
 // cookie carries the session across visits (7-day sliding window, see

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import logoColor from '@/assets/Marty-Logo-Color.PNG';
 import { signIn } from '@/auth/client';
@@ -13,8 +13,18 @@ import {
 
 const RESET_PASSWORD_ROUTE = '/reset-password';
 const SIGNUP_ROUTE = '/signup';
-// No portal/dashboard route exists yet, so a successful login returns to home.
-const AFTER_LOGIN_ROUTE = '/';
+// A successful login lands on the portal dashboard.
+const AFTER_LOGIN_ROUTE = '/app';
+
+// RequireAuth stashes the portal path a visitor asked for before being sent
+// here, so logging in returns them there instead of always to the dashboard.
+// Only in-app paths are honoured — an attacker-supplied absolute URL must never
+// become a redirect target.
+function safeReturnPath(from: unknown): string {
+  if (typeof from !== 'string') return AFTER_LOGIN_ROUTE;
+  if (!from.startsWith('/app') || from.startsWith('//')) return AFTER_LOGIN_ROUTE;
+  return from;
+}
 
 // Greet the returning visitor by name when this device remembers one, otherwise
 // fall back to the plain heading.
@@ -117,6 +127,10 @@ function validate(values: FormValues): FieldErrors {
 
 function LogInForm() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const returnPath = safeReturnPath(
+    (location.state as { from?: unknown } | null)?.from,
+  );
 
   const [values, setValues] = useState<FormValues>({ email: '', password: '' });
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -159,7 +173,7 @@ function LogInForm() {
       return;
     }
 
-    navigate(AFTER_LOGIN_ROUTE, { replace: true });
+    navigate(returnPath, { replace: true });
   }
 
   return (

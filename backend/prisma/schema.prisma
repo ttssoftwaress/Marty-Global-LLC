@@ -84,24 +84,44 @@ model Verification {
   @@map("verification")
 }
 
-// --- Leads ---------------------------------------------------------------
+// --- Notifications -------------------------------------------------------
+// Every outbound email/SMS is a row first, then a queued job. The row is the
+// delivery ledger: the processor claims it, sends, and records the provider
+// reference, so a retried job is a no-op once the row is SENT.
 
-enum LeadStatus {
-  NEW
-  CONTACTED
-  CLOSED
+enum NotificationChannel {
+  EMAIL
+  SMS
 }
 
-model Lead {
-  id        String     @id @default(cuid())
-  name      String
-  email     String
-  company   String?
-  message   String
-  status    LeadStatus @default(NEW)
-  createdAt DateTime   @default(now()) @db.Timestamptz(3)
-  updatedAt DateTime   @updatedAt @db.Timestamptz(3)
-  deletedAt DateTime?  @db.Timestamptz(3)
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+model Notification {
+  id        String              @id @default(cuid())
+  channel   NotificationChannel
+  status    NotificationStatus  @default(PENDING)
+  template  String
+  // Recipient address (email or E.164 phone) — PII, never logged.
+  recipient String
+  subject   String?
+  // Rendered at enqueue time so a retry sends byte-identical content.
+  body      String
+  bodyText  String?
+  // Provider message id (SES MessageId / Twilio SID) once accepted.
+  providerRef String?
+  attempts  Int                 @default(0)
+  lastError String?
+  sentAt    DateTime?           @db.Timestamptz(3)
+  userId    String?
+  createdAt DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime            @updatedAt @db.Timestamptz(3)
+  deletedAt DateTime?           @db.Timestamptz(3)
 
   @@index([status, createdAt])
+  @@index([userId])
+  @@map("notification")
 }

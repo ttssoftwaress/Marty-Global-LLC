@@ -4,6 +4,10 @@ You are an expert full-stack TypeScript engineer building **Marty Global LLC**,
 a corporate filing service provider. Clean, simple, maintainable code — clarity
 over abstraction. Think like a senior engineer on a production SaaS.
 
+Design, styling, and the UI build workflow live in **Design guide.md** (the
+companion to this file). Everything else — architecture, backend, data, money,
+auth, security — lives here.
+
 ---
 
 ## Project
@@ -26,6 +30,7 @@ Three surfaces, two apps:
 ```
 corporate-filing-system/
 ├── AGENTS.md
+├── Design guide.md      # design system, Figma handling, UI build workflow
 ├── frontend/            # React + Vite SPA
 ├── backend/             # Express API + jobs + Dockerfile
 ├── docker-compose.yml   # local Postgres + Redis
@@ -78,18 +83,9 @@ This list is the budget. Never add a library without asking first.
 Every task ends with a **short summary: what was built, what changed, how to
 test it.**
 
-- **UI task:** analyze the attached design images or Figma MCP context first →
-  replicate the design exactly (layout, spacing, type hierarchy, colors,
-  radius, shadows — no approximating, no simplifying) → build → summary. Make sure to use the setup Design System before trying any custom CSS or TAILWIND ok.
-- **Responsive UI task (three Figma links):** when given **three** Figma MCP
-  context links for the same design — desktop, mobile, and tablet — build all
-  three viewports to match their respective link **exactly** (layout, spacing,
-  type hierarchy, colors, radius, shadows). It is one responsive design across
-  breakpoints, not three unrelated screens. **Text copy comes from the desktop
-  link only:** whenever the copy differs across all three or between any two
-  links, the desktop link is the single source of truth for wording — mirror
-  its text on mobile and tablet, and treat the differing mobile/tablet copy as
-  a design artifact to ignore, not a variation to reproduce.
+- **UI / design / responsive tasks:** see **Design guide.md** — it owns the
+  design system, Figma MCP handling, the UI build workflow, and the styling
+  rules. The design-deviation logging rule there is part of the summary.
 - **Backend / logic task:** understand the prompt → read this file and follow
   it strictly → build → summary.
 - No plan-approval step — build directly. If something is unclear or a better
@@ -128,7 +124,7 @@ frontend/src/
 - Marty Global is a filing service provider, **not a law firm** — never write
   legal advice or imply attorney representation; keep the footer disclaimer.
   Never invent statistics, testimonials, or guarantees.
-- The contact form POSTs to the backend `leads` module — public, rate-limited,
+- The contact form POSTs to a public backend endpoint — rate-limited and
   Turnstile-verified server-side. The browser never calls a third party
   directly.
 
@@ -146,7 +142,7 @@ backend/
     ├── routes.ts    # mounts module routers — nothing else
     ├── config/      # env.ts (Zod, fail fast) + one file per external service
     ├── modules/     # auth users companies registrations documents mailroom
-    │                # support leads notifications billing payments audit
+    │                # support notifications billing payments audit
     ├── jobs/        # queues.ts (definitions + producers) · processors/
     ├── sockets/     # live chat
     ├── middlewares/  guards/  lib/
@@ -191,7 +187,8 @@ modules/companies/
   Mutating payment endpoints accept an `Idempotency-Key` header and are
   retry-safe.
 - Every endpoint is authenticated and role-guarded **by default**. Public
-  endpoints (leads, webhooks, health) are explicitly marked and rate-limited.
+  endpoints (contact form, webhooks, health) are explicitly marked and
+  rate-limited.
 
 ---
 
@@ -256,6 +253,40 @@ convenience.
 
 ---
 
+## Live Chat
+
+Real-time customer support over Socket.io, owned by the `support` module.
+Sockets are **transport only** — every message and conversation is persisted
+through the `support` service (the one layer touching Prisma), so history
+survives reconnects and process restarts. Never treat an in-memory socket as
+the source of truth.
+
+- **Auth on connect:** every socket authenticates with the same Better Auth
+  session as the REST API; reject unauthenticated connections. Live chat is a
+  portal + admin feature — customers connect to their own conversations, staff
+  and admin can join any. Guards are enforced server-side, exactly like the API.
+- **Rooms:** one room per support conversation. A customer is scoped to their
+  own conversation(s); staff/admin join by conversation id after an ownership/
+  role check in the service layer.
+- **Persist then emit:** the socket handler validates the payload (Zod, same as
+  every other wire contract), calls the `support` service to store the message,
+  then emits to the room. Presence and typing indicators are ephemeral socket
+  events — never persisted.
+- **Offline handoff:** when no staff is connected, enqueue an email/SMS
+  notification via `jobs/` (never inline) so the customer still gets a reply —
+  same queued path as the rest of `notifications`.
+- **Rate-limited:** inbound messages are rate-limited per connection, the same
+  posture as public endpoints.
+- **One process:** sockets run in the same Express process as the API and jobs.
+  If we ever scale sockets across processes we'll need the Socket.io Redis
+  adapter — **ask before adding it** (budget rule).
+- **PII:** never log message content — log conversation and message ids only.
+- **Frontend:** the customer chat widget lives in `portal/features/support` and
+  the staff view in `admin/features/support`; both use the shared
+  `services/socket.ts` client, and message rendering follows Design guide.md.
+
+---
+
 ## Code Style
 
 - TypeScript strict, no `any`. The backend infers types from its Zod schemas;
@@ -264,10 +295,9 @@ convenience.
   (money and crypto edge cases qualify).
 - Naming: `PascalCase.tsx` components, `useThing.ts` hooks,
   `thing.service.ts` module files, kebab-case folders.
-- Tailwind utilities with `cn()` and CVA variants; design tokens live in the
-  Tailwind config — no hardcoded hex. shadcn is the base; never hand-roll what
-  it provides.
-- Card entry is always Stripe Elements — never a hand-rolled card input.
+
+(Tailwind + `cn()`/CVA, design tokens, shadcn, and Stripe-Elements card entry
+live in **Design guide.md**.)
 
 ---
 
@@ -320,5 +350,7 @@ Critical paths only — do not chase coverage.
 - Business logic lives in services; controllers and processors are adapters.
 - Stripe holds the card, we hold the token. Never invent marketing claims or
   legal advice.
+- Design lives in **Design guide.md** — the Figma context is the pathway, not
+  the spec; improve where warranted and log every deviation in the summary.
 - End every task with the summary: what was built, what changed, how to test.
 - You always need to kill any server that you start for yourself ok.

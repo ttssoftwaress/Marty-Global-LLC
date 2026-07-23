@@ -15,8 +15,8 @@ import { ClockIcon, MailIcon, PhoneIcon } from '../icons';
  *   - desktop (lg, 1024px): px-20 py-20, two columns — intro 1fr, form 480px —
  *     with 64px gutter; the form card is elevated white on the gray page.
  * The mail, phone, and clock glyphs reuse the shared marketing icon set.
- * Fields are static placeholders — this is presentational; the wired lead form
- * lands later against the backend `leads` module.
+ * Fields are static placeholders — this is presentational; wiring the form to
+ * the backend lands later.
  */
 
 const DETAILS = [
