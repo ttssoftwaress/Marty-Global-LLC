@@ -1,0 +1,119 @@
+import { MessageSquare, Search } from 'lucide-react';
+
+import type { ConversationSummary } from '../../types/messages';
+import { ConversationListItem } from './ConversationListItem';
+
+/*
+ * The conversation list — the master pane. One tree serves every breakpoint:
+ * on mobile it is a plain title + search + stacked cards that fill the screen;
+ * from tablet up it becomes a fixed-width bordered column (280px tablet, 360px
+ * desktop) with a search header and flat divider rows, its list scrolling on
+ * its own so the search stays pinned.
+ *
+ * The page owns the search text (debounced into the query) and which
+ * conversation is open; this component only renders. A skeleton covers the
+ * first load, an empty state covers a search with no matches or a customer with
+ * no conversations yet.
+ */
+
+type ConversationListProps = {
+  conversations: ConversationSummary[] | undefined;
+  isLoading: boolean;
+  search: string;
+  onSearchChange: (value: string) => void;
+  activeId?: string;
+  className?: string;
+};
+
+function ListSkeleton() {
+  return (
+    <div className="flex flex-col gap-3 p-4 md:gap-0 md:p-0" aria-hidden="true">
+      {Array.from({ length: 5 }).map((_, index) => (
+        <div
+          key={index}
+          className="h-[72px] w-full animate-pulse rounded-card bg-gray-200 md:rounded-none md:border-b md:border-gray-200 md:bg-transparent md:p-4"
+        >
+          <div className="hidden size-full rounded-lg bg-gray-200 md:block" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ListEmptyState({ searching }: { searching: boolean }) {
+  return (
+    <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
+      <span className="flex size-12 items-center justify-center rounded-[24px] bg-gray-100">
+        <MessageSquare
+          className="size-6 text-gray-400"
+          strokeWidth={1.75}
+          aria-hidden="true"
+        />
+      </span>
+      <p className="text-body-lg font-semibold text-text">
+        {searching ? 'No matches' : 'No conversations yet'}
+      </p>
+      <p className="max-w-[300px] text-body text-gray-500">
+        {searching
+          ? 'No conversations match your search. Try a different term.'
+          : 'Messages with our team will appear here. Start one any time.'}
+      </p>
+    </div>
+  );
+}
+
+export function ConversationList({
+  conversations,
+  isLoading,
+  search,
+  onSearchChange,
+  activeId,
+  className = 'flex',
+}: ConversationListProps) {
+  const showSkeleton = isLoading || !conversations;
+  const isEmpty = !showSkeleton && conversations.length === 0;
+
+  return (
+    <section
+      className={`w-full min-h-0 flex-col gap-4 md:w-[280px] md:shrink-0 md:gap-0 md:overflow-hidden md:rounded-card md:border md:border-gray-200 md:bg-white lg:w-[360px] ${className}`}
+    >
+      <h1 className="shrink-0 text-h4 font-semibold text-text md:hidden">
+        Messages
+      </h1>
+
+      <div className="shrink-0 md:border-b md:border-gray-200 md:p-3 lg:p-4">
+        <div className="flex h-12 items-center gap-2 rounded-input border border-gray-300 bg-white px-3.5 transition-shadow focus-within:border-primary focus-within:shadow-[0_0_0_1px_var(--ring-focus)] md:h-10">
+          <Search
+            className="size-[18px] shrink-0 text-gray-400"
+            strokeWidth={1.75}
+            aria-hidden="true"
+          />
+          <input
+            type="search"
+            value={search}
+            onChange={(event) => onSearchChange(event.target.value)}
+            placeholder="Search conversations…"
+            aria-label="Search conversations"
+            className="min-w-0 flex-1 bg-transparent text-body text-text outline-none placeholder:text-gray-400"
+          />
+        </div>
+      </div>
+
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto md:gap-0">
+        {showSkeleton ? (
+          <ListSkeleton />
+        ) : isEmpty ? (
+          <ListEmptyState searching={search.trim().length > 0} />
+        ) : (
+          conversations.map((conversation) => (
+            <ConversationListItem
+              key={conversation.id}
+              conversation={conversation}
+              active={conversation.id === activeId}
+            />
+          ))
+        )}
+      </div>
+    </section>
+  );
+}

@@ -1,10 +1,16 @@
-import { Link } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 
 import logoColor from '@/assets/Marty-Logo-Color.PNG';
+import { authClient } from '@/auth/client';
 import { LeftPanel, SecureTrust } from './components/auth-brand';
 import { ArrowLeftIcon } from './components/icons';
 
 const LOGIN_ROUTE = '/login';
+const CHECK_EMAIL_ROUTE = '/check-your-email';
+// Better Auth emails a backend callback link that validates the token, then
+// redirects here with the token appended — SetNewPasswordPage reads it.
+const RESET_REDIRECT_PATH = '/reset-password/new';
 
 /*
  * Password reset — step 1 ("Request a reset link"). The user enters their email
@@ -81,11 +87,47 @@ function RightPanel() {
  * Header is left-aligned on desktop and centered below (mobile & tablet).
  */
 function RequestResetForm() {
+  const navigate = useNavigate();
+
+  const [email, setEmail] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (submitting) return;
+
+    setError(null);
+    const trimmed = email.trim();
+    if (!trimmed) {
+      setError('Email address is required');
+      return;
+    }
+
+    setSubmitting(true);
+    // Better Auth always replies success-shaped (even for an unknown email) to
+    // avoid leaking which addresses exist, so any error here is a transport or
+    // server fault, not "no such account".
+    const { error: resetError } = await authClient.requestPasswordReset({
+      email: trimmed,
+      redirectTo: `${window.location.origin}${RESET_REDIRECT_PATH}`,
+    });
+
+    if (resetError) {
+      setSubmitting(false);
+      setError(
+        resetError.message ??
+          'We could not send the reset link. Please try again.',
+      );
+      return;
+    }
+
+    // Carry the address forward so the confirmation screen can name it.
+    navigate(CHECK_EMAIL_ROUTE, { state: { email: trimmed } });
+  }
+
   return (
-    <form
-      className="flex w-full flex-col gap-8"
-      onSubmit={(e) => e.preventDefault()}
-    >
+    <form className="flex w-full flex-col gap-8" onSubmit={handleSubmit}>
       <div className="flex flex-col gap-2 text-center lg:text-left">
         <h2 className="text-[28px] font-semibold leading-none text-text">
           Reset Your Password
@@ -102,16 +144,28 @@ function RequestResetForm() {
         <input
           id="reset-email"
           type="email"
+          autoComplete="email"
           placeholder="enter your email address"
+          value={email}
+          onChange={(e) => {
+            setEmail(e.target.value);
+            if (error) setError(null);
+          }}
           className="input-field"
         />
+        {error && (
+          <p role="alert" className="text-[13px] leading-[1.3] text-error">
+            {error}
+          </p>
+        )}
       </div>
 
       <button
         type="submit"
-        className="btn btn-primary h-12 w-full rounded-input text-button"
+        disabled={submitting}
+        className="btn btn-primary h-12 w-full rounded-input text-button disabled:cursor-not-allowed disabled:opacity-50"
       >
-        Send Reset Link
+        {submitting ? 'Sending…' : 'Send Reset Link'}
       </button>
 
       <BackToLogIn />
@@ -130,4 +184,3 @@ function BackToLogIn() {
     </Link>
   );
 }
-

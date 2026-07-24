@@ -28,6 +28,7 @@ model User {
   deletedAt     DateTime? @db.Timestamptz(3)
   sessions      Session[]
   accounts      Account[]
+  orders        Order[]
 
   @@unique([email])
   @@map("user")
@@ -124,4 +125,103 @@ model Notification {
   @@index([status, createdAt])
   @@index([userId])
   @@map("notification")
+}
+
+// --- Service catalog -----------------------------------------------------
+// The orderable services a customer chooses from in the "Order new service"
+// flow. Admin-defined (AGENTS.md: the backend owns the catalog) — the portal
+// renders however many active services exist, in `sortOrder`. Step 2's form is
+// data: `detailFields` is the per-service field schema the frontend renders by
+// type. Nothing here is money — the flow is quote-based, so a Service carries no
+// price; the team prices each order after review.
+
+model Service {
+  id          String  @id @default(cuid())
+  // Icon intent the frontend maps to a lucide glyph (serviceIcons.ts). A key the
+  // frontend doesn't recognise falls back to a neutral glyph, so a new service
+  // type still renders.
+  iconKey     String
+  name        String
+  // Short label for the selection rail / chips where the full name is too long.
+  shortName   String?
+  description String
+  // Feature bullets shown on the Step 1 card.
+  features    String[]
+  // Card footer meta line: `{ label: string, chips?: string[] }`.
+  footer      Json
+  // Step 2 field schema: an ordered array of ServiceField (text | select |
+  // textarea). Stored as Json so the admin can shape a service's form without a
+  // migration; validated against the Zod schema on read.
+  detailFields Json?
+  // Only active services appear in the catalog; deactivating hides a service
+  // without deleting historical orders that reference its snapshot.
+  active      Boolean @default(true)
+  sortOrder   Int     @default(0)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+  deletedAt   DateTime? @db.Timestamptz(3)
+
+  orderItems  OrderItem[]
+
+  @@index([active, sortOrder])
+  @@map("service")
+}
+
+// --- Orders --------------------------------------------------------------
+// A customer's request to order one or more services. Created quote-based:
+// SUBMITTED and unpriced — the team reviews it and sends a quote + payment link
+// later (billing/payments modules, not built yet). One Order groups the several
+// services chosen in a single application; each is an OrderItem.
+
+enum OrderStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  MISSING_INFO
+  APPROVED
+  COMPLETED
+}
+
+model Order {
+  id          String      @id @default(cuid())
+  // Human-facing reference shown to the customer ("ORD-10432"). Unique, assigned
+  // at creation. Distinct from the cuid `id`, which is what URLs and FKs use.
+  reference   String      @unique
+  customerId  String
+  status      OrderStatus @default(SUBMITTED)
+  // Application-wide free-text note from Step 2 (optional).
+  notes       String?
+  // When the customer submitted the application. Set at creation for a submitted
+  // order; a future DRAFT flow would leave it null until submit.
+  submittedAt DateTime?   @db.Timestamptz(3)
+  createdAt   DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime    @updatedAt @db.Timestamptz(3)
+  deletedAt   DateTime?   @db.Timestamptz(3)
+
+  customer    User        @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  items       OrderItem[]
+
+  @@index([customerId, createdAt])
+  @@index([status])
+  @@map("order")
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  serviceId String
+  // Snapshot of the service name at order time, so the order reads correctly even
+  // if the catalog is later renamed or the service deactivated.
+  serviceName String
+  // The customer's answers to that service's detailFields: `{ [fieldName]: value }`.
+  answers   Json
+  sortOrder Int     @default(0)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  service   Service @relation(fields: [serviceId], references: [id])
+
+  @@index([orderId])
+  @@map("order_item")
 }

@@ -252,10 +252,14 @@
   --radius-pill: 999px; /* tags, badges & pill buttons */
 
   /* Elevation — layered shadows → `shadow-sm-elevation`,
-   * `shadow-md-elevation`, `shadow-lg-elevation`. */
+   * `shadow-md-elevation`, `shadow-lg-elevation`. Directional variants for
+   * overlay chrome: `shadow-slide-over` (panel entering from the right),
+   * `shadow-footer-raised` (sticky footer above scrolling content). */
   --shadow-sm-elevation: 0 1px 2px rgba(0, 0, 0, 0.06);
   --shadow-md-elevation: 0 4px 12px rgba(0, 0, 0, 0.08);
   --shadow-lg-elevation: 0 10px 30px rgba(0, 0, 0, 0.1);
+  --shadow-slide-over: -10px 0 30px rgba(0, 0, 0, 0.1);
+  --shadow-footer-raised: 0 -4px 6px rgba(0, 0, 0, 0.1);
 }
 
 /*

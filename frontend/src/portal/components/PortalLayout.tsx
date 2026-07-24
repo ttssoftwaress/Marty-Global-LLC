@@ -1,5 +1,7 @@
 import { useState, type ReactNode } from 'react';
 
+import { NotificationsPanel } from '../features/notifications';
+import type { Notification } from '../types/notifications';
 import { PortalSidebar, type SidebarUser } from './sidebar';
 import { PortalTopBar } from './topbar';
 
@@ -10,11 +12,20 @@ import { PortalTopBar } from './topbar';
  * The sidebar is fixed-height and the workspace scrolls on its own so the nav
  * and top bar stay put on long pages. Mobile has no persistent sidebar, so the
  * drawer's open state lives here — the top bar's hamburger toggles it.
+ *
+ * The notification panel is owned here too: the top bar's bell opens it, and it
+ * renders as a dropdown (tablet/desktop) or bottom sheet (mobile). Its feed
+ * arrives from the future `notifications` query the same way `notificationCount`
+ * does — the shell just presents whatever the page passes in.
  */
 
 type PortalLayoutProps = {
   user: SidebarUser;
   notificationCount?: number;
+  notifications?: Notification[];
+  notificationsLoading?: boolean;
+  onMarkAllNotificationsRead?: () => void;
+  onSelectNotification?: (notification: Notification) => void;
   onLogout?: () => void;
   children: ReactNode;
 };
@@ -22,10 +33,15 @@ type PortalLayoutProps = {
 export function PortalLayout({
   user,
   notificationCount,
+  notifications = [],
+  notificationsLoading,
+  onMarkAllNotificationsRead,
+  onSelectNotification,
   onLogout,
   children,
 }: PortalLayoutProps) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
 
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-gray-50">
@@ -41,10 +57,20 @@ export function PortalLayout({
           user={user}
           notificationCount={notificationCount}
           onOpenMenu={() => setMobileNavOpen(true)}
+          onOpenNotifications={() => setNotificationsOpen(true)}
         />
 
         <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
       </div>
+
+      <NotificationsPanel
+        open={notificationsOpen}
+        onClose={() => setNotificationsOpen(false)}
+        notifications={notifications}
+        isLoading={notificationsLoading}
+        onSelect={onSelectNotification}
+        onMarkAllRead={onMarkAllNotificationsRead}
+      />
     </div>
   );
 }

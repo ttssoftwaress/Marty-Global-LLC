@@ -1,11 +1,10 @@
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 
 import logoColor from '@/assets/Marty-Logo-Color.PNG';
 import { LeftPanel, SecureTrust } from './components/auth-brand';
 import { ArrowLeftIcon, CheckIcon } from './components/icons';
 
 const LOGIN_ROUTE = '/login';
-const SENT_TO_EMAIL = 'hello@company.com';
 
 /*
  * Password reset — step 2 ("Check Your Email"). Confirms the reset link was
@@ -15,6 +14,12 @@ const SENT_TO_EMAIL = 'hello@company.com';
  * logo + title header strip, mobile just the logo.
  */
 export function CheckYourEmailPage() {
+  // ResetPasswordPage hands us the address it dispatched to via router state; a
+  // visitor who lands here directly (no state) gets the generic wording.
+  const location = useLocation();
+  const email = (location.state as { email?: unknown } | null)?.email;
+  const sentTo = typeof email === 'string' && email ? email : null;
+
   return (
     <div className="flex min-h-screen w-full flex-col items-stretch bg-white lg:flex-row">
       <LeftPanel
@@ -22,7 +27,7 @@ export function CheckYourEmailPage() {
         title="Setting Global Corporate Standards"
         subtitle="Unlock corporate potential from anywhere. Marty Global manages your business structure so you can focus on expansion."
       />
-      <RightPanel />
+      <RightPanel sentTo={sentTo} />
     </div>
   );
 }
@@ -47,13 +52,13 @@ function BrandHeader() {
   );
 }
 
-function RightPanel() {
+function RightPanel({ sentTo }: { sentTo: string | null }) {
   return (
     <div className="flex flex-1 flex-col bg-white lg:min-h-screen lg:items-center lg:justify-between lg:px-24 lg:py-24 xl:w-[792px] xl:flex-none xl:shrink-0">
       <BrandHeader />
 
       <div className="flex w-full flex-1 flex-col items-center justify-center px-6 pb-6 pt-6 md:px-12 md:py-16 lg:p-0">
-        <SuccessCard />
+        <SuccessCard sentTo={sentTo} />
       </div>
 
       {/* Mobile & tablet: trust note sits after the card. Desktop: pinned to the panel base. */}
@@ -69,7 +74,7 @@ function RightPanel() {
   );
 }
 
-function SuccessCard() {
+function SuccessCard({ sentTo }: { sentTo: string | null }) {
   return (
     <div className="flex w-full max-w-[480px] flex-col items-center gap-6 md:gap-8">
       <div className="flex size-16 items-center justify-center rounded-full bg-status-approved-bg">
@@ -82,9 +87,18 @@ function SuccessCard() {
           Check Your Email
         </h2>
         <p className="text-body leading-[22px] text-text-secondary">
-          We&apos;ve sent a password reset link to{' '}
-          <span className="font-semibold text-text">{SENT_TO_EMAIL}</span>. It may
-          take a few minutes to arrive.
+          {sentTo ? (
+            <>
+              We&apos;ve sent a password reset link to{' '}
+              <span className="font-semibold text-text">{sentTo}</span>. It may
+              take a few minutes to arrive.
+            </>
+          ) : (
+            <>
+              We&apos;ve sent a password reset link to your email address. It may
+              take a few minutes to arrive.
+            </>
+          )}
         </p>
       </div>
 

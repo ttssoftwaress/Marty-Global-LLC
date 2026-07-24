@@ -44,7 +44,9 @@ export type SendEmailJob = {
 export async function enqueueEmail(payload: SendEmailJob) {
   return notificationsQueue.add(JobName.SEND_EMAIL, payload, {
     // Deduplicates producers that enqueue the same notification twice.
-    jobId: `email:${payload.notificationId}`,
+    // BullMQ reserves ':' as its Redis key separator, so a custom jobId can't
+    // contain one — use a hyphen.
+    jobId: `email-${payload.notificationId}`,
   });
 }
 

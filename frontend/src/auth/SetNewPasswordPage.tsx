@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
 import logoColor from '@/assets/Marty-Logo-Color.PNG';
+import { authClient } from '@/auth/client';
 import { LeftPanel, SecureTrust } from './components/auth-brand';
 import {
   ArrowLeftIcon,
@@ -11,6 +12,9 @@ import {
 } from './components/icons';
 
 const LOGIN_ROUTE = '/login';
+const RESET_REQUEST_ROUTE = '/reset-password';
+// Mirrors backend emailAndPassword.minPasswordLength (config/auth.ts).
+const MIN_PASSWORD_LENGTH = 8;
 
 /*
  * Password reset — step 3 ("Set a New Password"). The user has followed the
@@ -68,14 +72,81 @@ function RightPanel() {
   );
 }
 
+type FieldErrors = {
+  password?: string;
+  confirmPassword?: string;
+};
+
 function SetPasswordForm() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // Better Auth's callback redirect lands here with the validated token appended.
+  const token = searchParams.get('token');
+
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [errors, setErrors] = useState<FieldErrors>({});
+  const [formError, setFormError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+
+  // No token means the link was mistyped, already used, or the page was opened
+  // directly — there's nothing to reset, so send the user back to request a
+  // fresh link rather than let them fill in a form that can't succeed.
+  if (!token) {
+    return <MissingTokenNotice />;
+  }
+
+  function validate(): FieldErrors {
+    const next: FieldErrors = {};
+    if (!password) {
+      next.password = 'Password is required';
+    } else if (password.length < MIN_PASSWORD_LENGTH) {
+      next.password = `Password must be at least ${MIN_PASSWORD_LENGTH} characters`;
+    }
+    if (confirmPassword !== password) {
+      next.confirmPassword = 'Passwords do not match';
+    }
+    return next;
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (submitting) return;
+
+    setFormError(null);
+    const nextErrors = validate();
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
+      return;
+    }
+
+    setSubmitting(true);
+    const { error } = await authClient.resetPassword({
+      newPassword: password,
+      token: token as string,
+    });
+
+    if (error) {
+      setSubmitting(false);
+      // An expired/consumed token is the common failure here — point the user
+      // back to requesting a fresh link.
+      setFormError(
+        error.message ??
+          'We could not reset your password. The link may have expired — please request a new one.',
+      );
+      return;
+    }
+
+    navigate(LOGIN_ROUTE, { replace: true });
+  }
 
   return (
     <form
       className="flex w-full max-w-[480px] flex-col items-center gap-6 md:gap-8"
-      onSubmit={(e) => e.preventDefault()}
+      onSubmit={handleSubmit}
     >
       <div className="flex size-14 items-center justify-center rounded-full bg-primary-light md:size-16">
         <KeyIcon className="size-6 text-primary md:size-8" />
@@ -94,22 +165,45 @@ function SetPasswordForm() {
         <PasswordField
           id="new-password"
           label="New Password"
+          value={password}
+          onChange={(v) => {
+            setPassword(v);
+            if (errors.password) setErrors((p) => ({ ...p, password: undefined }));
+          }}
+          error={errors.password}
           visible={showNew}
           onToggle={() => setShowNew((v) => !v)}
         />
         <PasswordField
           id="confirm-password"
           label="Confirm New Password"
+          value={confirmPassword}
+          onChange={(v) => {
+            setConfirmPassword(v);
+            if (errors.confirmPassword)
+              setErrors((p) => ({ ...p, confirmPassword: undefined }));
+          }}
+          error={errors.confirmPassword}
           visible={showConfirm}
           onToggle={() => setShowConfirm((v) => !v)}
         />
       </div>
 
+      {formError && (
+        <p
+          role="alert"
+          className="w-full rounded-lg border border-error/30 bg-error/5 px-4 py-3 text-[13px] leading-[1.4] text-error"
+        >
+          {formError}
+        </p>
+      )}
+
       <button
         type="submit"
-        className="btn btn-primary h-12 w-full rounded-lg text-[15px] md:h-11"
+        disabled={submitting}
+        className="btn btn-primary h-12 w-full rounded-lg text-[15px] disabled:cursor-not-allowed disabled:opacity-50 md:h-11"
       >
-        Reset Password
+        {submitting ? 'Resetting…' : 'Reset Password'}
       </button>
 
       <div className="h-px w-full bg-gray-200" />
@@ -125,14 +219,67 @@ function SetPasswordForm() {
   );
 }
 
+/*
+ * Shown when the page is reached without a reset token (direct visit, or an
+ * expired/invalid link the backend refused to redirect). Keeps the key-badge
+ * chrome but routes the user to request a fresh link.
+ */
+function MissingTokenNotice() {
+  return (
+    <div className="flex w-full max-w-[480px] flex-col items-center gap-6 md:gap-8">
+      <div className="flex size-14 items-center justify-center rounded-full bg-primary-light md:size-16">
+        <KeyIcon className="size-6 text-primary md:size-8" />
+      </div>
+
+      <div className="flex w-full flex-col items-center gap-2 text-center md:gap-3">
+        <h2 className="text-2xl font-semibold leading-none text-text md:text-[28px]">
+          Reset Link Invalid
+        </h2>
+        <p className="text-body leading-[1.4] text-text-secondary md:leading-[22px]">
+          This password reset link is missing or has expired. Request a new one
+          to continue.
+        </p>
+      </div>
+
+      <Link
+        to={RESET_REQUEST_ROUTE}
+        className="btn btn-primary flex h-12 w-full items-center justify-center rounded-lg text-[15px] md:h-11"
+      >
+        Request a New Link
+      </Link>
+
+      <div className="h-px w-full bg-gray-200" />
+
+      <Link
+        to={LOGIN_ROUTE}
+        className="flex items-center justify-center gap-1.5 text-form-label font-semibold text-primary"
+      >
+        <ArrowLeftIcon className="size-4" />
+        Back to Log In
+      </Link>
+    </div>
+  );
+}
+
 type PasswordFieldProps = {
   id: string;
   label: string;
+  value: string;
+  onChange: (value: string) => void;
+  error?: string;
   visible: boolean;
   onToggle: () => void;
 };
 
-function PasswordField({ id, label, visible, onToggle }: PasswordFieldProps) {
+function PasswordField({
+  id,
+  label,
+  value,
+  onChange,
+  error,
+  visible,
+  onToggle,
+}: PasswordFieldProps) {
   return (
     <div className="flex flex-col gap-1.5 md:gap-2">
       <label htmlFor={id} className="text-[13px] font-medium leading-none text-gray-700 md:text-form-label">
@@ -142,7 +289,10 @@ function PasswordField({ id, label, visible, onToggle }: PasswordFieldProps) {
         <input
           id={id}
           type={visible ? 'text' : 'password'}
+          autoComplete="new-password"
           placeholder="••••••••••••"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
           className="h-11 w-full rounded-lg border border-gray-300 bg-white px-3 pr-11 text-[15px] text-text outline-none placeholder:text-gray-400 focus:border-primary focus:shadow-[0_0_0_1px_var(--color-primary)] md:text-base"
         />
         <button
@@ -154,6 +304,11 @@ function PasswordField({ id, label, visible, onToggle }: PasswordFieldProps) {
           {visible ? <EyeIcon className="size-full" /> : <EyeOffIcon className="size-full" />}
         </button>
       </div>
+      {error && (
+        <p id={`${id}-error`} className="text-[13px] leading-[1.3] text-error">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
