@@ -49,6 +49,13 @@ export type OrderableService = {
   // fixed set of inputs. Optional because Step 1 doesn't need it; a service with
   // no fields simply contributes no inputs to the application.
   detailFields?: ServiceField[];
+  /*
+   * The same questions grouped into steps, when the admin has split them. A
+   * service configured before steps existed carries only the flat
+   * `detailFields`; `serviceFormSteps` resolves either shape to a step list, so
+   * the order flow never branches on which one came back.
+   */
+  formSteps?: ServiceFormStep[];
 };
 
 // The Step 1 payload: the catalog to choose from. The backend resolves the list
@@ -104,6 +111,25 @@ export type ServiceField =
   | ServiceTextField
   | ServiceSelectField
   | ServiceTextareaField;
+
+/*
+ * How a service's questions are split into steps — the customer-facing half of
+ * the admin's "Request form & steps" control.
+ *
+ * A step is a titled group of fields; Step 2 renders one screen per step and
+ * gates Continue on that step's required fields. Because the grouping is data,
+ * an admin adding a step changes this flow with no deploy in either app.
+ *
+ * `key` identifies the step; `title` and `description` are what the screen
+ * prints above its fields. Mirrors the admin's `ServiceFormStep` exactly
+ * (AGENTS.md, two-apps sync rule).
+ */
+export type ServiceFormStep = {
+  key: string;
+  title: string;
+  description?: string;
+  fields: ServiceField[];
+};
 
 /*
  * The Step 2 draft the screen collects before submission. Answers are keyed by

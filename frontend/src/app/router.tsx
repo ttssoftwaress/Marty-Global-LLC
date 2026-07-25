@@ -17,6 +17,13 @@ const PORTAL_PLACEHOLDER_ROUTES = [
   { path: 'mailroom/new', title: 'Add new room' },
 ];
 
+// Admin sections the sidebar links to that have no screen yet. Paths are
+// relative to `/admin` and mirror ADMIN_NAV_ITEMS in
+// admin/components/sidebar/nav-items.ts — keep the two in sync.
+const ADMIN_PLACEHOLDER_ROUTES = [
+  { path: 'settings', title: 'Admin settings' },
+];
+
 export const router = createBrowserRouter([
   {
     path: '/',
@@ -338,12 +345,205 @@ export const router = createBrowserRouter([
     },
     children: [
       {
+        // Admin dashboard — the staff home screen: KPI figures, the
+        // orders-by-status breakdown, the activity feed, and the needs-attention
+        // queue, all scoped to the selected period. Data loads from
+        // `GET /v1/admin/dashboard/summary` once that endpoint lands.
         index: true,
         lazy: async () => {
-          const { AdminPlaceholderPage } = await import('@/admin/pages/AdminPlaceholderPage');
-          return { Component: () => <AdminPlaceholderPage title="Admin" /> };
+          const { AdminDashboardPage } = await import(
+            '@/admin/pages/AdminDashboardPage'
+          );
+          return { Component: AdminDashboardPage };
         },
       },
+      {
+        // Orders queue — the staff screen for working every customer order:
+        // status tabs with counts, search and the service / region / date
+        // filters, then the queue itself (a table at `md` and up, cards on
+        // mobile). Data loads from `GET /v1/admin/orders` and
+        // `GET /v1/admin/orders/summary` once those endpoints land.
+        path: 'orders',
+        lazy: async () => {
+          const { AdminOrdersQueuePage } = await import(
+            '@/admin/pages/AdminOrdersQueuePage'
+          );
+          return { Component: AdminOrdersQueuePage };
+        },
+      },
+      {
+        // Customers list — every customer account, with segment tabs, region
+        // and search filters, then the list itself (a table at `md` and up,
+        // cards on mobile). Data loads from `GET /v1/admin/customers` and
+        // `GET /v1/admin/customers/summary` once those endpoints land.
+        path: 'customers',
+        lazy: async () => {
+          const { AdminCustomersPage } = await import(
+            '@/admin/pages/AdminCustomersPage'
+          );
+          return { Component: AdminCustomersPage };
+        },
+      },
+      {
+        // A single customer's record — identity, the four KPI figures, and the
+        // section tabs (only Orders has a built panel so far; `?tab=` selects it
+        // so a section deep-links). Reached from the customers list' "View
+        // profile" action. Data loads from
+        // `GET /v1/admin/customers/:customerId` and
+        // `GET /v1/admin/customers/:customerId/orders` once those endpoints land.
+        path: 'customers/:customerId',
+        lazy: async () => {
+          const { AdminCustomerDetailPage } = await import(
+            '@/admin/pages/AdminCustomerDetailPage'
+          );
+          return { Component: AdminCustomerDetailPage };
+        },
+      },
+      {
+        // Quotes & payments — revenue KPIs, the revenue-over-time chart, the
+        // billing ledger (a table at `md` and up, cards on mobile) with its
+        // status filter tabs, and the refunds & adjustments log. Data loads from
+        // `GET /v1/admin/payments/summary`, `/payments/revenue`,
+        // `/payments/ledger`, and `/payments/refunds` once those endpoints land.
+        path: 'payments',
+        lazy: async () => {
+          const { AdminQuotesPaymentsPage } = await import(
+            '@/admin/pages/AdminQuotesPaymentsPage'
+          );
+          return { Component: AdminQuotesPaymentsPage };
+        },
+      },
+      {
+        // Support inbox — the staff screen for every customer conversation: the
+        // filterable thread list and the open thread's messages, internal notes,
+        // and composer (the admin face of the live-chat / support module). The
+        // list-only and open-thread views share one screen; `?filter=` selects
+        // the cohort. Data loads from `GET /v1/admin/support/conversations` once
+        // those endpoints land.
+        path: 'support',
+        lazy: async () => {
+          const { AdminSupportInboxPage } = await import(
+            '@/admin/pages/AdminSupportInboxPage'
+          );
+          return { Component: AdminSupportInboxPage };
+        },
+      },
+      {
+        // A single conversation open — the same Support inbox screen with that
+        // thread selected, so the view deep-links and Back returns to the list
+        // (the mobile thread header carries the back control).
+        path: 'support/:conversationId',
+        lazy: async () => {
+          const { AdminSupportInboxPage } = await import(
+            '@/admin/pages/AdminSupportInboxPage'
+          );
+          return { Component: AdminSupportInboxPage };
+        },
+      },
+      {
+        // Reports & analytics — the performance screen: headline KPIs with
+        // sparklines, revenue over time, the orders-by-service and
+        // orders-by-region donuts, the conversion funnel, and customer growth.
+        // One period pill strip scopes the whole page. Data loads from
+        // `GET /v1/admin/reports/summary`, `/reports/revenue`,
+        // `/reports/breakdown/:dimension`, `/reports/funnel`, and
+        // `/reports/growth` once those endpoints land.
+        path: 'reports',
+        lazy: async () => {
+          const { AdminReportsAnalyticsPage } = await import(
+            '@/admin/pages/AdminReportsAnalyticsPage'
+          );
+          return { Component: AdminReportsAnalyticsPage };
+        },
+      },
+      {
+        // Service catalog & pricing — the staff screen for what each service
+        // includes, where it's offered, and how it's priced: the catalog table
+        // (cards on mobile) plus the add/manage form, which also authors the
+        // per-service application questions the portal's order flow renders.
+        // Data loads from `GET /v1/admin/catalog/services`,
+        // `/catalog/services/:id`, and `/catalog/regions`, and writes through
+        // `POST`/`PATCH /v1/admin/catalog/services` once those endpoints land.
+        path: 'catalog',
+        lazy: async () => {
+          const { AdminServiceCatalogPage } = await import(
+            '@/admin/pages/AdminServiceCatalogPage'
+          );
+          return { Component: AdminServiceCatalogPage };
+        },
+      },
+      {
+        // One service in full — its description, what's included, the regions
+        // it's offered in, its pricing templates, and the request form (the
+        // steps and fields a customer fills in to order it, which the portal's
+        // order flow renders). Reached from the catalog list' "Manage" action.
+        // Data loads from `GET /v1/admin/catalog/services/:id` and
+        // `/catalog/regions`, and writes through
+        // `PATCH /v1/admin/catalog/services/:id` once those endpoints land.
+        path: 'catalog/:serviceId',
+        lazy: async () => {
+          const { AdminServiceCatalogDetailPage } = await import(
+            '@/admin/pages/AdminServiceCatalogDetailPage'
+          );
+          return { Component: AdminServiceCatalogDetailPage };
+        },
+      },
+      {
+        // Team & staff — the internal team, their roles, and their access: the
+        // three KPI figures, the search / role / status filters, then the list
+        // itself (a table at `md` and up, cards on mobile). Data loads from
+        // `GET /v1/admin/team` and `GET /v1/admin/team/summary` once those
+        // endpoints land.
+        path: 'team',
+        lazy: async () => {
+          const { AdminTeamStaffPage } = await import(
+            '@/admin/pages/AdminTeamStaffPage'
+          );
+          return { Component: AdminTeamStaffPage };
+        },
+      },
+      {
+        // Virtual mail ops — filing scanned mail into customer inboxes: the
+        // three KPI figures, the section tabs, then the customer picker, the
+        // scan form, and the recently-uploaded feed (a right rail on desktop, a
+        // card beneath the form on the narrower links). Data loads from
+        // `GET /v1/admin/mailroom/summary`, `/mailroom/customers`, and
+        // `/mailroom/scans`, with `POST /v1/admin/mailroom/scans` filing a
+        // scan, once those endpoints land.
+        path: 'mailroom',
+        lazy: async () => {
+          const { AdminVirtualMailOpsPage } = await import(
+            '@/admin/pages/AdminVirtualMailOpsPage'
+          );
+          return { Component: AdminVirtualMailOpsPage };
+        },
+      },
+      {
+        // One team member's account in full — their details, whether the account
+        // is enabled, the role they hold, and their per-area admin access.
+        // Reached from the team list's "Edit" action. Data loads from
+        // `GET /v1/admin/team/:memberId` and writes through
+        // `PATCH /v1/admin/team/:memberId` once those endpoints land.
+        path: 'team/:memberId/edit',
+        lazy: async () => {
+          const { AdminTeamMemberEditPage } = await import(
+            '@/admin/pages/AdminTeamMemberEditPage'
+          );
+          return { Component: AdminTeamMemberEditPage };
+        },
+      },
+      // The admin sidebar links to every admin section; their screens are not
+      // built yet, so each renders a placeholder instead of falling through to
+      // the catch-all and dropping the user back on marketing.
+      ...ADMIN_PLACEHOLDER_ROUTES.map(({ path, title }) => ({
+        path,
+        lazy: async () => {
+          const { AdminPlaceholderPage } = await import(
+            '@/admin/pages/AdminPlaceholderPage'
+          );
+          return { Component: () => <AdminPlaceholderPage title={title} /> };
+        },
+      })),
     ],
   },
   {

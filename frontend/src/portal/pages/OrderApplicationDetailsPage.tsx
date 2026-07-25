@@ -11,6 +11,10 @@ import {
   SupportingDocumentsCard,
 } from '../features/order-new-service';
 import {
+  buildApplicationSteps,
+  isStepComplete,
+} from '../features/order-new-service/applicationSteps';
+import {
   useCreateOrder,
   useServiceCatalog,
 } from '../features/order-new-service/queries';
@@ -29,10 +33,17 @@ import type {
  * that differ (2-col vs 1-col field grids, and the footer's desktop 3-across /
  * tablet note-above-buttons / mobile sticky-bar arrangements).
  *
- * The screen renders one ServiceDetailsCard per selected service, and each
- * card's fields come from that service's admin-defined `detailFields` schema —
- * so the form is data, matching Step 1's "the catalog is dynamic" contract.
- * Nothing about the two services in the design is hardcoded here.
+ * The form is entirely admin-defined. Each service carries its request form as
+ * data — either a flat field list or, once an admin has split it, a list of
+ * steps — and `buildApplicationSteps` turns the selection into the screens to
+ * render. An application for two services with two steps each is a four-screen
+ * flow; one for two flat services is a single screen showing both cards, which
+ * is what the design draws.
+ *
+ * Continue is gated on the current screen's required fields only, so a customer
+ * is never blocked by a question on a screen they haven't reached. Answers stay
+ * keyed by service id throughout, so the submit payload is identical whether the
+ * form was configured as one step or five.
  *
  * Selection flows from Step 1 via router `state` (an array of service ids).
  * Step 2 resolves those ids against the catalog (a prop until the endpoint
@@ -117,20 +128,90 @@ export function OrderApplicationDetailsPage({
 
   const setNotes = (notes: string) => setDraft((prev) => ({ ...prev, notes }));
 
-  // Submit unlocks once every required field on every selected service has a
-  // value. Optional fields, documents, and notes never gate it.
-  const canSubmit = useMemo(() => {
-    return selectedServices.every((service) =>
-      (service.detailFields ?? [])
-        .filter((field) => field.required)
-        .every((field) => {
-          const value = draft.answersByService[service.id]?.[field.name];
-          return typeof value === 'string' && value.trim().length > 0;
-        }),
+  /*
+   * The screens this application is made of, from the selected services' own
+   * form configuration. An empty list means no service asks anything, in which
+   * case the flow is the documents/notes screen alone.
+   */
+  const applicationSteps = useMemo(
+    () => buildApplicationSteps(selectedServices),
+    [selectedServices],
+  );
+
+  // The last screen carries the documents, notes, and Submit — so there is
+  // always one more screen than there are configured steps.
+  const screenCount = applicationSteps.length + 1;
+  const [screenIndex, setScreenIndex] = useState(0);
+
+  // A changed selection invalidates the position: the flow it indexed into no
+  // longer exists, so restart at its first screen.
+  useEffect(() => {
+    setScreenIndex(0);
+  }, [applicationSteps.length]);
+
+  const currentStep =
+    screenIndex < applicationSteps.length ? applicationSteps[screenIndex] : null;
+  const isFinalScreen = screenIndex === screenCount - 1;
+
+  /*
+   * Continue is gated on the current screen only. The final screen's Submit is
+   * gated on every step, because a customer can reach it by going back and
+   * forward again without having completed one in between.
+   */
+  const canAdvance = useMemo(() => {
+    if (!currentStep) return true;
+    return isStepComplete(
+      currentStep.step,
+      draft.answersByService[currentStep.service.id] ?? {},
     );
-  }, [selectedServices, draft.answersByService]);
+  }, [currentStep, draft.answersByService]);
+
+  const canSubmit = useMemo(
+    () =>
+      applicationSteps.every((entry) =>
+        isStepComplete(
+          entry.step,
+          draft.answersByService[entry.service.id] ?? {},
+        ),
+      ),
+    [applicationSteps, draft.answersByService],
+  );
+
+  /*
+   * The wizard's labels: Step 1 (already done), one per configured step, then
+   * the review screen. The indicator is 1-based and Step 1 is behind us, so the
+   * current position is offset by two.
+   */
+  const stepLabels = useMemo(
+    () => [
+      'Select services',
+      ...applicationSteps.map((entry) =>
+        entry.stepCount > 1
+          ? `${entry.service.shortName ?? entry.service.name}: ${entry.step.title}`
+          : entry.step.title,
+      ),
+      'Review & submit',
+    ],
+    [applicationSteps],
+  );
 
   const goToStep1 = () => navigate(STEP_1_ROUTE);
+
+  // Back from the first screen leaves the flow; otherwise it walks the wizard.
+  const onBack = () => {
+    if (screenIndex === 0) {
+      goToStep1();
+      return;
+    }
+    setScreenIndex((index) => index - 1);
+    window.scrollTo({ top: 0 });
+  };
+
+  const onContinue = () => {
+    if (!canAdvance) return;
+    setScreenIndex((index) => Math.min(index + 1, screenCount - 1));
+    window.scrollTo({ top: 0 });
+  };
 
   const onSubmit = () => {
     if (!canSubmit || createOrder.isPending) return;
@@ -189,14 +270,20 @@ export function OrderApplicationDetailsPage({
               <header className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex flex-col gap-1 lg:max-w-[640px]">
                   <h1 className="text-h4 font-semibold text-text md:text-[28px] md:leading-[36px] lg:text-h3">
-                    Application details
+                    {currentStep ? currentStep.step.title : 'Review & submit'}
                   </h1>
                   <p className="text-body text-text-secondary">
-                    Fill in the details for each selected service.
+                    {currentStep
+                      ? (currentStep.step.description ??
+                        'Fill in the details for this part of your application.')
+                      : 'Attach any supporting documents and add notes before submitting.'}
                   </p>
                 </div>
 
-                <OrderStepIndicator currentStep={2} />
+                <OrderStepIndicator
+                  currentStep={screenIndex + 2}
+                  steps={stepLabels}
+                />
               </header>
 
               <SelectedServicesSummaryStrip
@@ -205,23 +292,29 @@ export function OrderApplicationDetailsPage({
               />
 
               <div className="flex flex-col gap-5 md:gap-6">
-                {selectedServices.map((service) => (
+                {currentStep ? (
                   <ServiceDetailsCard
-                    key={service.id}
-                    service={service}
-                    answers={draft.answersByService[service.id] ?? {}}
+                    key={currentStep.key}
+                    service={currentStep.service}
+                    fields={currentStep.step.fields}
+                    stepTitle={`${currentStep.service.name} — ${currentStep.step.title}`}
+                    stepIndex={currentStep.stepIndex}
+                    stepCount={currentStep.stepCount}
+                    answers={draft.answersByService[currentStep.service.id] ?? {}}
                     onFieldChange={(fieldName, value) =>
-                      setFieldValue(service.id, fieldName, value)
+                      setFieldValue(currentStep.service.id, fieldName, value)
                     }
                   />
-                ))}
+                ) : (
+                  <>
+                    <SupportingDocumentsCard
+                      files={draft.documents}
+                      onChange={setDocuments}
+                    />
 
-                <SupportingDocumentsCard
-                  files={draft.documents}
-                  onChange={setDocuments}
-                />
-
-                <AdditionalNotesCard value={draft.notes} onChange={setNotes} />
+                    <AdditionalNotesCard value={draft.notes} onChange={setNotes} />
+                  </>
+                )}
               </div>
 
               {submitError && (
@@ -234,10 +327,11 @@ export function OrderApplicationDetailsPage({
               )}
 
               <ApplicationFooterActions
-                onBack={goToStep1}
-                onSubmit={onSubmit}
-                canSubmit={canSubmit}
+                onBack={onBack}
+                onSubmit={isFinalScreen ? onSubmit : onContinue}
+                canSubmit={isFinalScreen ? canSubmit : canAdvance}
                 isSubmitting={createOrder.isPending}
+                isFinalStep={isFinalScreen}
               />
             </>
           )}

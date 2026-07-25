@@ -1,8 +1,12 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { apiFetch } from '@/services/api';
 import type { ApiSuccess } from '@/types/api';
-import type { ConversationSummary, ConversationThread } from '../../types/messages';
+import type {
+  ConversationSummary,
+  ConversationThread,
+  Message,
+} from '../../types/messages';
 
 /*
  * Messages data layer. The Messages UI is the customer's window onto the
@@ -51,5 +55,36 @@ export function useConversation(conversationId: string) {
         `/support/conversations/${conversationId}`,
       ).then((res) => res.data),
     enabled: Boolean(conversationId),
+  });
+}
+
+/*
+ * POST /v1/support/conversations/:id/messages — send into a thread.
+ *
+ * The author is resolved server-side from the session, never sent, so a customer
+ * cannot post as an agent. Attachments are a separate upload step (R2), so this
+ * carries the text body only.
+ *
+ * On success both the thread and the conversation list are invalidated: the send
+ * moves the thread to the top of the list and rewrites its preview, so the list
+ * is as stale as the thread is.
+ */
+export function useSendMessage(conversationId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (body: string) =>
+      apiFetch<ApiSuccess<Message>>(
+        `/support/conversations/${conversationId}/messages`,
+        { method: 'POST', body: JSON.stringify({ body }) },
+      ).then((res) => res.data),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: conversationKey(conversationId),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ['support', 'conversations'],
+      });
+    },
   });
 }

@@ -2,25 +2,38 @@ import { Fragment } from 'react';
 import { Check } from 'lucide-react';
 
 /*
- * The two-step wizard progress indicator, shared across viewports with two
- * presentations the design calls for:
+ * The wizard progress indicator, shared across viewports with two presentations
+ * the design calls for:
  *   - md+ (tablet, desktop): numbered badges joined by a connector line. A step
  *     already passed shows a navy badge with a check and a muted label; the
  *     current step shows a navy badge with its number and a dark label; later
  *     steps are hollow gray.
  *   - mobile: a "Step N of M — <label>" caption over a filled progress bar.
  *
- * Steps are data so a future third step needs no layout change; `currentStep`
- * is 1-based.
+ * The step list is a prop rather than a constant, because how many steps an
+ * application has is admin-defined per service: a service whose request form is
+ * split into three steps produces a five-step flow (select, three, submitted-1),
+ * and the indicator has to say so. `currentStep` is 1-based.
+ *
+ * The labels are elided on md+ once the flow grows past four steps, so a long
+ * configuration doesn't overflow the header row — the numbered badges still
+ * carry the position, and the mobile caption always names the current step.
  */
 
-const STEPS = ['Select services', 'Application details'];
+const DEFAULT_STEPS = ['Select services', 'Application details'];
 
 type OrderStepIndicatorProps = {
   currentStep: number; // 1-based
+  steps?: string[];
 };
 
-export function OrderStepIndicator({ currentStep }: OrderStepIndicatorProps) {
+export function OrderStepIndicator({
+  currentStep,
+  steps = DEFAULT_STEPS,
+}: OrderStepIndicatorProps) {
+  const STEPS = steps.length > 0 ? steps : DEFAULT_STEPS;
+  const hideLabels = STEPS.length > 4;
+
   return (
     <>
       {/* md+ — numbered badges + connectors */}
@@ -48,13 +61,15 @@ export function OrderStepIndicator({ currentStep }: OrderStepIndicatorProps) {
                     stepNumber
                   )}
                 </span>
-                <span
-                  className={`whitespace-nowrap text-body font-medium ${
-                    isCurrent ? 'text-text' : isDone ? 'text-text-secondary' : 'text-gray-400'
-                  }`}
-                >
-                  {label}
-                </span>
+                {hideLabels && !isCurrent ? null : (
+                  <span
+                    className={`whitespace-nowrap text-body font-medium ${
+                      isCurrent ? 'text-text' : isDone ? 'text-text-secondary' : 'text-gray-400'
+                    }`}
+                  >
+                    {label}
+                  </span>
+                )}
               </div>
             </Fragment>
           );

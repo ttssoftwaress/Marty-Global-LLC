@@ -7,3 +7,4 @@ export { BillingSummaryCard } from './BillingSummaryCard';
 export { MailRoomsCard } from './MailRoomsCard';
 export { OrderStatusChip } from './OrderStatusChip';
 export { SummaryCard, type SummaryEntry } from './SummaryCard';
+export { useDashboardSummary, dashboardSummaryKey } from './queries';

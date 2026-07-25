@@ -1,4 +1,9 @@
-import { useInfiniteQuery } from '@tanstack/react-query';
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 
 import { apiFetch } from '@/services/api';
 import type { ApiSuccess } from '@/types/api';
@@ -46,5 +51,63 @@ export function useNotificationFeed(filter: NotificationFilter) {
     // Keep the previous tab's rows on screen while the next filter loads, so
     // switching tabs doesn't flash the skeleton.
     placeholderData: (previous) => previous,
+  });
+}
+
+/*
+ * The top-bar panel reads the same endpoint as the page, just the newest few
+ * rows and unfiltered — it shows a preview of the feed, not a paginated stream,
+ * so it is a plain query rather than an infinite one. `unreadCount` off the same
+ * response backs the bell's badge, so the badge and the panel can never
+ * disagree.
+ */
+
+const PANEL_LIMIT = 8;
+
+export const notificationPanelKey = () => ['notifications', 'panel'] as const;
+
+// GET /v1/notifications?filter=all&limit=
+export function useNotificationPanel() {
+  return useQuery({
+    queryKey: notificationPanelKey(),
+    queryFn: () =>
+      apiFetch<ApiSuccess<NotificationFeedPage>>(
+        `/notifications?filter=all&limit=${PANEL_LIMIT}`,
+      ).then((res) => res.data),
+  });
+}
+
+// Both mutations invalidate every notification stream — the panel, the badge,
+// and each filter tab's cached feed all read the same rows, so one write has to
+// refresh all of them rather than just the caller's view.
+function useInvalidateNotifications() {
+  const queryClient = useQueryClient();
+  return () => queryClient.invalidateQueries({ queryKey: ['notifications'] });
+}
+
+// POST /v1/notifications/read-all — the panel's "Mark all as read".
+export function useMarkAllNotificationsRead() {
+  const invalidate = useInvalidateNotifications();
+
+  return useMutation({
+    mutationFn: () =>
+      apiFetch<ApiSuccess<{ unreadCount: number }>>('/notifications/read-all', {
+        method: 'POST',
+      }).then((res) => res.data),
+    onSuccess: invalidate,
+  });
+}
+
+// POST /v1/notifications/:id/read — a row click, before it navigates to `href`.
+export function useMarkNotificationRead() {
+  const invalidate = useInvalidateNotifications();
+
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiFetch<ApiSuccess<{ id: string; read: true }>>(
+        `/notifications/${id}/read`,
+        { method: 'POST' },
+      ).then((res) => res.data),
+    onSuccess: invalidate,
   });
 }

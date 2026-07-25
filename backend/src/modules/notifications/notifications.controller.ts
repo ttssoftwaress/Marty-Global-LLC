@@ -2,7 +2,10 @@ import type { NextFunction, Request, Response } from 'express';
 
 import { AppError } from '../../lib/app-error.js';
 import * as service from './notifications.service.js';
-import { sendEmailSchema } from './notifications.validation.js';
+import {
+  listFeedQuerySchema,
+  sendEmailSchema,
+} from './notifications.validation.js';
 
 // Thin: validate → call service → respond (AGENTS.md "Backend").
 
@@ -59,6 +62,53 @@ export async function getNotification(
         createdAt: notification.createdAt,
       },
     });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// --- In-app feed (the signed-in customer's own) --------------------------
+
+export async function listFeed(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const parsed = listFeedQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      throw AppError.validation('Invalid feed query', parsed.error.issues);
+    }
+
+    const page = await service.listFeed(req, parsed.data);
+    res.json({ data: page });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function markAllRead(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const result = await service.markAllFeedRead(req);
+    res.json({ data: result });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function markRead(req: Request, res: Response, next: NextFunction) {
+  try {
+    const id = req.params.id;
+    if (typeof id !== 'string' || !id) {
+      throw AppError.validation('Notification id is required');
+    }
+
+    const result = await service.markFeedItemRead(req, id);
+    res.json({ data: result });
   } catch (error) {
     next(error);
   }

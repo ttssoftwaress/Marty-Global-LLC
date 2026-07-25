@@ -6,17 +6,29 @@ import { useSession } from '@/auth/client';
 import { PortalLayout } from '../components/PortalLayout';
 import {
   CompanyDetailsCard,
+  EMPTY_NOTIFICATION_PREFERENCES,
+  NotificationPreferencesCard,
   PasswordSecurityCard,
   ProfileInfoCard,
   SETTINGS_SECTIONS,
   SaveButton,
   SettingsMobileMenu,
   SettingsTabs,
+  areNotificationPreferencesEqual,
+  useCompanyDetails,
+  useNotificationPreferences,
+  useProfile,
+  useUpdateCompanyDetails,
+  useUpdateNotificationPreferences,
+  useUpdateProfile,
 } from '../features/settings';
 import { PASSWORD_REQUIREMENTS } from '../features/settings/password-strength';
 import { usePortalShell } from '../hooks/usePortalShell';
 import type {
   CompanyDetails,
+  NotificationCategory,
+  NotificationChannel,
+  NotificationPreferences,
   PasswordChange,
   ProfileInfo,
   SettingsSection,
@@ -32,15 +44,19 @@ import type {
  *     a row drills into that section's frame with a back-row and a sticky save
  *     bar. The drilled-in section lives in `?section=` so Back/deep-links work.
  *
- * Only Profile info is built; the other three sections show a "coming soon"
- * panel in the same frame. The section defaults to Profile on tablet/desktop
- * (there's always a panel beside the tabs) and to the menu on mobile (nothing is
- * drilled into yet) — one `?section=` param reconciles both.
+ * All four sections are built — Profile info, Company details, Password &
+ * security, and Notification preferences — each rendering its own card in the
+ * same frame. The section defaults to Profile on tablet/desktop (there's always
+ * a panel beside the tabs) and to the menu on mobile (nothing is drilled into
+ * yet) — one `?section=` param reconciles both.
  *
- * Nothing is hardcoded customer data: name and email seed from the session,
- * phone from the profile record once its endpoint lands (two-apps sync rule).
- * Save/Change-photo handlers are in place for those mutations; Save unlocks only
- * once a field actually changes.
+ * Nothing is hardcoded customer data. Profile, company, and notification
+ * preferences each load from and save to `/v1/profile*`; the session fills name
+ * and email until the profile record resolves. Save unlocks only once a field
+ * actually changes. Change-photo still awaits the R2 upload flow.
+ *
+ * Password changes are deliberately not a `/v1/profile` route — Better Auth owns
+ * password handling and serves its own endpoint (AGENTS.md, Auth).
  */
 
 const SETTINGS_ROUTE = '/app/settings';
@@ -86,16 +102,20 @@ export function AccountSettingsPage() {
     setSearchParams({}, { replace: false });
   };
 
-  // Seed values: session for name/email; phone/avatar await the profile
-  // endpoint. Re-seeds if the session resolves after first paint.
+  const profileQuery = useProfile();
+  const updateProfile = useUpdateProfile();
+
+  // Seed from the profile record; the session fills name/email until it
+  // resolves, so the fields are never blank on first paint. Re-seeds whenever
+  // either source settles.
   const initial = useMemo<ProfileInfo>(
     () => ({
-      fullName: session?.user.name ?? '',
-      email: session?.user.email ?? '',
-      phone: '',
-      avatarUrl: undefined,
+      fullName: profileQuery.data?.fullName ?? session?.user.name ?? '',
+      email: profileQuery.data?.email ?? session?.user.email ?? '',
+      phone: profileQuery.data?.phone ?? '',
+      avatarUrl: profileQuery.data?.avatarUrl,
     }),
-    [session?.user.name, session?.user.email],
+    [profileQuery.data, session?.user.name, session?.user.email],
   );
 
   const [form, setForm] = useState<ProfileInfo>(initial);
@@ -111,7 +131,11 @@ export function AccountSettingsPage() {
     form.phone !== initial.phone;
 
   const onSave = () => {
-    // Wires to the update-profile mutation once the endpoint lands.
+    updateProfile.mutate({
+      fullName: form.fullName,
+      email: form.email,
+      phone: form.phone,
+    });
   };
 
   const onCancel = () => setForm(initial);
@@ -120,11 +144,20 @@ export function AccountSettingsPage() {
     // Wires to the avatar upload flow once R2 upload lands.
   };
 
-  // Company details seed empty until the company-record endpoint lands; the
-  // fields render whatever the page holds, so real data slots straight in.
+  const companyQuery = useCompanyDetails();
+  const updateCompany = useUpdateCompanyDetails();
+
+  // Company details seed from the record. A customer without a company yet gets
+  // empty fields (the backend returns them rather than a 404), with the country
+  // select defaulting to US so it always has a valid selection.
   const initialCompany = useMemo<CompanyDetails>(
-    () => ({ businessName: '', country: 'US', industry: '', address: '' }),
-    [],
+    () => ({
+      businessName: companyQuery.data?.businessName ?? '',
+      country: companyQuery.data?.country || 'US',
+      industry: companyQuery.data?.industry ?? '',
+      address: companyQuery.data?.address ?? '',
+    }),
+    [companyQuery.data],
   );
 
   const [company, setCompany] = useState<CompanyDetails>(initialCompany);
@@ -140,7 +173,7 @@ export function AccountSettingsPage() {
     company.address !== initialCompany.address;
 
   const onSaveCompany = () => {
-    // Wires to the update-company mutation once the endpoint lands.
+    updateCompany.mutate(company);
   };
 
   const onCancelCompany = () => setCompany(initialCompany);
@@ -170,6 +203,48 @@ export function AccountSettingsPage() {
 
   const onCancelPassword = () => setPassword(emptyPassword);
 
+  const notificationsQuery = useNotificationPreferences();
+  const updateNotifications = useUpdateNotificationPreferences();
+
+  // Seeds all-off until the record resolves, so no channel is shown as on before
+  // the customer's real preferences arrive.
+  const initialNotifications = useMemo<NotificationPreferences>(
+    () => notificationsQuery.data ?? EMPTY_NOTIFICATION_PREFERENCES,
+    [notificationsQuery.data],
+  );
+
+  const [notifications, setNotifications] = useState<NotificationPreferences>(
+    initialNotifications,
+  );
+  useEffect(() => setNotifications(initialNotifications), [initialNotifications]);
+
+  const toggleNotificationMaster = (next: boolean) =>
+    setNotifications((prev) => ({ ...prev, emailMaster: next }));
+
+  const toggleNotificationChannel = (
+    category: NotificationCategory,
+    channel: NotificationChannel,
+    next: boolean,
+  ) =>
+    setNotifications((prev) => ({
+      ...prev,
+      categories: {
+        ...prev.categories,
+        [category]: { ...prev.categories[category], [channel]: next },
+      },
+    }));
+
+  const isNotificationsDirty = !areNotificationPreferencesEqual(
+    notifications,
+    initialNotifications,
+  );
+
+  const onSaveNotifications = () => {
+    updateNotifications.mutate(notifications);
+  };
+
+  const onCancelNotifications = () => setNotifications(initialNotifications);
+
   const activeLabel =
     SETTINGS_SECTIONS.find((section) => section.id === activeSection)?.label ??
     'Profile info';
@@ -177,6 +252,7 @@ export function AccountSettingsPage() {
   const isProfile = activeSection === 'profile';
   const isCompany = activeSection === 'company';
   const isSecurity = activeSection === 'security';
+  const isNotifications = activeSection === 'notifications';
 
   return (
     <PortalLayout user={user} onLogout={onLogout}>
@@ -287,7 +363,21 @@ export function AccountSettingsPage() {
               </>
             )}
 
-            {!isProfile && !isCompany && !isSecurity && (
+            {/* Notification preferences keeps its card chrome on mobile (the
+                design draws the matrix inside the panel card) and carries its
+                own footer inside that card, so it renders un-bare here. */}
+            {isNotifications && (
+              <NotificationPreferencesCard
+                value={notifications}
+                onToggleMaster={toggleNotificationMaster}
+                onToggleChannel={toggleNotificationChannel}
+                onCancel={onCancelNotifications}
+                onSave={onSaveNotifications}
+                canSave={isNotificationsDirty}
+              />
+            )}
+
+            {!isProfile && !isCompany && !isSecurity && !isNotifications && (
               <ComingSoonPanel label={activeLabel} bare />
             )}
           </div>
@@ -368,7 +458,18 @@ export function AccountSettingsPage() {
               />
             )}
 
-            {!isProfile && !isCompany && !isSecurity && (
+            {isNotifications && (
+              <NotificationPreferencesCard
+                value={notifications}
+                onToggleMaster={toggleNotificationMaster}
+                onToggleChannel={toggleNotificationChannel}
+                onCancel={onCancelNotifications}
+                onSave={onSaveNotifications}
+                canSave={isNotificationsDirty}
+              />
+            )}
+
+            {!isProfile && !isCompany && !isSecurity && !isNotifications && (
               <ComingSoonPanel label={activeLabel} />
             )}
           </div>

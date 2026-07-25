@@ -1,4 +1,4 @@
 export { ConversationList } from './ConversationList';
 export { MessageThread } from './MessageThread';
 export { EmptyThread } from './EmptyThread';
-export { useConversations, useConversation } from './queries';
+export { useConversations, useConversation, useSendMessage } from './queries';

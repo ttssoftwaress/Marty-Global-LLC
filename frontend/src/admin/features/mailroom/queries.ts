@@ -1,0 +1,265 @@
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
+
+import { apiFetch } from '@/services/api';
+import type { ApiSuccess } from '@/types/api';
+import type {
+  MailLogFilters,
+  MailLogPage,
+  MailOpsCustomer,
+  MailOpsRecentUpload,
+  MailOpsSummary,
+  MailRequestDetail,
+  MailRequestFilter,
+  MailRequestPage,
+  MailRequestResolution,
+  MailRequestRow,
+  MailScanDraft,
+} from '../../types/mailroom';
+
+/*
+ * Admin virtual mail ops data layer. The endpoints land later with the
+ * `mailroom` module (AGENTS.md, two-apps sync rule); these hooks fix the wire
+ * contract the screen expects so the module drops in without touching the UI:
+ *   - the summary, backing the three KPI figures and the tab counts in one call
+ *     so they cannot disagree with each other
+ *   - customer search, server-resolved like every other list in the admin area,
+ *     so the picker never filters a client-side copy of the customer table
+ *   - the recently-uploaded feed, cursor-paginated like every other list
+ *   - the upload itself, which invalidates the feed and the summary so a filed
+ *     scan appears without the screen re-deriving anything locally
+ */
+
+export const adminMailOpsSummaryKey = () =>
+  ['admin', 'mailroom', 'summary'] as const;
+
+// GET /v1/admin/mailroom/summary — the KPI figures and the tab counts.
+export function useAdminMailOpsSummary() {
+  return useQuery({
+    queryKey: adminMailOpsSummaryKey(),
+    queryFn: () =>
+      apiFetch<ApiSuccess<MailOpsSummary>>('/admin/mailroom/summary').then(
+        (res) => res.data,
+      ),
+  });
+}
+
+export const adminMailOpsCustomerSearchKey = (search: string) =>
+  ['admin', 'mailroom', 'customer-search', search] as const;
+
+/*
+ * GET /v1/admin/mailroom/customers?search= — the picker's options.
+ *
+ * Only runs once the operator has typed something: an unfiltered fetch of every
+ * customer is the query this screen must never make.
+ */
+export function useAdminMailOpsCustomerSearch(search: string) {
+  const query = search.trim();
+
+  return useQuery({
+    queryKey: adminMailOpsCustomerSearchKey(query),
+    queryFn: () =>
+      apiFetch<ApiSuccess<{ customers: MailOpsCustomer[] }>>(
+        `/admin/mailroom/customers?search=${encodeURIComponent(query)}`,
+      ).then((res) => res.data.customers),
+    enabled: query.length > 1,
+  });
+}
+
+export const adminMailOpsRecentKey = () =>
+  ['admin', 'mailroom', 'recent'] as const;
+
+// GET /v1/admin/mailroom/scans?cursor= — the recently-uploaded feed, newest first.
+export function useAdminMailOpsRecentUploads() {
+  return useInfiniteQuery({
+    queryKey: adminMailOpsRecentKey(),
+    queryFn: ({ pageParam }) => {
+      const query = pageParam ? `?cursor=${encodeURIComponent(pageParam)}` : '';
+      return apiFetch<
+        ApiSuccess<{ uploads: MailOpsRecentUpload[]; nextCursor: string | null }>
+      >(`/admin/mailroom/scans${query}`).then((res) => res.data);
+    },
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+  });
+}
+
+/*
+ * POST /v1/admin/mailroom/scans — file a scan into a customer's inbox.
+ *
+ * The body carries the R2 object key the scan was uploaded under, not the file
+ * itself (AGENTS.md, Storage). Both the feed and the summary are invalidated on
+ * success, since a filed scan moves the "new scans" figure as well as the list.
+ */
+export function useUploadMailScan() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (draft: MailScanDraft) =>
+      apiFetch<ApiSuccess<MailOpsRecentUpload>>('/admin/mailroom/scans', {
+        method: 'POST',
+        body: JSON.stringify(draft),
+      }).then((res) => res.data),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: adminMailOpsRecentKey() });
+      void queryClient.invalidateQueries({ queryKey: adminMailOpsSummaryKey() });
+    },
+  });
+}
+
+export const adminMailRequestsKey = (filter: MailRequestFilter, page: number) =>
+  ['admin', 'mailroom', 'requests', filter, page] as const;
+
+/*
+ * GET /v1/admin/mailroom/requests?filter=&page= — the forwarding / shredding
+ * queue behind the "Pending requests" tab.
+ *
+ * Offset-paginated rather than cursor-paginated (the exception AGENTS.md's list
+ * rule allows for): the footer prints an absolute range and a numbered page
+ * strip, and a page can be jumped to directly — none of which a cursor answers.
+ * The filter is applied server-side so the screen never holds the whole queue
+ * to narrow a copy of it locally.
+ *
+ * The previous page is kept in place while the next resolves, so paging and
+ * filtering swap the rows without the table collapsing to a spinner.
+ */
+export function useAdminMailRequests(filter: MailRequestFilter, page: number) {
+  return useQuery({
+    queryKey: adminMailRequestsKey(filter, page),
+    queryFn: () =>
+      apiFetch<ApiSuccess<MailRequestPage>>(
+        `/admin/mailroom/requests?filter=${filter}&page=${page}`,
+      ).then((res) => res.data),
+    placeholderData: (previous) => previous,
+  });
+}
+
+/*
+ * POST /v1/admin/mailroom/requests/:id/process — work one request.
+ *
+ * The backend decides what "process" means for the request's type and what the
+ * next status is; the client only names the row (AGENTS.md — business logic
+ * lives in services). Both the queue and the summary are invalidated on
+ * success, since working a request moves the KPI figures and the tab counts as
+ * well as the row.
+ */
+export function useProcessMailRequest() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (requestId: string) =>
+      apiFetch<ApiSuccess<MailRequestRow>>(
+        `/admin/mailroom/requests/${requestId}/process`,
+        { method: 'POST' },
+      ).then((res) => res.data),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ['admin', 'mailroom', 'requests'],
+      });
+      void queryClient.invalidateQueries({ queryKey: adminMailOpsSummaryKey() });
+    },
+  });
+}
+
+export const adminMailRequestDetailKey = (requestId: string) =>
+  ['admin', 'mailroom', 'requests', 'detail', requestId] as const;
+
+/*
+ * GET /v1/admin/mailroom/requests/:id — everything the slide-over renders.
+ *
+ * Fetched on open rather than carried on the queue row: the row would otherwise
+ * have to hold a presigned scan URL for every request on the page, and those
+ * URLs are short-TTL by design (AGENTS.md, Security & PII) — minting them for
+ * rows nobody opens both wastes them and widens what a list response exposes.
+ *
+ * `enabled` gates the call on an id, so the hook can sit unconditionally in the
+ * screen while no request is open.
+ */
+export function useAdminMailRequestDetail(requestId: string | null) {
+  return useQuery({
+    queryKey: adminMailRequestDetailKey(requestId ?? ''),
+    queryFn: () =>
+      apiFetch<ApiSuccess<MailRequestDetail>>(
+        `/admin/mailroom/requests/${requestId}`,
+      ).then((res) => res.data),
+    enabled: requestId !== null,
+  });
+}
+
+/*
+ * POST /v1/admin/mailroom/requests/:id/resolve — settle one request from the
+ * slide-over.
+ *
+ * Distinct from `useProcessMailRequest` above, which is the queue row's
+ * one-click advance: this carries the operator's form — the tracking number and
+ * carrier on a forwarding request, the notes on either — and is the call behind
+ * "Mark as forwarded" / "Mark as shredded". The backend decides what settling
+ * means for the request's type and what status it lands on; the client only
+ * reports what was entered.
+ *
+ * The queue, the summary, and this request's own detail are all invalidated on
+ * success, since settling moves the row, the KPI figures, and the tab counts.
+ */
+export function useResolveMailRequest() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ requestId, ...body }: MailRequestResolution) =>
+      apiFetch<ApiSuccess<MailRequestRow>>(
+        `/admin/mailroom/requests/${requestId}/resolve`,
+        { method: 'POST', body: JSON.stringify(body) },
+      ).then((res) => res.data),
+    onSuccess: (_row, { requestId }) => {
+      void queryClient.invalidateQueries({
+        queryKey: ['admin', 'mailroom', 'requests'],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: adminMailOpsSummaryKey(),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: adminMailRequestDetailKey(requestId),
+      });
+    },
+  });
+}
+
+export const adminMailLogKey = (filters: MailLogFilters, page: number) =>
+  ['admin', 'mailroom', 'log', filters, page] as const;
+
+/*
+ * GET /v1/admin/mailroom/log?search=&range=&action=&page= — the closed history
+ * behind the "Mail log" tab.
+ *
+ * Offset-paginated for the same reason the pending queue is (the footer prints
+ * an absolute range and a numbered strip). All three filters are applied
+ * server-side, so the screen never holds the whole log to narrow a copy of it
+ * locally — the log is the longest list in this module and the one that must
+ * never be fetched whole.
+ *
+ * The previous page is kept in place while the next resolves, so paging and
+ * re-filtering swap the rows without the table collapsing to a spinner.
+ */
+export function useAdminMailLog(filters: MailLogFilters, page: number) {
+  return useQuery({
+    queryKey: adminMailLogKey(filters, page),
+    queryFn: () => {
+      const params = new URLSearchParams({
+        range: filters.range,
+        action: filters.action,
+        page: String(page),
+      });
+
+      const search = filters.search.trim();
+      if (search) params.set('search', search);
+
+      return apiFetch<ApiSuccess<MailLogPage>>(
+        `/admin/mailroom/log?${params.toString()}`,
+      ).then((res) => res.data);
+    },
+    placeholderData: (previous) => previous,
+  });
+}

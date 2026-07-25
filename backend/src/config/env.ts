@@ -21,6 +21,15 @@ const envSchema = z.object({
   BETTER_AUTH_SECRET: z.string().min(32),
   BETTER_AUTH_URL: z.url(),
 
+  // The bootstrap admin account. Optional so an existing database and the test
+  // suite boot without them; when both are set, boot reconciles the account (see
+  // modules/auth/admin-bootstrap.ts). The password floor matches Better Auth's
+  // `minPasswordLength` in config/auth.ts — a shorter one would be rejected at
+  // creation time, so we fail fast on boot instead.
+  ADMIN_EMAIL: optionalString.pipe(z.email().optional()),
+  ADMIN_PASSWORD: optionalString.pipe(z.string().min(8).max(128).optional()),
+  ADMIN_NAME: z.string().min(1).default('Marty Global Admin'),
+
   // Amazon SES. Credentials are optional so local dev and tests boot without an
   // AWS account — when they are absent the transport logs instead of sending
   // (see config/ses.ts). Production must set them.
@@ -33,7 +42,17 @@ const envSchema = z.object({
   SES_FROM_NAME: z.string().min(1).default('Marty Global'),
   SES_REPLY_TO_EMAIL: optionalString.pipe(z.email().optional()),
   SES_CONFIGURATION_SET: optionalString,
-});
+})
+  // Half-configured is a mistake, not a "skip" — a typo'd ADMIN_EMAIL next to a
+  // real password would otherwise silently create nothing.
+  .refine(
+    (value) => Boolean(value.ADMIN_EMAIL) === Boolean(value.ADMIN_PASSWORD),
+    {
+      path: ['ADMIN_PASSWORD'],
+      message:
+        'ADMIN_EMAIL and ADMIN_PASSWORD must be set together (or both left unset)',
+    },
+  );
 
 const parsed = envSchema.safeParse(process.env);
 

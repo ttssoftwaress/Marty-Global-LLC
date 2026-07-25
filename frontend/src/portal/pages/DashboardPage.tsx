@@ -7,6 +7,7 @@ import {
   RecentActivity,
   RecentOrders,
   WelcomeBanner,
+  useDashboardSummary,
 } from '../features/dashboard';
 import { firstNameOf, usePortalShell } from '../hooks/usePortalShell';
 import type { DashboardSummary } from '../types/dashboard';
@@ -21,8 +22,12 @@ import type { DashboardSummary } from '../types/dashboard';
  * rather than forcing one grid to reflow into a different reading order.
  *
  * Every value comes from `summary`; nothing on this page is hardcoded customer
- * data. The API is not built yet, so the page renders a skeleton until a
- * summary is supplied by its future query.
+ * data. It loads from `GET /v1/dashboard/summary`, which the backend composes
+ * from the orders, billing, mail-room, and support modules so each figure agrees
+ * with the page it links to. A skeleton renders until that query resolves.
+ *
+ * The props are an override for rendering the page with a supplied summary
+ * (stories/tests); the route passes none and the query supplies it.
  */
 
 type DashboardPageProps = {
@@ -52,13 +57,19 @@ function DashboardSkeleton() {
   );
 }
 
-export function DashboardPage({ summary, isLoading }: DashboardPageProps) {
+export function DashboardPage(props: DashboardPageProps = {}) {
   // The shell's name and role come from the auth session; the summary supplies
-  // the page's customer data once its query lands.
+  // the page's customer data.
   const { user, onLogout } = usePortalShell();
+  const query = useDashboardSummary();
 
-  // Until the summary endpoint exists, the banner greets the customer with the
-  // first name on their account rather than rendering an empty greeting.
+  // A supplied summary wins over the query, so the page can be rendered with
+  // fixture data without the network.
+  const summary = props.summary ?? query.data;
+  const isLoading = props.summary ? Boolean(props.isLoading) : query.isPending;
+
+  // The banner falls back to the first name on the account, so the greeting is
+  // never empty while the summary is still loading.
   const firstName = summary?.customerFirstName ?? firstNameOf(user.name);
 
   return (

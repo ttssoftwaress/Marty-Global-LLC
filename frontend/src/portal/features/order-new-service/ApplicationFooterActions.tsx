@@ -27,6 +27,13 @@ type ApplicationFooterActionsProps = {
   onSubmit: () => void;
   canSubmit: boolean;
   isSubmitting?: boolean;
+  /*
+   * Whether this is the last screen of the application. A service's request form
+   * is admin-defined and may span several steps, so the footer's primary action
+   * is Continue until the final screen, where it becomes Submit. The reassurance
+   * note is about what happens after submitting, so it only appears there too.
+   */
+  isFinalStep?: boolean;
 };
 
 function LockNote({ className }: { className?: string }) {
@@ -43,8 +50,13 @@ export function ApplicationFooterActions({
   onSubmit,
   canSubmit,
   isSubmitting = false,
+  isFinalStep = true,
 }: ApplicationFooterActionsProps) {
-  const submitLabel = isSubmitting ? 'Submitting…' : 'Submit application';
+  const submitLabel = isFinalStep
+    ? isSubmitting
+      ? 'Submitting…'
+      : 'Submit application'
+    : 'Continue';
   const submitDisabled = !canSubmit || isSubmitting;
 
   return (
@@ -52,7 +64,13 @@ export function ApplicationFooterActions({
       {/* md+ in-flow footer. Tablet: note above the button row. Desktop: all
           three on one row via the lg overrides. */}
       <div className="hidden flex-col gap-5 md:flex lg:flex-row lg:items-center lg:justify-between lg:gap-6">
-        <LockNote className="lg:order-2 lg:max-w-[500px] lg:justify-center" />
+        {isFinalStep ? (
+          <LockNote className="lg:order-2 lg:max-w-[500px] lg:justify-center" />
+        ) : (
+          // Keeps Back left / Continue right on desktop's three-column row when
+          // the note isn't shown.
+          <div className="hidden lg:order-2 lg:block" aria-hidden="true" />
+        )}
 
         <div className="flex items-center justify-between gap-4 lg:contents">
           <button
@@ -78,7 +96,9 @@ export function ApplicationFooterActions({
 
       {/* Mobile: the note sits in the scrolling flow; the buttons live in the
           sticky bar below. */}
-      <LockNote className="justify-center px-2 py-2 text-center md:hidden" />
+      {isFinalStep ? (
+        <LockNote className="justify-center px-2 py-2 text-center md:hidden" />
+      ) : null}
 
       {/* Mobile sticky action bar — icon-only Back + full-width Submit. It's
           `sticky bottom-0` in the scrolling workspace so it rides above the

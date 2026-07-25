@@ -1,6 +1,12 @@
 export { AdditionalNotesCard } from './AdditionalNotesCard';
 export { ApplicationField } from './ApplicationField';
 export { ApplicationFooterActions } from './ApplicationFooterActions';
+export {
+  buildApplicationSteps,
+  isStepComplete,
+  serviceFormSteps,
+} from './applicationSteps';
+export type { ApplicationStep } from './applicationSteps';
 export { ConfirmationCard } from './ConfirmationCard';
 export { OrderStepIndicator } from './OrderStepIndicator';
 export { OrderStickyBar } from './OrderStickyBar';

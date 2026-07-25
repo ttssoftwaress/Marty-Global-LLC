@@ -4,7 +4,7 @@ You are an expert full-stack TypeScript engineer building **Marty Global LLC**,
 a corporate filing service provider. Clean, simple, maintainable code — clarity
 over abstraction. Think like a senior engineer on a production SaaS.
 
-Design, styling, and the UI build workflow live in **Design guide.md** (the
+Design, styling, and the UI build workflow live in **Design.md** (the
 companion to this file). Everything else — architecture, backend, data, money,
 auth, security — lives here.
 

@@ -30,8 +30,121 @@ model User {
   accounts      Account[]
   orders        Order[]
 
+  // Portal records owned by this customer. Better Auth owns the columns above;
+  // everything below is ours, kept off the auth table so a Better Auth
+  // regeneration never touches it.
+  profile                 CustomerProfile?
+  company                 Company?
+  notificationPreference  NotificationPreference?
+  feedNotifications       FeedNotification[]
+  mailRooms               MailRoom[]
+  conversations           Conversation[]
+  quotes                  Quote[]
+  payments                Payment[]
+  paymentMethods          PaymentMethod[]
+  stripeCustomer          StripeCustomer?
+
+  // Staff-side records. A customer has none of these; a staff/admin user has a
+  // StaffProfile and picks up whatever work is routed to them.
+  staffProfile            StaffProfile?
+  assignedOrders          Order[]           @relation("OrderAssignee")
+  assignedConversations   Conversation[]    @relation("ConversationAssignee")
+  mailRequestsRequested   MailRequest[]     @relation("MailRequestCustomer")
+  mailRequestsProcessed   MailRequest[]     @relation("MailRequestProcessor")
+  mailActionsProcessed    MailActionLog[]   @relation("MailActionProcessor")
+  refundsProcessed        Refund[]          @relation("RefundProcessor")
+
   @@unique([email])
   @@map("user")
+}
+
+// --- Customer profile & company ------------------------------------------
+// The Account-settings screens. Name and email live on the Better Auth `user`
+// row (the session is their source of truth); phone and avatar are ours, so they
+// sit in a satellite record created lazily on first save. A customer has at most
+// one company — the Company-details frame edits a single record.
+
+model CustomerProfile {
+  id     String @id @default(cuid())
+  userId String @unique
+  // E.164 — PII, never logged (AGENTS.md, Security & PII).
+  phone  String?
+  // R2 object key, not a URL: the served link is a short-TTL presigned URL the
+  // service layer mints after an ownership check.
+  avatarKey String?
+  // IANA zone (e.g. "America/New_York"). Timestamps are stored UTC and converted
+  // to this only at render (AGENTS.md, Dates).
+  timezone  String?
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
+  deletedAt DateTime? @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("customer_profile")
+}
+
+model Company {
+  id           String @id @default(cuid())
+  ownerId      String @unique
+  businessName String
+  // ISO 3166-1 alpha-2 — the select resolves its label from the code.
+  country      String
+  industry     String?
+  address      String?
+  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime  @updatedAt @db.Timestamptz(3)
+  deletedAt    DateTime? @db.Timestamptz(3)
+
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@map("company")
+}
+
+// --- Staff --------------------------------------------------------------
+// The admin "Team & staff" screen. Better Auth's `user.role` stays the coarse
+// authorization role — customer | staff | admin, the only thing the guards read
+// (AGENTS.md, Auth). This satellite record carries the job role the org actually
+// uses ("Reviewer / Compliance"), the account state, and per-area access, kept
+// off the auth table so a Better Auth regeneration never touches it.
+//
+// A member's granted areas are a string array rather than a Json map: the write
+// side sends a map, but what we store is the set of keys that are on, which is
+// what every read then checks membership against. The area catalogue itself is
+// server-owned (lib/permissions.ts), so adding an admin section is a backend
+// change — never a frontend deploy.
+
+enum StaffStatus {
+  ACTIVE
+  // Invited but not yet accepted: no join date, and the row's secondary action
+  // resends the invite rather than deactivating an account that doesn't exist.
+  INVITED
+  DEACTIVATED
+}
+
+model StaffProfile {
+  id     String @id @default(cuid())
+  userId String @unique
+  // The job role's stable key ("super-admin", "reviewer"), resolved to its label
+  // from lib/permissions.ts. Distinct from user.role, which is the auth role.
+  roleKey String
+  status  StaffStatus @default(INVITED)
+  // Granted permission-area keys. Absent from the array = not granted.
+  permissions String[]
+  // What the support inbox's narrow capsules print ("Marcus T."), snapshotted so
+  // a thread reads correctly without re-deriving it from the full name.
+  shortName   String?
+  invitedAt   DateTime? @db.Timestamptz(3)
+  joinedAt    DateTime? @db.Timestamptz(3)
+  lastActiveAt DateTime? @db.Timestamptz(3)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
+  deletedAt   DateTime? @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, roleKey])
+  @@map("staff_profile")
 }
 
 model Session {
@@ -127,6 +240,86 @@ model Notification {
   @@map("notification")
 }
 
+// --- Notification preferences --------------------------------------------
+// The Account-settings notification matrix: one master email gate plus four
+// categories × three channels. Modelled as explicit columns rather than Json —
+// the set is fixed by the UI and the delivery path queries individual flags, so
+// a column keeps that a cheap indexed read instead of a Json probe.
+//
+// `emailMaster` gates every email column account-wide: an enabled category still
+// sends no email when the master is off (the frontend enforces the same rule).
+
+model NotificationPreference {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  emailMaster Boolean @default(true)
+
+  statusUpdatesEmail Boolean @default(true)
+  statusUpdatesInApp Boolean @default(true)
+  statusUpdatesSms   Boolean @default(false)
+
+  quoteAlertsEmail Boolean @default(true)
+  quoteAlertsInApp Boolean @default(true)
+  quoteAlertsSms   Boolean @default(false)
+
+  documentRequestsEmail Boolean @default(true)
+  documentRequestsInApp Boolean @default(true)
+  documentRequestsSms   Boolean @default(false)
+
+  newMessagesEmail Boolean @default(true)
+  newMessagesInApp Boolean @default(true)
+  newMessagesSms   Boolean @default(false)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notification_preference")
+}
+
+// --- In-app notification feed --------------------------------------------
+// The top-bar panel and `/app/notifications`. Distinct from `Notification`
+// above: that row is a delivery ledger for an outbound email/SMS, this one is a
+// feed entry the customer reads in the app. One event can produce both.
+//
+// `message` is stored display-ready (resolved server-side, amounts already
+// formatted) so the row renders without the client re-deriving copy. `group` is
+// stamped at read time from the server clock, not stored — a row's bucket
+// changes as it ages, so persisting it would go stale.
+
+enum FeedNotificationCategory {
+  ORDER
+  BILLING
+  DOCUMENT
+  MESSAGE
+  PAYMENT
+  MAILROOM
+}
+
+model FeedNotification {
+  id       String                   @id @default(cuid())
+  userId   String
+  category FeedNotificationCategory
+  message  String
+  // In-app destination for the design's chevron rows ("/app/orders/:id"); null
+  // makes the row informational. A relative path only — never an external URL.
+  href     String?
+  readAt   DateTime? @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
+  deletedAt DateTime? @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // The feed reads newest-first per customer; the partial-unread count filters
+  // on readAt within the same scan.
+  @@index([userId, createdAt])
+  @@index([userId, readAt])
+  @@map("feed_notification")
+}
+
 // --- Service catalog -----------------------------------------------------
 // The orderable services a customer chooses from in the "Order new service"
 // flow. Admin-defined (AGENTS.md: the backend owns the catalog) — the portal
@@ -153,6 +346,11 @@ model Service {
   // textarea). Stored as Json so the admin can shape a service's form without a
   // migration; validated against the Zod schema on read.
   detailFields Json?
+  // The same questions grouped into wizard steps: an ordered array of
+  // ServiceFormStep (`{ key, title, description?, fields }`). Null on a service
+  // authored before steps existed — the flat `detailFields` above is then the
+  // whole form, and both apps read one shape through that fallback.
+  formSteps   Json?
   // Only active services appear in the catalog; deactivating hides a service
   // without deleting historical orders that reference its snapshot.
   active      Boolean @default(true)
@@ -162,9 +360,92 @@ model Service {
   deletedAt   DateTime? @db.Timestamptz(3)
 
   orderItems  OrderItem[]
+  pricingTiers ServicePricingTier[]
+  regions      ServiceRegionOffering[]
 
   @@index([active, sortOrder])
   @@map("service")
+}
+
+// --- Regions -------------------------------------------------------------
+// The jurisdictions a service can be offered in, and the label + flag every
+// screen prints for one. A table rather than a frontend constant because
+// Design.md forbids exporting glyph assets and AGENTS.md keeps the catalog
+// server-owned: adding a jurisdiction is a data change, not a deploy in either
+// app.
+//
+// `flag` is an emoji — text, not an asset. `code` is ISO 3166-1 alpha-2 where a
+// region is a country, and a stable slug where it is not ("EU").
+
+model Region {
+  code      String  @id
+  label     String
+  flag      String
+  active    Boolean @default(true)
+  sortOrder Int     @default(0)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  serviceOfferings ServiceRegionOffering[]
+  pricingTiers     ServicePricingTier[]
+  orders           Order[]
+
+  @@index([active, sortOrder])
+  @@map("region")
+}
+
+// Where a service is offered, and the processing estimate shown beside it — the
+// admin detail screen's "Supported regions" card, one row per toggle. A row
+// exists only for a region the admin has touched; `enabled` false is an explicit
+// "offered here once, not any more" rather than a deleted row, so the processing
+// estimate survives a toggle off and back on.
+model ServiceRegionOffering {
+  id             String  @id @default(cuid())
+  serviceId      String
+  regionCode     String
+  enabled        Boolean @default(true)
+  // Free text, per jurisdiction ("5–7 business days") — never parsed, only shown.
+  processingTime String?
+  sortOrder      Int     @default(0)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  region  Region  @relation(fields: [regionCode], references: [code], onDelete: Restrict)
+
+  @@unique([serviceId, regionCode])
+  @@index([regionCode])
+  @@map("service_region_offering")
+}
+
+// A named price point on a service ("Standard", "Expedited"), optionally scoped
+// to one region so the same tier can be priced differently per jurisdiction —
+// `regionCode` null means it applies everywhere the service is offered.
+//
+// MONEY: integer minor units + ISO 4217, never a float (AGENTS.md, Money). The
+// catalog stays quote-based, so a tier is the team's reference price rather than
+// something the customer is charged automatically.
+model ServicePricingTier {
+  id          String  @id @default(cuid())
+  serviceId   String
+  name        String
+  price       Int
+  currency    String  @default("USD")
+  regionCode  String?
+  // The delivery estimate as phrased for this tier; free text, like the region
+  // offering's, because it varies per jurisdiction.
+  turnaround  String?
+  description String?
+  sortOrder   Int     @default(0)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
+  deletedAt   DateTime? @db.Timestamptz(3)
+
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  region  Region? @relation(fields: [regionCode], references: [code], onDelete: SetNull)
+
+  @@index([serviceId, sortOrder])
+  @@map("service_pricing_tier")
 }
 
 // --- Orders --------------------------------------------------------------
@@ -191,6 +472,14 @@ model Order {
   status      OrderStatus @default(SUBMITTED)
   // Application-wide free-text note from Step 2 (optional).
   notes       String?
+  // The staff member working this order. Null renders "Unassigned" in the admin
+  // queue. SetNull on delete: an order must outlive the person who held it.
+  assigneeId  String?
+  // The jurisdiction the application is for, denormalised at creation from the
+  // primary item's answers. The admin queue filters and groups on it, and a Json
+  // probe into `OrderItem.answers` could neither be indexed nor kept honest as
+  // field names change per service.
+  regionCode  String?
   // When the customer submitted the application. Set at creation for a submitted
   // order; a future DRAFT flow would leave it null until submit.
   submittedAt DateTime?   @db.Timestamptz(3)
@@ -199,11 +488,90 @@ model Order {
   deletedAt   DateTime?   @db.Timestamptz(3)
 
   customer    User        @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  assignee    User?       @relation("OrderAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  region      Region?     @relation(fields: [regionCode], references: [code], onDelete: SetNull)
   items       OrderItem[]
+  documents   OrderDocument[]
+  activity    OrderActivity[]
+  quotes      Quote[]
+  conversations Conversation[]
 
   @@index([customerId, createdAt])
   @@index([status])
+  // The admin queue's default view: newest first across every customer, narrowed
+  // by status and by the two denormalised filter columns.
+  @@index([status, createdAt])
+  @@index([assigneeId])
+  @@index([regionCode])
   @@map("order")
+}
+
+// --- Order documents & activity ------------------------------------------
+// The order-detail screen's Documents and Activity cards.
+//
+// A document is either something the team generated (a filed certificate) or
+// something the customer uploaded with the application. Files live in R2 and are
+// served only as short-TTL presigned URLs after an ownership check in the service
+// layer (AGENTS.md, Security & PII) — so we store the object key, never a URL.
+// `status` gates the download: a PENDING row is a placeholder the UI renders
+// disabled ("we owe you this document"), with no object behind it yet.
+
+enum OrderDocumentStatus {
+  PENDING
+  AVAILABLE
+  REJECTED
+}
+
+enum OrderDocumentSource {
+  TEAM
+  CUSTOMER
+}
+
+model OrderDocument {
+  id      String              @id @default(cuid())
+  orderId String
+  name    String
+  status  OrderDocumentStatus @default(PENDING)
+  source  OrderDocumentSource @default(TEAM)
+  // R2 object key — null until the file exists (a PENDING placeholder).
+  objectKey   String?
+  contentType String?
+  // Bytes. Int is ample: uploads are capped far below 2 GB.
+  sizeBytes   Int?
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
+  deletedAt   DateTime? @db.Timestamptz(3)
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@map("order_document")
+}
+
+// One entry in the order's activity feed. `authorUserId` is null for a system
+// entry (a status change written by a job) — `authorName` still carries what the
+// row displays, so the feed reads correctly even after the author is deleted.
+enum OrderActivityAuthor {
+  TEAM
+  CUSTOMER
+  SYSTEM
+}
+
+model OrderActivity {
+  id           String              @id @default(cuid())
+  orderId      String
+  author       OrderActivityAuthor
+  authorName   String
+  authorUserId String?
+  message      String
+  occurredAt   DateTime            @default(now()) @db.Timestamptz(3)
+  createdAt    DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime            @updatedAt @db.Timestamptz(3)
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, occurredAt])
+  @@map("order_activity")
 }
 
 model OrderItem {
@@ -224,4 +592,625 @@ model OrderItem {
 
   @@index([orderId])
   @@map("order_item")
+}
+
+// --- Virtual mail rooms --------------------------------------------------
+// A customer's mail rooms (`/app/mailroom`) and each room's scanned inbox
+// (`/app/mailroom/:roomId`). The room is a subscription to a business address;
+// the counts the overview shows (new mail, pending requests) are derived from
+// the item rows, never stored — a stored counter drifts the moment a job or an
+// admin touches an item outside the path that increments it.
+//
+// `address` is denormalised onto the room as the one-line string the UI renders.
+// The structured parts sit beside it for the label/forwarding paperwork.
+
+enum MailRoomStatus {
+  ACTIVE
+  PENDING
+  SUSPENDED
+}
+
+model MailRoom {
+  id         String         @id @default(cuid())
+  customerId String
+  name       String
+  // Full one-line address as displayed. The parts below are the same address
+  // structured, for forwarding labels and jurisdiction filters.
+  address    String
+  line1      String?
+  line2      String?
+  city       String?
+  region     String?
+  postalCode String?
+  // ISO 3166-1 alpha-2.
+  country    String?
+  status     MailRoomStatus @default(PENDING)
+  // Subscription renewal — "Renews Mar 12, 2027" on the room card.
+  renewsAt   DateTime?      @db.Timestamptz(3)
+  createdAt  DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime       @updatedAt @db.Timestamptz(3)
+  deletedAt  DateTime?      @db.Timestamptz(3)
+
+  customer User       @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  items    MailItem[]
+
+  @@index([customerId, createdAt])
+  @@map("mail_room")
+}
+
+// A single piece of scanned mail. `scanReady` is false while the scan still
+// processes — the inbox renders a "Scanning" preview and no pages exist yet.
+// `storageExpiresAt` is the shred date; the inbox flags an item approaching it so
+// the customer can request forwarding in time.
+enum MailItemStatus {
+  NEW
+  VIEWED
+  SCANNED
+  FORWARDED
+  ACTION_REQUESTED
+  ARCHIVED
+}
+
+model MailItem {
+  id       String         @id @default(cuid())
+  roomId   String
+  // "State Registry Office" / "Unknown Sender" — free text off the envelope.
+  sender   String
+  status   MailItemStatus @default(NEW)
+  receivedAt       DateTime  @db.Timestamptz(3)
+  storageExpiresAt DateTime  @db.Timestamptz(3)
+  scanReady        Boolean   @default(false)
+  // Why an item needs action ("Forwarding address required") and by when.
+  note             String?
+  responseDueAt    DateTime? @db.Timestamptz(3)
+  // R2 object key for the combined PDF, once the scan finishes. Served only as a
+  // short-TTL presigned URL after an ownership check (AGENTS.md).
+  pdfObjectKey     String?
+  createdAt        DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime  @updatedAt @db.Timestamptz(3)
+  deletedAt        DateTime? @db.Timestamptz(3)
+
+  room     MailRoom        @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  pages    MailItemScan[]
+  requests MailRequest[]
+  actions  MailActionLog[]
+
+  // The inbox lists newest-first per room, filtered by status.
+  @@index([roomId, receivedAt])
+  @@index([roomId, status])
+  @@map("mail_item")
+}
+
+// One page image of a scanned item, in order. A row per page (rather than an
+// array on the item) so a page can carry its own key and be re-scanned
+// individually.
+model MailItemScan {
+  id         String @id @default(cuid())
+  mailItemId String
+  pageNumber Int
+  // R2 object key — presigned at read time, never stored as a URL.
+  objectKey  String
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+
+  mailItem MailItem @relation(fields: [mailItemId], references: [id], onDelete: Cascade)
+
+  @@unique([mailItemId, pageNumber])
+  @@map("mail_item_scan")
+}
+
+// --- Mail requests -------------------------------------------------------
+// What a customer asked us to do with a piece of mail, and the admin queue that
+// works it (`/admin/mailroom`, "Pending requests"). A distinct record from the
+// MailItem: an item can be requested, then requested again after a re-scan, and
+// the queue must show each request separately with its own outcome.
+//
+// `customerId` is denormalised off the room so the queue can scope and search by
+// customer without joining two levels up on every row.
+
+enum MailRequestType {
+  FORWARDING
+  SHREDDING
+}
+
+enum MailRequestStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+}
+
+model MailRequest {
+  id         String            @id @default(cuid())
+  mailItemId String
+  customerId String
+  type       MailRequestType
+  status     MailRequestStatus @default(PENDING)
+  // The one-line address the item forwards to, resolved and snapshotted when the
+  // request is made — address formats differ by country and the customer may
+  // move, so the label must not re-derive later. Null on a shredding request,
+  // which has nowhere to ship to.
+  shippingAddress String?
+  // Filled by the operator when the request settles.
+  carrier        String?
+  trackingNumber String?
+  notes          String?
+  processedById  String?
+  // Snapshotted so the log still names who settled it after they leave.
+  processedByName String?
+  requestedAt    DateTime  @default(now()) @db.Timestamptz(3)
+  processedAt    DateTime? @db.Timestamptz(3)
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime  @updatedAt @db.Timestamptz(3)
+  deletedAt      DateTime? @db.Timestamptz(3)
+
+  mailItem    MailItem @relation(fields: [mailItemId], references: [id], onDelete: Cascade)
+  customer    User     @relation("MailRequestCustomer", fields: [customerId], references: [id], onDelete: Cascade)
+  processedBy User?    @relation("MailRequestProcessor", fields: [processedById], references: [id], onDelete: SetNull)
+
+  // The queue lists oldest-first within a status (work the backlog in order).
+  @@index([status, requestedAt])
+  @@index([customerId])
+  @@index([mailItemId])
+  @@map("mail_request")
+}
+
+// --- Mail log ------------------------------------------------------------
+// The closed history behind the admin "Mail log" tab: how each piece of mail was
+// finally disposed of. Written when a request settles and when a customer pulls
+// a scan, so an item the customer only ever downloaded still has a row — that is
+// the DOWNLOADED case the log prints as "Downloaded only".
+//
+// A separate append-only record rather than a derived read over MailRequest,
+// because a download is not a request and would otherwise have nowhere to live.
+
+enum MailLogAction {
+  FORWARDED
+  SHREDDED
+  DOWNLOADED
+}
+
+model MailActionLog {
+  id         String        @id @default(cuid())
+  mailItemId String
+  customerId String
+  action     MailLogAction
+  // Snapshotted display strings: the log must still read correctly after the
+  // item is purged on its storage-expiry date or the operator leaves.
+  mailItemLabel   String
+  processedById   String?
+  processedByName String
+  closedAt   DateTime @default(now()) @db.Timestamptz(3)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+
+  mailItem    MailItem @relation(fields: [mailItemId], references: [id], onDelete: Cascade)
+  processedBy User?    @relation("MailActionProcessor", fields: [processedById], references: [id], onDelete: SetNull)
+
+  // The log lists newest-first, narrowed by action and by a date window.
+  @@index([closedAt])
+  @@index([action, closedAt])
+  @@index([customerId])
+  @@map("mail_action_log")
+}
+
+// The carriers the mail room actually ships with — an operational fact, not a UI
+// one, so it is a table the forwarding form reads rather than a frontend
+// constant that would need a deploy to change.
+model MailCarrier {
+  code      String  @id
+  label     String
+  active    Boolean @default(true)
+  sortOrder Int     @default(0)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([active, sortOrder])
+  @@map("mail_carrier")
+}
+
+// --- Support conversations (Messages) ------------------------------------
+// The portal's Messages screen and the live-chat module's persistence (AGENTS.md,
+// Live Chat: sockets are transport only — every message is a row first). A
+// conversation may hang off an order (the thread header links to it) or stand
+// alone as a general support thread.
+//
+// The list's status chip mirrors the linked order's status, so it is read through
+// the relation rather than duplicated here — one definition, no drift.
+
+enum ConversationCategory {
+  FORMATION
+  ECOMMERCE
+  MAILROOM
+  BILLING
+  DOCUMENTS
+  SUPPORT
+}
+
+// A thread's workflow state, which the admin inbox filters and the header
+// capsule prints. Distinct from the linked order's status: a thread can be
+// resolved while its order is still under review.
+enum ConversationStatus {
+  OPEN
+  // Waiting on the customer.
+  PENDING
+  RESOLVED
+}
+
+model Conversation {
+  id         String               @id @default(cuid())
+  customerId String
+  subject    String
+  category   ConversationCategory @default(SUPPORT)
+  status     ConversationStatus   @default(OPEN)
+  // The staff member handling the thread; null is the inbox's amber
+  // "Unassigned". SetNull so a thread outlives the agent who held it.
+  assigneeId String?
+  // Set when the thread is about a specific order. Null for a general thread.
+  orderId    String?
+  // Denormalised from the newest message so the list sorts and previews without
+  // joining every thread's messages. Written in the same transaction as the
+  // message insert.
+  lastMessageAt DateTime? @db.Timestamptz(3)
+  preview       String?
+  // When the customer last opened the thread — the unread dot is
+  // `lastMessageAt > customerReadAt`, derived rather than a stored boolean.
+  customerReadAt DateTime? @db.Timestamptz(3)
+  closedAt       DateTime? @db.Timestamptz(3)
+  createdAt      DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime  @updatedAt @db.Timestamptz(3)
+  deletedAt      DateTime? @db.Timestamptz(3)
+
+  customer User      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  assignee User?     @relation("ConversationAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  order    Order?    @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  messages Message[]
+
+  @@index([customerId, lastMessageAt])
+  @@index([orderId])
+  // The admin inbox lists newest-activity-first across every customer, narrowed
+  // by status and by whether a thread is claimed.
+  @@index([status, lastMessageAt])
+  @@index([assigneeId])
+  @@map("conversation")
+}
+
+// `authorUserId` is the staff/admin or customer who wrote it; `authorName` is
+// snapshotted ("Sarah — Client Success") so a thread still reads correctly after
+// a team member leaves. Message bodies are PII — never logged (AGENTS.md).
+enum MessageAuthor {
+  CUSTOMER
+  AGENT
+  // A staff-only note on the thread. It lives in the same chronological stream
+  // as the messages (that is how the admin thread reads), so it is an author
+  // kind rather than a second list — and the portal's own queries filter it out,
+  // which is the one rule that keeps it from ever reaching the customer.
+  INTERNAL_NOTE
+}
+
+model Message {
+  id             String        @id @default(cuid())
+  conversationId String
+  author         MessageAuthor
+  authorUserId   String?
+  authorName     String?
+  body           String
+  sentAt         DateTime      @default(now()) @db.Timestamptz(3)
+  createdAt      DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime      @updatedAt @db.Timestamptz(3)
+  deletedAt      DateTime?     @db.Timestamptz(3)
+
+  conversation Conversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  attachments  MessageAttachment[]
+
+  @@index([conversationId, sentAt])
+  @@map("message")
+}
+
+model MessageAttachment {
+  id        String @id @default(cuid())
+  messageId String
+  name      String
+  sizeBytes Int
+  contentType String?
+  // R2 object key — presigned at read time after an ownership check.
+  objectKey String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+  @@map("message_attachment")
+}
+
+// --- Billing -------------------------------------------------------------
+// `billing` owns what is owed (AGENTS.md, Payments). A Quote is the priced offer
+// the team sends after reviewing an order — the customer pays it, and that
+// payment is a `Payment` row (below).
+//
+// MONEY: every amount is integer minor units + an ISO 4217 code — never a float,
+// never a Decimal standing in for one (AGENTS.md, Money). `1250` + `"USD"` is
+// $12.50. The client never sends an amount; the backend resolves it here.
+
+enum QuoteStatus {
+  DRAFT
+  PENDING
+  PAID
+  EXPIRED
+  CANCELLED
+}
+
+model Quote {
+  id         String      @id @default(cuid())
+  // Human-facing reference ("QT-10432"), like an order's — distinct from the cuid.
+  reference  String      @unique
+  customerId String
+  orderId    String?
+  status     QuoteStatus @default(PENDING)
+  // What the quote is for, as displayed ("LLC Formation — USA"). Snapshotted so
+  // the billing row reads correctly if the catalog changes.
+  serviceName String
+  // Integer minor units. subtotal + tax - discount = total; each is stored rather
+  // than derived so a historical quote never re-computes under a new rule.
+  subtotal Int
+  discount Int    @default(0)
+  tax      Int    @default(0)
+  total    Int
+  currency String @default("USD")
+  issuedAt   DateTime  @db.Timestamptz(3)
+  validUntil DateTime  @db.Timestamptz(3)
+  paidAt     DateTime? @db.Timestamptz(3)
+  createdAt  DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime  @updatedAt @db.Timestamptz(3)
+  deletedAt  DateTime? @db.Timestamptz(3)
+
+  customer  User            @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  order     Order?          @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  lineItems QuoteLineItem[]
+  payments  Payment[]
+
+  @@index([customerId, createdAt])
+  @@index([status, validUntil])
+  @@map("quote")
+}
+
+// One line of the order-summary card. `amount` is signed minor units — a discount
+// or credit line is negative, which is why this is Int and not an unsigned count.
+model QuoteLineItem {
+  id      String @id @default(cuid())
+  quoteId String
+  label   String
+  amount  Int
+  sortOrder Int  @default(0)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  quote Quote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@index([quoteId])
+  @@map("quote_line_item")
+}
+
+// --- Payments ------------------------------------------------------------
+// `payments` owns collecting what billing says is owed. A Payment row is the
+// source of truth for a collection attempt and carries the provider reference —
+// a Stripe PaymentIntent id or a Tron tx hash — so reconciliation is a lookup,
+// never a guess (AGENTS.md, Payments).
+//
+// We never store a PAN or CVC anywhere: Stripe holds the card, we hold the token.
+
+enum PaymentProvider {
+  STRIPE
+  USDT_TRC20
+}
+
+enum PaymentStatus {
+  PENDING
+  REQUIRES_ACTION
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+  // Part of the collected amount was returned. Explicit rather than inferred
+  // from summing refunds at read time: the admin ledger filters on it, and a
+  // status the ledger can index is what keeps that a cheap query.
+  PARTIALLY_REFUNDED
+  // USDT only: the chain settled an amount that doesn't match the quote. Never a
+  // silent pass — an explicit state a human resolves (AGENTS.md, Money).
+  UNDERPAID
+  OVERPAID
+}
+
+model Payment {
+  id         String          @id @default(cuid())
+  customerId String
+  quoteId    String?
+  provider   PaymentProvider
+  status     PaymentStatus   @default(PENDING)
+
+  // Fiat amount owed, in integer minor units + ISO 4217 (AGENTS.md, Money).
+  amount   Int
+  currency String @default("USD")
+
+  // Card display only — brand + last four. Never a PAN, never a CVC.
+  cardBrand String?
+  cardLast4 String?
+
+  // Stripe PaymentIntent id / Tron tx hash. Unique so a webhook or a poller that
+  // fires twice can never create or credit a second row (AGENTS.md: match and
+  // credit in one transaction, never double-credit).
+  providerRef String? @unique
+
+  // --- USDT (TRC-20) only ------------------------------------------------
+  // The deposit address this payment watches, and the raw on-chain integer the
+  // transfer carried. USDT has 6 decimals; we store TronGrid's raw integer plus
+  // its decimals and convert for display only — never a float (AGENTS.md).
+  depositAddress  String?
+  usdtAmountRaw   Decimal? @db.Decimal(38, 0)
+  usdtDecimals    Int?
+  // The USD→USDT rate locked when the quote was issued, and its expiry. Stored as
+  // an integer numerator over a fixed scale rather than a float, and re-checked
+  // before crediting (AGENTS.md, Money).
+  lockedRateMinor Int?
+  rateExpiresAt   DateTime? @db.Timestamptz(3)
+  confirmations   Int       @default(0)
+
+  // The Idempotency-Key the mutating endpoint accepted, so a retried request
+  // resolves to this same row rather than charging twice (AGENTS.md, API).
+  idempotencyKey String? @unique
+
+  // Invoice PDF in R2 — presigned at read time after an ownership check.
+  invoiceObjectKey String?
+  failureReason    String?
+  paidAt           DateTime? @db.Timestamptz(3)
+  createdAt        DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime  @updatedAt @db.Timestamptz(3)
+  deletedAt        DateTime? @db.Timestamptz(3)
+
+  customer User     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  quote    Quote?   @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  refunds  Refund[]
+
+  @@index([customerId, createdAt])
+  @@index([status])
+  @@index([quoteId])
+  // The USDT poller matches a pending payment by address + amount.
+  @@index([depositAddress])
+  @@map("payment")
+}
+
+// One reversal against a payment — the admin "Refunds & adjustments" log. A row
+// per refund rather than a nullable column on the payment, because a payment can
+// be partially refunded more than once and each reversal has its own reason,
+// approver, and provider reference.
+//
+// MONEY: integer minor units + ISO 4217, positive (the amount returned). The
+// direction is the record's meaning, not its sign — the ledger prints it in the
+// error hue rather than as a negative number.
+model Refund {
+  id        String @id @default(cuid())
+  paymentId String
+  amount    Int
+  currency  String @default("USD")
+  reason    String
+  // Stripe refund id (`re_…`) or the Tron tx hash of the return. Unique so a
+  // retried job or a redelivered webhook can never record the same reversal
+  // twice (AGENTS.md, Payments).
+  providerRef String? @unique
+  // Who approved it. Kept by id without an FK cascade plus a snapshotted name, so
+  // the log still reads after the approver's account is gone.
+  processedById   String?
+  processedByName String
+  processedAt DateTime  @default(now()) @db.Timestamptz(3)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
+  deletedAt   DateTime? @db.Timestamptz(3)
+
+  payment     Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  processedBy User?   @relation("RefundProcessor", fields: [processedById], references: [id], onDelete: SetNull)
+
+  @@index([paymentId])
+  @@index([processedAt])
+  @@map("refund")
+}
+
+// The Stripe Customer a user's saved cards attach to. One per user, kept apart
+// from the Better Auth `user` row so a Better Auth regeneration never drops it.
+model StripeCustomer {
+  id               String @id @default(cuid())
+  userId           String @unique
+  stripeCustomerId String @unique
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("stripe_customer")
+}
+
+// A saved card, as the Billing screen lists it. Brand, last four, and expiry are
+// all we persist — the card itself lives at Stripe behind `stripePaymentMethodId`
+// (AGENTS.md, PCI: no PAN or CVC in any column, log, or endpoint, ever).
+model PaymentMethod {
+  id                    String @id @default(cuid())
+  customerId            String
+  stripePaymentMethodId String @unique
+  brand                 String
+  last4                 String
+  expMonth              Int
+  expYear               Int
+  isDefault             Boolean   @default(false)
+  createdAt             DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime  @updatedAt @db.Timestamptz(3)
+  deletedAt             DateTime? @db.Timestamptz(3)
+
+  customer User @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@map("payment_method")
+}
+
+// Every Stripe webhook we accept, keyed by the Stripe event id. The unique
+// constraint is the dedupe: a redelivered event inserts nothing and the handler
+// no-ops (AGENTS.md, Payments).
+model WebhookEvent {
+  id            String   @id @default(cuid())
+  provider      String
+  // Stripe's `evt_…` id.
+  externalId    String
+  type          String
+  processedAt   DateTime? @db.Timestamptz(3)
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @db.Timestamptz(3)
+
+  @@unique([provider, externalId])
+  @@map("webhook_event")
+}
+
+// --- Marketing contact form ----------------------------------------------
+// The public `/contact` form (rate-limited + Turnstile-verified server-side —
+// the browser never calls a third party directly, AGENTS.md). A row per
+// submission so the team can work the queue; `handledAt` marks it done.
+
+model ContactSubmission {
+  id      String @id @default(cuid())
+  name    String
+  email   String
+  message String
+  // Set when a signed-in user submits; null for an anonymous visitor. No FK — a
+  // marketing lead must survive the account being deleted.
+  userId    String?
+  handledAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
+  deletedAt DateTime? @db.Timestamptz(3)
+
+  @@index([createdAt])
+  @@map("contact_submission")
+}
+
+// --- Audit ---------------------------------------------------------------
+// Every state change on companies, registrations, billing, payments, and
+// documents writes an entry here through the `audit` module (AGENTS.md). The
+// actor is stored by id without an FK so the trail survives the account being
+// deleted — a deleted user must not erase what they did.
+
+model AuditLog {
+  id     String @id @default(cuid())
+  // Who acted. Null for a system/job actor.
+  actorId   String?
+  actorRole String?
+  // What happened: a dotted verb ("order.status_changed", "payment.succeeded").
+  action    String
+  // What it happened to: the model name and row id.
+  entityType String
+  entityId   String
+  // Before/after or a summary of the change. Never PII, never card data.
+  metadata   Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([entityType, entityId])
+  @@index([actorId, createdAt])
+  @@map("audit_log")
 }

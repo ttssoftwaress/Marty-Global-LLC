@@ -58,3 +58,32 @@ export type PasswordChangeUpdate = {
   currentPassword: string;
   newPassword: string;
 };
+
+// The three delivery channels the notification matrix switches per category.
+// Email is also the master switch — turning it off silences every category's
+// email column.
+export type NotificationChannel = 'email' | 'inApp' | 'sms';
+
+// The notification categories the customer can tune. Kept as a union so the
+// preference record is exhaustively typed and the backend's enum mirrors it
+// one-for-one (two-apps sync rule).
+export type NotificationCategory =
+  | 'statusUpdates'
+  | 'quoteAlerts'
+  | 'documentRequests'
+  | 'newMessages';
+
+// One category's three channel switches.
+export type NotificationChannelPrefs = Record<NotificationChannel, boolean>;
+
+// The full preference record as edited on the Notification-preferences frame.
+// `emailMaster` is the row-zero switch that gates email delivery account-wide;
+// `categories` holds each category's per-channel state.
+export type NotificationPreferences = {
+  emailMaster: boolean;
+  categories: Record<NotificationCategory, NotificationChannelPrefs>;
+};
+
+// What the form POSTs back on Save — the same shape it renders, since every
+// switch is directly editable.
+export type NotificationPreferencesUpdate = NotificationPreferences;
