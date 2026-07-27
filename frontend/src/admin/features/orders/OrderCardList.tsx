@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { formatOrderDate } from '../../lib/format';
 import type { AdminOrderRow } from '../../types/orders';
 import { OrderStatusChip } from './OrderStatusChip';
+import { stopRowClick, useOpenOrderRow } from './rowNavigation';
 
 /*
  * The mobile presentation of the queue — one card per order, replacing the table
@@ -14,9 +15,12 @@ import { OrderStatusChip } from './OrderStatusChip';
  * than the mobile mock's "Assigned to —", since the desktop link is the copy
  * source across the three (Design.md).
  *
- * The whole card is not a link: the action button is the row's single primary
- * target, and the reference stays separately tappable, which keeps the card's
- * text selectable.
+ * The whole card opens the order, matching the table it replaces — tapping a
+ * record and having nothing happen is worse on a phone than anywhere else. It is
+ * not wrapped in a link, though: the action button is a link of its own and
+ * anchors cannot nest, and a card-sized anchor would make the reference and the
+ * customer's name unselectable. So the card navigates on tap, its two links stop
+ * the tap themselves, and a tap that ends a text selection is left alone.
  */
 
 type OrderCardListProps = {
@@ -24,16 +28,20 @@ type OrderCardListProps = {
 };
 
 export function OrderCardList({ orders }: OrderCardListProps) {
+  const openOrderRow = useOpenOrderRow();
+
   return (
     <ul className="flex w-full flex-col gap-3 md:hidden">
       {orders.map((order) => (
         <li
           key={order.id}
-          className="flex flex-col gap-3 rounded-card bg-white p-4 shadow-sm-elevation"
+          onClick={() => openOrderRow(order.to)}
+          className="flex cursor-pointer flex-col gap-3 rounded-card bg-white p-4 shadow-sm-elevation transition-colors active:bg-gray-50"
         >
           <div className="flex items-center justify-between gap-2">
             <Link
               to={order.to}
+              onClick={stopRowClick}
               className="text-body font-semibold text-primary hover:underline"
             >
               {order.reference}
@@ -66,6 +74,7 @@ export function OrderCardList({ orders }: OrderCardListProps) {
 
           <Link
             to={order.to}
+            onClick={stopRowClick}
             className="flex h-10 w-full items-center justify-center rounded-input border border-primary text-[13px] font-semibold text-primary transition-colors hover:bg-primary-light"
           >
             {order.actionLabel}

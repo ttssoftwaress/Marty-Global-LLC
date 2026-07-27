@@ -1,10 +1,16 @@
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 
 import { apiFetch } from '@/services/api';
 import type { ApiSuccess } from '@/types/api';
 import type {
   MailItem,
   MailItemsPage,
+  MailRequest,
   MailRoomDetail,
   MailRoomOverview,
   MailRoomTab,
@@ -112,5 +118,62 @@ export function useMailItems(params: MailItemsParams) {
     // Keep the previous filter's results on screen while the next load resolves,
     // so changing status/search doesn't flash the skeleton.
     placeholderData: (previous) => previous,
+  });
+}
+
+/*
+ * POST /v1/mailrooms/:roomId/items/:itemId/requests — ask us to forward or shred
+ * a piece of mail.
+ *
+ * The forwarding address is not sent: the backend resolves it from the
+ * customer's own company record and snapshots it onto the request, so a caller
+ * can never redirect mail to an address they picked. The body carries the intent
+ * and an optional note; the backend decides what happens next.
+ *
+ * Both the item and the room's figures are invalidated on success, since a
+ * request moves the item into "action requested" and shifts the inbox counts.
+ */
+export function useCreateMailRequest(roomId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      itemId,
+      type,
+      notes,
+    }: {
+      itemId: string;
+      type: 'forwarding' | 'shredding';
+      notes?: string;
+    }) =>
+      apiFetch<ApiSuccess<MailRequest>>(
+        `/mailrooms/${roomId}/items/${itemId}/requests`,
+        { method: 'POST', body: JSON.stringify({ type, notes }) },
+      ).then((res) => res.data),
+    onSuccess: (_request, { itemId }) => {
+      void queryClient.invalidateQueries({ queryKey: mailItemKey(roomId, itemId) });
+      void queryClient.invalidateQueries({ queryKey: ['mailrooms', roomId, 'items'] });
+      void queryClient.invalidateQueries({ queryKey: mailRoomDetailKey(roomId) });
+      void queryClient.invalidateQueries({ queryKey: mailRoomOverviewKey() });
+    },
+  });
+}
+
+/*
+ * POST /v1/mailrooms/:roomId/items/:itemId/downloaded — record that the customer
+ * pulled the scan.
+ *
+ * Fire-and-forget beside the actual download: it writes the "Downloaded only"
+ * row in the mail log, which is the only trace an item nobody asked us to
+ * forward or shred was ever dealt with. The backend logs it once per item, so
+ * re-opening the same PDF is not a second disposal.
+ */
+export function useRecordMailDownload(roomId: string) {
+  return useMutation({
+    mutationFn: (itemId: string) =>
+      apiFetch<ApiSuccess<{ recorded: boolean }>>(
+        `/mailrooms/${roomId}/items/${itemId}/downloaded`,
+        { method: 'POST' },
+      ).then((res) => res.data),
   });
 }

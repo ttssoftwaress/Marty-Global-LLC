@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 
 import { formatCount } from '../../lib/format';
+import type { AdminOrdersScope } from '../../types/orders';
 
 /*
  * The queue's page header — breadcrumb, title block, and the two stat pills.
@@ -13,17 +14,25 @@ import { formatCount } from '../../lib/format';
  * with the figures coming from the summary — nothing here is a fixed number.
  * The awaiting-review pill is hidden at zero rather than printing "0 awaiting
  * review", so the header only ever flags real work.
+ *
+ * A member who only sees their own filings gets the same header saying so. The
+ * figure would otherwise read as the whole business's backlog when it is one
+ * person's workload — the count is honest, the word "total" would not be.
  */
 
 type OrdersQueueHeaderProps = {
   totalOrders: number;
   awaitingReview: number;
+  scope: AdminOrdersScope;
 };
 
 export function OrdersQueueHeader({
   totalOrders,
   awaitingReview,
+  scope,
 }: OrdersQueueHeaderProps) {
+  const assigned = scope === 'assigned';
+
   return (
     <div className="flex w-full flex-col gap-3 md:gap-4 lg:gap-6">
       <nav aria-label="Breadcrumb" className="hidden md:block">
@@ -48,13 +57,17 @@ export function OrdersQueueHeader({
             Orders queue
           </h1>
           <p className="hidden text-body text-gray-500 md:block">
-            Manage and review all customer orders across services and regions.
+            {assigned
+              ? 'Review and progress the orders assigned to you.'
+              : 'Manage and review all customer orders across services and regions.'}
           </p>
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-2 lg:gap-3">
           <span className="rounded-pill bg-gray-200 px-3 py-1.5 text-small font-medium text-gray-600 md:rounded-[6px] md:bg-gray-100 md:text-[13px]">
-            {formatCount(totalOrders)} total orders
+            {assigned
+              ? `${formatCount(totalOrders)} assigned to you`
+              : `${formatCount(totalOrders)} total orders`}
           </span>
 
           {awaitingReview > 0 ? (
@@ -67,3 +80,4 @@ export function OrdersQueueHeader({
     </div>
   );
 }
+

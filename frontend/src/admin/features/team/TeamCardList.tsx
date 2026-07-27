@@ -13,38 +13,30 @@ import { TeamStatusChip } from './TeamStatusChip';
  * and the join date keeps a word with it — a screen reader reads "Super Admin,
  * joined Jan 15, 2025" rather than two bare values.
  *
- * As in the table, the secondary action follows the member's state: resend for
- * an invite that has not been accepted, reactivate for a deactivated account,
- * deactivate otherwise. A member with no join date prints an em dash.
+ * As in the table, the status action follows the member's state: reactivate for
+ * a deactivated account, deactivate otherwise. Delete is added beside it in the
+ * error colour — the screen's only way to remove a staff account, and the same
+ * deviation the table logs. A member with no join date prints an em dash.
  */
 
 type TeamCardListProps = {
   members: AdminTeamMemberRow[];
   onEdit: (member: AdminTeamMemberRow) => void;
   onToggleActive: (member: AdminTeamMemberRow) => void;
-  onResendInvite: (member: AdminTeamMemberRow) => void;
+  onDelete: (member: AdminTeamMemberRow) => void;
 };
 
 export function TeamCardList({
   members,
   onEdit,
   onToggleActive,
-  onResendInvite,
+  onDelete,
 }: TeamCardListProps) {
   return (
     <ul className="flex w-full flex-col gap-4 md:hidden">
       {members.map((member) => {
-        const isInvited = member.status === 'invited';
         const isDeactivated = member.status === 'deactivated';
-
-        const secondaryLabel = isInvited
-          ? 'Resend invite'
-          : isDeactivated
-            ? 'Reactivate'
-            : 'Deactivate';
-
-        const onSecondary = () =>
-          isInvited ? onResendInvite(member) : onToggleActive(member);
+        const statusLabel = isDeactivated ? 'Reactivate' : 'Deactivate';
 
         return (
           <li
@@ -93,10 +85,18 @@ export function TeamCardList({
 
               <button
                 type="button"
-                onClick={onSecondary}
+                onClick={() => onToggleActive(member)}
                 className="shrink-0 whitespace-nowrap px-1 text-body text-gray-500 transition-colors hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
               >
-                {secondaryLabel}
+                {statusLabel}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onDelete(member)}
+                className="shrink-0 whitespace-nowrap px-1 text-body text-error transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-error"
+              >
+                Delete
               </button>
             </div>
           </li>

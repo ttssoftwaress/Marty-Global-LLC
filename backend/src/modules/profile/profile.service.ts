@@ -4,7 +4,9 @@ import { getAuth } from '../../guards/index.js';
 import { AppError } from '../../lib/app-error.js';
 import { prisma } from '../../lib/prisma.js';
 import { presignObject } from '../../lib/storage.js';
+import { assertKeyForPurpose } from '../uploads/uploads.service.js';
 import type {
+  UpdateAvatarInput,
   UpdateCompanyInput,
   UpdateNotificationPreferencesInput,
   UpdateProfileInput,
@@ -51,7 +53,7 @@ export async function getProfile(
     phone: user.profile?.phone ?? '',
     // Short-TTL presigned URL, minted after the ownership check above
     // (AGENTS.md, Security & PII); absent until an avatar is uploaded.
-    avatarUrl: presignObject(user.profile?.avatarKey),
+    avatarUrl: await presignObject(user.profile?.avatarKey),
   };
 }
 
@@ -91,7 +93,7 @@ export async function updateProfile(
     fullName: user.name,
     email: user.email,
     phone: profile.phone ?? '',
-    avatarUrl: presignObject(profile.avatarKey),
+    avatarUrl: await presignObject(profile.avatarKey),
   };
 }
 
@@ -175,6 +177,8 @@ export type NotificationPreferences = {
     quoteAlerts: { email: boolean; inApp: boolean; sms: boolean };
     documentRequests: { email: boolean; inApp: boolean; sms: boolean };
     newMessages: { email: boolean; inApp: boolean; sms: boolean };
+    // Virtual mail: post scanned into a room, and forwarding/shredding settled.
+    mailUpdates: { email: boolean; inApp: boolean; sms: boolean };
   };
 };
 
@@ -204,6 +208,11 @@ function toView(row: PreferenceRow): NotificationPreferences {
         inApp: row.newMessagesInApp,
         sms: row.newMessagesSms,
       },
+      mailUpdates: {
+        email: row.mailUpdatesEmail,
+        inApp: row.mailUpdatesInApp,
+        sms: row.mailUpdatesSms,
+      },
     },
   };
 }
@@ -223,6 +232,9 @@ function toColumns(input: UpdateNotificationPreferencesInput) {
     newMessagesEmail: input.categories.newMessages.email,
     newMessagesInApp: input.categories.newMessages.inApp,
     newMessagesSms: input.categories.newMessages.sms,
+    mailUpdatesEmail: input.categories.mailUpdates.email,
+    mailUpdatesInApp: input.categories.mailUpdates.inApp,
+    mailUpdatesSms: input.categories.mailUpdates.sms,
   };
 }
 
@@ -257,4 +269,41 @@ export async function updateNotificationPreferences(
   });
 
   return toView(row);
+}
+
+// --- Avatar --------------------------------------------------------------
+/*
+ * Set or clear the account's profile picture.
+ *
+ * The image was uploaded straight to R2 (`POST /v1/uploads`), so this only
+ * records the key — and checks it is one THIS customer's own uploads minted,
+ * which is what stops a caller pointing their avatar at somebody else's object.
+ */
+export async function updateAvatar(
+  req: Parameters<typeof getAuth>[0],
+  input: UpdateAvatarInput,
+): Promise<ProfileInfo> {
+  const auth = getAuth(req);
+
+  if (input.objectKey) {
+    assertKeyForPurpose(auth, 'avatar', input.objectKey);
+  }
+
+  const profile = await prisma.customerProfile.upsert({
+    where: { userId: auth.userId },
+    create: { userId: auth.userId, avatarKey: input.objectKey },
+    update: { avatarKey: input.objectKey },
+  });
+
+  const user = await prisma.user.findFirstOrThrow({
+    where: { id: auth.userId },
+    select: { name: true, email: true },
+  });
+
+  return {
+    fullName: user.name,
+    email: user.email,
+    phone: profile.phone ?? '',
+    avatarUrl: await presignObject(profile.avatarKey),
+  };
 }

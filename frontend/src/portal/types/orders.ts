@@ -127,6 +127,33 @@ export type OrderActivityEntry = {
   message: string;
 };
 
+/*
+ * The quote the team sent on this order. Null until one is raised, which is what
+ * keeps the summary card in its "awaiting quote" state rather than showing a
+ * fabricated price.
+ *
+ * `payable` is the backend's decision, not one the browser re-derives from the
+ * status and the date: the Pay button and the payment endpoint have to agree,
+ * and the endpoint is the real boundary (AGENTS.md, Auth).
+ */
+export type QuoteStatus = 'pending' | 'paid' | 'expired' | 'cancelled';
+
+export type OrderQuote = {
+  id: string;
+  reference: string; // "QT-10432"
+  status: QuoteStatus;
+  serviceName: string;
+  lineItems: OrderSummaryLine[];
+  subtotal: Money;
+  discount: Money;
+  tax: Money;
+  total: Money;
+  issuedAt: string; // ISO-8601 UTC
+  validUntil: string; // ISO-8601 UTC
+  paidAt: string | null;
+  payable: boolean;
+};
+
 export type OrderDetail = {
   id: string;
   reference: string; // "ORD-10432"
@@ -137,6 +164,7 @@ export type OrderDetail = {
   applicationDetails: OrderDetailField[];
   documents: OrderDocument[];
   activity: OrderActivityEntry[];
+  quote: OrderQuote | null;
   summary: OrderSummary;
   payment: OrderPayment;
   orderInformation: OrderDetailField[];

@@ -3,6 +3,33 @@
 @import 'tailwindcss';
 
 /*
+ * The portal and admin shells size themselves to `h-dvh` and scroll only their
+ * own `<main>`. That contract holds only if every ancestor is height-bound:
+ * Preflight resets `body` margin but leaves `html`/`body`/`#root` auto-height,
+ * so the document stays a scroll container behind the shell. On mobile that is
+ * visible — `100dvh` grows as the URL bar retracts, the document scrolls to fit
+ * the taller root, and the fixed sidebar rides up leaving blank space beneath.
+ *
+ * Chaining the height down to `#root` and pinning overflow at the document
+ * makes the shell's `<main>` the only thing that scrolls. Marketing pages are
+ * unaffected: they scroll inside `#root`, which is why `overflow` is clipped on
+ * `html`/`body` but left `auto` on the root node.
+ */
+@layer base {
+  html,
+  body {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  #root {
+    height: 100%;
+    overflow: auto;
+  }
+}
+
+/*
  * Marty Global LLC — Color System
  *
  * The single source of truth for brand color. Every token here becomes a
@@ -311,6 +338,17 @@
   --color-status-missing-text: #dc2626;
   --color-status-approved-bg: #dcfce7;
   --color-status-approved-text: #16a34a;
+  /*
+   * The two stages between approval and completion. `paid` is teal rather than
+   * another green: it sits directly beside `approved` in the pipeline, and two
+   * greens two steps apart are the pair an operator scanning a queue would read
+   * as the same state. `processing` is sky blue — work in motion, distinct from
+   * the amber `review` states where the ball is not with us.
+   */
+  --color-status-paid-bg: #ccfbf1;
+  --color-status-paid-text: #0f766e;
+  --color-status-processing-bg: #e0f2fe;
+  --color-status-processing-text: #0369a1;
   --color-status-completed-bg: #03126d;
   --color-status-completed-text: #ffffff;
 }
@@ -421,6 +459,14 @@
   .status-approved {
     background-color: var(--color-status-approved-bg);
     color: var(--color-status-approved-text);
+  }
+  .status-paid {
+    background-color: var(--color-status-paid-bg);
+    color: var(--color-status-paid-text);
+  }
+  .status-processing {
+    background-color: var(--color-status-processing-bg);
+    color: var(--color-status-processing-text);
   }
   .status-completed {
     background-color: var(--color-status-completed-bg);

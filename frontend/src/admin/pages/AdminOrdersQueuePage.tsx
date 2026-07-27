@@ -154,20 +154,25 @@ export function AdminOrdersQueuePage() {
   const isLoading = summary.isPending || orders.isPending;
   const isEmpty = !isLoading && loadedOrders.length === 0;
 
+  /*
+   * Whether this member is looking at the whole pipeline or only the filings
+   * assigned to them. The backend scopes the rows and sends the answer down with
+   * the summary; the page only prints it. Until the summary lands, assume the
+   * unscoped copy — it is the one the header already reads as.
+   */
+  const scope = summary.data?.scope ?? 'all';
+
   const rangeStart = totalResults === 0 ? 0 : pageIndex * PAGE_SIZE + 1;
   const rangeEnd = pageIndex * PAGE_SIZE + windowOrders.length;
 
   return (
-    <AdminLayout
-      user={user}
-      notificationCount={summary.data?.awaitingReview}
-      onLogout={onLogout}
-    >
+    <AdminLayout user={user} onLogout={onLogout}>
       <div className="w-full p-4 md:p-6 lg:p-content">
         <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-4 md:gap-5 lg:gap-6">
           <OrdersQueueHeader
             totalOrders={summary.data?.totalOrders ?? 0}
             awaitingReview={summary.data?.awaitingReview ?? 0}
+            scope={scope}
           />
 
           {summary.data ? (
@@ -225,6 +230,7 @@ export function AdminOrdersQueuePage() {
                 {isEmpty ? (
                   <OrdersEmptyState
                     isFiltered={isFiltered}
+                    scope={scope}
                     onClearFilters={clearFilters}
                   />
                 ) : null}
@@ -235,6 +241,7 @@ export function AdminOrdersQueuePage() {
                 <div className="rounded-card bg-white md:hidden">
                   <OrdersEmptyState
                     isFiltered={isFiltered}
+                    scope={scope}
                     onClearFilters={clearFilters}
                   />
                 </div>

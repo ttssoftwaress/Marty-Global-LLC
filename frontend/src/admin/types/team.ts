@@ -12,11 +12,11 @@
  * is what lets the row pick a chip and the page decide which secondary action to
  * offer without validating a string first.
  *
- * `invited` is a member who has been sent an invite but has not accepted it —
- * they have no join date, and their secondary action resends the invite rather
- * than deactivating an account that does not exist yet.
+ * There is no pending state: an admin creates the login itself — name, email,
+ * and the password the member signs in with — so an account is usable the moment
+ * it exists and is either active or deactivated.
  */
-export type TeamMemberStatus = 'active' | 'invited' | 'deactivated';
+export type TeamMemberStatus = 'active' | 'deactivated';
 
 /*
  * The filter tabs above the list. `all` is the unfiltered view the screen opens
@@ -49,6 +49,40 @@ export type TeamRoleOption = {
 export const ALL_ROLES = 'all';
 
 /*
+ * One area of the admin portal a member can be granted or denied.
+ *
+ * `key` is opaque to the UI — it is what goes back to the API in a write
+ * payload; `label` is the wording the row prints. Keeping the area set on the
+ * wire (rather than as a frontend constant) means adding an admin section is a
+ * backend change, not a frontend deploy — the same rule the role options and
+ * status tabs follow.
+ *
+ * `locked` marks an area the current admin may not change on this member (a
+ * super-admin's own access, for instance). The row still renders so the member's
+ * real access is visible; the switch is disabled rather than hidden. It is
+ * absent on the summary's copy, where no role has been chosen yet.
+ */
+export type TeamPermissionArea = {
+  key: string;
+  label: string;
+  /*
+   * The companion key for this area's "All data" switch, when the area has one.
+   *
+   * The two columns answer different questions. `key` is "Specific data" — may
+   * this member open the section at all, and see the records assigned to them.
+   * `scopeKey` is "All data" — does that section show them the whole org instead
+   * of only their own work.
+   *
+   * It is absent on an area with no owner to narrow to (the service catalog, the
+   * staff directory), where the row prints one switch and an empty second cell.
+   * Which areas those are is a backend decision, exactly like the area list
+   * itself — the UI never appends ".all" to a key to derive this.
+   */
+  scopeKey?: string;
+  locked?: boolean;
+};
+
+/*
  * A team member row.
  *
  * `initials` comes from the backend rather than being sliced off the name here,
@@ -60,8 +94,8 @@ export const ALL_ROLES = 'all';
  * `TeamRoleOption` so the dropdown and the row agree.
  *
  * `joinedAt` is ISO-8601 UTC, converted to the viewer's zone only at render
- * (AGENTS.md, Dates). It is null for an invited member who has not accepted yet
- * — the design prints an em dash there.
+ * (AGENTS.md, Dates). It is null for a legacy row that predates the account
+ * being created outright — the design prints an em dash there.
  */
 export type AdminTeamMemberRow = {
   id: string;
@@ -95,7 +129,14 @@ export type AdminTeamPage = {
 export type AdminTeamSummary = {
   totalMembers: number;
   activeMembers: number;
-  pendingInvites: number;
+  deactivatedMembers: number;
   tabs: TeamStatusTab[];
   roles: TeamRoleOption[];
+  /*
+   * The permission areas the add-staff form's grid renders. They ride along with
+   * the summary because that form has no member record to read them from — the
+   * edit screen gets its own copy, with the current role's `locked` flags, from
+   * `GET /admin/team/:memberId`.
+   */
+  permissionAreas: TeamPermissionArea[];
 };

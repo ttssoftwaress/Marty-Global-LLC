@@ -20,6 +20,7 @@
  */
 
 import type { Money } from './dashboard';
+import type { ResultFieldRef, ServiceRequestTypeDraft } from './delivery';
 
 export type { Money };
 
@@ -91,53 +92,29 @@ export type ServiceFooter = {
 };
 
 /*
- * The per-service application-detail field schema — Step 2's form, as data. The
- * admin shapes a service's questions here and the portal renders them by `type`,
- * so a new question on any service needs no UI change in either app. Mirrors the
- * portal's `ServiceField` discriminated union exactly.
+ * A service's form is stored as REFERENCES into the field registry, never as
+ * inline field definitions.
+ *
+ * What a question IS — its key, label, control type, choices, upload settings —
+ * is owned by `FieldDefinition` and authored on the Form fields screen
+ * (`admin/types/fields.ts`). A service records only which registered questions
+ * it asks and whether each is mandatory *on this service*, which is the one
+ * per-service difference that genuinely varies: a passport upload can be
+ * optional for a company formation and required for a bank account.
+ *
+ * That split is what keeps the answer keys a closed set — every stored key is a
+ * registered `fieldKey` — and what makes the customer's merged master form
+ * exact: two services picking the same definition are asking the same question
+ * by construction, so the order flow asks it once.
  *
  * No field type captures money or card data: amounts are resolved by the backend
- * and Stripe holds the card (AGENTS.md), so a generic admin-defined form never
- * carries either.
+ * and Stripe holds the card (AGENTS.md), so an admin-defined form never carries
+ * either.
  */
-export type ServiceFieldType = 'text' | 'select' | 'textarea';
-
-export const SERVICE_FIELD_TYPE_OPTIONS: {
-  value: ServiceFieldType;
-  label: string;
-}[] = [
-  { value: 'text', label: 'Short text' },
-  { value: 'select', label: 'Dropdown' },
-  { value: 'textarea', label: 'Long text' },
-];
-
-type ServiceFieldBase = {
-  // Stable key the customer's answer is stored under, unique within a service.
-  name: string;
-  label: string;
+export type ServiceFieldRef = {
+  fieldKey: string;
   required?: boolean;
-  placeholder?: string;
-  hint?: string;
 };
-
-export type ServiceTextField = ServiceFieldBase & { type: 'text' };
-
-export type ServiceSelectOption = { value: string; label: string };
-
-export type ServiceSelectField = ServiceFieldBase & {
-  type: 'select';
-  options: ServiceSelectOption[];
-};
-
-export type ServiceTextareaField = ServiceFieldBase & {
-  type: 'textarea';
-  rows?: number;
-};
-
-export type ServiceField =
-  | ServiceTextField
-  | ServiceSelectField
-  | ServiceTextareaField;
 
 /*
  * How a service's questions are split into wizard steps — the admin control over
@@ -147,9 +124,12 @@ export type ServiceField =
  * gates Continue on that step's required fields, so an admin adding a step
  * changes the customer's flow without a deploy in either app.
  *
- * `key` is the stable identifier an in-progress draft is keyed by; like a field's
- * `name` it must not change once orders reference it, so the UI derives it from
- * the title only while the step is new.
+ * `key` is the stable identifier an in-progress draft is keyed by; it must not
+ * change once orders reference it, so the UI derives it from the title only
+ * while the step is new.
+ *
+ * `fields` holds REFERENCES into the field registry, not definitions — a step
+ * says which registered questions it asks, in what order.
  *
  * A service with no steps is the flat case the catalog already supported: every
  * field renders in one section. `stepsFromService` collapses the two into a
@@ -159,7 +139,7 @@ export type ServiceFormStep = {
   key: string;
   title: string;
   description?: string;
-  fields: ServiceField[];
+  fields: ServiceFieldRef[];
 };
 
 /*
@@ -203,16 +183,32 @@ export type CatalogServiceDetail = {
   description: string;
   features: string[];
   footer: ServiceFooter;
-  detailFields: ServiceField[];
+  detailFields: ServiceFieldRef[];
   /*
-   * The request form split into steps. Optional because a service authored
-   * before steps existed carries only the flat `detailFields`; the UI reads it
-   * through `stepsFromService`, which falls back to a single step wrapping
+   * The request form split into steps. Optional because a service whose form is
+   * still flat carries only `detailFields`; the UI reads it through
+   * `stepsFromService`, which falls back to a single step wrapping
    * `detailFields` so both shapes render identically.
    */
   formSteps?: ServiceFormStep[];
   regionCodes: string[];
   pricingTiers: ServicePricingTier[];
+  /*
+   * The delivery half — what this service RETURNS, and the follow-up actions it
+   * offers. Edited on their own cards and saved through their own endpoints,
+   * because they are a different decision from what the service sells: what it
+   * delivers is settled once the team knows what the filing actually produces.
+   *
+   * An empty `resultFields` means the service delivers no structured record, so
+   * it gets no customer page at all — which is why a service with nothing to
+   * return is never a dead link in the portal sidebar.
+   */
+  resultFields: ResultFieldRef[];
+  resultPageTitle?: string;
+  resultNoun?: string;
+  // Inactive types are included so the editor can show and re-enable them; the
+  // customer's page only ever sees the active ones.
+  requestTypes: ServiceRequestTypeDraft[];
   active: boolean;
   sortOrder: number;
   updatedAt: string;
@@ -252,21 +248,27 @@ export type PricingTierDraft = {
   description?: string;
 };
 
+/*
+ * One picked question while the builder edits it.
+ *
+ * It is a reference, not a definition: `fieldKey` names the registered field and
+ * `required` is this service's own flag. `key` is only a React key for the row,
+ * since the same registry entry can be reordered but never appears twice on one
+ * service.
+ *
+ * Everything else about the question — its label, control type, choices, upload
+ * settings — is read live from the registry, so the builder shows the current
+ * definition rather than a copy that could drift.
+ */
 export type ServiceFieldDraft = {
   key: string;
-  type: ServiceFieldType;
-  name: string;
-  label: string;
+  fieldKey: string;
   required: boolean;
-  placeholder: string;
-  // Dropdown choices as one-per-line text while editing; split at submit.
-  options: string;
 };
 
 /*
- * One step while the builder edits it. Its fields are the same `ServiceFieldDraft`
- * rows the flat editor already used, so the field-level editing UI is shared —
- * a step only adds a title, an optional description, and the grouping itself.
+ * One step while the builder edits it: a title, an optional description, and the
+ * registered questions it asks in order.
  */
 export type ServiceFormStepDraft = {
   key: string;
@@ -327,7 +329,7 @@ export type ServiceWritePayload = {
   description: string;
   features: string[];
   footer: ServiceFooter;
-  detailFields: ServiceField[];
+  detailFields: ServiceFieldRef[];
   regionCodes: string[];
   pricingTiers: {
     id?: string;
@@ -345,8 +347,8 @@ export type ServiceWritePayload = {
  * never edits a service's name or icon, so it never sends them.
  *
  * `detailFields` is sent alongside `formSteps` as the flattened union of every
- * step's fields, so a consumer reading only the flat schema (an older client, or
- * any code path that doesn't care about grouping) still sees every question.
+ * step's field references, so a consumer reading only the flat shape (any code
+ * path that doesn't care about grouping) still sees every question.
  */
 export type ServiceDetailWritePayload = {
   description: string;
@@ -361,7 +363,7 @@ export type ServiceDetailWritePayload = {
     description?: string;
   }[];
   formSteps: ServiceFormStep[];
-  detailFields: ServiceField[];
+  detailFields: ServiceFieldRef[];
 };
 
 // Field-level messages the form renders under the control that failed. Keyed by

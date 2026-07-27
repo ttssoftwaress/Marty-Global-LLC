@@ -2,10 +2,10 @@ import type { ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 
 import { useSession } from '@/auth/client';
+import { landingRouteFor } from '@/auth/landing';
 import { isRole, type Role } from '@/constants/roles';
 
 const LOGIN_ROUTE = '/login';
-const PORTAL_ROUTE = '/app';
 
 // Role guard for the staff areas (`/admin/*`). It authorizes, it does not
 // authenticate: no session at all is a trip to /login (carrying the requested
@@ -33,7 +33,7 @@ export function RequireRole({
 
   const { role } = session.user;
   if (!isRole(role) || !allowed.includes(role)) {
-    return <Navigate to={PORTAL_ROUTE} replace />;
+    return <Navigate to={landingRouteFor(role)} replace />;
   }
 
   return <>{children}</>;

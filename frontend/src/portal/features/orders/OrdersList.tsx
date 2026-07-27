@@ -1,4 +1,6 @@
+import type { MouseEvent } from 'react';
 import { ChevronDown, PackageOpen } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
 
 import { OrderStatusChip } from '../dashboard/OrderStatusChip';
 import { formatOrderDate } from '../../lib/format';
@@ -14,6 +16,13 @@ import { OrderRowAction } from './OrderRowAction';
  *                   drops the standalone ORDER ID column
  *   - mobile:       one card per order, header + meta + full-width action
  *
+ * The whole row opens the order. The design only draws the trailing button, but
+ * a list of records where the record itself is inert is a list people click at
+ * and nothing happens — and it left an order reachable only through one small
+ * target. The service name is a real anchor inside the row, so the destination
+ * is keyboard-reachable, focusable, and can be opened in a new tab; the row's
+ * own handler is the convenience layer over it, not the only way in.
+ *
  * The DATE SUBMITTED header carries the design's sort affordance (highlighted
  * label + chevron). Sorting is a data concern the backend owns, so the header
  * is a button ready to request a sort rather than sorting in the browser.
@@ -27,6 +36,28 @@ type OrdersListProps = {
   orders: Order[];
   onToggleDateSort?: () => void;
 };
+
+export const orderDetailPath = (orderId: string) => `/app/orders/${orderId}`;
+
+/*
+ * A click anywhere on the row opens it, with two exceptions:
+ *   - a click that ends a text selection is someone reading a reference, not
+ *     navigating
+ *   - a click inside the action cell belongs to that control, which stops the
+ *     event itself
+ */
+function useOpenOrder() {
+  const navigate = useNavigate();
+
+  return (orderId: string) => {
+    if (window.getSelection()?.toString()) return;
+    navigate(orderDetailPath(orderId));
+  };
+}
+
+// The trailing control is a link of its own; without this its click would also
+// run the row handler and both would navigate.
+const stopRowClick = (event: MouseEvent) => event.stopPropagation();
 
 function EmptyState() {
   return (
@@ -57,6 +88,7 @@ function DateSortHeader({ onToggle }: { onToggle?: () => void }) {
 
 export function OrdersList({ orders, onToggleDateSort }: OrdersListProps) {
   const isEmpty = orders.length === 0;
+  const openOrder = useOpenOrder();
 
   return (
     <>
@@ -70,12 +102,17 @@ export function OrdersList({ orders, onToggleDateSort }: OrdersListProps) {
           orders.map((order) => (
             <li
               key={order.id}
-              className="flex flex-col gap-3 rounded-input border border-gray-300 bg-white p-4"
+              onClick={() => openOrder(order.id)}
+              className="flex cursor-pointer flex-col gap-3 rounded-input border border-gray-300 bg-white p-4 transition-colors active:bg-gray-50"
             >
               <div className="flex items-start gap-2">
-                <p className="min-w-0 flex-1 text-body font-semibold text-text">
+                <Link
+                  to={orderDetailPath(order.id)}
+                  onClick={stopRowClick}
+                  className="min-w-0 flex-1 text-body font-semibold text-text"
+                >
                   {order.serviceName}
-                </p>
+                </Link>
                 <OrderStatusChip status={order.status} />
               </div>
 
@@ -83,7 +120,9 @@ export function OrdersList({ orders, onToggleDateSort }: OrdersListProps) {
                 #{order.reference} · {formatOrderDate(order.submittedAt)}
               </p>
 
-              <OrderRowAction order={order} fullWidth />
+              <div onClick={stopRowClick}>
+                <OrderRowAction order={order} fullWidth />
+              </div>
             </li>
           ))
         )}
@@ -135,12 +174,17 @@ export function OrdersList({ orders, onToggleDateSort }: OrdersListProps) {
               orders.map((order) => (
                 <tr
                   key={order.id}
-                  className="h-16 border-b border-gray-200 last:border-b-0 lg:h-table-row"
+                  onClick={() => openOrder(order.id)}
+                  className="h-16 cursor-pointer border-b border-gray-200 transition-colors last:border-b-0 hover:bg-gray-50 lg:h-table-row"
                 >
                   <td className="min-w-0 px-4 lg:px-6">
-                    <p className="truncate text-body font-semibold text-text">
+                    <Link
+                      to={orderDetailPath(order.id)}
+                      onClick={stopRowClick}
+                      className="block truncate text-body font-semibold text-text"
+                    >
                       {order.serviceName}
-                    </p>
+                    </Link>
                     <p className="truncate text-small text-gray-500 lg:hidden">
                       #{order.reference}
                     </p>
@@ -159,7 +203,7 @@ export function OrdersList({ orders, onToggleDateSort }: OrdersListProps) {
                   </td>
 
                   <td className="pr-0 text-right lg:pr-6">
-                    <div className="flex justify-end">
+                    <div className="flex justify-end" onClick={stopRowClick}>
                       <OrderRowAction order={order} />
                     </div>
                   </td>

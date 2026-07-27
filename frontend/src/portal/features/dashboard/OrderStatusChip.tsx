@@ -1,4 +1,12 @@
-import { AlertTriangle, Check, Clock, FileEdit, Send } from 'lucide-react';
+import {
+  AlertTriangle,
+  Check,
+  Clock,
+  CreditCard,
+  FileEdit,
+  Loader,
+  Send,
+} from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 import type { OrderStatus } from '../../types/dashboard';
@@ -23,6 +31,8 @@ const STATUS_CONFIG: Record<
   under_review: { label: 'Under review', icon: Clock, className: 'status-review' },
   missing_info: { label: 'Missing info', icon: AlertTriangle, className: 'status-missing' },
   approved: { label: 'Approved', icon: Check, className: 'status-approved' },
+  paid: { label: 'Paid', icon: CreditCard, className: 'status-paid' },
+  processing: { label: 'Processing', icon: Loader, className: 'status-processing' },
   completed: { label: 'Completed', icon: Check, className: 'status-completed' },
 };
 

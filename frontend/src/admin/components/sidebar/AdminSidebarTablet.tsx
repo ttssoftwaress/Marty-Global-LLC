@@ -2,7 +2,7 @@ import { LogOut } from 'lucide-react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 
 import { AdminSidebarAvatar, type AdminSidebarUser } from './AdminSidebarUserBlock';
-import { ADMIN_NAV_ITEMS, isAdminNavItemActive } from './nav-items';
+import { isAdminNavItemActive, type AdminNavItem } from './nav-items';
 
 /*
  * Admin sidebar — tablet (md up to lg). A 72px icon rail: the wordmark collapses
@@ -12,18 +12,23 @@ import { ADMIN_NAV_ITEMS, isAdminNavItemActive } from './nav-items';
  *
  * Labels are invisible here, so every control carries its nav label as both an
  * accessible name and a native tooltip — otherwise the rail is unusable with a
- * screen reader and ambiguous with a mouse. Ten items overflow a short viewport,
- * so the icon column scrolls while the logo mark and footer stay put.
+ * screen reader and ambiguous with a mouse. A full nav list overflows a short
+ * viewport, so the icon column scrolls while the logo mark and footer stay put.
+ *
+ * `items` arrives already filtered to what this member may open, so the three
+ * variants cannot disagree about which sections exist.
  */
 
 type AdminSidebarTabletProps = {
   user: AdminSidebarUser;
+  items: AdminNavItem[];
   onLogout?: () => void;
   className?: string;
 };
 
 export function AdminSidebarTablet({
   user,
+  items,
   onLogout,
   className,
 }: AdminSidebarTabletProps) {
@@ -44,7 +49,7 @@ export function AdminSidebarTablet({
 
         <nav aria-label="Admin" className="min-h-0 w-full overflow-y-auto">
           <ul className="flex w-full flex-col items-center gap-3">
-            {ADMIN_NAV_ITEMS.map((item) => {
+            {items.map((item) => {
               const active = isAdminNavItemActive(item.to, pathname);
               const Icon = item.icon;
 

@@ -2,6 +2,7 @@ import { HelpCircle, LogOut } from 'lucide-react';
 import { NavLink, useLocation } from 'react-router-dom';
 
 import { PORTAL_NAV_ITEMS, PORTAL_SUPPORT_LINK, isNavItemActive } from './nav-items';
+import { isServiceNavItemActive, useServiceNavItems } from './useServiceNavItems';
 
 /*
  * Portal sidebar — tablet (md up to lg). A 72px icon rail: no logo, no labels,
@@ -20,6 +21,7 @@ type SidebarTabletProps = {
 
 export function SidebarTablet({ onLogout, className }: SidebarTabletProps) {
   const { pathname } = useLocation();
+  const serviceItems = useServiceNavItems();
 
   return (
     <aside
@@ -38,6 +40,37 @@ export function SidebarTablet({ onLogout, className }: SidebarTabletProps) {
                   end={item.to === '/app'}
                   title={item.label}
                   aria-label={item.label}
+                  aria-current={active ? 'page' : undefined}
+                  className={
+                    active
+                      ? 'flex size-12 items-center justify-center rounded-xl bg-white text-primary'
+                      : 'flex size-12 items-center justify-center rounded-xl text-white/80 transition-colors hover:bg-white/10 hover:text-white'
+                  }
+                >
+                  <Icon className="size-5" strokeWidth={1.75} aria-hidden="true" />
+                </NavLink>
+              </li>
+            );
+          })}
+
+          {/* The customer's delivered services. A hairline stands in for the
+           * "My services" heading the wider sidebars print — there is no room
+           * for a label here, and each tile carries the page name as its
+           * accessible name and tooltip. */}
+          {serviceItems.length > 0 ? (
+            <li aria-hidden="true" className="my-1 w-8 border-t border-white/15" />
+          ) : null}
+
+          {serviceItems.map((item) => {
+            const active = isServiceNavItemActive(item.to, pathname);
+            const Icon = item.icon;
+
+            return (
+              <li key={item.to}>
+                <NavLink
+                  to={item.to}
+                  title={`${item.label} (${item.count})`}
+                  aria-label={`${item.label}, ${item.count} record${item.count === 1 ? '' : 's'}`}
                   aria-current={active ? 'page' : undefined}
                   className={
                     active

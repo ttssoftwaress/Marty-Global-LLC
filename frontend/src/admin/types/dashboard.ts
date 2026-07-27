@@ -47,12 +47,16 @@ export type DashboardMetric = {
   trend: MetricTrend;
 };
 
+// The pipeline, in order. Mirrors the backend's `OrderStatus` enum — the backend
+// is the source of truth (AGENTS.md, two-apps sync rule).
 export type OrderStatus =
   | 'draft'
   | 'submitted'
   | 'under_review'
   | 'missing_info'
   | 'approved'
+  | 'paid'
+  | 'processing'
   | 'completed';
 
 export type OrderStatusCount = {

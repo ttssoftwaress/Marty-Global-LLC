@@ -10,6 +10,7 @@ export {
 } from './AdminSidebarUserBlock';
 export {
   ADMIN_NAV_ITEMS,
+  visibleAdminNavItems,
   isAdminNavItemActive,
   type AdminNavItem,
 } from './nav-items';

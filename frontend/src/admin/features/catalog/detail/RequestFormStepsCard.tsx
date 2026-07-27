@@ -1,28 +1,17 @@
-import { useState } from 'react';
-import {
-  ChevronDown,
-  ChevronUp,
-  GripVertical,
-  Plus,
-  Trash2,
-  X,
-} from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { ChevronDown, ChevronUp, GripVertical, Plus, Trash2 } from 'lucide-react';
 
-import {
-  emptyFieldDraft,
-  emptyStepDraft,
-  moveItem,
-  slugify,
-} from '../../../lib/catalog';
+import { emptyStepDraft, fieldDraft, moveItem } from '../../../lib/catalog';
 import type {
   ServiceFieldDraft,
   ServiceFormErrors,
   ServiceFormStepDraft,
 } from '../../../types/catalog';
-import { SERVICE_FIELD_TYPE_OPTIONS } from '../../../types/catalog';
-import { Field, SelectInput, TextArea, TextInput } from '../FormControls';
+import type { FieldDefinition } from '../../../types/fields';
+import { FieldPicker } from '../FieldPicker';
+import { PickedFieldRow } from '../PickedFieldRow';
+import { Field, TextInput } from '../FormControls';
 import { DashedAddButton, DetailCard } from './DetailCard';
-import { ToggleSwitch } from './ToggleSwitch';
 
 /*
  * "Request form & steps" — the admin control over what a customer fills in to
@@ -34,30 +23,38 @@ import { ToggleSwitch } from './ToggleSwitch';
  * same card language as the designed sections, and is logged as a deviation.
  *
  * The shape it writes is the contract the portal's order flow reads: a service's
- * steps, each holding its own fields. The portal renders one screen per step and
- * gates Continue on that step's required fields, so adding a step here changes
- * the customer's flow with no deploy in either app — which is the whole point of
- * the catalog being data.
+ * steps, each holding the registered questions it asks. The portal renders one
+ * screen per step and gates Continue on that step's required fields, so adding a
+ * step here changes the customer's flow with no deploy in either app.
  *
- * A field key (`name`) is what an answer is stored under. It is derived from the
- * label while a field is new and left alone once saved: renaming a live key would
- * orphan every answer already recorded against it. Keys are unique across the
- * whole service, not per step, because answers land in one flat map per service.
+ * Questions are PICKED from the field registry, never authored here. What a
+ * question is — its key, label, control type, choices, upload settings — lives on
+ * the Form fields screen; a step records only which registered questions it asks
+ * and whether each is required on this service. That is what keeps answer keys a
+ * closed set instead of whatever an admin typed on a given service, and what
+ * makes the customer's merged master form exact.
  *
- * No field type collects money or card data, by design (AGENTS.md) — the backend
- * resolves amounts and Stripe holds the card, so an admin-authored form must
- * never be able to ask for either.
+ * A question may appear only once across the whole service, not merely once per
+ * step, because answers land in one flat map per service.
+ *
+ * No registered field collects money or card data, by design (AGENTS.md) — the
+ * backend resolves amounts and Stripe holds the card.
  */
 
 type RequestFormStepsCardProps = {
   steps: ServiceFormStepDraft[];
   errors: ServiceFormErrors;
+  // The live registry the picker offers.
+  registry: FieldDefinition[];
+  isRegistryLoading: boolean;
   onChange: (steps: ServiceFormStepDraft[]) => void;
 };
 
 export function RequestFormStepsCard({
   steps,
   errors,
+  registry,
+  isRegistryLoading,
   onChange,
 }: RequestFormStepsCardProps) {
   // Every step starts open on a fresh load; collapsing is per-session state that
@@ -88,6 +85,18 @@ export function RequestFormStepsCard({
 
   const totalFields = steps.reduce((sum, step) => sum + step.fields.length, 0);
 
+  const registryByKey = useMemo(
+    () => new Map(registry.map((definition) => [definition.key, definition])),
+    [registry],
+  );
+
+  // Every question the service already asks, across all steps — the picker
+  // disables these so the same field can't land on two screens.
+  const pickedKeys = useMemo(
+    () => steps.flatMap((step) => step.fields.map((field) => field.fieldKey)),
+    [steps],
+  );
+
   return (
     <DetailCard
       title="Request form & steps"
@@ -113,6 +122,10 @@ export function RequestFormStepsCard({
                 index={index}
                 stepCount={steps.length}
                 errors={errors}
+                registry={registry}
+                registryByKey={registryByKey}
+                isRegistryLoading={isRegistryLoading}
+                pickedKeys={pickedKeys}
                 collapsed={collapsed.has(step.key)}
                 onToggleCollapsed={() => toggleCollapsed(step.key)}
                 onChange={(patch) => updateStep(index, patch)}
@@ -134,6 +147,10 @@ function StepRow({
   index,
   stepCount,
   errors,
+  registry,
+  registryByKey,
+  isRegistryLoading,
+  pickedKeys,
   collapsed,
   onToggleCollapsed,
   onChange,
@@ -144,6 +161,10 @@ function StepRow({
   index: number;
   stepCount: number;
   errors: ServiceFormErrors;
+  registry: FieldDefinition[];
+  registryByKey: Map<string, FieldDefinition>;
+  isRegistryLoading: boolean;
+  pickedKeys: string[];
   collapsed: boolean;
   onToggleCollapsed: () => void;
   onChange: (patch: Partial<ServiceFormStepDraft>) => void;
@@ -152,6 +173,8 @@ function StepRow({
 }) {
   const prefix = `steps.${index}`;
   const titleError = errors[`${prefix}.title`];
+
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
 
   const setFields = (fields: ServiceFieldDraft[]) => onChange({ fields });
 
@@ -262,196 +285,61 @@ function StepRow({
 
       {collapsed ? null : (
         <div className="flex flex-col gap-3 border-t border-gray-200 pt-4">
-          {step.fields.length === 0 ? (
+          {step.fields.length === 0 && !isPickerOpen ? (
             <p className="text-body text-gray-500">
-              This step has no fields yet — customers would see an empty screen.
+              This step has no questions yet — customers would see an empty screen.
             </p>
-          ) : (
-            step.fields.map((field, fieldIndex) => (
-              <FieldRow
-                key={field.key}
-                field={field}
-                stepIndex={index}
-                index={fieldIndex}
-                fieldCount={step.fields.length}
-                errors={errors}
-                onChange={(patch) =>
-                  setFields(
-                    step.fields.map((item, i) =>
-                      i === fieldIndex ? { ...item, ...patch } : item,
-                    ),
-                  )
-                }
-                onRemove={() =>
-                  setFields(step.fields.filter((_, i) => i !== fieldIndex))
-                }
-                onMove={(to) => setFields(moveItem(step.fields, fieldIndex, to))}
-              />
-            ))
-          )}
+          ) : null}
 
-          <button
-            type="button"
-            onClick={() => setFields([...step.fields, emptyFieldDraft()])}
-            className="flex h-10 items-center justify-center gap-2 self-start rounded-control border border-dashed border-gray-300 bg-white px-4 text-body font-medium text-primary transition-colors hover:border-primary hover:bg-primary-light focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-          >
-            <Plus className="size-4 shrink-0" strokeWidth={2} aria-hidden="true" />
-            Add field
-          </button>
+          {step.fields.map((field, fieldIndex) => (
+            <PickedFieldRow
+              key={field.key}
+              field={field}
+              definition={registryByKey.get(field.fieldKey)}
+              index={fieldIndex}
+              fieldCount={step.fields.length}
+              error={errors[`steps.${index}.fields.${fieldIndex}.fieldKey`]}
+              onChange={(patch) =>
+                setFields(
+                  step.fields.map((item, i) =>
+                    i === fieldIndex ? { ...item, ...patch } : item,
+                  ),
+                )
+              }
+              onRemove={() =>
+                setFields(step.fields.filter((_, i) => i !== fieldIndex))
+              }
+              onMove={(to) => setFields(moveItem(step.fields, fieldIndex, to))}
+            />
+          ))}
+
+          <FieldPicker
+            open={isPickerOpen}
+            fields={registry}
+            isLoading={isRegistryLoading}
+            // Every key the whole service already asks, not just this step:
+            // answers land in one flat map per service, so a field picked on
+            // another step would collide here.
+            pickedKeys={pickedKeys}
+            onPick={(definition) => {
+              setFields([...step.fields, fieldDraft(definition.key)]);
+              setIsPickerOpen(false);
+            }}
+            onClose={() => setIsPickerOpen(false)}
+          />
+
+          {!isPickerOpen && (
+            <button
+              type="button"
+              onClick={() => setIsPickerOpen(true)}
+              className="flex h-10 items-center justify-center gap-2 self-start rounded-control border border-dashed border-gray-300 bg-white px-4 text-body font-medium text-primary transition-colors hover:border-primary hover:bg-primary-light focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            >
+              <Plus className="size-4 shrink-0" strokeWidth={2} aria-hidden="true" />
+              Add question
+            </button>
+          )}
         </div>
       )}
     </li>
-  );
-}
-
-function FieldRow({
-  field,
-  stepIndex,
-  index,
-  fieldCount,
-  errors,
-  onChange,
-  onRemove,
-  onMove,
-}: {
-  field: ServiceFieldDraft;
-  stepIndex: number;
-  index: number;
-  fieldCount: number;
-  errors: ServiceFormErrors;
-  onChange: (patch: Partial<ServiceFieldDraft>) => void;
-  onRemove: () => void;
-  onMove: (to: number) => void;
-}) {
-  const prefix = `steps.${stepIndex}.fields.${index}`;
-
-  return (
-    <div className="flex flex-col gap-3 rounded-card border border-gray-200 bg-white p-3 md:p-4">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-caption font-medium uppercase tracking-[0.4px] text-gray-500">
-          Field {index + 1}
-        </span>
-
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => onMove(index - 1)}
-            disabled={index === 0}
-            aria-label={`Move field ${index + 1} up`}
-            className="flex size-7 items-center justify-center rounded text-gray-400 transition-colors hover:text-primary disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-          >
-            <ChevronUp className="size-4" strokeWidth={2} aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            onClick={() => onMove(index + 1)}
-            disabled={index === fieldCount - 1}
-            aria-label={`Move field ${index + 1} down`}
-            className="flex size-7 items-center justify-center rounded text-gray-400 transition-colors hover:text-primary disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-          >
-            <ChevronDown className="size-4" strokeWidth={2} aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            onClick={onRemove}
-            aria-label={`Remove field ${index + 1}`}
-            className="flex size-7 items-center justify-center rounded text-gray-400 transition-colors hover:text-error focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-          >
-            <X className="size-4" strokeWidth={1.75} aria-hidden="true" />
-          </button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        <Field
-          label="Label"
-          htmlFor={`${field.key}-label`}
-          error={errors[`${prefix}.label`]}
-          required
-        >
-          <TextInput
-            id={`${field.key}-label`}
-            value={field.label}
-            onChange={(event) => onChange({ label: event.target.value })}
-            placeholder="Preferred company name"
-            error={errors[`${prefix}.label`]}
-          />
-        </Field>
-
-        <Field label="Type" htmlFor={`${field.key}-type`}>
-          <SelectInput
-            id={`${field.key}-type`}
-            value={field.type}
-            onChange={(event) =>
-              onChange({ type: event.target.value as ServiceFieldDraft['type'] })
-            }
-          >
-            {SERVICE_FIELD_TYPE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </SelectInput>
-        </Field>
-
-        <Field
-          label="Field key"
-          htmlFor={`${field.key}-name`}
-          error={errors[`${prefix}.name`]}
-          hint="Leave blank to derive it from the label."
-        >
-          <TextInput
-            id={`${field.key}-name`}
-            value={field.name}
-            onChange={(event) => onChange({ name: event.target.value })}
-            placeholder={slugify(field.label) || 'company-name'}
-            error={errors[`${prefix}.name`]}
-          />
-        </Field>
-
-        <Field label="Placeholder" htmlFor={`${field.key}-placeholder`}>
-          <TextInput
-            id={`${field.key}-placeholder`}
-            value={field.placeholder}
-            onChange={(event) => onChange({ placeholder: event.target.value })}
-            placeholder="Shown inside the empty input"
-          />
-        </Field>
-      </div>
-
-      {field.type === 'select' ? (
-        <Field
-          label="Choices"
-          htmlFor={`${field.key}-options`}
-          error={errors[`${prefix}.options`]}
-          hint="One per line. Use value|Label to set a stored value."
-          required
-        >
-          <TextArea
-            id={`${field.key}-options`}
-            value={field.options}
-            onChange={(event) => onChange({ options: event.target.value })}
-            rows={4}
-            placeholder={'Delaware\nWyoming\nnew-mexico|New Mexico'}
-            error={errors[`${prefix}.options`]}
-          />
-        </Field>
-      ) : null}
-
-      <div className="flex items-center justify-between gap-3 border-t border-gray-200 pt-3">
-        <div className="flex flex-col">
-          <span className="text-form-label text-text">Required</span>
-          <span className="text-caption text-gray-500">
-            Customers must answer this before continuing.
-          </span>
-        </div>
-
-        <ToggleSwitch
-          checked={field.required}
-          onChange={(next) => onChange({ required: next })}
-          label={`Make ${field.label || `field ${index + 1}`} required`}
-        />
-      </div>
-    </div>
   );
 }

@@ -51,11 +51,17 @@ type MailItemSlideOverProps = {
   onClose: () => void;
   onPrev: () => void;
   onNext: () => void;
-  // Request/read actions land with the backend (two-apps sync rule); the
-  // buttons render per the design and wire up here once the endpoints exist.
   onRequestForwarding?: () => void;
   onRequestShredding?: () => void;
   onMarkRead?: () => void;
+  // Fires alongside the actual download so the backend can log the "Downloaded
+  // only" disposal — the browser still follows the link either way.
+  onDownload?: () => void;
+  // While a request is in flight, so the two buttons cannot be double-submitted.
+  isRequesting?: boolean;
+  // Set when a request was rejected — a customer with no company address on file
+  // cannot be forwarded to, and the reason belongs beside the button.
+  requestError?: string | null;
 };
 
 type IconButtonProps = {
@@ -114,6 +120,9 @@ export function MailItemSlideOver({
   onRequestForwarding,
   onRequestShredding,
   onMarkRead,
+  onDownload,
+  isRequesting = false,
+  requestError = null,
 }: MailItemSlideOverProps) {
   const panelRef = useRef<HTMLElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
@@ -331,18 +340,26 @@ export function MailItemSlideOver({
 
         {/* Action footer */}
         <footer className="flex w-full shrink-0 flex-col gap-3 border-t border-gray-200 bg-white p-4 shadow-footer-raised md:p-5 md:shadow-none">
+          {requestError ? (
+            <p role="alert" className="text-small text-error">
+              {requestError}
+            </p>
+          ) : null}
+
           <button
             type="button"
             onClick={onRequestForwarding}
-            className="btn btn-primary w-full md:text-body"
+            disabled={isRequesting}
+            className="btn btn-primary w-full md:text-body disabled:opacity-50"
           >
-            Request forwarding
+            {isRequesting ? 'Sending request…' : 'Request forwarding'}
           </button>
           <div className="flex w-full gap-3 md:gap-2">
             <button
               type="button"
               onClick={onRequestShredding}
-              className="btn btn-secondary min-w-0 flex-1 px-2 text-body"
+              disabled={isRequesting}
+              className="btn btn-secondary min-w-0 flex-1 px-2 text-body disabled:opacity-50"
             >
               Request shredding
             </button>
@@ -352,6 +369,7 @@ export function MailItemSlideOver({
                 download
                 target="_blank"
                 rel="noreferrer"
+                onClick={onDownload}
                 className="btn btn-secondary min-w-0 flex-1 px-2 text-body"
               >
                 Download PDF

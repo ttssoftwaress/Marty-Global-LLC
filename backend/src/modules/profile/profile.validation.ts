@@ -30,7 +30,7 @@ export const updateCompanySchema = z.object({
 });
 export type UpdateCompanyInput = z.infer<typeof updateCompanySchema>;
 
-// Notification preferences: one master email gate plus four categories × three
+// Notification preferences: one master email gate plus five categories × three
 // channels. The set is fixed by the UI, so the schema is explicit rather than a
 // free-form record — an unknown category is a client bug, not data to store.
 const channelPrefs = z.object({
@@ -46,8 +46,19 @@ export const updateNotificationPreferencesSchema = z.object({
     quoteAlerts: channelPrefs,
     documentRequests: channelPrefs,
     newMessages: channelPrefs,
+    mailUpdates: channelPrefs,
   }),
 });
 export type UpdateNotificationPreferencesInput = z.infer<
   typeof updateNotificationPreferencesSchema
 >;
+
+/*
+ * Setting the account's profile picture. The image itself went straight to R2
+ * through `POST /v1/uploads` (AGENTS.md, Storage); this records the key it landed
+ * under. A null key clears the picture back to initials.
+ */
+export const updateAvatarSchema = z.object({
+  objectKey: z.string().trim().min(1).max(500).nullable(),
+});
+export type UpdateAvatarInput = z.infer<typeof updateAvatarSchema>;

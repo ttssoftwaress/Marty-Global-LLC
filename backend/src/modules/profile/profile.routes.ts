@@ -17,6 +17,9 @@ router.get('/', apiRateLimit, controller.getProfile);
 // A profile write can change the account's email, so it takes the tighter limiter.
 router.patch('/', sensitiveRateLimit, controller.updateProfile);
 
+// The image itself goes to R2 through `/v1/uploads`; this records the key.
+router.put('/avatar', sensitiveRateLimit, controller.updateAvatar);
+
 router.get('/company', apiRateLimit, controller.getCompany);
 router.patch('/company', sensitiveRateLimit, controller.updateCompany);
 

@@ -1,7 +1,10 @@
+import { useMemo } from 'react';
+
 import { AdminSidebarDesktop } from './AdminSidebarDesktop';
 import { AdminSidebarMobileDrawer } from './AdminSidebarMobileDrawer';
 import { AdminSidebarTablet } from './AdminSidebarTablet';
 import type { AdminSidebarUser } from './AdminSidebarUserBlock';
+import { visibleAdminNavItems } from './nav-items';
 
 /*
  * Admin sidebar — the responsive shell shared by every `/admin/*` page. One
@@ -14,12 +17,17 @@ import type { AdminSidebarUser } from './AdminSidebarUserBlock';
  * component reflowing, because the rail trades the wordmark for an "M" tile and
  * drops every label — a single tree would carry markup hidden at every width.
  *
+ * All three render at once, so the nav list is resolved here and handed down
+ * rather than filtered three times. Their markup differs; which sections a
+ * member may open does not.
+ *
  * The drawer's open state is owned by the caller (the admin layout), so the menu
  * button that toggles it can live in a sibling component.
  */
 
 type AdminSidebarProps = {
   user: AdminSidebarUser;
+  permissions: readonly string[] | undefined;
   mobileOpen: boolean;
   onMobileClose: () => void;
   onLogout?: () => void;
@@ -27,22 +35,32 @@ type AdminSidebarProps = {
 
 export function AdminSidebar({
   user,
+  permissions,
   mobileOpen,
   onMobileClose,
   onLogout,
 }: AdminSidebarProps) {
+  const items = useMemo(() => visibleAdminNavItems(permissions), [permissions]);
+
   return (
     <>
       <AdminSidebarTablet
         user={user}
+        items={items}
         onLogout={onLogout}
         className="hidden md:flex lg:hidden"
       />
-      <AdminSidebarDesktop user={user} onLogout={onLogout} className="hidden lg:flex" />
+      <AdminSidebarDesktop
+        user={user}
+        items={items}
+        onLogout={onLogout}
+        className="hidden lg:flex"
+      />
       <AdminSidebarMobileDrawer
         open={mobileOpen}
         onClose={onMobileClose}
         user={user}
+        items={items}
         onLogout={onLogout}
       />
     </>

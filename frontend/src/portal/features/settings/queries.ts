@@ -110,3 +110,26 @@ export function useUpdateNotificationPreferences() {
     },
   });
 }
+
+/*
+ * PUT /v1/profile/avatar — set or clear the account's profile picture.
+ *
+ * The image itself was uploaded straight to R2 through `services/upload.ts`; the
+ * body carries only the object key (AGENTS.md, Storage). The response is the
+ * refreshed profile, including a freshly presigned `avatarUrl`, so it is written
+ * straight into the cache rather than triggering a second fetch.
+ */
+export function useUpdateAvatar() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (objectKey: string | null) =>
+      apiFetch<ApiSuccess<ProfileInfo>>('/profile/avatar', {
+        method: 'PUT',
+        body: JSON.stringify({ objectKey }),
+      }).then((res) => res.data),
+    onSuccess: (profile) => {
+      queryClient.setQueryData(profileKey(), profile);
+    },
+  });
+}

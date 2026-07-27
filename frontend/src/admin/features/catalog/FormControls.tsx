@@ -122,18 +122,25 @@ export function SelectInput({
  * readable in a sheet.
  */
 export function FormSection({
+  id,
   title,
   description,
   action,
   children,
 }: {
+  // An anchor for the form to scroll to when this section holds the first
+  // error blocking a submit.
+  id?: string;
   title: string;
   description?: string;
   action?: ReactNode;
   children: ReactNode;
 }) {
   return (
-    <section className="flex flex-col gap-3 border-t border-gray-200 pt-5 first:border-t-0 first:pt-0">
+    <section
+      id={id}
+      className="flex flex-col gap-3 border-t border-gray-200 pt-5 first:border-t-0 first:pt-0"
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-0.5">
           <h3 className="text-body-lg font-semibold text-text">{title}</h3>

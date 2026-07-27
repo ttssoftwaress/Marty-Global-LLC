@@ -2,7 +2,7 @@ import { formatCount } from '../../lib/format';
 import type { TeamStatusFilter, TeamStatusTab } from '../../types/team';
 
 /*
- * The status tab strip — All / Active / Invited / Deactivated.
+ * The status tab strip — All / Active / Deactivated.
  *
  * The shape is the same at every width; only the pill height changes (40px on
  * desktop, 36px from tablet down, matching the links).

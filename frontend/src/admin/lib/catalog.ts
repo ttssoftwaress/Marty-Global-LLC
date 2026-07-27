@@ -7,7 +7,7 @@ import type {
   PricingTierDraft,
   ServiceDetailDraft,
   ServiceDetailWritePayload,
-  ServiceField,
+  ServiceFieldRef,
   ServiceFieldDraft,
   ServiceFormDraft,
   ServiceFormErrors,
@@ -135,16 +135,10 @@ export function emptyTierDraft(currency = 'USD'): PricingTierDraft {
   };
 }
 
-export function emptyFieldDraft(): ServiceFieldDraft {
-  return {
-    key: nextDraftKey('field'),
-    type: 'text',
-    name: '',
-    label: '',
-    required: false,
-    placeholder: '',
-    options: '',
-  };
+// A newly picked question. `fieldKey` is filled in by the picker; a draft row
+// never exists without one, so this is only ever called with a chosen field.
+export function fieldDraft(fieldKey: string, required = false): ServiceFieldDraft {
+  return { key: nextDraftKey('field'), fieldKey, required };
 }
 
 // Text areas that collect a list edit as one item per line.
@@ -160,34 +154,6 @@ function splitChips(value: string) {
     .split(',')
     .map((chip) => chip.trim())
     .filter(Boolean);
-}
-
-/*
- * A dropdown choice is typed as either "value|Label" or just "Label", the second
- * deriving a slug value — the admin shouldn't have to invent a machine key for
- * every option, but can when the stored answer needs a specific one.
- */
-function parseSelectOptions(value: string) {
-  return splitLines(value).map((line) => {
-    // `split` always yields at least one element, which the index signature
-    // can't express under `noUncheckedIndexedAccess`.
-    const [rawValue = '', rawLabel] = line.split('|');
-    if (rawLabel !== undefined) {
-      return { value: rawValue.trim(), label: rawLabel.trim() };
-    }
-    const label = rawValue.trim();
-    return { value: slugify(label), label };
-  });
-}
-
-function serializeSelectOptions(options: { value: string; label: string }[]) {
-  return options
-    .map((option) =>
-      option.value === slugify(option.label)
-        ? option.label
-        : `${option.value}|${option.label}`,
-    )
-    .join('\n');
 }
 
 export function slugify(value: string) {
@@ -224,16 +190,7 @@ export function draftFromService(
       regionCode: tier.regionCode ?? '',
       turnaround: tier.turnaround ?? '',
     })),
-    detailFields: service.detailFields.map((field) => ({
-      key: nextDraftKey('field'),
-      type: field.type,
-      name: field.name,
-      label: field.label,
-      required: Boolean(field.required),
-      placeholder: field.placeholder ?? '',
-      options:
-        field.type === 'select' ? serializeSelectOptions(field.options) : '',
-    })),
+    detailFields: service.detailFields.map(fieldDraftFromRef),
     active: service.active,
   };
 }
@@ -272,21 +229,14 @@ export function validateServiceDraft(
     }
   });
 
-  const fieldNames = new Set<string>();
+  // A question is picked from the registry, so there is nothing to validate
+  // about its shape — only that the service doesn't ask the same one twice.
+  const picked = new Set<string>();
   draft.detailFields.forEach((field, index) => {
-    if (!field.label.trim()) errors[`fields.${index}.label`] = 'Label this field.';
-
-    const name = field.name.trim() || slugify(field.label);
-    if (!name) {
-      errors[`fields.${index}.name`] = 'A field key is required.';
-    } else if (fieldNames.has(name)) {
-      errors[`fields.${index}.name`] = 'Field keys must be unique.';
+    if (picked.has(field.fieldKey)) {
+      errors[`fields.${index}.fieldKey`] = 'This service already asks this question.';
     }
-    fieldNames.add(name);
-
-    if (field.type === 'select' && parseSelectOptions(field.options).length === 0) {
-      errors[`fields.${index}.options`] = 'Add at least one choice.';
-    }
+    picked.add(field.fieldKey);
   });
 
   return errors;
@@ -312,7 +262,7 @@ export function payloadFromDraft(
       label: draft.footerLabel.trim(),
       ...(chips.length > 0 ? { chips } : {}),
     },
-    detailFields: draft.detailFields.map(toServiceField),
+    detailFields: draft.detailFields.map(toFieldRef),
     regionCodes: [...draft.regionCodes],
     pricingTiers: draft.pricingTiers.map((tier) => ({
       ...(tier.id ? { id: tier.id } : {}),
@@ -355,7 +305,7 @@ export function emptyFeatureDraft(value = ''): FeatureDraft {
  */
 export function stepsFromService(service: {
   formSteps?: ServiceFormStep[];
-  detailFields?: ServiceField[];
+  detailFields?: ServiceFieldRef[];
 }): ServiceFormStep[] {
   const steps = service.formSteps ?? [];
   if (steps.length > 0) return steps;
@@ -411,20 +361,18 @@ export function detailDraftFromService(
       savedKey: step.key,
       title: step.title,
       description: step.description ?? '',
-      fields: step.fields.map(fieldDraftFromField),
+      fields: step.fields.map(fieldDraftFromRef),
     })),
   };
 }
 
-function fieldDraftFromField(field: ServiceField): ServiceFieldDraft {
+// A stored reference → the builder's draft row. Nothing about the question's
+// appearance is copied here: the builder reads that live from the registry.
+function fieldDraftFromRef(ref: ServiceFieldRef): ServiceFieldDraft {
   return {
     key: nextDraftKey('field'),
-    type: field.type,
-    name: field.name,
-    label: field.label,
-    required: Boolean(field.required),
-    placeholder: field.placeholder ?? '',
-    options: field.type === 'select' ? serializeSelectOptions(field.options) : '',
+    fieldKey: ref.fieldKey,
+    required: Boolean(ref.required),
   };
 }
 
@@ -466,30 +414,23 @@ export function validateDetailDraft(
     }
   });
 
-  const fieldKeys = new Set<string>();
+  /*
+   * A question is picked from the registry, so its shape needs no validating
+   * here — only that the service doesn't ask the same one twice. Answers land in
+   * one flat map per service, so the boundary is the service, not the step: the
+   * same field on two steps would collide exactly as two picks on one step would.
+   */
+  const picked = new Set<string>();
   draft.steps.forEach((step, stepIndex) => {
     if (!step.title.trim())
       errors[`steps.${stepIndex}.title`] = 'Name this step.';
 
     step.fields.forEach((field, fieldIndex) => {
-      const path = `steps.${stepIndex}.fields.${fieldIndex}`;
-
-      if (!field.label.trim()) errors[`${path}.label`] = 'Label this field.';
-
-      const name = field.name.trim() || slugify(field.label);
-      if (!name) {
-        errors[`${path}.name`] = 'A field key is required.';
-      } else if (fieldKeys.has(name)) {
-        errors[`${path}.name`] = 'Field keys must be unique across all steps.';
+      if (picked.has(field.fieldKey)) {
+        errors[`steps.${stepIndex}.fields.${fieldIndex}.fieldKey`] =
+          'This question is already asked on another step.';
       }
-      fieldKeys.add(name);
-
-      if (
-        field.type === 'select' &&
-        parseSelectOptions(field.options).length === 0
-      ) {
-        errors[`${path}.options`] = 'Add at least one choice.';
-      }
+      picked.add(field.fieldKey);
     });
   });
 
@@ -510,7 +451,7 @@ export function detailPayloadFromDraft(
     key: step.savedKey || slugify(step.title) || nextDraftKey('step'),
     title: step.title.trim(),
     ...(step.description.trim() ? { description: step.description.trim() } : {}),
-    fields: step.fields.map(toServiceField),
+    fields: step.fields.map(toFieldRef),
   }));
 
   return {
@@ -553,19 +494,14 @@ export function moveItem<T>(items: T[], from: number, to: number): T[] {
   return next;
 }
 
-function toServiceField(field: ServiceFieldDraft): ServiceField {
-  const base = {
-    name: field.name.trim() || slugify(field.label),
-    label: field.label.trim(),
+/*
+ * A draft row → the stored reference. Only which question and whether this
+ * service requires it — everything else about the field lives in the registry,
+ * so a service can never carry a stale copy of a label or a choice list.
+ */
+function toFieldRef(field: ServiceFieldDraft): ServiceFieldRef {
+  return {
+    fieldKey: field.fieldKey,
     ...(field.required ? { required: true } : {}),
-    ...(field.placeholder.trim() ? { placeholder: field.placeholder.trim() } : {}),
   };
-
-  if (field.type === 'select') {
-    return { ...base, type: 'select', options: parseSelectOptions(field.options) };
-  }
-  if (field.type === 'textarea') {
-    return { ...base, type: 'textarea' };
-  }
-  return { ...base, type: 'text' };
 }

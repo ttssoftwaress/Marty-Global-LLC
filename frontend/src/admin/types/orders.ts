@@ -108,12 +108,25 @@ export type AdminOrdersPage = {
 };
 
 /*
+ * How much of the pipeline the caller is looking at. An admin — and a staff
+ * member granted `orders.assign`, who distributes the work — sees every order;
+ * everyone else sees only the filings assigned to them.
+ *
+ * The backend decides it and sends it down with the summary. The queue prints the
+ * scope rather than deriving it from a role: "12 total orders" and "12 orders
+ * assigned to you" are the same figure meaning very different things, and the
+ * rule that separates them lives in the backend (AGENTS.md, Auth).
+ */
+export type AdminOrdersScope = 'all' | 'assigned';
+
+/*
  * The queue's header figures and filter chrome — one call, so the tab counts and
  * the two header pills agree with each other and with the list.
  */
 export type AdminOrdersSummary = {
   totalOrders: number;
   awaitingReview: number;
+  scope: AdminOrdersScope;
   tabs: OrderStatusTab[];
   filterOptions: OrderFilterOptions;
 };

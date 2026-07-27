@@ -2,25 +2,25 @@ import { Link } from 'react-router-dom';
 import { Plus } from 'lucide-react';
 
 /*
- * The Team & staff page header — breadcrumb, title block, and the invite action.
+ * The Team & staff page header — breadcrumb, title block, and the add action.
  *
  * The three links arrange the same parts differently, which one tree covers:
- *   - desktop & tablet: the title block and the invite button share one row
+ *   - desktop & tablet: the title block and the add button share one row
  *   - mobile:           the breadcrumb and the subtitle drop away and the button
  *                       becomes a full-width bar under the title
  *
- * The invite button carries the desktop link's navy fill at every width. The
- * tablet link draws it magenta — reproduced as navy here and logged as a
- * deviation: the accent is the marketing CTA colour, and every other primary
- * action in the admin portal is navy, so a magenta button on one breakpoint only
- * would read as a different control.
+ * The button carries the desktop link's navy fill at every width. The tablet
+ * link draws it magenta — reproduced as navy here and logged as a deviation: the
+ * accent is the marketing CTA colour, and every other primary action in the
+ * admin portal is navy, so a magenta button on one breakpoint only would read as
+ * a different control.
  */
 
 type TeamHeaderProps = {
-  onInvite: () => void;
+  onAddStaff: () => void;
 };
 
-export function TeamHeader({ onInvite }: TeamHeaderProps) {
+export function TeamHeader({ onAddStaff }: TeamHeaderProps) {
   return (
     <div className="flex w-full flex-col gap-3 md:gap-4">
       <nav aria-label="Breadcrumb" className="hidden md:block">
@@ -57,7 +57,7 @@ export function TeamHeader({ onInvite }: TeamHeaderProps) {
 
         <button
           type="button"
-          onClick={onInvite}
+          onClick={onAddStaff}
           // Type sizes are arbitrary utilities, not the `.text-*` tokens: those
           // are `@layer components`, so their responsive variants emit no CSS.
           className="flex h-12 w-full shrink-0 items-center justify-center gap-2 rounded-control bg-primary px-5 text-[16px] font-semibold leading-6 text-white transition-colors hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary md:h-10 md:w-auto md:gap-1.5 md:px-4 md:text-[14px] md:leading-5 lg:h-12 lg:gap-2 lg:px-5 lg:text-[16px] lg:leading-6"
@@ -67,7 +67,7 @@ export function TeamHeader({ onInvite }: TeamHeaderProps) {
             strokeWidth={2}
             aria-hidden="true"
           />
-          Invite team member
+          Add staff member
         </button>
       </div>
     </div>

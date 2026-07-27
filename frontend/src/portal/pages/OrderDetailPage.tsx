@@ -11,7 +11,9 @@ import {
   OrderSummaryCard,
   OrderTimelineCard,
   PaymentStatusCard,
+  QuoteCard,
 } from '../features/order-detail';
+import { OrderConversationSection } from '../features/order-conversation';
 import { useOrderDetail } from '../features/orders/queries';
 import { usePortalShell } from '../hooks/usePortalShell';
 import type { OrderDetail } from '../types/orders';
@@ -70,10 +72,11 @@ export function OrderDetailPage({
 
   const showSkeleton = isLoading || !order;
 
-  // Support and conversation links hang off this order's id (falling back to the
-  // route param while the record loads).
+  // The conversation panel and the support link both hang off this order's id
+  // (falling back to the route param while the record loads). They are different
+  // destinations on purpose: the panel is this order's thread with its assigned
+  // specialist, the support link opens a general help thread.
   const orderKey = order?.id ?? orderId ?? '';
-  const conversationHref = `/app/orders/${orderKey}/conversation`;
   const supportHref = `/app/support?order=${orderKey}`;
 
   return (
@@ -107,13 +110,19 @@ export function OrderDetailPage({
                     <ApplicationDetailsCard fields={order.applicationDetails} />
                   </div>
                   <div className="order-4 md:order-2">
-                    <DocumentsCard documents={order.documents} />
+                    <DocumentsCard documents={order.documents} orderId={orderKey} />
                   </div>
                   <div className="order-5 md:order-3">
-                    <ActivityCard
-                      activity={order.activity}
-                      conversationHref={conversationHref}
-                    />
+                    <ActivityCard activity={order.activity} />
+                  </div>
+                  {/*
+                   * The conversation sits directly under the activity feed: the
+                   * feed is what happened to the order, the conversation is where
+                   * the customer asks about it. Adjacent, but distinct records —
+                   * and both distinct from Messages, which is general support.
+                   */}
+                  <div className="order-6 md:order-4">
+                    <OrderConversationSection orderId={orderKey} />
                   </div>
                 </div>
 
@@ -126,7 +135,7 @@ export function OrderDetailPage({
                  * pairing them doesn't disturb the mobile sequence.
                  */}
                 <div className="contents lg:flex lg:w-[440px] lg:shrink-0 lg:flex-col lg:gap-6">
-                  <div className="order-1 flex flex-col gap-6 md:order-4 md:flex-row lg:flex-col">
+                  <div className="order-1 flex flex-col gap-6 md:order-5 md:flex-row lg:flex-col">
                     <div className="flex-1">
                       <OrderSummaryCard summary={order.summary} />
                     </div>
@@ -134,7 +143,20 @@ export function OrderDetailPage({
                       <PaymentStatusCard payment={order.payment} />
                     </div>
                   </div>
-                  <div className="order-6 flex flex-col gap-6 md:flex-row lg:flex-col">
+
+                  {/*
+                   * The quote sits directly under the summary+payment pair, and
+                   * only once one has been sent — an order awaiting pricing has
+                   * no offer to show, and the payment card beside it already
+                   * says so. Full-width in its own row rather than joining the
+                   * pair above, because it carries the Pay action.
+                   */}
+                  {order.quote && (
+                    <div className="order-2 md:order-6 lg:order-none">
+                      <QuoteCard quote={order.quote} />
+                    </div>
+                  )}
+                  <div className="order-7 flex flex-col gap-6 md:order-7 md:flex-row lg:flex-col">
                     <div className="flex-1">
                       <OrderInformationCard fields={order.orderInformation} />
                     </div>

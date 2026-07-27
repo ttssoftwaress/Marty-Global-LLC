@@ -225,8 +225,10 @@ export async function listPayments(
   const hasMore = rows.length > query.limit;
   const pageRows = hasMore ? rows.slice(0, query.limit) : rows;
 
-  return {
-    payments: pageRows.map((payment) => ({
+  // Presigned in parallel rather than one after another: this is a list, so a
+  // serial await here would add one signature round of latency per row.
+  const payments = await Promise.all(
+    pageRows.map(async (payment) => ({
       id: payment.id,
       // A failed attempt never got a paidAt; the row still needs a date, so it
       // falls back to when the attempt was made.
@@ -240,8 +242,12 @@ export async function listPayments(
       status: STATUS_TO_VIEW[payment.status] ?? 'failed',
       // Short-TTL presigned URL, minted after the ownership check above
       // (AGENTS.md, Security & PII); absent until the invoice exists.
-      invoiceHref: presignObject(payment.invoiceObjectKey),
+      invoiceHref: await presignObject(payment.invoiceObjectKey),
     })),
+  );
+
+  return {
+    payments,
     // The design's "Page X of Y" is a convenience over the cursor stream; without
     // an offset we report page 1 for the first fetch and let the cursor advance.
     page: query.cursor ? 0 : 1,

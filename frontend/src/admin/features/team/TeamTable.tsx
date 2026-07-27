@@ -20,20 +20,22 @@ import { TeamStatusChip } from './TeamStatusChip';
  *     pushing the actions off the edge; desktop switches to `table-auto` and
  *     sizes to content.
  *
- * The secondary action follows the member's state: an invited member has nothing
- * to deactivate, so it resends their invite instead — and a member who is
- * already deactivated is reactivated rather than deactivated again, a state the
- * links show a filter tab for but never draw a row of (Design.md).
+ * The status action follows the member's state: a member who is already
+ * deactivated is reactivated rather than deactivated again, a state the links
+ * show a filter tab for but never draw a row of (Design.md).
  *
- * A member with no join date (an invite not yet accepted) prints an em dash,
- * matching the desktop link.
+ * The links draw two actions per row. A third, Delete, is added — it is the
+ * screen's only way to remove a staff account, and it is drawn in the error
+ * colour so it does not read as a peer of Edit. Logged as a deviation.
+ *
+ * A member with no join date prints an em dash, matching the desktop link.
  */
 
 type TeamTableProps = {
   members: AdminTeamMemberRow[];
   onEdit: (member: AdminTeamMemberRow) => void;
   onToggleActive: (member: AdminTeamMemberRow) => void;
-  onResendInvite: (member: AdminTeamMemberRow) => void;
+  onDelete: (member: AdminTeamMemberRow) => void;
 };
 
 const HEAD_CELL =
@@ -43,7 +45,7 @@ export function TeamTable({
   members,
   onEdit,
   onToggleActive,
-  onResendInvite,
+  onDelete,
 }: TeamTableProps) {
   return (
     <div className="hidden w-full overflow-x-auto md:block">
@@ -73,7 +75,7 @@ export function TeamTable({
             </th>
             <th
               scope="col"
-              className={`${HEAD_CELL} w-[160px] pr-5 text-right lg:w-[200px] lg:pr-card`}
+              className={`${HEAD_CELL} w-[200px] pr-5 text-right lg:w-[260px] lg:pr-card`}
             >
               <span className="inline-block w-full text-right">Action</span>
             </th>
@@ -82,17 +84,8 @@ export function TeamTable({
 
         <tbody>
           {members.map((member) => {
-            const isInvited = member.status === 'invited';
             const isDeactivated = member.status === 'deactivated';
-
-            const secondaryLabel = isInvited
-              ? 'Resend invite'
-              : isDeactivated
-                ? 'Reactivate'
-                : 'Deactivate';
-
-            const onSecondary = () =>
-              isInvited ? onResendInvite(member) : onToggleActive(member);
+            const statusLabel = isDeactivated ? 'Reactivate' : 'Deactivate';
 
             return (
               <tr
@@ -162,10 +155,18 @@ export function TeamTable({
 
                     <button
                       type="button"
-                      onClick={onSecondary}
+                      onClick={() => onToggleActive(member)}
                       className="whitespace-nowrap rounded-[8px] px-0 text-[14px] font-medium leading-5 text-gray-500 transition-colors hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary lg:h-8 lg:px-3 lg:text-[12px] lg:leading-4"
                     >
-                      {secondaryLabel}
+                      {statusLabel}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => onDelete(member)}
+                      className="whitespace-nowrap rounded-[8px] px-0 text-[14px] font-medium leading-5 text-error transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-error lg:h-8 lg:px-3 lg:text-[12px] lg:leading-4"
+                    >
+                      Delete
                     </button>
                   </div>
                 </td>

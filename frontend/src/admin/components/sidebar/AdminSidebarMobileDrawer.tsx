@@ -3,7 +3,7 @@ import { LogOut, X } from 'lucide-react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 
 import { AdminSidebarUserBlock, type AdminSidebarUser } from './AdminSidebarUserBlock';
-import { ADMIN_NAV_ITEMS, isAdminNavItemActive } from './nav-items';
+import { isAdminNavItemActive, type AdminNavItem } from './nav-items';
 
 /*
  * Admin sidebar — mobile (below md). A drawer that slides in over the page
@@ -14,12 +14,16 @@ import { ADMIN_NAV_ITEMS, isAdminNavItemActive } from './nav-items';
  * The design covers only the open panel; the overlay behaviour it implies —
  * scrim, Escape to close, focus moved into the drawer, background scroll lock —
  * is added here so the drawer is usable and accessible.
+ *
+ * `items` arrives already filtered to what this member may open, so the three
+ * variants cannot disagree about which sections exist.
  */
 
 type AdminSidebarMobileDrawerProps = {
   open: boolean;
   onClose: () => void;
   user: AdminSidebarUser;
+  items: AdminNavItem[];
   onLogout?: () => void;
 };
 
@@ -27,6 +31,7 @@ export function AdminSidebarMobileDrawer({
   open,
   onClose,
   user,
+  items,
   onLogout,
 }: AdminSidebarMobileDrawerProps) {
   const { pathname } = useLocation();
@@ -96,7 +101,7 @@ export function AdminSidebarMobileDrawer({
 
           <nav aria-label="Admin" className="min-h-0 w-full overflow-y-auto">
             <ul className="flex w-full flex-col gap-1">
-              {ADMIN_NAV_ITEMS.map((item) => {
+              {items.map((item) => {
                 const active = isAdminNavItemActive(item.to, pathname);
                 const Icon = item.icon;
 

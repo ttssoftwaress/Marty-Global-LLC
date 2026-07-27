@@ -47,13 +47,27 @@ async function ensureUser(id: string) {
   });
 }
 
+/*
+ * Answer keys are `FieldDefinition.key` values from the seeded field registry —
+ * a service's form is a list of references into it, so these are the only keys
+ * the catalog can ask for.
+ *
+ * `company_name` is deliberately the same key on both services: that is how the
+ * registry marks two services as asking the same question, and the customer's
+ * master form asks it once and records the answer against both items.
+ */
 const validAnswers = {
   [COMPANY]: {
-    companyName: 'North Peak LLC',
+    company_name: 'North Peak LLC',
     jurisdiction: 'us-de',
-    entityType: 'llc',
+    entity_type: 'llc',
   },
-  [BANK]: { accountRegion: 'us', entityName: 'North Peak LLC' },
+  [BANK]: {
+    banking_region: 'us',
+    company_name: 'North Peak LLC',
+    identity_document: 'passport.pdf',
+    proof_of_address: 'utility-bill.pdf',
+  },
 };
 
 beforeEach(async () => {
@@ -88,6 +102,9 @@ describe('createOrder', () => {
     expect(stored.status).toBe('SUBMITTED');
     expect(stored.submittedAt).not.toBeNull();
     expect(stored.items).toHaveLength(2);
+    // The jurisdiction answer ("us-de") is denormalised to the region the admin
+    // queue filters on; without it that filter can never match the order.
+    expect(stored.regionCode).toBe('US');
 
     // The confirmation email is queued (through the mocked notifications service).
     expect(queueEmail).toHaveBeenCalledTimes(1);
@@ -97,7 +114,7 @@ describe('createOrder', () => {
     await expect(
       createOrder(reqAs(auth(OWNER_ID)), {
         serviceIds: [COMPANY],
-        answersByService: { [COMPANY]: { companyName: '' } },
+        answersByService: { [COMPANY]: { company_name: '' } },
       }),
     ).rejects.toMatchObject({ status: 400 });
 
@@ -112,9 +129,9 @@ describe('createOrder', () => {
         serviceIds: [COMPANY],
         answersByService: {
           [COMPANY]: {
-            companyName: 'X',
+            company_name: 'X',
             jurisdiction: 'not-a-real-place',
-            entityType: 'llc',
+            entity_type: 'llc',
           },
         },
       }),

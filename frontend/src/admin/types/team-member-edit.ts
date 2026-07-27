@@ -9,26 +9,12 @@
  * the grid lists all arrive from the API.
  */
 
-import type { TeamRoleOption } from './team';
+import type { TeamPermissionArea, TeamRoleOption } from './team';
 
-/*
- * One area of the admin portal a member can be granted or denied.
- *
- * `key` is opaque to the UI — it is what goes back to the API in the write
- * payload; `label` is the wording the row prints. Keeping the area set on the
- * wire (rather than as a frontend constant) means adding an admin section is a
- * backend change, not a frontend deploy — the same rule the role options and
- * status tabs on the list screen follow.
- *
- * `locked` marks an area the current admin may not change on this member (a
- * super-admin's own access, for instance). The row still renders so the member's
- * real access is visible; the switch is disabled rather than hidden.
- */
-export type TeamPermissionArea = {
-  key: string;
-  label: string;
-  locked?: boolean;
-};
+// Defined with the list types (the summary carries its own copy for the
+// add-staff form) and re-exported so this module stays the one import for
+// everything the member forms render.
+export type { TeamPermissionArea };
 
 /*
  * The member being edited, plus the chrome the form needs to render itself: the
@@ -61,26 +47,45 @@ export type AdminTeamMemberDetail = {
  * What the form edits. It is deliberately narrower than the detail record —
  * the role options and the area list are chrome the API owns, not values the
  * admin can change here.
+ *
+ * `password` is the optional credential reset: left blank the member keeps the
+ * password they have, and it is never seeded from the API — a password is
+ * write-only and no response carries one back.
  */
 export type TeamMemberEditDraft = {
   name: string;
   email: string;
+  password: string;
   isActive: boolean;
   role: string;
   permissions: Record<string, boolean>;
 };
 
 /*
- * The PATCH body. Same shape as the draft: every field on the form is writable,
- * and a PATCH applies only what it carries.
+ * The PATCH body. Same shape as the draft, minus the blank password: a PATCH
+ * applies only what it carries, so omitting the key is what leaves the existing
+ * credential alone.
  */
-export type TeamMemberWritePayload = TeamMemberEditDraft;
+export type TeamMemberWritePayload = Omit<TeamMemberEditDraft, 'password'> & {
+  password?: string;
+};
 
 /*
- * Field-level validation messages, keyed by draft field. Only the two text
+ * The "Add staff member" form. The same fields as the editor, except the
+ * password is required — an admin is creating the login here, so there is no
+ * existing credential to fall back on.
+ */
+export type TeamMemberCreateDraft = TeamMemberEditDraft;
+
+export type TeamMemberCreatePayload = Omit<TeamMemberEditDraft, 'password'> & {
+  password: string;
+};
+
+/*
+ * Field-level validation messages, keyed by draft field. Only the three text
  * inputs can be invalid — the switches and the select are always in a legal
  * state because their values come from the API.
  */
 export type TeamMemberEditErrors = Partial<
-  Record<'name' | 'email', string>
+  Record<'name' | 'email' | 'password', string>
 >;

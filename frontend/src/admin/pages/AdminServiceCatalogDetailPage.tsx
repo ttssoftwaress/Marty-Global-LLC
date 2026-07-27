@@ -6,6 +6,8 @@ import {
   IncludedItemsCard,
   PricingTemplatesCard,
   RequestFormStepsCard,
+  RequestTypesCard,
+  ResultSchemaCard,
   ServiceDescriptionCard,
   ServiceDetailFooter,
   ServiceDetailHeader,
@@ -14,6 +16,7 @@ import {
   useAdminCatalogService,
   useUpdateCatalogServiceDetail,
 } from '../features/catalog';
+import { useFieldPicker } from '../features/fields/queries';
 import { useAdminShell } from '../hooks/useAdminShell';
 import {
   detailDraftFromService,
@@ -53,6 +56,8 @@ export function AdminServiceCatalogDetailPage() {
 
   const service = useAdminCatalogService(serviceId || null);
   const regions = useAdminCatalogRegions();
+  // The field registry the request-form builder picks questions from.
+  const registry = useFieldPicker();
   const updateService = useUpdateCatalogServiceDetail();
 
   const [draft, setDraft] = useState<ServiceDetailDraft | null>(null);
@@ -189,7 +194,31 @@ export function AdminServiceCatalogDetailPage() {
               <RequestFormStepsCard
                 steps={draft.steps}
                 errors={visibleErrors}
+                registry={registry.data ?? []}
+                isRegistryLoading={registry.isLoading}
                 onChange={(steps) => patch({ steps })}
+              />
+
+              {/*
+               * The delivery half. Both cards save through their own endpoints
+               * rather than the page's shared draft below — what a service
+               * delivers is a different decision from what it sells, made at a
+               * different time, and folding them into one Save would make an
+               * unrelated pricing edit republish every customer's page.
+               *
+               * They read `service.data` rather than `draft` for the same
+               * reason: they are not part of that draft.
+               */}
+              <ResultSchemaCard
+                serviceId={service.data.id}
+                resultFields={service.data.resultFields}
+                resultPageTitle={service.data.resultPageTitle}
+                resultNoun={service.data.resultNoun}
+              />
+
+              <RequestTypesCard
+                serviceId={service.data.id}
+                requestTypes={service.data.requestTypes}
               />
 
               {showErrors && hasErrors ? (

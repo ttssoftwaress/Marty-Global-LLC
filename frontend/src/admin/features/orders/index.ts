@@ -8,6 +8,7 @@ export { OrdersLoadMore, OrdersPagination } from './OrdersPagination';
 export { OrdersQueueHeader } from './OrdersQueueHeader';
 export { OrdersTable } from './OrdersTable';
 export { OrdersToolbar } from './OrdersToolbar';
+export { stopRowClick, useOpenOrderRow } from './rowNavigation';
 export {
   adminOrdersKey,
   adminOrdersSummaryKey,

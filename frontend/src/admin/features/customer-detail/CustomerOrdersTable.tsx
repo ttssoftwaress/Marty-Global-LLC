@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { formatOrderDate } from '../../lib/format';
 import type { CustomerOrderRow } from '../../types/customer-detail';
 import { OrderStatusChip } from '../orders/OrderStatusChip';
+import { stopRowClick, useOpenOrderRow } from '../orders/rowNavigation';
 
 /*
  * The customer's orders as a table — the tablet and desktop presentation (mobile
@@ -19,6 +20,10 @@ import { OrderStatusChip } from '../orders/OrderStatusChip';
  *
  * `table-fixed` holds the column allocation so a long service name truncates
  * instead of pushing the action off the edge.
+ *
+ * The whole row opens the order, the same as the main queue's — the two tables
+ * list the same records, so they must not disagree about whether a row is
+ * clickable. The action link stops the click itself so it is not handled twice.
  */
 
 type CustomerOrdersTableProps = {
@@ -29,6 +34,8 @@ const HEAD_CELL =
   'px-0 py-0 text-left text-caption font-semibold uppercase tracking-[0.6px] text-gray-400 lg:text-gray-500';
 
 export function CustomerOrdersTable({ orders }: CustomerOrdersTableProps) {
+  const openOrderRow = useOpenOrderRow();
+
   return (
     <div className="hidden w-full overflow-x-auto md:block">
       <table className="w-full min-w-[620px] table-fixed border-collapse text-left lg:min-w-[820px]">
@@ -62,7 +69,8 @@ export function CustomerOrdersTable({ orders }: CustomerOrdersTableProps) {
           {orders.map((order) => (
             <tr
               key={order.id}
-              className="border-b border-gray-200 transition-colors last:border-b-0 hover:bg-gray-50"
+              onClick={() => openOrderRow(order.to)}
+              className="cursor-pointer border-b border-gray-200 transition-colors last:border-b-0 hover:bg-gray-50"
             >
               <td className="h-16 py-3 pl-5 pr-4 align-middle lg:h-table-row lg:pl-card">
                 <span className="block truncate text-body font-medium text-text">
@@ -94,6 +102,7 @@ export function CustomerOrdersTable({ orders }: CustomerOrdersTableProps) {
               <td className="py-3 pl-2 pr-5 text-right align-middle lg:pr-card">
                 <Link
                   to={order.to}
+                  onClick={stopRowClick}
                   className="inline-flex h-9 items-center justify-center whitespace-nowrap rounded-input border border-primary bg-white px-3.5 text-[13px] font-semibold text-primary transition-colors hover:bg-primary-light"
                 >
                   View order

@@ -14,6 +14,10 @@ import type {
   ServiceRegion,
   ServiceWritePayload,
 } from '../../types/catalog';
+import type {
+  ResultFieldRef,
+  ServiceRequestTypeDraft,
+} from '../../types/delivery';
 
 /*
  * Admin service catalog data layer (endpoints land later, AGENTS.md two-apps
@@ -164,6 +168,60 @@ export function useUpdateCatalogService() {
       void queryClient.invalidateQueries({
         queryKey: adminCatalogServiceKey(serviceId),
       });
+    },
+  });
+}
+
+/*
+ * PUT /v1/admin/catalog/services/:id/result-schema — what this service DELIVERS.
+ *
+ * Its own endpoint rather than another branch of the service PATCH, because it
+ * is a different decision made at a different time: what a service sells is
+ * settled when it is created, what it delivers once the team knows what the
+ * filing actually produces.
+ *
+ * Reshaping it changes every customer page for the service, so the customer-side
+ * caches go too — a delivered record renders the schema as it stands now.
+ */
+export function useUpdateResultSchema(serviceId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: {
+      resultFields: ResultFieldRef[];
+      resultPageTitle?: string;
+      resultNoun?: string;
+    }) =>
+      apiFetch<ApiSuccess<CatalogServiceDetail>>(
+        `/admin/catalog/services/${serviceId}/result-schema`,
+        { method: 'PUT', body: JSON.stringify(payload) },
+      ).then((res) => res.data),
+    onSuccess: (data) => {
+      queryClient.setQueryData(adminCatalogServiceKey(serviceId), data);
+      void queryClient.invalidateQueries({ queryKey: adminCatalogServicesKey() });
+    },
+  });
+}
+
+/*
+ * PUT /v1/admin/catalog/services/:id/request-types — the buttons on the
+ * customer's record for this service.
+ *
+ * A type dropped from the list is deactivated rather than deleted: requests
+ * already raised under it point at the row, and the queue has to keep reading
+ * them (AGENTS.md — ask before any hard delete).
+ */
+export function useUpdateRequestTypes(serviceId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: { requestTypes: ServiceRequestTypeDraft[] }) =>
+      apiFetch<ApiSuccess<CatalogServiceDetail>>(
+        `/admin/catalog/services/${serviceId}/request-types`,
+        { method: 'PUT', body: JSON.stringify(payload) },
+      ).then((res) => res.data),
+    onSuccess: (data) => {
+      queryClient.setQueryData(adminCatalogServiceKey(serviceId), data);
     },
   });
 }

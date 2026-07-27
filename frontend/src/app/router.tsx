@@ -6,10 +6,10 @@ import { createBrowserRouter, Outlet } from 'react-router-dom';
 const PORTAL_PLACEHOLDER_ROUTES = [
   { path: 'documents', title: 'Documents' },
   { path: 'support', title: 'Support' },
-  // Billing sub-flows the billing screen links to whose screens (the branded
-  // Stripe checkout / add-card) are not built yet — placeholders keep the links
-  // inside the portal instead of falling through to marketing.
-  { path: 'billing/pay/:quoteId', title: 'Checkout' },
+  // Billing sub-flows the billing screen links to whose screens are not built
+  // yet — placeholders keep the links inside the portal instead of falling
+  // through to marketing. (The checkout at `billing/pay/:quoteId` is built; see
+  // the real route below.)
   { path: 'billing/methods/new', title: 'Add payment method' },
   // Mail-room sub-flows the mail-room screens link to (the add-room wizard)
   // whose screens are not built yet — placeholders keep the links inside the
@@ -259,6 +259,18 @@ export const router = createBrowserRouter([
         },
       },
       {
+        // Checkout — where a quote becomes a payment. "Pay now" on the billing
+        // screen routes here with the quote id. The screen reads the quote from
+        // `GET /v1/payments/quotes/:quoteId`, creates the intent through
+        // `POST /v1/payments/intents`, then polls `GET /v1/payments/:paymentId`
+        // while the backend's TronGrid poller settles the transfer.
+        path: 'billing/pay/:quoteId',
+        lazy: async () => {
+          const { CheckoutPage } = await import('@/portal/pages/CheckoutPage');
+          return { Component: CheckoutPage };
+        },
+      },
+      {
         // Messages — the customer's conversations with the team (the portal face
         // of the live-chat / support module). The list-only and open-thread views
         // share one screen; the conversation id in the URL selects the thread and
@@ -310,6 +322,43 @@ export const router = createBrowserRouter([
             '@/portal/pages/MailRoomInboxPage'
           );
           return { Component: MailRoomInboxPage };
+        },
+      },
+      {
+        /*
+         * One delivered record — a formed company, a registration. Mounted
+         * ahead of `services/:slug` so the literal `record` segment is not
+         * swallowed by it.
+         *
+         * A record sits outside its service's path because it is reached from
+         * several places (the list, a notification, an order) and does not need
+         * to know which page the customer came through — its breadcrumb links
+         * back to the service.
+         */
+        path: 'services/record/:resultId',
+        lazy: async () => {
+          const { ServiceRecordDetailPage } = await import(
+            '@/portal/pages/ServiceRecordDetailPage'
+          );
+          return { Component: ServiceRecordDetailPage };
+        },
+      },
+      {
+        /*
+         * A service's delivered records — "My companies", "My registrations".
+         *
+         * ONE route serves every service: the heading, the table's columns, and
+         * the noun all arrive with the data, so a new service with a result
+         * schema gets a working page the moment its first record is delivered.
+         * That is the whole point of the dynamic surface — no route per service,
+         * no deploy.
+         */
+        path: 'services/:slug',
+        lazy: async () => {
+          const { ServiceRecordsPage } = await import(
+            '@/portal/pages/ServiceRecordsPage'
+          );
+          return { Component: ServiceRecordsPage };
         },
       },
       // The sidebar links to every portal section; their screens are not built
@@ -368,7 +417,128 @@ export const router = createBrowserRouter([
           const { AdminOrdersQueuePage } = await import(
             '@/admin/pages/AdminOrdersQueuePage'
           );
-          return { Component: AdminOrdersQueuePage };
+          const { RequirePermission } = await import(
+            '@/admin/components/RequirePermission'
+          );
+          return {
+            Component: () => (
+              <RequirePermission area="orders" title="Orders queue">
+                <AdminOrdersQueuePage />
+              </RequirePermission>
+            ),
+          };
+        },
+      },
+      {
+        // A single order, staff-side — the screen where an order is actually
+        // worked: the customer's answers, the documents, the activity feed with
+        // its reply composer, and the status / assignee controls. Every admin
+        // list links here, because this is the route the backend returns as an
+        // order's `to`. Data loads from `GET /v1/admin/orders/:orderId`; the two
+        // writes are `PATCH /v1/admin/orders/:orderId` and
+        // `POST /v1/admin/orders/:orderId/activity`.
+        path: 'orders/:orderId',
+        lazy: async () => {
+          const { AdminOrderDetailPage } = await import(
+            '@/admin/pages/AdminOrderDetailPage'
+          );
+          const { RequirePermission } = await import(
+            '@/admin/components/RequirePermission'
+          );
+          return {
+            Component: () => (
+              <RequirePermission area="orders" title="Orders queue">
+                <AdminOrderDetailPage />
+              </RequirePermission>
+            ),
+          };
+        },
+      },
+      {
+        /*
+         * Service requests — the follow-ups customers raise against a delivered
+         * record. Its own `requests` area rather than part of `orders`, because
+         * it is a different job: an order is worked once and filed, while a
+         * request is small after-sales work against something already
+         * delivered. Data loads from `GET /v1/admin/requests`.
+         */
+        path: 'requests',
+        lazy: async () => {
+          const { AdminRequestsPage } = await import(
+            '@/admin/pages/AdminRequestsPage'
+          );
+          const { RequirePermission } = await import(
+            '@/admin/components/RequirePermission'
+          );
+          return {
+            Component: () => (
+              <RequirePermission area="requests" title="Service requests">
+                <AdminRequestsPage />
+              </RequirePermission>
+            ),
+          };
+        },
+      },
+      {
+        /*
+         * One request — its intake answers, its workflow controls, the record it
+         * concerns (editable in place), and the order's conversation. Reads
+         * `GET /v1/admin/requests/:requestId`; writes are
+         * `PATCH /v1/admin/requests/:requestId` and
+         * `PUT /v1/admin/requests/:requestId/result`.
+         */
+        path: 'requests/:requestId',
+        lazy: async () => {
+          const { AdminRequestDetailPage } = await import(
+            '@/admin/pages/AdminRequestDetailPage'
+          );
+          const { RequirePermission } = await import(
+            '@/admin/components/RequirePermission'
+          );
+          return {
+            Component: () => (
+              <RequirePermission area="requests" title="Service requests">
+                <AdminRequestDetailPage />
+              </RequirePermission>
+            ),
+          };
+        },
+      },
+      {
+        // My conversations — the order threads assigned to this staff member,
+        // distinct from the shared support inbox. Gated on `orders` rather than
+        // `support`, matching the backend route: answering a customer about
+        // their filing is part of working the order. Data loads from
+        // `GET /v1/admin/conversations`.
+        path: 'conversations',
+        lazy: async () => {
+          const { AdminConversationsPage } = await import(
+            '@/admin/pages/AdminConversationsPage'
+          );
+          const { RequirePermission } = await import(
+            '@/admin/components/RequirePermission'
+          );
+          return {
+            Component: () => (
+              <RequirePermission area="orders" title="My conversations">
+                <AdminConversationsPage />
+              </RequirePermission>
+            ),
+          };
+        },
+      },
+      {
+        // Notifications — the staff member's own full feed with filter tabs for
+        // the work queues (orders, payments, support, mail room), date grouping,
+        // and cursor pagination. The top bar's bell panel links here with "View
+        // all notifications". Not permission-gated: it is the member's own
+        // inbox, which is why the backend route isn't narrowed either.
+        path: 'notifications',
+        lazy: async () => {
+          const { AdminNotificationsPage } = await import(
+            '@/admin/pages/AdminNotificationsPage'
+          );
+          return { Component: AdminNotificationsPage };
         },
       },
       {
@@ -381,7 +551,16 @@ export const router = createBrowserRouter([
           const { AdminCustomersPage } = await import(
             '@/admin/pages/AdminCustomersPage'
           );
-          return { Component: AdminCustomersPage };
+          const { RequirePermission } = await import(
+            '@/admin/components/RequirePermission'
+          );
+          return {
+            Component: () => (
+              <RequirePermission area="customers" title="Customers">
+                <AdminCustomersPage />
+              </RequirePermission>
+            ),
+          };
         },
       },
       {
@@ -396,7 +575,16 @@ export const router = createBrowserRouter([
           const { AdminCustomerDetailPage } = await import(
             '@/admin/pages/AdminCustomerDetailPage'
           );
-          return { Component: AdminCustomerDetailPage };
+          const { RequirePermission } = await import(
+            '@/admin/components/RequirePermission'
+          );
+          return {
+            Component: () => (
+              <RequirePermission area="customers" title="Customers">
+                <AdminCustomerDetailPage />
+              </RequirePermission>
+            ),
+          };
         },
       },
       {
@@ -410,7 +598,16 @@ export const router = createBrowserRouter([
           const { AdminQuotesPaymentsPage } = await import(
             '@/admin/pages/AdminQuotesPaymentsPage'
           );
-          return { Component: AdminQuotesPaymentsPage };
+          const { RequirePermission } = await import(
+            '@/admin/components/RequirePermission'
+          );
+          return {
+            Component: () => (
+              <RequirePermission area="payments" title="Quotes & payments">
+                <AdminQuotesPaymentsPage />
+              </RequirePermission>
+            ),
+          };
         },
       },
       {
@@ -425,7 +622,16 @@ export const router = createBrowserRouter([
           const { AdminSupportInboxPage } = await import(
             '@/admin/pages/AdminSupportInboxPage'
           );
-          return { Component: AdminSupportInboxPage };
+          const { RequirePermission } = await import(
+            '@/admin/components/RequirePermission'
+          );
+          return {
+            Component: () => (
+              <RequirePermission area="support" title="Support inbox">
+                <AdminSupportInboxPage />
+              </RequirePermission>
+            ),
+          };
         },
       },
       {
@@ -437,7 +643,16 @@ export const router = createBrowserRouter([
           const { AdminSupportInboxPage } = await import(
             '@/admin/pages/AdminSupportInboxPage'
           );
-          return { Component: AdminSupportInboxPage };
+          const { RequirePermission } = await import(
+            '@/admin/components/RequirePermission'
+          );
+          return {
+            Component: () => (
+              <RequirePermission area="support" title="Support inbox">
+                <AdminSupportInboxPage />
+              </RequirePermission>
+            ),
+          };
         },
       },
       {
@@ -453,7 +668,16 @@ export const router = createBrowserRouter([
           const { AdminReportsAnalyticsPage } = await import(
             '@/admin/pages/AdminReportsAnalyticsPage'
           );
-          return { Component: AdminReportsAnalyticsPage };
+          const { RequirePermission } = await import(
+            '@/admin/components/RequirePermission'
+          );
+          return {
+            Component: () => (
+              <RequirePermission area="reports" title="Reports & analytics">
+                <AdminReportsAnalyticsPage />
+              </RequirePermission>
+            ),
+          };
         },
       },
       {
@@ -469,7 +693,40 @@ export const router = createBrowserRouter([
           const { AdminServiceCatalogPage } = await import(
             '@/admin/pages/AdminServiceCatalogPage'
           );
-          return { Component: AdminServiceCatalogPage };
+          const { RequirePermission } = await import(
+            '@/admin/components/RequirePermission'
+          );
+          return {
+            Component: () => (
+              <RequirePermission area="catalog" title="Service catalog">
+                <AdminServiceCatalogPage />
+              </RequirePermission>
+            ),
+          };
+        },
+      },
+      {
+        // Form fields — the field registry every service form is built from.
+        // An admin registers a question once here (label, answer type, and its
+        // per-type settings), and the service form builder then picks from this
+        // list rather than re-authoring the question, which is what keeps the
+        // answer keys a closed set. Data loads from `GET /v1/admin/fields` and
+        // writes through `POST`/`PATCH /v1/admin/fields`.
+        path: 'fields',
+        lazy: async () => {
+          const { AdminFormFieldsPage } = await import(
+            '@/admin/pages/AdminFormFieldsPage'
+          );
+          const { RequirePermission } = await import(
+            '@/admin/components/RequirePermission'
+          );
+          return {
+            Component: () => (
+              <RequirePermission area="catalog" title="Form fields">
+                <AdminFormFieldsPage />
+              </RequirePermission>
+            ),
+          };
         },
       },
       {
@@ -485,7 +742,16 @@ export const router = createBrowserRouter([
           const { AdminServiceCatalogDetailPage } = await import(
             '@/admin/pages/AdminServiceCatalogDetailPage'
           );
-          return { Component: AdminServiceCatalogDetailPage };
+          const { RequirePermission } = await import(
+            '@/admin/components/RequirePermission'
+          );
+          return {
+            Component: () => (
+              <RequirePermission area="catalog" title="Service catalog">
+                <AdminServiceCatalogDetailPage />
+              </RequirePermission>
+            ),
+          };
         },
       },
       {
@@ -499,7 +765,16 @@ export const router = createBrowserRouter([
           const { AdminTeamStaffPage } = await import(
             '@/admin/pages/AdminTeamStaffPage'
           );
-          return { Component: AdminTeamStaffPage };
+          const { RequirePermission } = await import(
+            '@/admin/components/RequirePermission'
+          );
+          return {
+            Component: () => (
+              <RequirePermission area="team" title="Team & staff">
+                <AdminTeamStaffPage />
+              </RequirePermission>
+            ),
+          };
         },
       },
       {
@@ -515,7 +790,16 @@ export const router = createBrowserRouter([
           const { AdminVirtualMailOpsPage } = await import(
             '@/admin/pages/AdminVirtualMailOpsPage'
           );
-          return { Component: AdminVirtualMailOpsPage };
+          const { RequirePermission } = await import(
+            '@/admin/components/RequirePermission'
+          );
+          return {
+            Component: () => (
+              <RequirePermission area="mailroom" title="Virtual mail ops">
+                <AdminVirtualMailOpsPage />
+              </RequirePermission>
+            ),
+          };
         },
       },
       {
@@ -529,7 +813,16 @@ export const router = createBrowserRouter([
           const { AdminTeamMemberEditPage } = await import(
             '@/admin/pages/AdminTeamMemberEditPage'
           );
-          return { Component: AdminTeamMemberEditPage };
+          const { RequirePermission } = await import(
+            '@/admin/components/RequirePermission'
+          );
+          return {
+            Component: () => (
+              <RequirePermission area="team" title="Team & staff">
+                <AdminTeamMemberEditPage />
+              </RequirePermission>
+            ),
+          };
         },
       },
       // The admin sidebar links to every admin section; their screens are not

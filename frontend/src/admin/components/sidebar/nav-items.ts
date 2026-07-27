@@ -1,10 +1,14 @@
 import {
   BarChart2,
+  Bell,
   BookOpen,
+  ClipboardList,
   CreditCard,
   Inbox,
   LayoutGrid,
+  ListChecks,
   Mail,
+  MessagesSquare,
   Settings,
   ShoppingBag,
   UserCheck,
@@ -19,26 +23,102 @@ import type { LucideIcon } from 'lucide-react';
  *
  * Routes are the admin's `/admin/*` group. Labels come from the desktop Figma
  * link, which is the source of truth for copy across all three viewports.
+ *
+ * `permission` names the backend area that gates the section's endpoints
+ * (backend/src/lib/permissions.ts, enforced by `requirePermission`). It is what
+ * makes the nav dynamic: a member sees a section only when they hold its area,
+ * so a mail operator no longer gets a "Team & staff" link that 403s on arrival.
+ *
+ * An item with no `permission` is one every staff member gets — the dashboard
+ * they land on, their own notification inbox, and their own settings. Those
+ * three routes are deliberately un-narrowed on the backend too, for the same
+ * reason, so the nav and the API agree.
+ *
+ * The key strings are duplicated from the backend catalogue rather than fetched,
+ * which is the one place this app names areas. That is the two-apps mirror rule
+ * (AGENTS.md), not a fetch that was skipped: a *new* backend area still needs a
+ * frontend deploy here to gain a label, icon, and route — the "backend change,
+ * not a frontend deploy" rule the team screen follows applies to the permission
+ * *grid*, which stays fully server-driven. An unknown area simply has no nav
+ * item yet; it never hides a section it doesn't name.
  */
 
 export type AdminNavItem = {
   label: string;
   to: string;
   icon: LucideIcon;
+  permission?: string;
 };
 
 export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   { label: 'Dashboard', to: '/admin', icon: LayoutGrid },
-  { label: 'Orders queue', to: '/admin/orders', icon: ShoppingBag },
-  { label: 'Customers', to: '/admin/customers', icon: Users },
-  { label: 'Quotes & payments', to: '/admin/payments', icon: CreditCard },
-  { label: 'Support inbox', to: '/admin/support', icon: Inbox },
-  { label: 'Virtual mail ops', to: '/admin/mailroom', icon: Mail },
-  { label: 'Team & staff', to: '/admin/team', icon: UserCheck },
-  { label: 'Service catalog', to: '/admin/catalog', icon: BookOpen },
-  { label: 'Reports & analytics', to: '/admin/reports', icon: BarChart2 },
+  { label: 'Orders queue', to: '/admin/orders', icon: ShoppingBag, permission: 'orders' },
+  { label: 'Customers', to: '/admin/customers', icon: Users, permission: 'customers' },
+  { label: 'Quotes & payments', to: '/admin/payments', icon: CreditCard, permission: 'payments' },
+  { label: 'Support inbox', to: '/admin/support', icon: Inbox, permission: 'support' },
+  /*
+   * Distinct from the support inbox above, and the two must not be conflated: the
+   * inbox is the shared helpdesk queue any agent may claim from, while this lists
+   * the order conversations assigned to *this* member — threads only they can
+   * answer, which no shared queue would ever surface to them.
+   *
+   * Gated on `orders`, not `support`, because answering a customer about their
+   * filing is part of working the order (the backend route agrees).
+   */
+  {
+    label: 'My conversations',
+    to: '/admin/conversations',
+    icon: MessagesSquare,
+    permission: 'orders',
+  },
+  /*
+   * Follow-ups customers raise against a delivered service. Its own area rather
+   * than part of `orders`, because it is a different job: an order is worked
+   * once and filed, while a request is small after-sales work against something
+   * already delivered — exactly what a support agent handles without ever
+   * touching the filing pipeline.
+   */
+  {
+    label: 'Service requests',
+    to: '/admin/requests',
+    icon: ClipboardList,
+    permission: 'requests',
+  },
+  { label: 'Notifications', to: '/admin/notifications', icon: Bell },
+  { label: 'Virtual mail ops', to: '/admin/mailroom', icon: Mail, permission: 'mailroom' },
+  { label: 'Team & staff', to: '/admin/team', icon: UserCheck, permission: 'team' },
+  { label: 'Service catalog', to: '/admin/catalog', icon: BookOpen, permission: 'catalog' },
+  /*
+   * The field registry — the questions service forms are built from. Sits beside
+   * the catalog and carries the same area, because it is the vocabulary the
+   * catalog's form builder picks from: anyone who may shape a service's form
+   * needs to read it.
+   */
+  { label: 'Form fields', to: '/admin/fields', icon: ListChecks, permission: 'catalog' },
+  { label: 'Reports & analytics', to: '/admin/reports', icon: BarChart2, permission: 'reports' },
   { label: 'Admin settings', to: '/admin/settings', icon: Settings },
 ];
+
+/*
+ * The nav list for one member: the shared items, plus each gated item they hold
+ * the area for. Order is preserved from the list above, so two members with
+ * different access still see the same sections in the same places.
+ *
+ * `permissions` is `undefined` while the record loads. Returning the ungated
+ * items only — rather than everything or nothing — means the nav never briefly
+ * shows a section the member cannot open, and never flickers from a full list
+ * down to a short one. It fills in when the record arrives.
+ */
+export function visibleAdminNavItems(
+  permissions: readonly string[] | undefined,
+): AdminNavItem[] {
+  if (!permissions) return ADMIN_NAV_ITEMS.filter((item) => !item.permission);
+
+  const granted = new Set(permissions);
+  return ADMIN_NAV_ITEMS.filter(
+    (item) => !item.permission || granted.has(item.permission),
+  );
+}
 
 // The dashboard is the admin index, so it would match every nested `/admin/*`
 // route with a prefix test — it alone matches exactly.

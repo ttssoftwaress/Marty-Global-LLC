@@ -17,6 +17,12 @@ import type { LucideIcon } from 'lucide-react';
  *
  * Routes are the portal's `/app/*` group. Labels come from the desktop Figma
  * link, which is the source of truth for copy across all three viewports.
+ *
+ * Note what is deliberately absent: order conversations. A conversation about an
+ * order lives on that order's detail page, with the specialist assigned to it —
+ * it is not a destination of its own. `Messages` here is general support, routed
+ * to whichever agent is free. Giving the two the same nav entry would suggest one
+ * inbox, when the customer is really talking to two different sets of people.
  */
 
 export type PortalNavItem = {

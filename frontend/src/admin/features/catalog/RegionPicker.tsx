@@ -38,24 +38,41 @@ export function RegionPicker({
     );
   };
 
+  /*
+   * The error renders in every branch, not just the populated one. A service
+   * needs a region to be saved, so if the list is still loading or came back
+   * empty there is nothing to select and the save is blocked — silently, unless
+   * the reason is printed here as well.
+   */
   if (isLoading) {
     return (
-      <div className="flex flex-wrap gap-2" aria-hidden="true">
-        {Array.from({ length: 5 }, (_, index) => (
-          <div
-            key={index}
-            className="h-9 w-24 animate-pulse rounded-pill bg-gray-200"
-          />
-        ))}
+      <div className="flex flex-col gap-1.5">
+        <div className="flex flex-wrap gap-2" aria-hidden="true">
+          {Array.from({ length: 5 }, (_, index) => (
+            <div
+              key={index}
+              className="h-9 w-24 animate-pulse rounded-pill bg-gray-200"
+            />
+          ))}
+        </div>
+
+        {error ? <p className="text-caption text-error">{error}</p> : null}
       </div>
     );
   }
 
   if (regions.length === 0) {
     return (
-      <p className="text-body text-gray-500">
-        No regions are configured yet.
-      </p>
+      <div className="flex flex-col gap-1.5">
+        <p className="text-body text-gray-500">No regions are configured yet.</p>
+
+        {error ? (
+          <p className="text-caption text-error">
+            {error} None could be loaded — reload the page, and if the list stays
+            empty the region reference data still needs seeding.
+          </p>
+        ) : null}
+      </div>
     );
   }
 

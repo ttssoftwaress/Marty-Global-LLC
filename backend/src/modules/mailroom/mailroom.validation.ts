@@ -20,6 +20,25 @@ export const mailStatusFilter = z.enum([
 ]);
 export type MailStatusFilter = z.infer<typeof mailStatusFilter>;
 
+/*
+ * What the customer asks us to do with a piece of mail — the two buttons on the
+ * item slide-over. The request lands in the admin mail-ops queue; the backend
+ * decides what happens next, so the payload carries nothing but the intent and
+ * an optional note (AGENTS.md — business logic lives in services).
+ *
+ * The forwarding address is not accepted from the client: it is resolved from
+ * the customer's own record at request time and snapshotted onto the row, so a
+ * caller cannot redirect someone else's mail to an address they chose.
+ */
+export const mailRequestType = z.enum(['forwarding', 'shredding']);
+export type MailRequestType = z.infer<typeof mailRequestType>;
+
+export const createMailRequestSchema = z.object({
+  type: mailRequestType,
+  notes: z.string().trim().max(500).optional(),
+});
+export type CreateMailRequestInput = z.infer<typeof createMailRequestSchema>;
+
 export const listMailItemsQuerySchema = z.object({
   tab: mailRoomTab.default('inbox'),
   status: mailStatusFilter.default('all'),

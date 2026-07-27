@@ -3,7 +3,7 @@ import { Link, NavLink, useLocation } from 'react-router-dom';
 
 import logoWhite from '@/assets/Marty-Logo-White.png';
 import { AdminSidebarUserBlock, type AdminSidebarUser } from './AdminSidebarUserBlock';
-import { ADMIN_NAV_ITEMS, isAdminNavItemActive } from './nav-items';
+import { isAdminNavItemActive, type AdminNavItem } from './nav-items';
 
 /*
  * Admin sidebar — desktop (lg and up). 280px wide, full-height navy column:
@@ -13,16 +13,21 @@ import { ADMIN_NAV_ITEMS, isAdminNavItemActive } from './nav-items';
  *
  * The nav list is long enough to crowd the user block on short viewports, so it
  * scrolls on its own while the brand mark and footer stay put.
+ *
+ * `items` arrives already filtered to what this member may open, so the three
+ * variants cannot disagree about which sections exist.
  */
 
 type AdminSidebarDesktopProps = {
   user: AdminSidebarUser;
+  items: AdminNavItem[];
   onLogout?: () => void;
   className?: string;
 };
 
 export function AdminSidebarDesktop({
   user,
+  items,
   onLogout,
   className,
 }: AdminSidebarDesktopProps) {
@@ -43,7 +48,7 @@ export function AdminSidebarDesktop({
 
         <nav aria-label="Admin" className="min-h-0 w-full overflow-y-auto">
           <ul className="flex w-full flex-col gap-1">
-            {ADMIN_NAV_ITEMS.map((item) => {
+            {items.map((item) => {
               const active = isAdminNavItemActive(item.to, pathname);
               const Icon = item.icon;
 

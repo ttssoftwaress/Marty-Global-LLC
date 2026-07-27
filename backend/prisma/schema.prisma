@@ -43,12 +43,16 @@ model User {
   payments                Payment[]
   paymentMethods          PaymentMethod[]
   stripeCustomer          StripeCustomer?
+  // Delivered services and the follow-ups raised against them.
+  serviceResults          ServiceResult[]  @relation("ServiceResultCustomer")
+  serviceRequests         ServiceRequest[] @relation("ServiceRequestCustomer")
 
   // Staff-side records. A customer has none of these; a staff/admin user has a
   // StaffProfile and picks up whatever work is routed to them.
   staffProfile            StaffProfile?
   assignedOrders          Order[]           @relation("OrderAssignee")
   assignedConversations   Conversation[]    @relation("ConversationAssignee")
+  assignedServiceRequests ServiceRequest[]  @relation("ServiceRequestAssignee")
   mailRequestsRequested   MailRequest[]     @relation("MailRequestCustomer")
   mailRequestsProcessed   MailRequest[]     @relation("MailRequestProcessor")
   mailActionsProcessed    MailActionLog[]   @relation("MailActionProcessor")
@@ -271,6 +275,14 @@ model NotificationPreference {
   newMessagesInApp Boolean @default(true)
   newMessagesSms   Boolean @default(false)
 
+  // Virtual mail: a scan filed into a room, and a forwarding/shredding request
+  // settled. Its own category rather than folded into `statusUpdates`, because a
+  // customer who wants to hear about every piece of post is rarely the same one
+  // who wants an email per filing-status change.
+  mailUpdatesEmail Boolean @default(true)
+  mailUpdatesInApp Boolean @default(true)
+  mailUpdatesSms   Boolean @default(false)
+
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
@@ -342,15 +354,67 @@ model Service {
   features    String[]
   // Card footer meta line: `{ label: string, chips?: string[] }`.
   footer      Json
-  // Step 2 field schema: an ordered array of ServiceField (text | select |
-  // textarea). Stored as Json so the admin can shape a service's form without a
-  // migration; validated against the Zod schema on read.
+  /*
+   * The service's request form, as REFERENCES into the field registry rather
+   * than inline definitions: an ordered array of `{ fieldKey, required? }`.
+   *
+   * A service no longer owns what a question looks like — `FieldDefinition` does
+   * — so this records only which registered questions this service asks and
+   * whether each is mandatory here. The same field can be optional on one
+   * service and required on another, which is the one per-service override that
+   * genuinely varies.
+   *
+   * Resolved against the registry on read (services.service.ts). A reference to
+   * a key that no longer exists is skipped rather than rendered blank.
+   */
   detailFields Json?
-  // The same questions grouped into wizard steps: an ordered array of
-  // ServiceFormStep (`{ key, title, description?, fields }`). Null on a service
-  // authored before steps existed — the flat `detailFields` above is then the
-  // whole form, and both apps read one shape through that fallback.
+  /*
+   * The same references grouped into wizard steps: an ordered array of
+   * `{ key, title, description?, fields }` where `fields` holds the same
+   * `{ fieldKey, required? }` references. Null on a service whose form is still
+   * flat — `detailFields` is then the whole form, and both apps read one shape
+   * through that fallback.
+   */
   formSteps   Json?
+  /*
+   * What this service RETURNS, as references into the result registry:
+   * `{ fieldKey, required?, isPrimary?, showInList? }`.
+   *
+   * The mirror of `detailFields`. Same reasoning, same shape: a service records
+   * which registered facts it delivers, never what one looks like. The three
+   * optional flags are the per-service overrides that genuinely vary —
+   * "Company name" is the record's title on a formation and an ordinary fact on
+   * an annual report, and only the service using it knows which.
+   *
+   * Null or empty means the service delivers no structured result. Those
+   * services simply get no portal page — the sidebar lists what a customer
+   * actually has, so a service that returns nothing is never a dead link.
+   */
+  resultFields Json?
+  /*
+   * The heading the customer's page for this service carries ("My companies").
+   * Distinct from `name`, which is what the thing is called when you BUY it
+   * ("Company Formation"): a page listing what you already own reads wrong in
+   * the shop's words. Falls back to `name` when unset.
+   */
+  resultPageTitle String?
+  // The word for one delivered record ("company", "registration"), used in the
+  // empty state and counts. Falls back to "record".
+  resultNoun      String?
+  /*
+   * The result form exists for the TEAM to complete, and what it produces is not
+   * a customer-facing record.
+   *
+   * The virtual mail room is the case this was added for: staff must fill in the
+   * address the room is opened at, so the service needs `resultFields` — but the
+   * thing that delivers is the mail room itself, which already has its own
+   * screens at `/app/mailroom`. Without this flag the customer would get a second,
+   * emptier page for the same subscription in the "My services" sidebar.
+   *
+   * Internal results are still written, audited, and editable by staff; they are
+   * simply filtered out of every customer-facing read.
+   */
+  resultInternal  Boolean @default(false)
   // Only active services appear in the catalog; deactivating hides a service
   // without deleting historical orders that reference its snapshot.
   active      Boolean @default(true)
@@ -362,6 +426,8 @@ model Service {
   orderItems  OrderItem[]
   pricingTiers ServicePricingTier[]
   regions      ServiceRegionOffering[]
+  results      ServiceResult[]
+  requestTypes ServiceRequestType[]
 
   @@index([active, sortOrder])
   @@map("service")
@@ -376,6 +442,65 @@ model Service {
 //
 // `flag` is an emoji — text, not an asset. `code` is ISO 3166-1 alpha-2 where a
 // region is a country, and a stable slug where it is not ("EU").
+
+/*
+ * The field registry — the vocabulary of questions a service form may ask.
+ *
+ * An admin registers a field once ("Company name", "Passport upload") and then
+ * BUILDS forms by picking from this list. Nothing about a question is authored
+ * inline on a service any more, which is what makes the answer keys a closed set
+ * instead of whatever an admin happened to type: `OrderItem.answers` is keyed by
+ * `FieldDefinition.key`, so every answer in the database maps back to a row here.
+ *
+ * It is also what makes the customer's master form work. Two services picking
+ * the same definition are asking the same question by construction — not by an
+ * admin remembering to reuse a spelling — so the merge that asks it once is
+ * exact rather than a best guess.
+ *
+ * `key` is the stable identifier answers are stored under. It is immutable once
+ * created (the service layer refuses to change it): renaming it would orphan
+ * every answer already recorded against it. The label, placeholder, and hint are
+ * all freely editable, because they are presentation and a reworded question is
+ * still the same question.
+ *
+ * `config` holds the per-type extras as Json — a select's options, a file
+ * field's accepted types and size cap. Json rather than columns because the
+ * shape differs per type and is validated by the Zod schema on both write and
+ * read; the parts that must be queryable (`key`, `type`, `archived`) are real
+ * columns.
+ */
+model FieldDefinition {
+  id    String @id @default(cuid())
+  // The answer key. Immutable after creation — see above.
+  key   String @unique
+  label String
+  // text | select | textarea | file — the control the customer sees.
+  type  String
+  // Optional presentation, shared by every service that uses this field.
+  placeholder String?
+  hint        String?
+  // Per-type extras: `{ options }` for a select, `{ accept, maxSizeMb, multiple }`
+  // for a file upload. Null for a plain text field.
+  config      Json?
+  /*
+   * A grouping label for the picker ("Company details", "Identity documents"),
+   * so a registry of eighty fields stays navigable. Free text: it is a UI
+   * affordance, never referenced by an answer.
+   */
+  category    String?
+  /*
+   * Archived fields stay in the registry but leave the picker: a field a live
+   * service still uses — or that historical orders hold answers for — must
+   * remain resolvable, so this is a soft retirement rather than a delete.
+   */
+  archived    Boolean @default(false)
+  sortOrder   Int     @default(0)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([archived, sortOrder])
+  @@map("field_definition")
+}
 
 model Region {
   code      String  @id
@@ -454,12 +579,18 @@ model ServicePricingTier {
 // later (billing/payments modules, not built yet). One Order groups the several
 // services chosen in a single application; each is an OrderItem.
 
+// The pipeline, in order. APPROVED means "priced and offered" — it is set by the
+// team, and reached automatically the moment a quote is sent. PAID follows a
+// settled payment (also settable by hand, for money taken outside the app), and
+// PROCESSING is the filing actually being worked, which no automation can infer.
 enum OrderStatus {
   DRAFT
   SUBMITTED
   UNDER_REVIEW
   MISSING_INFO
   APPROVED
+  PAID
+  PROCESSING
   COMPLETED
 }
 
@@ -495,6 +626,7 @@ model Order {
   activity    OrderActivity[]
   quotes      Quote[]
   conversations Conversation[]
+  results     ServiceResult[]
 
   @@index([customerId, createdAt])
   @@index([status])
@@ -564,6 +696,12 @@ model OrderActivity {
   authorName   String
   authorUserId String?
   message      String
+  // A staff-only note. The customer's order-detail endpoint filters these out;
+  // only the admin feed renders them. Default false so every existing row — and
+  // every status-change entry — stays customer-visible, which is what an order's
+  // feed is for. The flag lives on the row rather than being inferred from the
+  // author, because the team writes both kinds.
+  internal     Boolean             @default(false)
   occurredAt   DateTime            @default(now()) @db.Timestamptz(3)
   createdAt    DateTime            @default(now()) @db.Timestamptz(3)
   updatedAt    DateTime            @updatedAt @db.Timestamptz(3)
@@ -571,7 +709,23 @@ model OrderActivity {
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId, occurredAt])
+  // The customer's feed reads only the visible rows for one order.
+  @@index([orderId, internal])
   @@map("order_activity")
+}
+
+// Where one service on an order has got to, independently of the order's own
+// status. An order groups several services and they do not finish together — a
+// mail room can be live weeks before the company formation clears — so
+// "completed" has to be answerable per item or the customer is told their
+// filing is done when only one of three services is.
+//
+// The order's status stays the headline the customer sees; this is the grain the
+// team actually works and the grain a result is delivered at.
+enum OrderItemStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
 }
 
 model OrderItem {
@@ -583,15 +737,355 @@ model OrderItem {
   serviceName String
   // The customer's answers to that service's detailFields: `{ [fieldName]: value }`.
   answers   Json
+  status    OrderItemStatus @default(PENDING)
+  completedAt DateTime?     @db.Timestamptz(3)
   sortOrder Int     @default(0)
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
   order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
   service   Service @relation(fields: [serviceId], references: [id])
+  result    ServiceResult?
+  // The virtual mail room this line provisioned on delivery, if it is that
+  // service. At most one — the room's FK is unique.
+  mailRoom  MailRoom?
 
   @@index([orderId])
+  @@index([serviceId, status])
   @@map("order_item")
+}
+
+// --- Service delivery ----------------------------------------------------
+//
+// What the customer GETS once a service is done, and what they can ask for
+// afterwards. The mirror image of the request form: that registry is the
+// vocabulary of questions we ASK, this one is the vocabulary of facts we RETURN.
+//
+// The shape of the whole feature:
+//
+//   ResultFieldDefinition   the registry of returnable facts ("Company name")
+//   Service.resultFields    which facts THIS service returns, as references
+//   Service.requestTypes    which follow-up actions THIS service offers
+//   ServiceResult           one delivered record, per completed OrderItem
+//   ServiceResultValue      one fact on that record, keyed by field
+//   ServiceRequest          a customer's follow-up request, worked by staff
+//
+// Why a second registry rather than a `kind` column on FieldDefinition: a result
+// field carries properties an input question has no use for (`isPrimary`,
+// `showInList`) and four extra types that only make sense as output (date,
+// number, url, status). Folding them together would leave those columns null on
+// every request field and put output facts in the picker an admin builds an
+// input form from — two different vocabularies sharing one list.
+//
+// Everything else is deliberately identical to the request registry: the key is
+// immutable because values are stored under it, archiving retires a field
+// without breaking the records that hold it, and a live field's type is frozen.
+
+/*
+ * A returnable fact, registered once and reused across services.
+ *
+ * `type` widens the request registry's four with four output-only controls:
+ *   date   — an instant, stored ISO-8601 UTC and rendered in the viewer's zone
+ *   number — an integer or decimal, right-aligned and locale-grouped
+ *   url    — an external link (a state registry page), rendered as an anchor
+ *   status — a chip whose options and tones the admin defines in `config`
+ *
+ * `config` holds the per-type extras exactly as the request registry does: a
+ * select's or status's options, a file's accepted types. Json because the shape
+ * differs per type; the queryable parts (`key`, `type`, `archived`) are columns.
+ */
+model ResultFieldDefinition {
+  id    String @id @default(cuid())
+  // The value key. Immutable after creation — ServiceResultValue rows are stored
+  // under it, so renaming would orphan every delivered record.
+  key   String @unique
+  label String
+  // text | textarea | select | file | date | number | url | status
+  type  String
+  // Shown under the value when it needs explaining ("As filed with the state").
+  hint  String?
+  // Per-type extras: `{ options }` for select/status, `{ accept, maxSizeMb }`
+  // for file, `{ prefix, suffix, decimals }` for number.
+  config Json?
+  // A grouping label for the picker and for the detail page's card headings
+  // ("Registration", "Documents"). Free text — a UI affordance, never a key.
+  category String?
+  /*
+   * The one field whose value titles the record: the company's name on a
+   * formation, the trademark on a filing. The list page's first column and the
+   * detail page's heading both print it.
+   *
+   * A property of the field's USE, not of the field itself — the same
+   * "Company name" definition is the title on a formation and an ordinary fact
+   * on an annual report — so what is stored here is only the DEFAULT. The
+   * service's own reference overrides it, and the service layer resolves exactly
+   * one primary per service.
+   */
+  isPrimary Boolean @default(false)
+  // Default for whether this fact appears as a column on the list page. Also
+  // overridable per service, for the same reason.
+  showInList Boolean @default(false)
+  // Retired from the picker but still resolvable, so delivered records that hold
+  // a value for it keep rendering (AGENTS.md — ask before any hard delete).
+  archived  Boolean @default(false)
+  sortOrder Int     @default(0)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  values ServiceResultValue[]
+
+  @@index([archived, sortOrder])
+  @@map("result_field_definition")
+}
+
+/*
+ * A follow-up action a service offers its customers — the buttons on the result
+ * detail page ("Request a certified copy", "Order an amendment").
+ *
+ * A row per service rather than a Json array on Service, because a request type
+ * is referenced by every ServiceRequest raised against it: the admin queue
+ * filters by type, and a Json entry has no id to point at. Retiring one has to
+ * leave the requests already raised under it readable, which is what `active`
+ * is for — the same archive-not-delete rule the registries follow.
+ *
+ * `fields` is an optional intake form for the request itself, stored as the same
+ * `{ fieldKey, required? }` references the request registry uses — so asking
+ * "which address should we ship the copy to?" reuses the vocabulary that already
+ * exists rather than inventing a third one.
+ */
+model ServiceRequestType {
+  id        String @id @default(cuid())
+  serviceId String
+  // Stable per service, so a request row records what was asked for even after
+  // the label is reworded.
+  key       String
+  label     String
+  description String?
+  // Icon intent the frontend maps to a lucide glyph, exactly as Service.iconKey
+  // does. An unknown key falls back to a neutral glyph (Design.md: never export
+  // glyph assets).
+  iconKey   String?
+  /*
+   * References into the REQUEST field registry (`FieldDefinition`), as
+   * `{ fieldKey, required? }`. Null or empty means the button raises the request
+   * immediately with no form.
+   */
+  fields    Json?
+  // Free text shown beside the button ("Typically 3–5 business days"). Never
+  // parsed — an expectation, not a deadline.
+  turnaround String?
+  active    Boolean @default(true)
+  sortOrder Int     @default(0)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
+  deletedAt DateTime? @db.Timestamptz(3)
+
+  service  Service          @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  requests ServiceRequest[]
+
+  @@unique([serviceId, key])
+  @@index([serviceId, active, sortOrder])
+  @@map("service_request_type")
+}
+
+/*
+ * One delivered service — the row on the customer's per-service page and the
+ * record its detail screen renders.
+ *
+ * One per OrderItem (the unique below), created when staff mark that item
+ * complete and fill the result form. `customerId` and `serviceId` are
+ * denormalised off the order so the customer's list page is a single indexed
+ * read rather than a three-level join on every row, and so the record survives
+ * as a queryable thing in its own right.
+ *
+ * `title` is a snapshot of the primary field's value at save time. It is
+ * duplicated from the value rows on purpose: the list page sorts and searches on
+ * it, and neither is possible against a value stored one join away in a table
+ * keyed by field. The service layer rewrites it whenever the primary value
+ * changes, so it cannot drift.
+ */
+enum ServiceResultStatus {
+  // Staff have started filling the form but not delivered it. Never visible to
+  // the customer — the portal's queries filter on ACTIVE.
+  DRAFT
+  ACTIVE
+  // The delivered thing is no longer current (a dissolved company, a lapsed
+  // registration). Still readable, still listed, visibly inactive.
+  ARCHIVED
+}
+
+model ServiceResult {
+  id          String @id @default(cuid())
+  orderItemId String @unique
+  orderId     String
+  customerId  String
+  serviceId   String
+  // Snapshot, like OrderItem.serviceName — the record must read correctly after
+  // the catalog is renamed.
+  serviceName String
+  status      ServiceResultStatus @default(DRAFT)
+  // The primary field's value, snapshotted for sorting and search. See above.
+  title       String
+  // Human-facing reference the customer quotes to support ("REC-10432").
+  reference   String @unique
+  // When the record was first delivered to the customer (status → ACTIVE), and
+  // when staff last changed a value. Both are printed on the detail page.
+  deliveredAt DateTime? @db.Timestamptz(3)
+  lastEditedAt DateTime? @db.Timestamptz(3)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
+  deletedAt   DateTime? @db.Timestamptz(3)
+
+  orderItem OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  order     Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  customer  User      @relation("ServiceResultCustomer", fields: [customerId], references: [id], onDelete: Cascade)
+  service   Service   @relation(fields: [serviceId], references: [id])
+  values    ServiceResultValue[]
+  requests  ServiceRequest[]
+
+  // The customer's per-service list page: their records for one service, newest
+  // first, filtered by status.
+  @@index([customerId, serviceId, createdAt])
+  @@index([customerId, status])
+  @@index([orderId])
+  @@map("service_result")
+}
+
+/*
+ * One fact on a delivered record, keyed by the registry field it answers.
+ *
+ * A row per value rather than a Json blob on ServiceResult, because a value is
+ * individually edited (a request's whole purpose is "change this one thing"),
+ * individually audited, and — for a file — carries its own R2 object key. A Json
+ * column would make every edit a read-modify-write of the entire record.
+ *
+ * `value` is the scalar as text; `valueJson` carries the shapes text cannot
+ * (a multi-file upload). Text rather than per-type columns because the type is
+ * the field's, not the row's: the service parses it on read against the
+ * definition, exactly as the request form's answers are parsed.
+ *
+ * Dates are stored as ISO-8601 UTC strings here and converted at render
+ * (AGENTS.md, Dates). Money is not a type this registry offers — an amount owed
+ * belongs to billing, and duplicating one here would be a second source of truth.
+ */
+model ServiceResultValue {
+  id       String @id @default(cuid())
+  resultId String
+  // The registry key this answers. Also stored as a relation, so a definition
+  // cannot be hard-deleted out from under a delivered record.
+  fieldKey String
+  fieldId  String
+  value     String?
+  valueJson Json?
+  // R2 object key for a `file` field — never a URL. Served only as a short-TTL
+  // presigned link after an ownership check in the service layer (AGENTS.md).
+  objectKey   String?
+  contentType String?
+  sizeBytes   Int?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  result     ServiceResult         @relation(fields: [resultId], references: [id], onDelete: Cascade)
+  definition ResultFieldDefinition @relation(fields: [fieldId], references: [id], onDelete: Restrict)
+
+  // One value per field per record — the write path upserts on this.
+  @@unique([resultId, fieldKey])
+  @@index([fieldId])
+  @@map("service_result_value")
+}
+
+/*
+ * A customer's follow-up request against a delivered record — raised from a
+ * button on the result detail page, worked from `/admin/requests`.
+ *
+ * Deliberately NOT reusing MailRequest: that model is mail-specific (a piece of
+ * mail, a carrier, a tracking number) and its statuses are a mail workflow. This
+ * is the generic queue every other service's follow-ups run through.
+ *
+ * The workflow is its own enum rather than the order pipeline's, because the two
+ * answer different questions. An order moves through review → pricing → payment
+ * → filing; a request is simply picked up, worked, and closed — with one extra
+ * state the order flow has no equivalent for: BLOCKED, which is the "Error" the
+ * team needs when a request cannot proceed and the customer must be told why.
+ */
+enum ServiceRequestStatus {
+  SUBMITTED
+  IN_PROGRESS
+  // Cannot proceed — waiting on the customer, or the registry rejected it.
+  // `blockedReason` is what the customer is shown.
+  BLOCKED
+  COMPLETED
+  CANCELLED
+}
+
+model ServiceRequest {
+  id         String @id @default(cuid())
+  // Human-facing reference ("REQ-10432"), like an order's.
+  reference  String @unique
+  resultId   String
+  requestTypeId String
+  customerId String
+  serviceId  String
+  status     ServiceRequestStatus @default(SUBMITTED)
+  // Snapshots, so the queue row reads correctly after the type is reworded or
+  // the catalog renamed — the same rule OrderItem.serviceName follows.
+  typeLabel   String
+  serviceName String
+  // The customer's answers to the request type's intake form, keyed by
+  // FieldDefinition.key — the same shape and the same registry as OrderItem.answers.
+  answers    Json?
+  // Free-text note the customer added when raising it.
+  note       String?
+  // Why the request is blocked, shown to the customer. Set with BLOCKED and
+  // cleared when it moves on, so a stale reason can never outlive the state.
+  blockedReason String?
+  // Closing note from staff, shown to the customer on a completed request.
+  resolution String?
+  // The staff member working it. Null renders "Unassigned" in the queue.
+  assigneeId String?
+  startedAt  DateTime? @db.Timestamptz(3)
+  closedAt   DateTime? @db.Timestamptz(3)
+  createdAt  DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime  @updatedAt @db.Timestamptz(3)
+  deletedAt  DateTime? @db.Timestamptz(3)
+
+  result      ServiceResult      @relation(fields: [resultId], references: [id], onDelete: Cascade)
+  requestType ServiceRequestType @relation(fields: [requestTypeId], references: [id], onDelete: Restrict)
+  customer    User               @relation("ServiceRequestCustomer", fields: [customerId], references: [id], onDelete: Cascade)
+  assignee    User?              @relation("ServiceRequestAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  activity    ServiceRequestActivity[]
+
+  // The queue's default view: oldest-first within a status (work the backlog in
+  // order), narrowed by assignee and by service.
+  @@index([status, createdAt])
+  @@index([assigneeId, status])
+  @@index([customerId, createdAt])
+  @@index([resultId])
+  @@index([serviceId, status])
+  @@map("service_request")
+}
+
+// One entry in a request's history — every status change, every note. The same
+// shape and the same rules as OrderActivity: `internal` rows are staff-only and
+// the customer's endpoint filters them out, and `authorName` is snapshotted so
+// the feed reads correctly after the author leaves.
+model ServiceRequestActivity {
+  id           String @id @default(cuid())
+  requestId    String
+  author       OrderActivityAuthor
+  authorName   String
+  authorUserId String?
+  message      String
+  internal     Boolean  @default(false)
+  occurredAt   DateTime @default(now()) @db.Timestamptz(3)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(3)
+
+  request ServiceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId, occurredAt])
+  @@index([requestId, internal])
+  @@map("service_request_activity")
 }
 
 // --- Virtual mail rooms --------------------------------------------------
@@ -613,6 +1107,15 @@ enum MailRoomStatus {
 model MailRoom {
   id         String         @id @default(cuid())
   customerId String
+  /*
+   * The order item whose delivery provisioned this room. Unique, so delivering
+   * the same item twice can never mint a second room — that idempotency is the
+   * reason the column exists, not the provenance it also records.
+   *
+   * Null for a room created by any other route (the seeds, or an operator adding
+   * one by hand for a customer who paid outside the app).
+   */
+  orderItemId String?       @unique
   name       String
   // Full one-line address as displayed. The parts below are the same address
   // structured, for forwarding labels and jurisdiction filters.
@@ -631,8 +1134,11 @@ model MailRoom {
   updatedAt  DateTime       @updatedAt @db.Timestamptz(3)
   deletedAt  DateTime?      @db.Timestamptz(3)
 
-  customer User       @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  items    MailItem[]
+  customer  User       @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  // SetNull rather than Cascade: a room that has been receiving post for months
+  // must outlive the order line that created it.
+  orderItem OrderItem? @relation(fields: [orderItemId], references: [id], onDelete: SetNull)
+  items     MailItem[]
 
   @@index([customerId, createdAt])
   @@map("mail_room")
@@ -681,15 +1187,25 @@ model MailItem {
   @@map("mail_item")
 }
 
-// One page image of a scanned item, in order. A row per page (rather than an
-// array on the item) so a page can carry its own key and be re-scanned
-// individually.
+// One uploaded file of a scanned item, in the order the operator attached them.
+// A row per file (rather than an array on the item) so each carries its own key
+// and can be re-scanned individually.
+//
+// `pageNumber` is the file's position in the scan, not a page count: an operator
+// may attach several images (one sheet each) or a single multi-page PDF, and we
+// deliberately do not split a PDF server-side — the viewer renders images inline
+// and hands a PDF to the browser whole. `contentType` is what tells it which.
 model MailItemScan {
   id         String @id @default(cuid())
   mailItemId String
   pageNumber Int
   // R2 object key — presigned at read time, never stored as a URL.
   objectKey  String
+  // Captured at upload so the viewer can choose its renderer without sniffing
+  // the object, and so the file keeps a readable name when downloaded.
+  contentType String?
+  fileName    String?
+  sizeBytes   Int?
   createdAt  DateTime @default(now()) @db.Timestamptz(3)
   updatedAt  DateTime @updatedAt @db.Timestamptz(3)
 
@@ -826,6 +1342,24 @@ enum ConversationCategory {
   SUPPORT
 }
 
+// What kind of thread this is, and therefore who is allowed to answer it. The two
+// kinds are routed by opposite rules, which is the whole reason this column
+// exists rather than the presence of `orderId` standing in for it:
+//
+//   ORDER   — the conversation on an order's detail screen. Bound to exactly one
+//             order and answerable only by that order's assignee. The customer is
+//             talking to the person doing their filing, not to "support".
+//   SUPPORT — the general help thread behind the Messages screen. Unbound, and
+//             routed to whichever agent is available, exactly like a helpdesk.
+//
+// Inferring the kind from `orderId != null` would be wrong in both directions: a
+// support thread may reference an order for context, and the routing rule has to
+// be readable by an index the inbox queries.
+enum ConversationKind {
+  ORDER
+  SUPPORT
+}
+
 // A thread's workflow state, which the admin inbox filters and the header
 // capsule prints. Distinct from the linked order's status: a thread can be
 // resolved while its order is still under review.
@@ -841,11 +1375,19 @@ model Conversation {
   customerId String
   subject    String
   category   ConversationCategory @default(SUPPORT)
+  kind       ConversationKind     @default(SUPPORT)
   status     ConversationStatus   @default(OPEN)
   // The staff member handling the thread; null is the inbox's amber
   // "Unassigned". SetNull so a thread outlives the agent who held it.
+  //
+  // On an ORDER thread this is not the routing decision it is on a SUPPORT one —
+  // it is mirrored from the order's own assignee, because the customer is
+  // entitled to the person working their filing. The service keeps the two in
+  // step; reassigning the order reassigns the thread.
   assigneeId String?
-  // Set when the thread is about a specific order. Null for a general thread.
+  // The order this thread belongs to. Required in practice for an ORDER thread
+  // and null for a SUPPORT one — the pairing is enforced in the service layer,
+  // since Prisma cannot express "required when kind = ORDER".
   orderId    String?
   // Denormalised from the newest message so the list sorts and previews without
   // joining every thread's messages. Written in the same transaction as the
@@ -866,9 +1408,18 @@ model Conversation {
   messages Message[]
 
   @@index([customerId, lastMessageAt])
+  // An order has at most one conversation, so the order-detail screen resolves it
+  // by lookup rather than by "newest thread that happens to mention this order".
+  // A partial unique index is what the database can actually express here: a
+  // SUPPORT thread referencing an order for context leaves orderId null, so this
+  // constrains only the ORDER threads it is meant to.
+  @@unique([orderId, kind])
   @@index([orderId])
   // The admin inbox lists newest-activity-first across every customer, narrowed
-  // by status and by whether a thread is claimed.
+  // by status and by whether a thread is claimed. Kind leads the support inbox's
+  // index because that screen shows SUPPORT threads only — order conversations
+  // are worked from the order, not the helpdesk queue.
+  @@index([kind, status, lastMessageAt])
   @@index([status, lastMessageAt])
   @@index([assigneeId])
   @@map("conversation")
@@ -1055,6 +1606,27 @@ model Payment {
   rateExpiresAt   DateTime? @db.Timestamptz(3)
   confirmations   Int       @default(0)
 
+  /*
+   * The exact raw USDT integer this payment is watching for. TRC-20 transfers
+   * carry no memo or destination tag, so with one shared deposit address the
+   * AMOUNT is the only thing that can identify which payment a transfer belongs
+   * to. `usdtAmountRaw` above is what actually arrived; this is what was asked
+   * for, and the two differing is precisely an under/overpayment.
+   *
+   * The partial unique index below is what makes matching unambiguous: no two
+   * simultaneously-watching payments may expect the same amount at the same
+   * address, so a transfer can never match two rows.
+   */
+  usdtExpectedRaw Decimal? @db.Decimal(38, 0)
+
+  // When this payment stops watching. A transfer arriving after it is held for a
+  // human rather than credited at a stale rate (AGENTS.md, Money).
+  expiresAt DateTime? @db.Timestamptz(3)
+
+  // The block timestamp of the matched transfer, so the poller can re-derive
+  // confirmation depth on a later sweep without re-reading the chain history.
+  chainConfirmedAt DateTime? @db.Timestamptz(3)
+
   // The Idempotency-Key the mutating endpoint accepted, so a retried request
   // resolves to this same row rather than charging twice (AGENTS.md, API).
   idempotencyKey String? @unique
@@ -1076,7 +1648,32 @@ model Payment {
   @@index([quoteId])
   // The USDT poller matches a pending payment by address + amount.
   @@index([depositAddress])
+  @@index([depositAddress, usdtExpectedRaw])
   @@map("payment")
+}
+
+/*
+ * How far the USDT poller has swept. One row, keyed by provider, so a restart
+ * resumes from the last processed block timestamp instead of re-reading the
+ * chain from the beginning (or worse, only from "now", which would skip
+ * transfers that landed while the process was down).
+ *
+ * Not a cache: losing this row costs a wider re-sweep, never a lost credit,
+ * because every credit is guarded by the unique tx hash on Payment.
+ */
+model ChainSyncCursor {
+  id       String @id @default(cuid())
+  // "usdt-trc20-mainnet" / "usdt-trc20-nile" — network-scoped so a testnet
+  // cursor can never be read as a mainnet one.
+  provider String @unique
+  // Block timestamp (ms since epoch) of the newest transfer we have processed.
+  // BigInt because it is a millisecond epoch, not a count.
+  lastBlockTimestamp BigInt   @default(0)
+  lastSweptAt        DateTime? @db.Timestamptz(3)
+  createdAt          DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime  @updatedAt @db.Timestamptz(3)
+
+  @@map("chain_sync_cursor")
 }
 
 // One reversal against a payment — the admin "Refunds & adjustments" log. A row
@@ -1097,6 +1694,11 @@ model Refund {
   // retried job or a redelivered webhook can never record the same reversal
   // twice (AGENTS.md, Payments).
   providerRef String? @unique
+  // The Idempotency-Key the endpoint accepted. Unique, so a retried request
+  // resolves to this same reversal rather than refunding twice — the guard only
+  // surfaces the header, this column is what actually makes it retry-safe
+  // (AGENTS.md, API Conventions).
+  idempotencyKey String? @unique
   // Who approved it. Kept by id without an FK cascade plus a snapshotted name, so
   // the log still reads after the approver's account is gone.
   processedById   String?

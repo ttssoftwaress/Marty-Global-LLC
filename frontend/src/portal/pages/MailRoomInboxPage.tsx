@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Clock, Inbox } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
+import { ApiError } from '@/services/api';
+
 import { PortalLayout } from '../components/PortalLayout';
 import {
   InboxControls,
@@ -9,9 +11,11 @@ import {
   MailItemSlideOver,
   MailList,
   MailRoomInboxKpiCards,
+  useCreateMailRequest,
   useMailItem,
   useMailItems,
   useMailRoomDetail,
+  useRecordMailDownload,
 } from '../features/mailroom';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { usePortalShell } from '../hooks/usePortalShell';
@@ -176,8 +180,29 @@ export function MailRoomInboxPage() {
     ? loadedItems.findIndex((candidate) => candidate.id === itemId)
     : -1;
 
+  /*
+   * Asking us to forward or shred a piece of mail. The backend resolves the
+   * forwarding address from the customer's own company record, so the payload
+   * carries only the intent — and a customer with no address on file gets a
+   * business-rule message back, which belongs beside the button rather than in a
+   * toast that scrolls away.
+   */
+  const createRequest = useCreateMailRequest(roomId);
+  const recordDownload = useRecordMailDownload(roomId);
+
+  const requestError =
+    createRequest.error instanceof ApiError ? createRequest.error.message : null;
+
+  const requestHandling = (type: 'forwarding' | 'shredding') => {
+    if (!itemId) return;
+    createRequest.mutate({ itemId, type });
+  };
+
   const itemPath = (id: string) => `/app/mailroom/${roomId}/${id}`;
-  const closeItem = () => navigate(`/app/mailroom/${roomId}`);
+  const closeItem = () => {
+    createRequest.reset();
+    navigate(`/app/mailroom/${roomId}`);
+  };
   // Prev/Next replace the history entry so Back always returns to the inbox
   // rather than replaying every viewed item.
   const goPrevItem = () => {
@@ -270,6 +295,11 @@ export function MailRoomInboxPage() {
           onClose={closeItem}
           onPrev={goPrevItem}
           onNext={goNextItem}
+          onRequestForwarding={() => requestHandling('forwarding')}
+          onRequestShredding={() => requestHandling('shredding')}
+          onDownload={() => recordDownload.mutate(slideOverItem.id)}
+          isRequesting={createRequest.isPending}
+          requestError={requestError}
         />
       ) : null}
     </PortalLayout>

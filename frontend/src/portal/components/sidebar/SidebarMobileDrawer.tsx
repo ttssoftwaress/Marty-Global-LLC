@@ -9,6 +9,7 @@ import {
   PORTAL_SUPPORT_LINK,
   isNavItemActive,
 } from './nav-items';
+import { isServiceNavItemActive, useServiceNavItems } from './useServiceNavItems';
 
 /*
  * Portal sidebar — mobile (below md). A 280px drawer that slides in over the
@@ -36,6 +37,9 @@ export function SidebarMobileDrawer({
 }: SidebarMobileDrawerProps) {
   const { pathname } = useLocation();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  // Called before the `!open` early return below, so the hook order stays stable
+  // across renders whether the drawer is open or not.
+  const serviceItems = useServiceNavItems();
 
   useEffect(() => {
     if (!open) return;
@@ -124,6 +128,45 @@ export function SidebarMobileDrawer({
                 );
               })}
             </ul>
+
+            {/* The customer's own delivered services — things they OWN, as
+             * distinct from the actions above. */}
+            {serviceItems.length > 0 ? (
+              <div className="mt-5 flex w-full flex-col gap-1">
+                <p className="px-4 pb-1 text-caption font-semibold uppercase tracking-[0.6px] text-white/50">
+                  My services
+                </p>
+
+                {serviceItems.map((item) => {
+                  const active = isServiceNavItemActive(item.to, pathname);
+                  const Icon = item.icon;
+
+                  return (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      onClick={onClose}
+                      aria-current={active ? 'page' : undefined}
+                      className={
+                        active
+                          ? 'flex w-full items-center gap-3 rounded-input bg-white px-4 py-3 text-body font-semibold text-primary'
+                          : 'flex w-full items-center gap-3 rounded-input px-4 py-3 text-body font-medium text-white/80 transition-colors hover:bg-white/10 hover:text-white'
+                      }
+                    >
+                      <Icon className="size-5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                      <span className="min-w-0 flex-1 break-words">{item.label}</span>
+                      <span
+                        className={`shrink-0 rounded-full px-2 py-0.5 text-caption font-semibold ${
+                          active ? 'bg-primary-light text-primary' : 'bg-white/15 text-white'
+                        }`}
+                      >
+                        {item.count}
+                      </span>
+                    </NavLink>
+                  );
+                })}
+              </div>
+            ) : null}
           </nav>
         </div>
 

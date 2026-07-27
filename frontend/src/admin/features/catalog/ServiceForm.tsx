@@ -17,6 +17,7 @@ import type {
   ServiceWritePayload,
 } from '../../types/catalog';
 import { SERVICE_ICON_OPTIONS } from '../../types/catalog';
+import { useFieldPicker } from '../fields/queries';
 import { DetailFieldEditor } from './DetailFieldEditor';
 import {
   Field,
@@ -80,6 +81,15 @@ export function ServiceForm({
 }: ServiceFormProps) {
   const [draft, setDraft] = useState<ServiceFormDraft>(newServiceDraft);
   const [errors, setErrors] = useState<ServiceFormErrors>({});
+  // Why the last press of the submit button did nothing. Field errors alone
+  // aren't enough: the button is in the fixed footer and the control it is
+  // complaining about is usually scrolled out of sight, so a blocked submit
+  // reads as a dead button unless it is also reported down here.
+  const [blockedMessage, setBlockedMessage] = useState<string | null>(null);
+
+  // The field registry the Application-questions picker offers. Questions are
+  // registered on the Form fields screen; this form only chooses among them.
+  const registry = useFieldPicker();
 
   /*
    * Re-seed whenever the dialog opens, and again when the service detail
@@ -89,19 +99,37 @@ export function ServiceForm({
   useEffect(() => {
     if (!open) return;
     setErrors({});
+    setBlockedMessage(null);
     setDraft(service ? draftFromService(service) : newServiceDraft());
   }, [open, service]);
 
   const setField = <K extends keyof ServiceFormDraft>(
     key: K,
     value: ServiceFormDraft[K],
-  ) => setDraft((current) => ({ ...current, [key]: value }));
+  ) => {
+    // The footer notice belongs to the press that was blocked; once the admin
+    // edits anything it is stale, so it clears on the next keystroke.
+    setBlockedMessage(null);
+    setDraft((current) => ({ ...current, [key]: value }));
+  };
 
   const handleSubmit = () => {
     const nextErrors = validateServiceDraft(draft);
     setErrors(nextErrors);
-    if (Object.keys(nextErrors).length > 0) return;
 
+    const blocker = firstError(nextErrors);
+    if (blocker) {
+      const count = Object.keys(nextErrors).length;
+      setBlockedMessage(
+        count === 1
+          ? blocker.message
+          : `${blocker.message} ${count} fields need attention.`,
+      );
+      revealError(blocker.anchorId);
+      return;
+    }
+
+    setBlockedMessage(null);
     onSubmit(payloadFromDraft(draft));
   };
 
@@ -112,6 +140,13 @@ export function ServiceForm({
       : error
         ? 'Could not save this service. Try again.'
         : null;
+
+  /*
+   * The local block wins: it is set by the press that just happened and cleared
+   * by the next edit, so whenever it is set it is the newer news — a server
+   * rejection still on screen is from a request that went out before it.
+   */
+  const footerError = blockedMessage ?? submitError;
 
   const isBusy = Boolean(isSaving);
   const showSkeleton = mode === 'edit' && isLoadingService && !service;
@@ -128,9 +163,9 @@ export function ServiceForm({
       onClose={onClose}
       footer={
         <div className="flex flex-col gap-3">
-          {submitError ? (
+          {footerError ? (
             <p role="alert" className="text-caption text-error">
-              {submitError}
+              {footerError}
             </p>
           ) : null}
 
@@ -285,6 +320,7 @@ export function ServiceForm({
           </FormSection>
 
           <FormSection
+            id={ERROR_ANCHORS.regions}
             title="Regions supported"
             description="Where this service can be ordered."
           >
@@ -298,6 +334,7 @@ export function ServiceForm({
           </FormSection>
 
           <FormSection
+            id={ERROR_ANCHORS.pricing}
             title="Pricing tiers"
             description="Each tier is one price point for this service."
           >
@@ -311,12 +348,15 @@ export function ServiceForm({
           </FormSection>
 
           <FormSection
+            id={ERROR_ANCHORS.questions}
             title="Application questions"
-            description="What the customer is asked when ordering this service."
+            description="Pick from the registered fields. Manage the questions themselves on the Form fields screen."
           >
             <DetailFieldEditor
               fields={draft.detailFields}
               errors={errors}
+              registry={registry.data ?? []}
+              isRegistryLoading={registry.isLoading}
               onChange={(fields) => setField('detailFields', fields)}
             />
           </FormSection>
@@ -336,6 +376,63 @@ export function ServiceForm({
       )}
     </ServiceFormDialog>
   );
+}
+
+/*
+ * Where each error key lives in the form, in the order the controls appear.
+ *
+ * Validation keys are paths ('name', 'tiers.0.amount'); these resolve one to the
+ * element that has to come into view for the message to make sense — the control
+ * itself where there is one, otherwise the section holding the row that failed.
+ */
+const ERROR_ANCHORS = {
+  regions: 'service-regions',
+  pricing: 'service-pricing',
+  questions: 'service-questions',
+} as const;
+
+const ANCHOR_ORDER: { matches: (key: string) => boolean; anchorId: string }[] = [
+  { matches: (key) => key === 'name', anchorId: 'service-name' },
+  { matches: (key) => key === 'description', anchorId: 'service-description' },
+  { matches: (key) => key === 'regionCodes', anchorId: ERROR_ANCHORS.regions },
+  { matches: (key) => key.startsWith('tiers.'), anchorId: ERROR_ANCHORS.pricing },
+  {
+    matches: (key) => key.startsWith('fields.'),
+    anchorId: ERROR_ANCHORS.questions,
+  },
+];
+
+// The first error in form order — the one worth naming in the footer and
+// scrolling to, since fixing errors top-down is how the form is read.
+function firstError(errors: ServiceFormErrors) {
+  const entries = Object.entries(errors);
+  if (entries.length === 0) return null;
+
+  for (const anchor of ANCHOR_ORDER) {
+    const hit = entries.find(([key]) => anchor.matches(key));
+    if (hit) return { anchorId: anchor.anchorId, message: hit[1] };
+  }
+
+  // A key no anchor claims still has to be reported; there is just nowhere
+  // specific to scroll to.
+  return { anchorId: null, message: entries[0]![1] };
+}
+
+function revealError(anchorId: string | null) {
+  if (!anchorId) return;
+
+  const element = document.getElementById(anchorId);
+  if (!element) return;
+
+  element.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  // Focus only lands on a control; a section is scrolled to, not focused.
+  if (
+    element instanceof HTMLInputElement ||
+    element instanceof HTMLTextAreaElement ||
+    element instanceof HTMLSelectElement
+  ) {
+    element.focus({ preventScroll: true });
+  }
 }
 
 function FormSkeleton() {

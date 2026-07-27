@@ -1,18 +1,24 @@
-import { Link } from 'react-router-dom';
-
+import { useScrollAfterItems } from '@/hooks/useScrollAfterItems';
 import { formatOrderDate } from '../../lib/format';
 import type { OrderActivityEntry } from '../../types/orders';
 import { SectionCard } from './SectionCard';
 
 /*
- * Activity feed — a chronological list of updates on the order. Two author
- * kinds: the Marty Global team (navy "M" monogram + TEAM tag) and the customer
- * (their avatar image). The message text sits under the header, aligned with
- * the name rather than the avatar, matching the desktop link.
+ * Activity feed — a chronological list of what has happened to the order: status
+ * changes, documents filed, updates written by the team. Two author kinds: the
+ * Marty Global team (navy "M" monogram + TEAM tag) and the customer (their
+ * avatar image).
  *
- * "Open conversation" routes into the order's support thread — live chat lives
- * in portal/features/support (AGENTS.md), so this is the entry point to it.
+ * This is the order's record, not a place to talk. The conversation with the
+ * assigned specialist is its own card directly below (features/order-conversation)
+ * — separating them keeps a two-way thread from being mistaken for the audit
+ * trail, and keeps the trail readable once the thread gets long.
+ *
+ * The trail only ever grows, so past six entries it scrolls inside the card
+ * rather than pushing everything below it off the screen.
  */
+
+const VISIBLE_ENTRIES = 6;
 
 function TeamMonogram() {
   return (
@@ -61,24 +67,32 @@ function ActivityItem({ entry }: { entry: OrderActivityEntry }) {
 
 type ActivityCardProps = {
   activity: OrderActivityEntry[];
-  conversationHref: string;
 };
 
-export function ActivityCard({ activity, conversationHref }: ActivityCardProps) {
+export function ActivityCard({ activity }: ActivityCardProps) {
+  const { ref, maxHeight } = useScrollAfterItems<HTMLUListElement>(
+    activity.length,
+    VISIBLE_ENTRIES,
+  );
+
   return (
     <SectionCard title="Activity" className="gap-5 md:gap-6">
-      <ul className="flex flex-col gap-4 md:gap-6">
-        {activity.map((entry) => (
-          <ActivityItem key={entry.id} entry={entry} />
-        ))}
-      </ul>
-
-      <Link
-        to={conversationHref}
-        className="btn btn-secondary h-input w-full rounded-input text-button"
-      >
-        Open conversation
-      </Link>
+      {activity.length === 0 ? (
+        <p className="text-body text-gray-500">
+          Nothing has happened on this order yet.
+        </p>
+      ) : (
+        <ul
+          ref={ref}
+          style={{ maxHeight }}
+          tabIndex={maxHeight === undefined ? undefined : 0}
+          className="relative flex flex-col gap-4 overflow-y-auto pr-1 md:gap-6"
+        >
+          {activity.map((entry) => (
+            <ActivityItem key={entry.id} entry={entry} />
+          ))}
+        </ul>
+      )}
     </SectionCard>
   );
 }

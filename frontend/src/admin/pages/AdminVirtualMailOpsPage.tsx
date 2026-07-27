@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
 
+import { ApiError } from '@/services/api';
+import { uploadFiles } from '@/services/upload';
 import { AdminLayout } from '../components/AdminLayout';
 import {
   MailLogPanel,
@@ -19,11 +21,7 @@ import {
 } from '../features/mailroom';
 import { useAdminShell } from '../hooks/useAdminShell';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
-import type {
-  MailOpsCustomer,
-  MailOpsTab,
-  MailScanAttachment,
-} from '../types/mailroom';
+import type { MailOpsCustomer, MailOpsTab } from '../types/mailroom';
 
 /*
  * Virtual mail room — operations. The admin screen for filing scanned mail into
@@ -101,9 +99,12 @@ export function AdminVirtualMailOpsPage() {
   const [sender, setSender] = useState('');
   const [receivedOn, setReceivedOn] = useState('');
   const [notes, setNotes] = useState('');
-  const [scan, setScan] = useState<{ file: File; meta: MailScanAttachment } | null>(
-    null,
-  );
+  // The files the operator has attached, in the order they will be filed as
+  // pages. Held as `File` objects until submit, when they go to R2.
+  const [scans, setScans] = useState<File[]>([]);
+  // 0–1 while the set uploads, null when idle — drives the drop zone's bar.
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const summary = useAdminMailOpsSummary();
   const customerSearch = useAdminMailOpsCustomerSearch(debouncedSearch);
@@ -129,35 +130,62 @@ export function AdminVirtualMailOpsPage() {
     setSender('');
     setReceivedOn('');
     setNotes('');
-    setScan(null);
+    setScans([]);
+    setUploadError(null);
   };
+
+  const isBusy = uploadProgress !== null || uploadScan.isPending;
 
   // The submit is only meaningful once every required part is in hand; the
   // backend re-validates all of it (AGENTS.md — the guard is server-side).
   const canSubmit = Boolean(
-    selected && sender.trim() && receivedOn && scan && !uploadScan.isPending,
+    selected && sender.trim() && receivedOn && scans.length > 0 && !isBusy,
   );
 
   /*
-   * Filing a scan is two steps: the file goes to R2 through the storage service
-   * and the resulting object key is what the API is sent (AGENTS.md, Storage —
-   * the bytes never round-trip through the API process). `services/upload.ts`
-   * lands with that module, so the key is threaded through here and the upload
-   * call slots in ahead of the mutation without the form changing.
+   * Filing a scan is two steps: the files go straight to R2 through
+   * `services/upload.ts`, and only the resulting object keys are sent to the API
+   * (AGENTS.md, Storage — the bytes never round-trip through the API process).
+   *
+   * The upload is awaited before the mutation because the keys ARE the payload:
+   * a failure here must leave the form intact with everything still attached, so
+   * the operator retries the upload rather than re-entering the whole scan.
    */
-  const onSubmit = () => {
-    if (!selected || !scan) return;
+  const onSubmit = async () => {
+    if (!selected || scans.length === 0) return;
 
-    uploadScan.mutate(
-      {
-        customerId: selected.id,
-        sender: sender.trim(),
-        receivedOn,
-        scanKey: scan.meta.name,
-        notes: notes.trim() || undefined,
-      },
-      { onSuccess: resetForm },
-    );
+    setUploadError(null);
+    setUploadProgress(0);
+
+    try {
+      const uploaded = await uploadFiles(scans, 'mail-scan', {
+        onProgress: setUploadProgress,
+      });
+
+      uploadScan.mutate(
+        {
+          customerId: selected.id,
+          sender: sender.trim(),
+          receivedOn,
+          files: uploaded.map((file) => ({
+            objectKey: file.objectKey,
+            fileName: file.name,
+            contentType: file.contentType,
+            sizeBytes: file.sizeBytes,
+          })),
+          notes: notes.trim() || undefined,
+        },
+        { onSuccess: resetForm },
+      );
+    } catch (error) {
+      setUploadError(
+        error instanceof ApiError
+          ? error.message
+          : 'Those scans could not be uploaded. Try again.',
+      );
+    } finally {
+      setUploadProgress(null);
+    }
   };
 
   const isLoading = summary.isPending || recent.isPending;
@@ -214,23 +242,31 @@ export function AdminVirtualMailOpsPage() {
                       onReceivedOnChange={setReceivedOn}
                       notes={notes}
                       onNotesChange={setNotes}
-                      file={scan?.meta ?? null}
-                      onFileSelect={(file) =>
-                        setScan({
-                          file,
-                          meta: { name: file.name, size: file.size },
-                        })
+                      files={scans.map((file) => ({
+                        name: file.name,
+                        size: file.size,
+                      }))}
+                      onFilesAdd={(added) =>
+                        setScans((previous) => [...previous, ...added])
                       }
-                      onFileRemove={() => setScan(null)}
+                      onFileRemove={(index) =>
+                        setScans((previous) =>
+                          previous.filter((_, position) => position !== index),
+                        )
+                      }
+                      uploadProgress={uploadProgress}
                       formId={SCAN_FORM_ID}
                       canSubmit={canSubmit}
-                      isSubmitting={uploadScan.isPending}
+                      isSubmitting={isBusy}
                       errorMessage={
-                        uploadScan.isError
+                        uploadError ??
+                        (uploadScan.isError
                           ? 'That scan could not be filed. Try again.'
-                          : null
+                          : null)
                       }
-                      onSubmit={onSubmit}
+                      onSubmit={() => {
+                        void onSubmit();
+                      }}
                     />
                   </div>
 

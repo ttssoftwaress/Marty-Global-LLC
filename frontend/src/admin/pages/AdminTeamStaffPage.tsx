@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { ApiError } from '@/services/api';
 import { AdminLayout } from '../components/AdminLayout';
 import {
+  AddStaffDialog,
+  AddStaffForm,
+  DeleteStaffDialog,
   TeamCardList,
   TeamEmptyState,
   TeamHeader,
@@ -15,11 +19,20 @@ import {
   TeamTable,
   useAdminTeam,
   useAdminTeamSummary,
+  useCreateTeamMember,
+  useDeleteTeamMember,
+  useUpdateTeamMember,
 } from '../features/team';
 import { useAdminShell } from '../hooks/useAdminShell';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import {
+  emptyCreateDraft,
+  payloadFromCreateDraft,
+  validateMemberDraft,
+} from '../lib/team-member-edit';
 import type { AdminTeamMemberRow, TeamStatusFilter } from '../types/team';
 import { ALL_ROLES } from '../types/team';
+import type { TeamMemberCreateDraft } from '../types/team-member-edit';
 
 /*
  * Team & staff — the admin screen for the internal team, their roles, and their
@@ -36,20 +49,21 @@ import { ALL_ROLES } from '../types/team';
  *     becomes a stack of cards on the page background with no frame around them
  *
  * Every figure and row comes from the API; nothing on this page is hardcoded
- * business data. Two queries back it (endpoints land later): the summary for the
- * three KPI cards, the tabs, and the role options, and an infinite query for the
- * list. Status, role, and search are all query params the backend resolves, so a
- * page always agrees with the total printed beside it.
+ * business data. Two queries back it: the summary for the three KPI cards, the
+ * tabs, and the role options, and an infinite query for the list. Status, role,
+ * and search are all query params the backend resolves, so a page always agrees
+ * with the total printed beside it.
  *
  * Pagination is one cursor stream shown two ways (AGENTS.md): mobile's "Load
  * more" appends the next page, while the wider links' numbered pager steps a
  * window over what has loaded, fetching ahead when the window runs past the
  * loaded edge.
  *
- * The row actions (invite, edit, deactivate/reactivate, resend) are the screen's
- * write paths; their mutations land with the backend module. They are wired to
- * named handlers here rather than left inert, so the endpoints drop into one
- * place when they arrive.
+ * Three write paths run from this screen. "Add staff member" opens a dialog that
+ * creates the login outright — there is no invitation to accept, so the account
+ * works the moment it exists. The row's status action flips the member between
+ * active and deactivated, and Delete removes the account behind a confirmation.
+ * Edit navigates to `/admin/team/:memberId/edit` for the full record.
  */
 
 const PAGE_SIZE = 7;
@@ -136,20 +150,129 @@ export function AdminTeamStaffPage() {
     setSearch('');
   };
 
+  const createMember = useCreateTeamMember();
+  const updateMember = useUpdateTeamMember();
+  const deleteMember = useDeleteTeamMember();
+
   /*
-   * The screen's write paths. Edit opens the member editor at
-   * `/admin/team/:memberId/edit`; the rest are backend mutations that do not
-   * exist yet (AGENTS.md, two-apps sync rule) — an invite form and the
-   * status/resend endpoints land with the `team` module. Keeping them as named
-   * no-op handlers rather than inert markup means the controls are already real
-   * buttons with the right accessible names and focus behaviour, and the
-   * endpoints drop into one place.
+   * The add-staff dialog. The draft is held here rather than in the dialog so
+   * closing and reopening starts clean, and so a failed create keeps what was
+   * typed instead of making the admin re-enter a password.
    */
-  const onInvite = () => {};
+  const [addDraft, setAddDraft] = useState<TeamMemberCreateDraft | null>(null);
+  const [showAddErrors, setShowAddErrors] = useState(false);
+
+  const addErrors = useMemo(
+    () =>
+      addDraft
+        ? validateMemberDraft(addDraft, { requirePassword: true })
+        : {},
+    [addDraft],
+  );
+  const hasAddErrors = Object.keys(addErrors).length > 0;
+
+  const [pendingDelete, setPendingDelete] = useState<AdminTeamMemberRow | null>(
+    null,
+  );
+
   const onEdit = (member: AdminTeamMemberRow) =>
     navigate(`/admin/team/${member.id}/edit`);
-  const onToggleActive = (_member: AdminTeamMemberRow) => {};
-  const onResendInvite = (_member: AdminTeamMemberRow) => {};
+
+  /*
+   * The role list is the summary's, minus its leading "All roles" filter entry —
+   * that value is a query param, not a role an account can hold. The first real
+   * option seeds the draft so the select always opens on something valid.
+   */
+  const assignableRoles = useMemo(
+    () => summary.data?.roles.filter((option) => option.value !== ALL_ROLES) ?? [],
+    [summary.data],
+  );
+
+  const onAddStaff = () => {
+    const defaultRole = assignableRoles[0]?.value;
+    if (!defaultRole) return;
+
+    createMember.reset();
+    setAddDraft(emptyCreateDraft(defaultRole));
+    setShowAddErrors(false);
+  };
+
+  const closeAddDialog = () => {
+    if (createMember.isPending) return;
+    setAddDraft(null);
+    setShowAddErrors(false);
+  };
+
+  const onCreate = () => {
+    if (!addDraft || createMember.isPending) return;
+
+    if (hasAddErrors) {
+      setShowAddErrors(true);
+      return;
+    }
+
+    createMember.mutate(payloadFromCreateDraft(addDraft), {
+      onSuccess: () => {
+        setAddDraft(null);
+        setShowAddErrors(false);
+      },
+    });
+  };
+
+  /*
+   * The row's status action. The list rows do not carry the member's role or
+   * permission grid, so the PATCH sends only `isActive` — a partial write, which
+   * is what the endpoint expects; the backend leaves everything it does not
+   * carry alone.
+   */
+  const onToggleActive = (member: AdminTeamMemberRow) => {
+    if (updateMember.isPending) return;
+
+    updateMember.mutate({
+      memberId: member.id,
+      payload: { isActive: member.status !== 'active' },
+    });
+  };
+
+  const onConfirmDelete = () => {
+    if (!pendingDelete || deleteMember.isPending) return;
+
+    deleteMember.mutate(pendingDelete.id, {
+      onSuccess: () => setPendingDelete(null),
+    });
+  };
+
+  const closeDeleteDialog = () => {
+    if (deleteMember.isPending) return;
+    deleteMember.reset();
+    setPendingDelete(null);
+  };
+
+  // A refused write is the backend's message when it has one — "last active
+  // admin", "email already in use" — and a generic line otherwise.
+  const errorMessage = (error: unknown, fallback: string) =>
+    error instanceof ApiError ? error.message : fallback;
+
+  const createError = createMember.isError
+    ? errorMessage(
+        createMember.error,
+        'Something went wrong creating this account. Please try again.',
+      )
+    : null;
+
+  const deleteError = deleteMember.isError
+    ? errorMessage(
+        deleteMember.error,
+        'Something went wrong deleting this account. Please try again.',
+      )
+    : null;
+
+  const toggleError = updateMember.isError
+    ? errorMessage(
+        updateMember.error,
+        'Something went wrong updating this member. Please try again.',
+      )
+    : null;
 
   const isFiltered =
     status !== 'all' || role !== ALL_ROLES || Boolean(debouncedSearch.trim());
@@ -164,9 +287,20 @@ export function AdminTeamStaffPage() {
     <AdminLayout user={user} onLogout={onLogout}>
       <div className="w-full p-4 pb-8 md:p-6 lg:p-content">
         <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-4 md:gap-6 lg:gap-8">
-          <TeamHeader onInvite={onInvite} />
+          <TeamHeader onAddStaff={onAddStaff} />
 
           {summary.data ? <TeamKpiCards summary={summary.data} /> : null}
+
+          {/* A refused status change has nowhere else to surface — the row
+              action has no form behind it. */}
+          {toggleError ? (
+            <p
+              role="alert"
+              className="rounded-input border border-error/30 bg-error/5 px-4 py-3 text-small text-error"
+            >
+              {toggleError}
+            </p>
+          ) : null}
 
           {summary.data ? (
             /*
@@ -231,7 +365,7 @@ export function AdminTeamStaffPage() {
                   members={loadedMembers}
                   onEdit={onEdit}
                   onToggleActive={onToggleActive}
-                  onResendInvite={onResendInvite}
+                  onDelete={setPendingDelete}
                 />
               )}
 
@@ -247,7 +381,7 @@ export function AdminTeamStaffPage() {
                     members={windowMembers}
                     onEdit={onEdit}
                     onToggleActive={onToggleActive}
-                    onResendInvite={onResendInvite}
+                    onDelete={setPendingDelete}
                   />
                 )}
               </div>
@@ -284,6 +418,74 @@ export function AdminTeamStaffPage() {
           )}
         </div>
       </div>
+
+      {/* The dialog's own draft is what keeps it mounted, so the sheet animates
+          and its focus trap tears down cleanly on close. */}
+      <AddStaffDialog
+        open={addDraft !== null}
+        title="Add staff member"
+        description="Create a login for a colleague and choose what they can access."
+        onClose={closeAddDialog}
+        footer={
+          <div className="flex items-center justify-end gap-3 md:gap-4">
+            <button
+              type="button"
+              onClick={closeAddDialog}
+              disabled={createMember.isPending}
+              className="flex h-input items-center justify-center rounded-control border border-gray-300 bg-white px-5 text-button text-text transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            >
+              Cancel
+            </button>
+
+            <button
+              type="button"
+              onClick={onCreate}
+              disabled={createMember.isPending}
+              className="flex h-input min-w-0 items-center justify-center rounded-control bg-primary px-5 text-button text-white transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
+            >
+              {createMember.isPending ? 'Creating…' : 'Create account'}
+            </button>
+          </div>
+        }
+      >
+        {addDraft ? (
+          <div className="flex w-full flex-col gap-5">
+            <AddStaffForm
+              draft={addDraft}
+              roles={assignableRoles}
+              areas={summary.data?.permissionAreas ?? []}
+              errors={showAddErrors ? addErrors : {}}
+              onChange={(next) =>
+                setAddDraft((prev) => (prev ? { ...prev, ...next } : prev))
+              }
+              onPermissionChange={(key, granted) =>
+                setAddDraft((prev) =>
+                  prev
+                    ? { ...prev, permissions: { ...prev.permissions, [key]: granted } }
+                    : prev,
+                )
+              }
+            />
+
+            {createError ? (
+              <p
+                role="alert"
+                className="rounded-input border border-error/30 bg-error/5 px-4 py-3 text-small text-error"
+              >
+                {createError}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+      </AddStaffDialog>
+
+      <DeleteStaffDialog
+        member={pendingDelete}
+        isDeleting={deleteMember.isPending}
+        error={deleteError}
+        onCancel={closeDeleteDialog}
+        onConfirm={onConfirmDelete}
+      />
     </AdminLayout>
   );
 }

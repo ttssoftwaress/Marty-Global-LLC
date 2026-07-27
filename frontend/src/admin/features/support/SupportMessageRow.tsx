@@ -6,10 +6,16 @@ import { SupportAgentAvatar } from './SupportAgentAvatar';
 /*
  * One entry in the thread. Three authorships render differently, all from the
  * same chronological stream:
- *   - the customer: avatar left, gray bubble, timestamp under it
- *   - a staff reply: mirrored right, brand-tinted bubble, name suffixed
- *     "— Support"
+ *   - the reader's own message: mirrored right, brand-tinted bubble
+ *   - anyone else's: avatar left, gray bubble, timestamp under it
  *   - an internal note: a full-width amber block, never sent to the customer
+ *
+ * The side comes from `mine` (resolved per-viewer by the backend), not from the
+ * author kind, so the thread reads like a messaging app from both desks: a second
+ * agent stepping in sees the assigned agent's replies on the left, as the
+ * customer does. Keying this off `kind === 'staff'` would put every agent's reply
+ * on the right and show a colleague's message as the reader's own. `kind` still
+ * drives the "— Support" suffix, which labels the role rather than the side.
  *
  * Bubbles cap their width so a long message wraps into a column rather than
  * running the pane's full width — 580px on desktop, 280px on mobile, matching
@@ -34,7 +40,7 @@ type SupportMessageRowProps = {
 };
 
 export function SupportMessageRow({ message }: SupportMessageRowProps) {
-  const { kind, authorName, authorInitials, body, sentAt, id } = message;
+  const { kind, mine, authorName, authorInitials, body, sentAt, id } = message;
 
   if (kind === 'internal_note') {
     return (
@@ -55,10 +61,10 @@ export function SupportMessageRow({ message }: SupportMessageRowProps) {
   return (
     <div
       className={`flex w-full shrink-0 items-start gap-3 md:gap-2 lg:gap-3 ${
-        isStaff ? 'justify-end' : ''
+        mine ? 'justify-end' : ''
       }`}
     >
-      {!isStaff ? (
+      {!mine ? (
         <SupportAgentAvatar
           id={id}
           initials={authorInitials}
@@ -68,7 +74,7 @@ export function SupportMessageRow({ message }: SupportMessageRowProps) {
 
       <div
         className={`flex min-w-0 max-w-[280px] flex-1 flex-col gap-1 md:max-w-[80%] lg:max-w-[580px] ${
-          isStaff ? 'items-end' : 'items-start'
+          mine ? 'items-end' : 'items-start'
         }`}
       >
         <p className="max-w-full truncate text-small font-medium text-gray-600 md:text-gray-700 lg:text-gray-600">
@@ -80,7 +86,7 @@ export function SupportMessageRow({ message }: SupportMessageRowProps) {
 
         <div
           className={`w-full rounded-card p-3.5 md:p-2.5 lg:p-3.5 ${
-            isStaff ? 'bg-primary-light' : 'bg-gray-100'
+            mine ? 'bg-primary-light' : 'bg-gray-100'
           }`}
         >
           <p className="whitespace-pre-wrap break-words text-body leading-[1.5] text-text md:text-[13px] md:leading-[1.4] lg:text-body lg:leading-[1.5]">
@@ -96,7 +102,7 @@ export function SupportMessageRow({ message }: SupportMessageRowProps) {
         </time>
       </div>
 
-      {isStaff ? (
+      {mine ? (
         <SupportAgentAvatar
           id={id}
           initials={authorInitials}

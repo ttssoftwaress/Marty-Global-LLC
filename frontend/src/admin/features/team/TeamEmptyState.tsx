@@ -32,7 +32,7 @@ export function TeamEmptyState({
         <p className="max-w-[380px] text-body text-gray-500">
           {isFiltered
             ? 'Try a different status, role, or search term.'
-            : 'Invite a colleague to give them access to the admin portal.'}
+            : 'Add a staff member to give them a login for the admin portal.'}
         </p>
       </div>
 

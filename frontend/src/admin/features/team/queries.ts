@@ -15,12 +15,14 @@ import type {
 import { ALL_ROLES } from '../../types/team';
 import type {
   AdminTeamMemberDetail,
+  TeamMemberCreatePayload,
   TeamMemberWritePayload,
 } from '../../types/team-member-edit';
 
 /*
- * Admin team & staff data layer. Two queries back the screen (endpoints land
- * later, AGENTS.md two-apps sync rule):
+ * Admin team & staff data layer.
+ *
+ * Two queries back the list screen:
  *   - the summary: the three KPI figures, the status tabs, and the role options
  *   - the list itself, an infinite query so the design's two pagination shapes
  *     both work over one cursor stream (AGENTS.md, cursor pagination): mobile's
@@ -29,6 +31,10 @@ import type {
  * Status, role, and search are all query params the backend resolves — the UI
  * never filters, sorts, or counts rows client-side, so a page always agrees with
  * the total printed beside it.
+ *
+ * Three mutations write: creating a staff login, editing one, and deleting one.
+ * All three shift the KPI figures and move rows between tabs, so each
+ * invalidates the list and the summary rather than patching the cache by hand.
  */
 
 export const adminTeamSummaryKey = () => ['admin', 'team', 'summary'] as const;
@@ -118,6 +124,56 @@ export function useAdminTeamMember(memberId: string | null) {
  * invalidated because a role or status change moves the member between tabs and
  * shifts the KPI figures.
  */
+/*
+ * POST /v1/admin/team — create a staff login.
+ *
+ * The admin sets the credential directly; there is no invitation to accept, so
+ * the account comes back ready to sign in. The backend hashes the password
+ * through Better Auth and re-derives the effective permissions from the role, so
+ * the response is what actually got created rather than what the form sent.
+ */
+export function useCreateTeamMember() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: TeamMemberCreatePayload) =>
+      apiFetch<ApiSuccess<AdminTeamMemberDetail>>('/admin/team', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }).then((res) => res.data),
+    onSuccess: (member) => {
+      queryClient.setQueryData(adminTeamMemberKey(member.id), member);
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'team', 'list'] });
+      void queryClient.invalidateQueries({ queryKey: adminTeamSummaryKey() });
+    },
+  });
+}
+
+/*
+ * DELETE /v1/admin/team/:memberId — remove a staff account.
+ *
+ * The backend soft-deletes the record and drops the member's sessions, so this
+ * ends their access rather than only hiding the row. The cached detail record is
+ * dropped outright: the member no longer resolves, and a stale entry would let
+ * the edit screen render a form over an account that is gone.
+ */
+export function useDeleteTeamMember() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (memberId: string) =>
+      apiFetch<ApiSuccess<{ id: string }>>(
+        `/admin/team/${encodeURIComponent(memberId)}`,
+        { method: 'DELETE' },
+      ).then((res) => res.data),
+    onSuccess: ({ id }) => {
+      queryClient.removeQueries({ queryKey: adminTeamMemberKey(id) });
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'team', 'list'] });
+      void queryClient.invalidateQueries({ queryKey: adminTeamSummaryKey() });
+    },
+  });
+}
+
 export function useUpdateTeamMember() {
   const queryClient = useQueryClient();
 

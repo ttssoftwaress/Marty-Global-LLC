@@ -74,10 +74,26 @@ export type MailOpsRecentUpload = {
 };
 
 /*
- * The upload form's payload. The scan itself is uploaded separately through
- * `services/upload.ts` to R2 (AGENTS.md, Storage); this carries the resulting
- * object key rather than the bytes, so the JSON request stays small and the
- * file never round-trips through the API process.
+ * One uploaded file of a scan. The bytes go to R2 through `services/upload.ts`
+ * (AGENTS.md, Storage); this carries the resulting object key rather than the
+ * file, so the JSON request stays small and nothing round-trips through the API.
+ *
+ * `contentType` travels with it because the customer's viewer needs it to pick a
+ * renderer — an image page is drawn inline, a PDF is handed to the browser whole.
+ */
+export type MailScanFile = {
+  objectKey: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes?: number;
+};
+
+/*
+ * The upload form's payload.
+ *
+ * `files` is ordered — position becomes the page number — because an envelope is
+ * rarely one file: an operator scans several sheets, or attaches a multi-page
+ * PDF among them.
  *
  * `receivedOn` is a plain calendar date (`yyyy-MM-dd`) — the day the physical
  * mail was received, which has no time-of-day and must not be built from a
@@ -87,11 +103,11 @@ export type MailScanDraft = {
   customerId: string;
   sender: string;
   receivedOn: string; // yyyy-MM-dd
-  scanKey: string;
+  files: MailScanFile[];
   notes?: string;
 };
 
-// The scan the operator has attached but not yet submitted.
+// A scan the operator has attached but not yet uploaded.
 export type MailScanAttachment = {
   name: string;
   size: number; // bytes

@@ -1,3 +1,6 @@
+export { AddStaffDialog } from './AddStaffDialog';
+export { AddStaffForm } from './AddStaffForm';
+export { DeleteStaffDialog } from './DeleteStaffDialog';
 export { TeamCardList } from './TeamCardList';
 export { TeamEmptyState } from './TeamEmptyState';
 export { TeamHeader } from './TeamHeader';
@@ -23,6 +26,8 @@ export {
   useAdminTeam,
   useAdminTeamMember,
   useAdminTeamSummary,
+  useCreateTeamMember,
+  useDeleteTeamMember,
   useUpdateTeamMember,
   type AdminTeamParams,
 } from './queries';

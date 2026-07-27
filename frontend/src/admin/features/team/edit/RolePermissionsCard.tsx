@@ -1,30 +1,24 @@
 import { ChevronDown } from 'lucide-react';
-import { useId, type CSSProperties } from 'react';
+import { useId } from 'react';
 
 import type { TeamRoleOption } from '../../../types/team';
 import type { TeamPermissionArea } from '../../../types/team-member-edit';
-import { TeamToggleSwitch } from './TeamToggleSwitch';
+import { PermissionGrid } from './PermissionGrid';
 
 /*
- * "Role & permissions" — the role select, its helper line, then one switch per
- * area of the admin portal.
+ * "Role & permissions" — the role select, its helper line, then the permission
+ * table.
  *
  * The role options and the area rows both come from the API, so adding an admin
  * section or a role is a backend change rather than a frontend deploy.
  *
- * The grid is where the three links differ. Desktop and mobile run one column
- * top to bottom; tablet splits the same rows into two columns filled
- * column-major (Dashboard, Customers, Support inbox … on the left; Orders
- * queue, Quotes & payments … on the right). That is `grid-flow-col` with an
- * explicit row count at `md` only — the row order in the DOM is the desktop
- * order, so the reading order stays correct at every width and the tablet
- * columns fall out of the flow rather than out of a second markup tree.
+ * The table itself is `PermissionGrid`, shared with the add-staff form — it owns
+ * the two "Specific data" / "All data" columns and how the pair interacts.
  *
- * Two smaller design artifacts are not reproduced, both logged as deviations:
- * the tablet link italicises the helper line and drops the row labels from
- * medium to regular weight, while desktop and mobile do neither. The desktop
- * link is the source of truth for type, so all three widths use the upright
- * helper line and medium row labels.
+ * The previous tablet layout (the same rows split column-major into two halves)
+ * is gone, logged as a deviation: a row now carries two switches under a header
+ * that names them, and splitting those rows into side-by-side halves would put
+ * four switches on a line under one set of headings.
  */
 
 type RolePermissionsCardProps = {
@@ -46,10 +40,6 @@ export function RolePermissionsCard({
 }: RolePermissionsCardProps) {
   const roleId = useId();
   const helperId = `${roleId}-helper`;
-
-  // Tablet's two columns are filled top-to-bottom, left column first, so the
-  // left column takes the ceiling when the area count is odd.
-  const tabletRows = Math.ceil(areas.length / 2);
 
   return (
     <section className="flex w-full flex-col gap-5 rounded-card border border-gray-200 bg-white p-5 shadow-sm-elevation md:gap-card md:p-card">
@@ -84,30 +74,18 @@ export function RolePermissionsCard({
 
         <p id={helperId} className="text-small leading-[1.4] text-gray-400">
           Choosing a role applies its default permissions — adjust individual
-          areas below.
+          areas below. <span className="text-gray-500">Specific data</span> shows
+          the member only the records assigned to them;{' '}
+          <span className="text-gray-500">All data</span> shows them everything
+          in that area.
         </p>
       </div>
 
-      <div
-        className="grid w-full grid-flow-row grid-cols-1 md:grid-flow-col md:grid-cols-2 md:grid-rows-[var(--tablet-rows)] md:gap-x-8 lg:grid-flow-row lg:grid-cols-1 lg:grid-rows-none"
-        style={{ '--tablet-rows': `repeat(${tabletRows}, auto)` } as CSSProperties}
-      >
-        {areas.map((area) => (
-          <div
-            key={area.key}
-            className="flex items-center justify-between gap-4 border-b border-gray-200 py-4 md:py-3 lg:py-4"
-          >
-            <p className="min-w-0 text-form-label text-gray-800">{area.label}</p>
-
-            <TeamToggleSwitch
-              checked={permissions[area.key] === true}
-              onChange={(next) => onPermissionChange(area.key, next)}
-              label={area.label}
-              disabled={area.locked}
-            />
-          </div>
-        ))}
-      </div>
+      <PermissionGrid
+        areas={areas}
+        permissions={permissions}
+        onPermissionChange={onPermissionChange}
+      />
     </section>
   );
 }

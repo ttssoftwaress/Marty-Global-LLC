@@ -21,6 +21,7 @@ export type {
 export {
   useProfile,
   useUpdateProfile,
+  useUpdateAvatar,
   useCompanyDetails,
   useUpdateCompanyDetails,
   useNotificationPreferences,

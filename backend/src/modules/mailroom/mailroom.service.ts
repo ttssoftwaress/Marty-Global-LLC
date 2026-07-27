@@ -1,4 +1,11 @@
-import { MailItemStatus, MailRoomStatus, Prisma } from '@prisma/client';
+import {
+  MailItemStatus,
+  MailLogAction,
+  MailRequestStatus as PrismaMailRequestStatus,
+  MailRequestType as PrismaMailRequestType,
+  MailRoomStatus,
+  Prisma,
+} from '@prisma/client';
 
 import { getAuth } from '../../guards/index.js';
 import { assertFound } from '../../guards/ownership.js';
@@ -6,7 +13,10 @@ import { AppError } from '../../lib/app-error.js';
 import { prisma } from '../../lib/prisma.js';
 import { presignObject, presignObjects } from '../../lib/storage.js';
 import type {
+  CreateMailRequestInput,
   ListMailItemsQuery,
+  MailRequestType,
+  MailRoomTab,
   MailStatusFilter,
 } from './mailroom.validation.js';
 
@@ -57,6 +67,33 @@ const PENDING_REQUEST_STATUSES: MailItemStatus[] = [
 ];
 
 const liveItem: Prisma.MailItemWhereInput = { deletedAt: null };
+
+/*
+ * What each of the room's three tabs narrows the SAME list of mail items to.
+ *
+ * All three render identical rows — an envelope with a sender, a date, and a
+ * status — so they are one query with three scopes rather than three shapes:
+ *
+ *   inbox     everything in the room
+ *   requests  items with a forwarding/shredding request still open, which is
+ *             exactly the set the customer is waiting on us for
+ *   history   items that have been closed out — forwarded, shredded, or the
+ *             customer pulled the scan and we logged the disposal
+ */
+const TAB_SCOPE: Record<MailRoomTab, Prisma.MailItemWhereInput> = {
+  inbox: {},
+  requests: {
+    requests: {
+      some: {
+        deletedAt: null,
+        status: {
+          in: [PrismaMailRequestStatus.PENDING, PrismaMailRequestStatus.PROCESSING],
+        },
+      },
+    },
+  },
+  history: { actions: { some: {} } },
+};
 
 // --- Overview ------------------------------------------------------------
 export type MailRoomView = {
@@ -168,8 +205,21 @@ export type MailItemView = {
   scanReady: boolean;
   note?: string;
   responseDueAt?: string;
+  // Presigned page images, in order — what the viewer draws inline.
   scanPages?: string[];
+  // The item's PDF, when one of the uploaded files was a PDF.
   pdfUrl?: string;
+  /*
+   * Every uploaded file with its own link, so a scan the viewer cannot draw
+   * inline (a PDF among the images) is still reachable one file at a time. The
+   * object key is never included — only the short-lived URL.
+   */
+  files?: {
+    name: string;
+    contentType: string | null;
+    sizeBytes: number | null;
+    url: string;
+  }[];
 };
 
 export type MailItemsPage = {
@@ -201,16 +251,10 @@ export async function listItems(
 ): Promise<MailItemsPage> {
   const ownedRoomId = await assertRoomOwned(req, roomId);
 
-  // Requests and history are placeholder views in the design — they have no rows
-  // of their own yet, so they resolve to an empty page instead of listing the
-  // inbox under a different heading.
-  if (query.tab !== 'inbox') {
-    return { items: [], totalItems: 0, totalPages: 1, nextCursor: null };
-  }
-
   const where: Prisma.MailItemWhereInput = {
     roomId: ownedRoomId,
     ...liveItem,
+    ...TAB_SCOPE[query.tab],
     ...(query.status === 'all'
       ? {}
       : { status: VIEW_TO_ITEM_STATUS[query.status] }),
@@ -277,7 +321,35 @@ export async function getItem(
     });
   }
 
-  const scanPages = presignObjects(item.pages.map((page) => page.objectKey));
+  /*
+   * Every uploaded file is presigned once, then split two ways: the images
+   * become the inline page strip the viewer draws, and the full list (images and
+   * PDFs alike) is returned so nothing an operator attached is unreachable.
+   *
+   * A file whose signature failed is dropped from both rather than rendered as a
+   * broken link — `presignObject` already returns undefined instead of throwing.
+   */
+  const files = (
+    await Promise.all(
+      item.pages.map(async (page) => {
+        const url = await presignObject(page.objectKey);
+        if (!url) return null;
+
+        return {
+          name: page.fileName ?? `Page ${page.pageNumber}`,
+          contentType: page.contentType,
+          sizeBytes: page.sizeBytes,
+          url,
+        };
+      }),
+    )
+  ).filter((file): file is NonNullable<typeof file> => file !== null);
+
+  // Only images can be drawn inline. A legacy row predating `contentType` has
+  // none recorded; those were all page images, so they stay in the strip.
+  const scanPages = files
+    .filter((file) => !file.contentType || file.contentType.startsWith('image/'))
+    .map((file) => file.url);
 
   return {
     id: item.id,
@@ -293,6 +365,173 @@ export async function getItem(
     note: item.note ?? undefined,
     responseDueAt: item.responseDueAt?.toISOString(),
     scanPages: scanPages.length > 0 ? scanPages : undefined,
-    pdfUrl: presignObject(item.pdfObjectKey),
+    pdfUrl: await presignObject(item.pdfObjectKey),
+    files: files.length > 0 ? files : undefined,
   };
+}
+
+// --- Customer-initiated requests -----------------------------------------
+/*
+ * The write side of the mail room: the "Request forwarding" / "Request
+ * shredding" buttons on the item viewer, and the download that closes an item
+ * out. Each of these is what puts a row in front of the mail operator — the
+ * admin queue has nothing to work without them.
+ */
+
+export type MailRequestView = {
+  id: string;
+  mailItemId: string;
+  type: MailRequestType;
+  status: string;
+  requestedAt: string;
+};
+
+const REQUEST_TYPE_TO_PRISMA: Record<MailRequestType, PrismaMailRequestType> = {
+  forwarding: PrismaMailRequestType.FORWARDING,
+  shredding: PrismaMailRequestType.SHREDDING,
+};
+
+/*
+ * The one-line address the item forwards to, resolved from the customer's own
+ * records rather than accepted from the request. Their company address is the
+ * business one they gave us; the room's own address is where the mail already
+ * is, so it is not a forwarding destination and is deliberately not used here.
+ */
+async function forwardingAddress(customerId: string): Promise<string | null> {
+  const company = await prisma.company.findFirst({
+    where: { ownerId: customerId, deletedAt: null },
+    select: { address: true },
+  });
+
+  return company?.address ?? null;
+}
+
+export async function createRequest(
+  req: Parameters<typeof getAuth>[0],
+  roomId: string,
+  itemId: string,
+  input: CreateMailRequestInput,
+): Promise<MailRequestView> {
+  const auth = getAuth(req);
+  const ownedRoomId = await assertRoomOwned(req, roomId);
+
+  const item = await prisma.mailItem.findFirst({
+    where: { id: itemId, roomId: ownedRoomId, deletedAt: null },
+    select: { id: true, status: true },
+  });
+
+  if (!item) throw AppError.notFound('Mail item not found');
+
+  // Already dealt with — forwarding a shredded item is not a thing we can do.
+  if (
+    item.status === MailItemStatus.FORWARDED ||
+    item.status === MailItemStatus.ARCHIVED
+  ) {
+    throw AppError.businessRule('This item has already been handled');
+  }
+
+  // One open request per item. Without this a double-tap on the button would put
+  // the same envelope in the operator's queue twice.
+  const existing = await prisma.mailRequest.findFirst({
+    where: {
+      mailItemId: item.id,
+      deletedAt: null,
+      status: { in: [PrismaMailRequestStatus.PENDING, PrismaMailRequestStatus.PROCESSING] },
+    },
+  });
+
+  if (existing) {
+    throw AppError.conflict('A request for this item is already in progress');
+  }
+
+  const type = REQUEST_TYPE_TO_PRISMA[input.type];
+
+  const address =
+    type === PrismaMailRequestType.FORWARDING
+      ? await forwardingAddress(auth.userId)
+      : null;
+
+  if (type === PrismaMailRequestType.FORWARDING && !address) {
+    throw AppError.businessRule(
+      'Add a company address in your account settings before requesting forwarding',
+    );
+  }
+
+  // One transaction: an item flagged as needing action must always have the
+  // request that explains why, and vice versa.
+  const request = await prisma.$transaction(async (tx) => {
+    const created = await tx.mailRequest.create({
+      data: {
+        mailItemId: item.id,
+        customerId: auth.userId,
+        type,
+        shippingAddress: address,
+        notes: input.notes ?? null,
+      },
+    });
+
+    await tx.mailItem.update({
+      where: { id: item.id },
+      data: { status: MailItemStatus.ACTION_REQUESTED },
+    });
+
+    return created;
+  });
+
+  return {
+    id: request.id,
+    mailItemId: request.mailItemId,
+    type: input.type,
+    status: 'pending',
+    requestedAt: request.requestedAt.toISOString(),
+  };
+}
+
+/*
+ * Record that the customer pulled the scan. This is the "Downloaded only" row in
+ * the admin mail log — an item nobody asked us to forward or shred, which would
+ * otherwise leave no trace of having been dealt with at all.
+ *
+ * Logged once per item: a customer opening the same PDF three times is one
+ * disposal, not three log rows.
+ */
+export async function recordDownload(
+  req: Parameters<typeof getAuth>[0],
+  roomId: string,
+  itemId: string,
+): Promise<{ recorded: boolean }> {
+  const auth = getAuth(req);
+  const ownedRoomId = await assertRoomOwned(req, roomId);
+
+  const item = await prisma.mailItem.findFirst({
+    where: { id: itemId, roomId: ownedRoomId, deletedAt: null },
+    select: { id: true, sender: true },
+  });
+
+  if (!item) throw AppError.notFound('Mail item not found');
+
+  const already = await prisma.mailActionLog.findFirst({
+    where: { mailItemId: item.id, action: MailLogAction.DOWNLOADED },
+    select: { id: true },
+  });
+
+  if (already) return { recorded: false };
+
+  const customer = await prisma.user.findUnique({
+    where: { id: auth.userId },
+    select: { name: true },
+  });
+
+  await prisma.mailActionLog.create({
+    data: {
+      mailItemId: item.id,
+      customerId: auth.userId,
+      action: MailLogAction.DOWNLOADED,
+      mailItemLabel: item.sender,
+      // The customer did it themselves, so there is no staff processor.
+      processedByName: customer?.name ?? 'Customer',
+    },
+  });
+
+  return { recorded: true };
 }

@@ -5,12 +5,13 @@ import { PortalLayout } from '../components/PortalLayout';
 import {
   AdditionalNotesCard,
   ApplicationFooterActions,
+  ApplicationStepCard,
   OrderStepIndicator,
   SelectedServicesSummaryStrip,
-  ServiceDetailsCard,
   SupportingDocumentsCard,
 } from '../features/order-new-service';
 import {
+  answersByServiceFrom,
   buildApplicationSteps,
   isStepComplete,
 } from '../features/order-new-service/applicationSteps';
@@ -20,6 +21,7 @@ import {
 } from '../features/order-new-service/queries';
 import { usePortalShell } from '../hooks/usePortalShell';
 import { ApiError } from '@/services/api';
+import { uploadFiles, type UploadedFile } from '@/services/upload';
 import type {
   OrderApplicationDraft,
   OrderServiceCatalog,
@@ -33,17 +35,18 @@ import type {
  * that differ (2-col vs 1-col field grids, and the footer's desktop 3-across /
  * tablet note-above-buttons / mobile sticky-bar arrangements).
  *
- * The form is entirely admin-defined. Each service carries its request form as
- * data — either a flat field list or, once an admin has split it, a list of
- * steps — and `buildApplicationSteps` turns the selection into the screens to
- * render. An application for two services with two steps each is a four-screen
- * flow; one for two flat services is a single screen showing both cards, which
- * is what the design draws.
+ * The form is entirely admin-defined, and it is ONE MASTER FORM. Each service
+ * carries its own request form as data — a flat field list, or a list of steps
+ * once an admin has split it — and `buildApplicationSteps` merges the selected
+ * services' forms into a single questionnaire: steps sharing a key become one
+ * screen, and a question two services both ask is asked once. Ordering three
+ * services that each want the company name asks for it a single time.
  *
  * Continue is gated on the current screen's required fields only, so a customer
- * is never blocked by a question on a screen they haven't reached. Answers stay
- * keyed by service id throughout, so the submit payload is identical whether the
- * form was configured as one step or five.
+ * is never blocked by a question on a screen they haven't reached. Answers are
+ * held by field name (the merged shape) and fanned back out to every service
+ * that asked for them at submit by `answersByServiceFrom`, so the payload the
+ * backend receives — and every `OrderItem` it writes — is unchanged.
  *
  * Selection flows from Step 1 via router `state` (an array of service ids).
  * Step 2 resolves those ids against the catalog (a prop until the endpoint
@@ -90,6 +93,12 @@ export function OrderApplicationDetailsPage({
   const isLoading = isLoadingProp ?? catalogQuery.isLoading;
   const createOrder = useCreateOrder();
 
+  // 0–1 while the attached files upload to R2, null when idle; and the upload's
+  // own error, which is separate from the mutation's because it happens first.
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const isUploading = uploadProgress !== null;
+
   const selectedIds = useMemo(() => {
     const state = location.state as OrderApplicationLocationState | null;
     return state?.serviceIds ?? [];
@@ -105,21 +114,25 @@ export function OrderApplicationDetailsPage({
   }, [catalog, selectedIds]);
 
   const [draft, setDraft] = useState<OrderApplicationDraft>({
-    answersByService: {},
+    answers: {},
+    filesByField: {},
     documents: [],
     notes: '',
   });
 
-  const setFieldValue = (serviceId: string, fieldName: string, value: string) => {
+  // Answers are keyed by field name, not by service — that is what makes a
+  // question shared between services a single input holding a single value.
+  const setFieldValue = (fieldName: string, value: string) => {
     setDraft((prev) => ({
       ...prev,
-      answersByService: {
-        ...prev.answersByService,
-        [serviceId]: {
-          ...prev.answersByService[serviceId],
-          [fieldName]: value,
-        },
-      },
+      answers: { ...prev.answers, [fieldName]: value },
+    }));
+  };
+
+  const setFieldFiles = (fieldName: string, files: File[]) => {
+    setDraft((prev) => ({
+      ...prev,
+      filesByField: { ...prev.filesByField, [fieldName]: files },
     }));
   };
 
@@ -129,9 +142,9 @@ export function OrderApplicationDetailsPage({
   const setNotes = (notes: string) => setDraft((prev) => ({ ...prev, notes }));
 
   /*
-   * The screens this application is made of, from the selected services' own
-   * form configuration. An empty list means no service asks anything, in which
-   * case the flow is the documents/notes screen alone.
+   * The master form's screens: the selected services' forms merged into one
+   * flow. An empty list means no service asks anything, in which case the flow
+   * is the documents/notes screen alone.
    */
   const applicationSteps = useMemo(
     () => buildApplicationSteps(selectedServices),
@@ -160,36 +173,23 @@ export function OrderApplicationDetailsPage({
    */
   const canAdvance = useMemo(() => {
     if (!currentStep) return true;
-    return isStepComplete(
-      currentStep.step,
-      draft.answersByService[currentStep.service.id] ?? {},
-    );
-  }, [currentStep, draft.answersByService]);
+    return isStepComplete(currentStep, draft.answers);
+  }, [currentStep, draft.answers]);
 
   const canSubmit = useMemo(
-    () =>
-      applicationSteps.every((entry) =>
-        isStepComplete(
-          entry.step,
-          draft.answersByService[entry.service.id] ?? {},
-        ),
-      ),
-    [applicationSteps, draft.answersByService],
+    () => applicationSteps.every((step) => isStepComplete(step, draft.answers)),
+    [applicationSteps, draft.answers],
   );
 
   /*
-   * The wizard's labels: Step 1 (already done), one per configured step, then
-   * the review screen. The indicator is 1-based and Step 1 is behind us, so the
+   * The wizard's labels: Step 1 (already done), one per merged step, then the
+   * review screen. The indicator is 1-based and Step 1 is behind us, so the
    * current position is offset by two.
    */
   const stepLabels = useMemo(
     () => [
       'Select services',
-      ...applicationSteps.map((entry) =>
-        entry.stepCount > 1
-          ? `${entry.service.shortName ?? entry.service.name}: ${entry.step.title}`
-          : entry.step.title,
-      ),
+      ...applicationSteps.map((step) => step.title),
       'Review & submit',
     ],
     [applicationSteps],
@@ -213,20 +213,61 @@ export function OrderApplicationDetailsPage({
     window.scrollTo({ top: 0 });
   };
 
-  const onSubmit = () => {
-    if (!canSubmit || createOrder.isPending) return;
+  /*
+   * Submitting is two phases: every attached file goes straight to R2, then the
+   * order is created carrying only the resulting object keys (AGENTS.md, Storage
+   * — the bytes never round-trip through the API).
+   *
+   * The uploads are awaited first because their keys are part of the payload. A
+   * failure there leaves the whole draft intact — files included — so the
+   * customer retries the submit rather than re-attaching everything.
+   *
+   * Both a document-upload QUESTION's files and the general supporting documents
+   * are uploaded together: they are the same kind of thing to the order, and the
+   * answer string already records which question each was attached to.
+   */
+  const onSubmit = async () => {
+    if (!canSubmit || createOrder.isPending || isUploading) return;
+
+    const attached = [...Object.values(draft.filesByField).flat(), ...draft.documents];
+
+    setUploadError(null);
+    setUploadProgress(attached.length > 0 ? 0 : null);
+
+    let documents: UploadedFile[] = [];
+
+    try {
+      if (attached.length > 0) {
+        documents = await uploadFiles(attached, 'order-document', {
+          onProgress: setUploadProgress,
+        });
+      }
+    } catch (error) {
+      setUploadError(
+        error instanceof ApiError
+          ? error.message
+          : 'Your documents could not be uploaded. Please try again.',
+      );
+      setUploadProgress(null);
+      return;
+    }
+
+    setUploadProgress(null);
 
     // POST the assembled draft. The endpoint returns the OrderConfirmation
     // (reference, submitted date, services, email — the backend owns those,
     // AGENTS.md); Step 3 renders only that real data, so it's carried there via
     // router state exactly the way Step 1 handed the selection to Step 2.
-    // Documents are deferred (R2 upload is a later task), so only answers +
-    // notes are sent for now.
+    //
+    // The merged answers fan back out to every service that asked for them here,
+    // so each OrderItem still records the complete set of answers to its own
+    // service's questions.
     createOrder.mutate(
       {
         serviceIds: selectedServices.map((service) => service.id),
-        answersByService: draft.answersByService,
+        answersByService: answersByServiceFrom(selectedServices, draft.answers),
         notes: draft.notes.trim() || undefined,
+        ...(documents.length > 0 ? { documents } : {}),
       },
       {
         onSuccess: (confirmation) => {
@@ -236,11 +277,13 @@ export function OrderApplicationDetailsPage({
     );
   };
 
-  const submitError = createOrder.isError
-    ? createOrder.error instanceof ApiError
-      ? createOrder.error.message
-      : 'Something went wrong submitting your application. Please try again.'
-    : null;
+  const submitError =
+    uploadError ??
+    (createOrder.isError
+      ? createOrder.error instanceof ApiError
+        ? createOrder.error.message
+        : 'Something went wrong submitting your application. Please try again.'
+      : null);
 
   const showSkeleton = isLoading || !catalog;
 
@@ -270,11 +313,11 @@ export function OrderApplicationDetailsPage({
               <header className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex flex-col gap-1 lg:max-w-[640px]">
                   <h1 className="text-h4 font-semibold text-text md:text-[28px] md:leading-[36px] lg:text-h3">
-                    {currentStep ? currentStep.step.title : 'Review & submit'}
+                    {currentStep ? currentStep.title : 'Review & submit'}
                   </h1>
                   <p className="text-body text-text-secondary">
                     {currentStep
-                      ? (currentStep.step.description ??
+                      ? (currentStep.description ??
                         'Fill in the details for this part of your application.')
                       : 'Attach any supporting documents and add notes before submitting.'}
                   </p>
@@ -293,17 +336,13 @@ export function OrderApplicationDetailsPage({
 
               <div className="flex flex-col gap-5 md:gap-6">
                 {currentStep ? (
-                  <ServiceDetailsCard
+                  <ApplicationStepCard
                     key={currentStep.key}
-                    service={currentStep.service}
-                    fields={currentStep.step.fields}
-                    stepTitle={`${currentStep.service.name} — ${currentStep.step.title}`}
-                    stepIndex={currentStep.stepIndex}
-                    stepCount={currentStep.stepCount}
-                    answers={draft.answersByService[currentStep.service.id] ?? {}}
-                    onFieldChange={(fieldName, value) =>
-                      setFieldValue(currentStep.service.id, fieldName, value)
-                    }
+                    step={currentStep}
+                    answers={draft.answers}
+                    filesByField={draft.filesByField}
+                    onFieldChange={setFieldValue}
+                    onFilesChange={setFieldFiles}
                   />
                 ) : (
                   <>
@@ -326,11 +365,38 @@ export function OrderApplicationDetailsPage({
                 </p>
               )}
 
+              {isUploading && (
+                <div className="flex w-full flex-col gap-1">
+                  <div
+                    className="h-1.5 w-full overflow-hidden rounded-full bg-gray-200"
+                    role="progressbar"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={Math.round(uploadProgress * 100)}
+                    aria-label="Upload progress"
+                  >
+                    <div
+                      className="h-full rounded-full bg-primary transition-[width] duration-200"
+                      style={{ width: `${Math.round(uploadProgress * 100)}%` }}
+                    />
+                  </div>
+                  <p className="text-small text-gray-500">
+                    Uploading your documents… {Math.round(uploadProgress * 100)}%
+                  </p>
+                </div>
+              )}
+
               <ApplicationFooterActions
                 onBack={onBack}
-                onSubmit={isFinalScreen ? onSubmit : onContinue}
+                onSubmit={
+                  isFinalScreen
+                    ? () => {
+                        void onSubmit();
+                      }
+                    : onContinue
+                }
                 canSubmit={isFinalScreen ? canSubmit : canAdvance}
-                isSubmitting={createOrder.isPending}
+                isSubmitting={createOrder.isPending || isUploading}
                 isFinalStep={isFinalScreen}
               />
             </>

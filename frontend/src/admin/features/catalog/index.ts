@@ -9,6 +9,10 @@ export {
   IncludedItemsCard,
   PricingTemplatesCard,
   RequestFormStepsCard,
+  // The delivery half — what a service RETURNS, and the actions it offers on a
+  // delivered record.
+  RequestTypesCard,
+  ResultSchemaCard,
   ServiceDescriptionCard,
   ServiceDetailFooter,
   ServiceDetailHeader,
@@ -24,4 +28,6 @@ export {
   useCreateCatalogService,
   useUpdateCatalogService,
   useUpdateCatalogServiceDetail,
+  useUpdateRequestTypes,
+  useUpdateResultSchema,
 } from './queries';

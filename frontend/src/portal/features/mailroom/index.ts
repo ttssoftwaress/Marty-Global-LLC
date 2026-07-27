@@ -11,6 +11,8 @@ export {
   mailItemsKey,
   useMailItem,
   mailItemKey,
+  useCreateMailRequest,
+  useRecordMailDownload,
 } from './queries';
 
 export { MailRoomInboxKpiCards } from './MailRoomInboxKpiCards';

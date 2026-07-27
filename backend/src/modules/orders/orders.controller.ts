@@ -1,10 +1,12 @@
 import type { NextFunction, Request, Response } from 'express';
 
 import { AppError } from '../../lib/app-error.js';
+import { pathParam } from '../../lib/params.js';
 import * as service from './orders.service.js';
 import {
   createOrderSchema,
   listOrdersQuerySchema,
+  uploadOrderDocumentsSchema,
 } from './orders.validation.js';
 
 // Thin: validate → call service → respond with the { data } envelope. The
@@ -60,6 +62,45 @@ export async function getOrder(
 
     const order = await service.getOrderDetail(req, id);
     res.json({ data: order });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function attachDocuments(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const parsed = uploadOrderDocumentsSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw AppError.validation('Invalid documents payload', parsed.error.issues);
+    }
+
+    const result = await service.attachDocuments(
+      req,
+      pathParam(req, 'id'),
+      parsed.data,
+    );
+    res.status(201).json({ data: result });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getDocumentLink(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const link = await service.getDocumentLink(
+      req,
+      pathParam(req, 'id'),
+      pathParam(req, 'documentId'),
+    );
+    res.json({ data: link });
   } catch (error) {
     next(error);
   }

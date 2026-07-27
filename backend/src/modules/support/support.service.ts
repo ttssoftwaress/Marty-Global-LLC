@@ -1,5 +1,6 @@
 import {
   ConversationCategory,
+  ConversationKind,
   MessageAuthor,
   OrderStatus,
   Prisma,
@@ -42,6 +43,8 @@ const ORDER_STATUS_TO_VIEW: Record<OrderStatus, string> = {
   [OrderStatus.UNDER_REVIEW]: 'under_review',
   [OrderStatus.MISSING_INFO]: 'missing_info',
   [OrderStatus.APPROVED]: 'approved',
+  [OrderStatus.PAID]: 'paid',
+  [OrderStatus.PROCESSING]: 'processing',
   [OrderStatus.COMPLETED]: 'completed',
 };
 
@@ -95,6 +98,11 @@ export async function listConversations(
   const where: Prisma.ConversationWhereInput = {
     customerId: auth.userId,
     deletedAt: null,
+    // Support threads only. An order's conversation is a different thing with a
+    // different routing rule (modules/conversations) and is read on the order's
+    // own screen — listing it here would present two threads the customer cannot
+    // tell apart, one of which only their assignee can answer.
+    kind: ConversationKind.SUPPORT,
     ...(query.search
       ? {
           OR: [
@@ -164,16 +172,11 @@ type ConversationWithThread = Prisma.ConversationGetPayload<{
   include: typeof threadInclude;
 }>;
 
-function toThread(conversation: ConversationWithThread): ConversationThread {
-  return {
-    id: conversation.id,
-    subject: conversation.subject,
-    category: CATEGORY_TO_VIEW[conversation.category],
-    status: conversation.order
-      ? ORDER_STATUS_TO_VIEW[conversation.order.status]
-      : undefined,
-    orderId: conversation.order?.id,
-    messages: conversation.messages.map((message) => ({
+async function toThread(
+  conversation: ConversationWithThread,
+): Promise<ConversationThread> {
+  const messages = await Promise.all(
+    conversation.messages.map(async (message) => ({
       id: message.id,
       author: AUTHOR_TO_VIEW[message.author],
       body: message.body,
@@ -186,16 +189,29 @@ function toThread(conversation: ConversationWithThread): ConversationThread {
           : undefined,
       attachments:
         message.attachments.length > 0
-          ? message.attachments.map((attachment) => ({
-              id: attachment.id,
-              name: attachment.name,
-              size: attachment.sizeBytes,
-              // Short-TTL presigned URL, minted after the ownership check below
-              // (AGENTS.md, Security & PII).
-              href: presignObject(attachment.objectKey),
-            }))
+          ? await Promise.all(
+              message.attachments.map(async (attachment) => ({
+                id: attachment.id,
+                name: attachment.name,
+                size: attachment.sizeBytes,
+                // Short-TTL presigned URL, minted after the ownership check
+                // below (AGENTS.md, Security & PII).
+                href: await presignObject(attachment.objectKey),
+              })),
+            )
           : undefined,
     })),
+  );
+
+  return {
+    id: conversation.id,
+    subject: conversation.subject,
+    category: CATEGORY_TO_VIEW[conversation.category],
+    status: conversation.order
+      ? ORDER_STATUS_TO_VIEW[conversation.order.status]
+      : undefined,
+    orderId: conversation.order?.id,
+    messages,
   };
 }
 
@@ -206,8 +222,15 @@ export async function getConversation(
 ): Promise<ConversationThread> {
   const auth = getAuth(req);
 
+  /*
+   * Scoped to SUPPORT threads, which is a security boundary and not just a
+   * filter: an order conversation may only be answered by that order's assignee,
+   * and this module does not apply that rule. Without the `kind` clause, any
+   * staff member could reach an order thread through the support endpoint and
+   * bypass the lock entirely (modules/conversations owns that check).
+   */
   const conversation = await prisma.conversation.findFirst({
-    where: { id: conversationId, deletedAt: null },
+    where: { id: conversationId, kind: ConversationKind.SUPPORT, deletedAt: null },
     include: threadInclude,
   });
 
@@ -223,7 +246,7 @@ export async function getConversation(
     });
   }
 
-  return toThread(found);
+  return await toThread(found);
 }
 
 // --- Send ----------------------------------------------------------------
@@ -237,8 +260,10 @@ export async function sendMessage(
 ): Promise<MessageView> {
   const auth = getAuth(req);
 
+  // SUPPORT only, for the same reason as the read above: posting into an order
+  // thread from here would sidestep the assignee lock.
   const conversation = await prisma.conversation.findFirst({
-    where: { id: conversationId, deletedAt: null },
+    where: { id: conversationId, kind: ConversationKind.SUPPORT, deletedAt: null },
     select: { id: true, customerId: true },
   });
 
@@ -299,8 +324,15 @@ export async function sendMessage(
 }
 
 // --- Cross-module summaries ----------------------------------------------
-// The dashboard's "pending messages" metric — threads with a reply the customer
-// hasn't opened yet. Derived from the same rule as the list's unread dot.
+/*
+ * The dashboard's "pending messages" metric — threads with a reply the customer
+ * hasn't opened yet. Derived from the same rule as the list's unread dot.
+ *
+ * Deliberately spans both kinds, unlike every other read in this module: the
+ * metric answers "does anything need my attention", and an unread reply from the
+ * specialist on an order counts just as much as one from support. The screens are
+ * separate; the customer's attention is not.
+ */
 export async function countUnreadConversations(userId: string): Promise<number> {
   const conversations = await prisma.conversation.findMany({
     where: { customerId: userId, deletedAt: null },

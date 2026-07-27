@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { formatOrderDate } from '../../lib/format';
 import type { AdminOrderRow } from '../../types/orders';
 import { OrderStatusChip } from './OrderStatusChip';
+import { stopRowClick, useOpenOrderRow } from './rowNavigation';
 
 /*
  * The queue table — the desktop and tablet presentation (mobile renders cards
@@ -23,6 +24,14 @@ import { OrderStatusChip } from './OrderStatusChip';
  * a row checkbox toggles itself, and the header renders indeterminate on a
  * partial selection. The bulk actions those selections feed land with the
  * backend.
+ *
+ * The whole row opens the order. The link only draws the trailing button, but a
+ * queue whose rows are inert is one staff click at and nothing happens, and a
+ * reviewer works this list all day. The reference stays a real anchor, so the
+ * destination is keyboard-reachable and can be opened in a new tab; the row
+ * handler is the convenience layer over it. The select checkbox and the two
+ * links stop the click themselves, so selecting a row never navigates away from
+ * the selection.
  */
 
 type OrdersTableProps = {
@@ -43,6 +52,7 @@ export function OrdersTable({
 }: OrdersTableProps) {
   const allSelected = orders.length > 0 && selectedIds.length === orders.length;
   const someSelected = selectedIds.length > 0 && !allSelected;
+  const openOrderRow = useOpenOrderRow();
 
   return (
     <div className="hidden w-full overflow-x-auto md:block">
@@ -95,11 +105,15 @@ export function OrdersTable({
             return (
               <tr
                 key={order.id}
-                className={`border-b border-gray-200 transition-colors last:border-b-0 ${
+                onClick={() => openOrderRow(order.to)}
+                className={`cursor-pointer border-b border-gray-200 transition-colors last:border-b-0 ${
                   isSelected ? 'bg-primary-light/40' : 'hover:bg-gray-50'
                 }`}
               >
-                <td className="h-14 pl-4 pr-2 align-middle lg:pl-6">
+                <td
+                  className="h-14 pl-4 pr-2 align-middle lg:pl-6"
+                  onClick={stopRowClick}
+                >
                   <input
                     type="checkbox"
                     checked={isSelected}
@@ -112,6 +126,7 @@ export function OrdersTable({
                 <td className="py-2 pr-3 align-middle lg:pr-4">
                   <Link
                     to={order.to}
+                    onClick={stopRowClick}
                     className="whitespace-nowrap text-body font-medium text-primary hover:underline"
                   >
                     {order.reference}
@@ -190,6 +205,7 @@ export function OrdersTable({
                 <td className="py-2 pl-2 pr-4 align-middle text-right lg:pr-6">
                   <Link
                     to={order.to}
+                    onClick={stopRowClick}
                     className="inline-flex h-10 items-center justify-center rounded-input border border-primary px-4 text-body font-semibold text-primary transition-colors hover:bg-primary-light"
                   >
                     {order.actionLabel}

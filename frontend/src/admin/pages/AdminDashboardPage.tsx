@@ -75,11 +75,7 @@ export function AdminDashboardPage(props: AdminDashboardPageProps = {}) {
   const isLoading = props.summary ? Boolean(props.isLoading) : query.isPending;
 
   return (
-    <AdminLayout
-      user={user}
-      notificationCount={summary?.attention.total}
-      onLogout={onLogout}
-    >
+    <AdminLayout user={user} onLogout={onLogout}>
       <div className="w-full p-4 md:p-6 lg:p-content">
         <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-6 lg:gap-8">
           {/*

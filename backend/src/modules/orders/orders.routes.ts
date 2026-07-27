@@ -14,4 +14,10 @@ router.post('/', sensitiveRateLimit, controller.createOrder);
 router.get('/', apiRateLimit, controller.listOrders);
 router.get('/:id', apiRateLimit, controller.getOrder);
 
+// Documents on an existing order. The bytes went straight to R2 through
+// `/v1/uploads`; attaching is a write, and the download mints a short-TTL link
+// per request rather than handing one out with the order detail.
+router.post('/:id/documents', sensitiveRateLimit, controller.attachDocuments);
+router.get('/:id/documents/:documentId', apiRateLimit, controller.getDocumentLink);
+
 export const ordersRouter = router;

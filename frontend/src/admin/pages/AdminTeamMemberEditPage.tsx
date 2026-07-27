@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
+import { Trash2 } from 'lucide-react';
 
 import { ApiError } from '@/services/api';
 import { AdminLayout } from '../components/AdminLayout';
 import {
   AccountDetailsCard,
+  DeleteStaffDialog,
   EditMemberFooter,
   EditMemberHeader,
   RolePermissionsCard,
   useAdminTeamMember,
+  useDeleteTeamMember,
   useUpdateTeamMember,
 } from '../features/team';
 import { useAdminShell } from '../hooks/useAdminShell';
@@ -50,12 +53,15 @@ const TEAM_ROUTE = '/admin/team';
 export function AdminTeamMemberEditPage() {
   const { user, onLogout } = useAdminShell();
   const { memberId = '' } = useParams<{ memberId: string }>();
+  const navigate = useNavigate();
 
   const member = useAdminTeamMember(memberId || null);
   const updateMember = useUpdateTeamMember();
+  const deleteMember = useDeleteTeamMember();
 
   const [draft, setDraft] = useState<TeamMemberEditDraft | null>(null);
   const [showErrors, setShowErrors] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   /*
    * Seed the draft once the record has landed. Keyed on the loaded record, so a
@@ -112,10 +118,32 @@ export function AdminTeamMemberEditPage() {
     updateMember.mutate({ memberId, payload: payloadFromDraft(draft) });
   };
 
+  /*
+   * Deleting returns to the list — the record this screen renders no longer
+   * resolves, so staying here would leave a form over an account that is gone.
+   * `replace` keeps Back from landing on it again.
+   */
+  const onConfirmDelete = () => {
+    if (!memberId || deleteMember.isPending) return;
+
+    deleteMember.mutate(memberId, {
+      onSuccess: () => {
+        setConfirmingDelete(false);
+        navigate(TEAM_ROUTE, { replace: true });
+      },
+    });
+  };
+
   const saveError = updateMember.isError
     ? updateMember.error instanceof ApiError
       ? updateMember.error.message
       : 'Something went wrong saving this member. Please try again.'
+    : null;
+
+  const deleteError = deleteMember.isError
+    ? deleteMember.error instanceof ApiError
+      ? deleteMember.error.message
+      : 'Something went wrong deleting this account. Please try again.'
     : null;
 
   const isLoading = member.isPending || !draft;
@@ -155,11 +183,13 @@ export function AdminTeamMemberEditPage() {
               <AccountDetailsCard
                 name={draft.name}
                 email={draft.email}
+                password={draft.password}
                 isActive={draft.isActive}
                 statusDescription={loadedMember?.statusDescription ?? ''}
                 errors={visibleErrors}
                 onNameChange={(name) => patch({ name })}
                 onEmailChange={(email) => patch({ email })}
+                onPasswordChange={(password) => patch({ password })}
                 onActiveChange={(isActive) => patch({ isActive })}
               />
 
@@ -205,10 +235,48 @@ export function AdminTeamMemberEditPage() {
                 isSaving={updateMember.isPending}
                 onSave={onSave}
               />
+
+              {/*
+               * Deleting the account is separated from the save actions and
+               * drawn in the error colour, so it never reads as another way to
+               * finish the form. A section the design does not cover — logged as
+               * a deviation.
+               */}
+              <section className="flex w-full flex-col gap-4 rounded-card border border-error/30 bg-error/5 p-5 md:flex-row md:items-center md:justify-between md:gap-6 md:p-card">
+                <div className="flex min-w-0 flex-col gap-1">
+                  <h2 className="text-h6 text-text">Delete this account</h2>
+                  <p className="text-small text-text-secondary">
+                    Removes the member from the team and signs them out
+                    everywhere. Work they have already handled stays on the
+                    record.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setConfirmingDelete(true)}
+                  className="flex h-input w-full shrink-0 items-center justify-center gap-2 rounded-control border border-error bg-white px-5 text-button text-error transition-colors hover:bg-error/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-error md:w-auto"
+                >
+                  <Trash2 className="size-[18px]" strokeWidth={1.75} aria-hidden="true" />
+                  Delete account
+                </button>
+              </section>
             </>
           )}
         </div>
       </div>
+
+      <DeleteStaffDialog
+        member={confirmingDelete && loadedMember ? loadedMember : null}
+        isDeleting={deleteMember.isPending}
+        error={deleteError}
+        onCancel={() => {
+          if (deleteMember.isPending) return;
+          deleteMember.reset();
+          setConfirmingDelete(false);
+        }}
+        onConfirm={onConfirmDelete}
+      />
     </AdminLayout>
   );
 }

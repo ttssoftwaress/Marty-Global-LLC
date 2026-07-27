@@ -36,9 +36,12 @@ type MailScanDetailsFormProps = {
   onReceivedOnChange: (value: string) => void;
   notes: string;
   onNotesChange: (value: string) => void;
-  file: MailScanAttachment | null;
-  onFileSelect: (file: File) => void;
-  onFileRemove: () => void;
+  // Ordered — a file's position is the page it is filed as.
+  files: MailScanAttachment[];
+  onFilesAdd: (files: File[]) => void;
+  onFileRemove: (index: number) => void;
+  // 0–1 while the scans upload to R2, null when idle.
+  uploadProgress?: number | null;
   formId: string;
   canSubmit: boolean;
   isSubmitting: boolean;
@@ -53,9 +56,10 @@ export function MailScanDetailsForm({
   onReceivedOnChange,
   notes,
   onNotesChange,
-  file,
-  onFileSelect,
+  files,
+  onFilesAdd,
   onFileRemove,
+  uploadProgress = null,
   formId,
   canSubmit,
   isSubmitting,
@@ -105,9 +109,10 @@ export function MailScanDetailsForm({
       </div>
 
       <MailScanDropZone
-        file={file}
-        onSelect={onFileSelect}
+        files={files}
+        onAdd={onFilesAdd}
         onRemove={onFileRemove}
+        progress={uploadProgress}
       />
 
       <div className="flex w-full flex-col gap-2">

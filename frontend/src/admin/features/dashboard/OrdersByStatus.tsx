@@ -2,9 +2,13 @@ import { formatCount } from '../../lib/format';
 import type { OrderStatus, OrderStatusCount } from '../../types/dashboard';
 
 /*
- * Orders by status — the pipeline at a glance. Desktop lays the six blocks in
- * one row inside the card; tablet and mobile wrap to 3-across over two rows,
- * matching their Figma links.
+ * Orders by status — the pipeline at a glance.
+ *
+ * The Figma links lay six blocks out in a single desktop row (3-across on
+ * tablet and mobile). The pipeline now has eight stages, and six-across would
+ * strand the last two on a half-empty second row, so the grid is 4-across from
+ * tablet up — two even rows — and 2-across on mobile. Deviation logged: the
+ * block styling, dots, and typography are unchanged, only the column count.
  *
  * Each block's dot is the status hue from the design system's status tokens, so
  * a status reads the same here as it does on a badge elsewhere in the app.
@@ -20,6 +24,8 @@ const STATUS_DOT: Record<OrderStatus, string> = {
   under_review: 'bg-warning',
   missing_info: 'bg-error',
   approved: 'bg-success',
+  paid: 'bg-[var(--color-status-paid-text)]',
+  processing: 'bg-[var(--color-status-processing-text)]',
   completed: 'bg-primary',
 };
 
@@ -40,7 +46,7 @@ export function OrdersByStatus({ statuses }: { statuses: OrderStatusCount[] }) {
             No orders in this period yet.
           </p>
         ) : (
-          <ul className="grid w-full grid-cols-3 gap-2.5 md:gap-3 lg:grid-cols-6 lg:gap-4">
+          <ul className="grid w-full grid-cols-2 gap-2.5 md:grid-cols-4 md:gap-3 lg:grid-cols-4 lg:gap-4">
             {statuses.map((status) => (
               <li
                 key={status.status}

@@ -1,4 +1,13 @@
-import { AlertCircle, ArrowUpRight, Check, CheckCircle2, Clock, FileText } from 'lucide-react';
+import {
+  AlertCircle,
+  ArrowUpRight,
+  Check,
+  CheckCircle2,
+  Clock,
+  CreditCard,
+  FileText,
+  Loader,
+} from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 import type { OrderStatus } from '../../types/orders';
@@ -27,6 +36,8 @@ const CONFIG: Record<OrderStatus, { icon: LucideIcon; className: string }> = {
   under_review: { icon: Clock, className: 'status-review' },
   missing_info: { icon: AlertCircle, className: 'status-missing' },
   approved: { icon: CheckCircle2, className: 'status-approved' },
+  paid: { icon: CreditCard, className: 'status-paid' },
+  processing: { icon: Loader, className: 'status-processing' },
   completed: { icon: Check, className: 'status-completed' },
 };
 

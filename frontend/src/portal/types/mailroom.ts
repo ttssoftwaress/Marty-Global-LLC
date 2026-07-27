@@ -22,6 +22,26 @@ export type MailRoom = {
   renewsAt: string; // ISO-8601 UTC — "Renews Mar 12, 2027"
 };
 
+/*
+ * What the customer asked us to do with a piece of mail — the two buttons on the
+ * item viewer. The request lands in the admin mail-ops queue; the backend
+ * decides what happens next and what the item's status becomes, so this is only
+ * the receipt for having asked.
+ *
+ * The forwarding address is deliberately not part of the payload or the reply:
+ * the backend resolves it from the customer's own company record, so it is never
+ * something the client chooses or needs to hold.
+ */
+export type MailRequestType = 'forwarding' | 'shredding';
+
+export type MailRequest = {
+  id: string;
+  mailItemId: string;
+  type: MailRequestType;
+  status: string;
+  requestedAt: string; // ISO-8601 UTC
+};
+
 // The three headline figures across the top of the page.
 export type MailRoomStats = {
   totalRooms: number;
@@ -66,6 +86,23 @@ export type MailItem = {
   responseDueAt?: string; // ISO-8601 UTC — the deadline for an action-requested item
   scanPages?: string[]; // presigned page-image URLs, in order — for the detail view
   pdfUrl?: string; // presigned PDF download, once available
+  /*
+   * Every file the operator attached, each with its own short-lived link.
+   *
+   * `scanPages` above is the subset the viewer can draw inline (the images);
+   * this is the complete set, so a PDF filed alongside them is still reachable.
+   * No object key is ever included — only the URL, minted per request.
+   */
+  files?: MailItemFile[];
+};
+
+// One uploaded file of a scan. `contentType` is what tells the viewer whether to
+// draw it inline or hand it to the browser.
+export type MailItemFile = {
+  name: string;
+  contentType: string | null;
+  sizeBytes: number | null;
+  url: string;
 };
 
 // The three headline figures across the top of a room's inbox.

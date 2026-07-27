@@ -3,6 +3,7 @@ import type { NextFunction, Request, Response } from 'express';
 import { AppError } from '../../lib/app-error.js';
 import * as service from './profile.service.js';
 import {
+  updateAvatarSchema,
   updateCompanySchema,
   updateNotificationPreferencesSchema,
   updateProfileSchema,
@@ -97,6 +98,23 @@ export async function updateNotificationPreferences(
     res.json({
       data: await service.updateNotificationPreferences(req, parsed.data),
     });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function updateAvatar(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const parsed = updateAvatarSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw AppError.validation('Invalid avatar payload', parsed.error.issues);
+    }
+
+    res.json({ data: await service.updateAvatar(req, parsed.data) });
   } catch (error) {
     next(error);
   }

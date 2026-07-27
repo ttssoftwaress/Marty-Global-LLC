@@ -75,7 +75,7 @@ export type OrderServiceCatalog = {
  * generic form (AGENTS.md: the backend resolves amounts; Stripe holds the card).
  * Step 2 is a quote request, so every field is descriptive.
  */
-export type ServiceFieldType = 'text' | 'select' | 'textarea';
+export type ServiceFieldType = 'text' | 'select' | 'textarea' | 'file';
 
 type ServiceFieldBase = {
   // Stable key the answer is stored under, unique within a service's fields.
@@ -107,10 +107,29 @@ export type ServiceTextareaField = ServiceFieldBase & {
   rows?: number;
 };
 
+/*
+ * A document-upload question — an admin-authored file selector. The admin sets
+ * which MIME types the picker offers, the per-file size cap, and whether one
+ * question may collect several files; the customer gets a dropzone in place of
+ * a text input.
+ *
+ * The answer is still a string on the wire, like every other field: the files
+ * upload to R2 separately (AGENTS.md, Storage) and the answer records what was
+ * attached. The selected `File` objects live in the draft's `filesByField` until
+ * that upload step exists.
+ */
+export type ServiceFileField = ServiceFieldBase & {
+  type: 'file';
+  accept?: string[];
+  maxSizeMb?: number;
+  multiple?: boolean;
+};
+
 export type ServiceField =
   | ServiceTextField
   | ServiceSelectField
-  | ServiceTextareaField;
+  | ServiceTextareaField
+  | ServiceFileField;
 
 /*
  * How a service's questions are split into steps — the customer-facing half of
@@ -132,20 +151,27 @@ export type ServiceFormStep = {
 };
 
 /*
- * The Step 2 draft the screen collects before submission. Answers are keyed by
- * service id, then by field name, so each service's section owns its own values
- * independently. Files and notes are application-wide (the design puts one
- * documents card and one notes card below the per-service sections), so they sit
- * at the top level rather than under a service.
+ * The Step 2 draft the screen collects before submission.
  *
- * This is the client-side shape; the submit payload the backend receives is
- * resolved from it (files upload separately to R2 per AGENTS.md — the draft only
- * tracks the selected File objects until then).
+ * Answers are keyed by FIELD NAME, not by service — this is the master form. A
+ * customer ordering three services fills in one merged questionnaire, so a
+ * question two of those services both ask ("company_name") is asked once and
+ * held once. `answersByService`, which is what the backend receives, is derived
+ * from this at submit by fanning each answer back out to every service that
+ * asked for it.
+ *
+ * `filesByField` holds the `File` objects a document-upload question collected,
+ * under the same field key. Files upload separately to R2 (AGENTS.md, Storage);
+ * until that step exists the draft only tracks the selection.
+ *
+ * `documents` and `notes` stay application-wide — the design puts one documents
+ * card and one notes card below the questions, and neither belongs to a service.
  */
 export type ServiceFieldAnswers = Record<string, string>;
 
 export type OrderApplicationDraft = {
-  answersByService: Record<string, ServiceFieldAnswers>;
+  answers: ServiceFieldAnswers;
+  filesByField: Record<string, File[]>;
   documents: File[];
   notes: string;
 };

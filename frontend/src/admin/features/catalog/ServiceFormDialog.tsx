@@ -42,6 +42,16 @@ export function ServiceFormDialog({
   const panelRef = useRef<HTMLDivElement>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
 
+  // `onClose` is a fresh closure on every render of the page holding the form's
+  // draft, so it can't be an effect dependency: the effect would tear down and
+  // re-run on every keystroke, pulling focus out of the field being typed in and
+  // onto the panel's first focusable. The ref keeps the latest handler while the
+  // effect stays tied to `open` alone.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
   useEffect(() => {
     if (!open) return;
 
@@ -49,7 +59,7 @@ export function ServiceFormDialog({
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        onClose();
+        onCloseRef.current();
         return;
       }
 
@@ -88,7 +98,7 @@ export function ServiceFormDialog({
       document.body.style.overflow = overflow;
       restoreFocusRef.current?.focus({ preventScroll: true });
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 

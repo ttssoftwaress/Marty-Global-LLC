@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { formatOrderDate } from '../../lib/format';
 import type { CustomerOrderRow } from '../../types/customer-detail';
 import { OrderStatusChip } from '../orders/OrderStatusChip';
+import { stopRowClick, useOpenOrderRow } from '../orders/rowNavigation';
 
 /*
  * The mobile presentation of the customer's orders — one card per order,
@@ -13,8 +14,10 @@ import { OrderStatusChip } from '../orders/OrderStatusChip';
  * The meta separator is decorative, so it is hidden from assistive tech and the
  * two values read on their own.
  *
- * The whole card is not a link: the button is the row's single primary target,
- * which keeps the card's text selectable.
+ * The whole card opens the order, matching the table it replaces. It is not
+ * wrapped in a link — the button is a link of its own and anchors cannot nest,
+ * and a card-sized anchor would make the reference unselectable — so the card
+ * navigates on tap and the button stops the tap itself.
  */
 
 type CustomerOrderCardListProps = {
@@ -22,12 +25,15 @@ type CustomerOrderCardListProps = {
 };
 
 export function CustomerOrderCardList({ orders }: CustomerOrderCardListProps) {
+  const openOrderRow = useOpenOrderRow();
+
   return (
     <ul className="flex w-full flex-col gap-3 md:hidden">
       {orders.map((order) => (
         <li
           key={order.id}
-          className="flex flex-col gap-3.5 rounded-card border border-gray-200 bg-white p-4 shadow-sm-elevation"
+          onClick={() => openOrderRow(order.to)}
+          className="flex cursor-pointer flex-col gap-3.5 rounded-card border border-gray-200 bg-white p-4 shadow-sm-elevation transition-colors active:bg-gray-50"
         >
           <div className="flex items-start justify-between gap-3">
             <span className="min-w-0 flex-1 truncate text-body font-semibold text-text">
@@ -44,6 +50,7 @@ export function CustomerOrderCardList({ orders }: CustomerOrderCardListProps) {
 
           <Link
             to={order.to}
+            onClick={stopRowClick}
             className="flex h-10 w-full items-center justify-center rounded-input border border-primary text-body font-semibold text-primary transition-colors hover:bg-primary-light"
           >
             View order

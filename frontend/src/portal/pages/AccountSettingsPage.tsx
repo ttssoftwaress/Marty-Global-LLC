@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 
 import { useSession } from '@/auth/client';
+import { ApiError } from '@/services/api';
+import { uploadFile } from '@/services/upload';
 import { PortalLayout } from '../components/PortalLayout';
 import {
   CompanyDetailsCard,
@@ -18,6 +20,7 @@ import {
   useCompanyDetails,
   useNotificationPreferences,
   useProfile,
+  useUpdateAvatar,
   useUpdateCompanyDetails,
   useUpdateNotificationPreferences,
   useUpdateProfile,
@@ -53,13 +56,17 @@ import type {
  * Nothing is hardcoded customer data. Profile, company, and notification
  * preferences each load from and save to `/v1/profile*`; the session fills name
  * and email until the profile record resolves. Save unlocks only once a field
- * actually changes. Change-photo still awaits the R2 upload flow.
+ * actually changes. Change-photo uploads straight to R2 and records the key.
  *
  * Password changes are deliberately not a `/v1/profile` route — Better Auth owns
  * password handling and serves its own endpoint (AGENTS.md, Auth).
  */
 
 const SETTINGS_ROUTE = '/app/settings';
+
+// Matches the ceiling the uploads endpoint enforces for an avatar. Checked here
+// so the customer is told before anything is sent; the backend is the boundary.
+const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
 
 function isSettingsSection(value: string | null): value is SettingsSection {
   return SETTINGS_SECTIONS.some((section) => section.id === value);
@@ -104,6 +111,13 @@ export function AccountSettingsPage() {
 
   const profileQuery = useProfile();
   const updateProfile = useUpdateProfile();
+  const updateAvatar = useUpdateAvatar();
+
+  // The avatar picker is shared by the mobile and desktop renders of the profile
+  // card, so it lives here rather than inside either of them.
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
 
   // Seed from the profile record; the session fills name/email until it
   // resolves, so the fields are never blank on first paint. Re-seeds whenever
@@ -140,8 +154,37 @@ export function AccountSettingsPage() {
 
   const onCancel = () => setForm(initial);
 
-  const onChangePhoto = () => {
-    // Wires to the avatar upload flow once R2 upload lands.
+  /*
+   * Changing the photo opens a picker, uploads the image straight to R2, and
+   * records the resulting key — the bytes never round-trip through the API
+   * (AGENTS.md, Storage). The input lives on the page rather than in the card so
+   * both the mobile and desktop renders of that card share one picker.
+   */
+  const onChangePhoto = () => avatarInputRef.current?.click();
+
+  const onAvatarPicked = async (file: File | undefined) => {
+    if (!file) return;
+
+    if (file.size > AVATAR_MAX_BYTES) {
+      setAvatarError('That image is larger than 5 MB.');
+      return;
+    }
+
+    setAvatarError(null);
+    setIsUploadingAvatar(true);
+
+    try {
+      const uploaded = await uploadFile(file, 'avatar');
+      await updateAvatar.mutateAsync(uploaded.objectKey);
+    } catch (error) {
+      setAvatarError(
+        error instanceof ApiError
+          ? error.message
+          : 'That photo could not be uploaded. Try again.',
+      );
+    } finally {
+      setIsUploadingAvatar(false);
+    }
   };
 
   const companyQuery = useCompanyDetails();
@@ -290,6 +333,8 @@ export function AccountSettingsPage() {
                 value={form}
                 onChange={setField}
                 onChangePhoto={onChangePhoto}
+                isUploadingPhoto={isUploadingAvatar || updateAvatar.isPending}
+                photoError={avatarError}
                 onCancel={onCancel}
                 onSave={onSave}
                 canSave={isDirty}
@@ -432,6 +477,8 @@ export function AccountSettingsPage() {
                 value={form}
                 onChange={setField}
                 onChangePhoto={onChangePhoto}
+                isUploadingPhoto={isUploadingAvatar || updateAvatar.isPending}
+                photoError={avatarError}
                 onCancel={onCancel}
                 onSave={onSave}
                 canSave={isDirty}
@@ -475,6 +522,20 @@ export function AccountSettingsPage() {
           </div>
         </div>
       </div>
+
+      {/* One picker for both renders of the profile card (mobile drill-in and
+          tablet/desktop panel), so neither owns the other's input. */}
+      <input
+        ref={avatarInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="sr-only"
+        aria-label="Upload a profile photo"
+        onChange={(event) => {
+          void onAvatarPicked(event.target.files?.[0]);
+          event.target.value = '';
+        }}
+      />
     </PortalLayout>
   );
 }

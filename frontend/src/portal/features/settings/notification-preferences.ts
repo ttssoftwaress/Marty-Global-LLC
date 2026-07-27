@@ -56,6 +56,11 @@ export const NOTIFICATION_CATEGORIES: NotificationCategoryDef[] = [
     label: 'New messages',
     description: 'Notification of directly sent workspace chat',
   },
+  {
+    id: 'mailUpdates',
+    label: 'Virtual mail',
+    description: 'When post is scanned in or a mail request is completed',
+  },
 ];
 
 // The master row above the categories — email delivery account-wide.

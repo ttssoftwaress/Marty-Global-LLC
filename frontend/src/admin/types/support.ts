@@ -95,10 +95,10 @@ export type SupportConversationsPage = {
 /*
  * One entry in an open thread.
  *
- * Three authorships render differently: the customer's message (left, gray
- * bubble), a staff reply (right, brand-tinted bubble), and an internal note (the
- * full-width amber block that is never visible to the customer). Modelling the
- * note as a message kind rather than a separate list keeps the thread in one
+ * Three authorships render differently: the reader's own messages (right,
+ * brand-tinted bubble), everyone else's (left, gray bubble), and an internal note
+ * (the full-width amber block that is never visible to the customer). Modelling
+ * the note as a message kind rather than a separate list keeps the thread in one
  * chronological stream, which is how the design reads it.
  *
  * `authorName` is the backend's word for who spoke; the frontend adds no title
@@ -109,6 +109,14 @@ export type SupportMessageKind = 'customer' | 'staff' | 'internal_note';
 export type SupportMessage = {
   id: string;
   kind: SupportMessageKind;
+  /*
+   * Which side of the thread this bubble sits on. Resolved per-viewer by the
+   * backend, so it means "I wrote this", not "my side wrote this" — `kind` cannot
+   * stand in for it, because every agent's reply is `staff` and only one of them
+   * is the reader's. A second agent joining a thread sees the first agent's
+   * replies on the left, exactly as the customer sees them.
+   */
+  mine: boolean;
   authorName: string;
   authorInitials: string;
   body: string;

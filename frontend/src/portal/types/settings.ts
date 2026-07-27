@@ -71,7 +71,8 @@ export type NotificationCategory =
   | 'statusUpdates'
   | 'quoteAlerts'
   | 'documentRequests'
-  | 'newMessages';
+  | 'newMessages'
+  | 'mailUpdates';
 
 // One category's three channel switches.
 export type NotificationChannelPrefs = Record<NotificationChannel, boolean>;

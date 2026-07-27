@@ -1,27 +1,39 @@
 import { ChevronDown } from 'lucide-react';
 
 import type { ServiceField } from '../../types/order-new-service';
+import { ApplicationFileField } from './ApplicationFileField';
 
 /*
- * One application-details field, rendered by its schema `type`. The three
- * controls the design uses share a label row (name + red required asterisk) and
- * the design system's field styling (`.input-field` — 48px tall, 10px radius,
- * gray-300 border, navy focus ring); the textarea opts out of the fixed height
- * for a multi-line box, and the select overlays a chevron on a native control.
+ * One application-details field, rendered by its schema `type`. The controls
+ * share a label row (name + red required asterisk) and the design system's field
+ * styling (`.input-field` — 48px tall, 10px radius, gray-300 border, navy focus
+ * ring); the textarea opts out of the fixed height for a multi-line box, the
+ * select overlays a chevron on a native control, and a document-upload question
+ * renders a dropzone instead of an input.
  *
  * A native `<select>` (not a custom popover) is deliberate: it's keyboard- and
  * screen-reader-accessible for free and matches the design's plain chevron
  * dropdown. Everything is controlled — value + onChange come from the page's
- * draft state, keyed per service — so nothing here holds catalog or answer data.
+ * draft state, keyed by field name — so nothing here holds catalog or answer
+ * data.
+ *
+ * `askedBy` is the master form's one addition: when a question came from more
+ * than one selected service, the field says so, which is what makes "asked
+ * once" legible rather than looking like a question went missing.
  */
 
 type ApplicationFieldProps = {
   field: ServiceField;
   value: string;
   onChange: (value: string) => void;
-  // Namespaced so ids stay unique when the same field name appears under two
-  // services (e.g. two "country" fields on one screen).
+  // Namespaced so ids stay unique across screens.
   idPrefix: string;
+  // The files a document-upload question has collected, and the setter for them.
+  // Ignored by every other field type.
+  files?: File[];
+  onFilesChange?: (files: File[]) => void;
+  // Service names this question serves, when more than one asked it.
+  askedBy?: string[];
 };
 
 export function ApplicationField({
@@ -29,9 +41,14 @@ export function ApplicationField({
   value,
   onChange,
   idPrefix,
+  files,
+  onFilesChange,
+  askedBy,
 }: ApplicationFieldProps) {
   const fieldId = `${idPrefix}-${field.name}`;
   const hintId = field.hint ? `${fieldId}-hint` : undefined;
+  const sharedId = askedBy && askedBy.length > 1 ? `${fieldId}-shared` : undefined;
+  const describedBy = [hintId, sharedId].filter(Boolean).join(' ') || undefined;
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -47,7 +64,20 @@ export function ApplicationField({
         )}
       </label>
 
-      {field.type === 'textarea' ? (
+      {field.type === 'file' ? (
+        <ApplicationFileField
+          field={field}
+          files={files ?? []}
+          onChange={(next) => {
+            onFilesChange?.(next);
+            // The answer records what was attached, so an order reads correctly
+            // before the objects themselves reach R2 (AGENTS.md, Storage).
+            onChange(next.map((file) => file.name).join(', '));
+          }}
+          fieldId={fieldId}
+          {...(describedBy ? { describedBy } : {})}
+        />
+      ) : field.type === 'textarea' ? (
         <textarea
           id={fieldId}
           value={value}
@@ -55,7 +85,7 @@ export function ApplicationField({
           required={field.required}
           rows={field.rows ?? 4}
           placeholder={field.placeholder}
-          aria-describedby={hintId}
+          aria-describedby={describedBy}
           className="input-field h-auto resize-y py-3 leading-[1.5]"
         />
       ) : field.type === 'select' ? (
@@ -65,7 +95,7 @@ export function ApplicationField({
             value={value}
             onChange={(event) => onChange(event.target.value)}
             required={field.required}
-            aria-describedby={hintId}
+            aria-describedby={describedBy}
             className={`input-field cursor-pointer appearance-none pr-11 ${
               value ? 'text-text' : 'text-gray-400'
             }`}
@@ -94,7 +124,7 @@ export function ApplicationField({
           onChange={(event) => onChange(event.target.value)}
           required={field.required}
           placeholder={field.placeholder}
-          aria-describedby={hintId}
+          aria-describedby={describedBy}
           className="input-field"
         />
       )}
@@ -102,6 +132,12 @@ export function ApplicationField({
       {field.hint && (
         <p id={hintId} className="text-small text-text-secondary">
           {field.hint}
+        </p>
+      )}
+
+      {sharedId && askedBy && (
+        <p id={sharedId} className="text-small text-text-secondary">
+          Used for {askedBy.join(' · ')}
         </p>
       )}
     </div>

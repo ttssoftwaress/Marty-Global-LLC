@@ -2,11 +2,17 @@ import { formatCount } from '../../lib/format';
 import type { AdminTeamSummary } from '../../types/team';
 
 /*
- * The three headline figures — total members, active members, pending invites.
+ * The three headline figures — total members, active members, deactivated
+ * members.
+ *
+ * The design's third card counted pending invites. There is no invite flow —
+ * an admin creates the login outright — so the card would always read zero;
+ * it counts deactivated accounts instead, which is the state the third filter
+ * tab narrows to. Logged as a deviation.
  *
  * The desktop and tablet links put all three on one row; the mobile link splits
- * them, with the first two sharing a row and "Pending invites" spanning the
- * width beneath. One grid covers it: two columns on mobile with the third card
+ * them, with the first two sharing a row and the third spanning the width
+ * beneath. One grid covers it: two columns on mobile with the third card
  * spanning both, three from `md` up.
  *
  * Every figure comes from the summary query — nothing here is a fixed number.
@@ -28,7 +34,7 @@ export function TeamKpiCards({ summary }: TeamKpiCardsProps) {
   const cards = [
     { label: 'Total team members', value: summary.totalMembers },
     { label: 'Active members', value: summary.activeMembers },
-    { label: 'Pending invites', value: summary.pendingInvites },
+    { label: 'Deactivated', value: summary.deactivatedMembers },
   ];
 
   return (

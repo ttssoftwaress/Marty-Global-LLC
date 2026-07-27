@@ -36,6 +36,8 @@ type ProfileInfoCardProps = {
   value: ProfileInfo;
   onChange: (field: ProfileField['id'], next: string) => void;
   onChangePhoto: () => void;
+  isUploadingPhoto?: boolean;
+  photoError?: string | null;
   onCancel: () => void;
   onSave: () => void;
   canSave: boolean;
@@ -49,6 +51,8 @@ export function ProfileInfoCard({
   value,
   onChange,
   onChangePhoto,
+  isUploadingPhoto = false,
+  photoError = null,
   onCancel,
   onSave,
   canSave,
@@ -82,15 +86,36 @@ export function ProfileInfoCard({
           }`}
           aria-hidden="true"
         >
-          {initials(value.fullName)}
+          {/*
+           * The presigned avatar when there is one, initials otherwise. The URL
+           * is short-lived by design (AGENTS.md, Security & PII), so it comes
+           * from the profile query rather than being cached here.
+           */}
+          {value.avatarUrl ? (
+            <img
+              src={value.avatarUrl}
+              alt=""
+              className="size-full rounded-full object-cover"
+            />
+          ) : (
+            initials(value.fullName)
+          )}
         </div>
-        <button
-          type="button"
-          onClick={onChangePhoto}
-          className="inline-flex h-10 items-center justify-center rounded-input border border-primary bg-white px-4 text-[14px] font-semibold text-primary transition-colors hover:bg-primary-light"
-        >
-          Change photo
-        </button>
+        <div className="flex flex-col items-center gap-1 md:items-start">
+          <button
+            type="button"
+            onClick={onChangePhoto}
+            disabled={isUploadingPhoto}
+            className="inline-flex h-10 items-center justify-center rounded-input border border-primary bg-white px-4 text-[14px] font-semibold text-primary transition-colors hover:bg-primary-light disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isUploadingPhoto ? 'Uploading…' : 'Change photo'}
+          </button>
+          {photoError ? (
+            <p role="alert" className="text-small text-error">
+              {photoError}
+            </p>
+          ) : null}
+        </div>
       </div>
 
       {/* Fields */}

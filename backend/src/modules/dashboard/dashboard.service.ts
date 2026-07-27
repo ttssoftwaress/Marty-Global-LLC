@@ -22,6 +22,8 @@ const STATUS_TO_VIEW: Record<OrderStatus, string> = {
   [OrderStatus.UNDER_REVIEW]: 'under_review',
   [OrderStatus.MISSING_INFO]: 'missing_info',
   [OrderStatus.APPROVED]: 'approved',
+  [OrderStatus.PAID]: 'paid',
+  [OrderStatus.PROCESSING]: 'processing',
   [OrderStatus.COMPLETED]: 'completed',
 };
 
@@ -31,6 +33,8 @@ const ACTIVE_STATUSES: OrderStatus[] = [
   OrderStatus.UNDER_REVIEW,
   OrderStatus.MISSING_INFO,
   OrderStatus.APPROVED,
+  OrderStatus.PAID,
+  OrderStatus.PROCESSING,
 ];
 
 // The feed row's category picks the activity icon and tint; the dashboard's set
