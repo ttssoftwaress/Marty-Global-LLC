@@ -18,10 +18,15 @@ type NavLink = {
   href: string;
 };
 
+// FAQ sits between "How It Works" and "About Us" — it answers the questions a
+// visitor has right after reading the process, and before deciding to contact
+// us. Six links is the most the tablet row holds at its condensed size, so the
+// gap tightens there rather than the row wrapping.
 const NAV_LINKS: NavLink[] = [
   { label: 'Home', href: '/' },
   { label: 'Services', href: '/services' },
   { label: 'How It Works', href: '/how-it-works' },
+  { label: 'FAQ', href: '/faq' },
   { label: 'About Us', href: '/about' },
   { label: 'Contact', href: '/contact' },
 ];
@@ -48,7 +53,7 @@ export function Navbar() {
         />
       </Link>
 
-      <nav className="hidden items-center md:flex md:gap-5 lg:gap-8">
+      <nav className="hidden items-center md:flex md:gap-3.5 lg:gap-7">
         {NAV_LINKS.map((link) => (
           <NavItem key={link.label} link={link} active={isActive(link.href, pathname)} />
         ))}

@@ -24,8 +24,12 @@ import type {
  * the signed-in customer.
  */
 
+// Exported so the shell's live-badge hook invalidates exactly this subtree
+// rather than re-declaring the same literal beside it.
+export const ROOT_KEY = ['notifications'] as const;
+
 export const notificationFeedKey = (filter: NotificationFilter) =>
-  ['notifications', 'feed', filter] as const;
+  [...ROOT_KEY, 'feed', filter] as const;
 
 // GET /v1/notifications?filter=&cursor=&limit= — one page of the customer's
 // feed. The backend resolves the filter, the per-row date group, the unread
@@ -64,7 +68,7 @@ export function useNotificationFeed(filter: NotificationFilter) {
 
 const PANEL_LIMIT = 8;
 
-export const notificationPanelKey = () => ['notifications', 'panel'] as const;
+export const notificationPanelKey = () => [...ROOT_KEY, 'panel'] as const;
 
 // GET /v1/notifications?filter=all&limit=
 export function useNotificationPanel() {
@@ -82,7 +86,7 @@ export function useNotificationPanel() {
 // refresh all of them rather than just the caller's view.
 function useInvalidateNotifications() {
   const queryClient = useQueryClient();
-  return () => queryClient.invalidateQueries({ queryKey: ['notifications'] });
+  return () => queryClient.invalidateQueries({ queryKey: ROOT_KEY });
 }
 
 // POST /v1/notifications/read-all — the panel's "Mark all as read".

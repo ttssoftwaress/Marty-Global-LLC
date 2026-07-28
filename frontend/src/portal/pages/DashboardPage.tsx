@@ -73,11 +73,7 @@ export function DashboardPage(props: DashboardPageProps = {}) {
   const firstName = summary?.customerFirstName ?? firstNameOf(user.name);
 
   return (
-    <PortalLayout
-      user={user}
-      notificationCount={summary?.metrics.unreadMail}
-      onLogout={onLogout}
-    >
+    <PortalLayout user={user} onLogout={onLogout}>
       <div className="w-full p-4 md:p-6 lg:p-content">
         <div className="mx-auto flex w-full max-w-[75rem] flex-col gap-5 md:gap-6 lg:gap-8">
           {isLoading || !summary ? (

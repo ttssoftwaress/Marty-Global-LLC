@@ -1,7 +1,15 @@
-import { useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import { useCompactScale } from '@/hooks/useCompactScale';
-import { NotificationsPanel } from '../features/notifications';
+import { useUnreadCounts } from '@/hooks/useUnreadCounts';
+import {
+  NotificationsPanel,
+  notificationsRootKey,
+  useMarkAllNotificationsRead,
+  useMarkNotificationRead,
+  useNotificationPanel,
+} from '../features/notifications';
 import { SupportWidget } from '../features/support';
 import type { Notification } from '../types/notifications';
 import { PortalSidebar, type SidebarUser } from './sidebar';
@@ -15,42 +23,57 @@ import { PortalTopBar } from './topbar';
  * and top bar stay put on long pages. Mobile has no persistent sidebar, so the
  * drawer's open state lives here — the top bar's hamburger toggles it.
  *
- * The notification panel is owned here too: the top bar's bell opens it, and it
- * renders as a dropdown (tablet/desktop) or bottom sheet (mobile). Its feed
- * arrives from the future `notifications` query the same way `notificationCount`
- * does — the shell just presents whatever the page passes in.
+ * Notifications are owned here rather than passed in per page, for the reason
+ * the admin shell already records: the bell is in the top bar of every portal
+ * screen, so its feed and its badge have to resolve on every portal screen.
+ * Threading them through each page meant a page that forgot got a dead bell —
+ * and fifteen of the seventeen did, which is what this fixes. One query in the
+ * shell is also one cache entry shared across navigation rather than a refetch
+ * per page; the notifications screen reads the same key and hits that cache.
  */
 
 type PortalLayoutProps = {
   user: SidebarUser;
-  notificationCount?: number;
-  notifications?: Notification[];
-  notificationsLoading?: boolean;
-  onMarkAllNotificationsRead?: () => void;
-  onSelectNotification?: (notification: Notification) => void;
   onLogout?: () => void;
   children: ReactNode;
 };
 
-export function PortalLayout({
-  user,
-  notificationCount,
-  notifications = [],
-  notificationsLoading,
-  onMarkAllNotificationsRead,
-  onSelectNotification,
-  onLogout,
-  children,
-}: PortalLayoutProps) {
+export function PortalLayout({ user, onLogout, children }: PortalLayoutProps) {
   useCompactScale();
 
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
 
+  const navigate = useNavigate();
+  const panel = useNotificationPanel();
+  const markRead = useMarkNotificationRead();
+  const markAllRead = useMarkAllNotificationsRead();
+
+  // Live counters off the shared socket, so a notification that arrives while
+  // the customer sits on a page moves the badge without a refetch.
+  const unread = useUnreadCounts(
+    panel.data?.unreadCount ?? 0,
+    notificationsRootKey,
+  );
+
+  const notifications = useMemo(
+    () => panel.data?.notifications ?? [],
+    [panel.data],
+  );
+
+  // Opening a row marks it read and then navigates. The row is a Link, so the
+  // navigation would happen on its own; doing it here keeps both halves in one
+  // place and lets an informational row (no href) still be marked read.
+  const onSelectNotification = (notification: Notification) => {
+    if (!notification.read) markRead.mutate(notification.id);
+    if (notification.href) navigate(notification.href);
+  };
+
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-gray-50">
       <PortalSidebar
         user={user}
+        badges={{ notifications: unread.notifications, support: unread.messages }}
         mobileOpen={mobileNavOpen}
         onMobileClose={() => setMobileNavOpen(false)}
         onLogout={onLogout}
@@ -59,7 +82,7 @@ export function PortalLayout({
       <div className="flex min-w-0 flex-1 flex-col">
         <PortalTopBar
           user={user}
-          notificationCount={notificationCount}
+          notificationCount={unread.notifications}
           onOpenMenu={() => setMobileNavOpen(true)}
           onOpenNotifications={() => setNotificationsOpen(true)}
         />
@@ -71,12 +94,12 @@ export function PortalLayout({
         open={notificationsOpen}
         onClose={() => setNotificationsOpen(false)}
         notifications={notifications}
-        isLoading={notificationsLoading}
+        isLoading={panel.isLoading}
         onSelect={onSelectNotification}
-        onMarkAllRead={onMarkAllNotificationsRead}
+        onMarkAllRead={() => markAllRead.mutate()}
       />
 
-      {/* Live chat, on every portal screen. It hides itself on /app/messages,
+      {/* Live chat, on every portal screen. It hides itself on /app/support,
           where the conversation already fills the page. */}
       <SupportWidget />
     </div>

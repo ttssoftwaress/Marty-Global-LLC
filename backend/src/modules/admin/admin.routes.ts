@@ -1,6 +1,7 @@
 import { Router } from 'express';
 
 import { requireAuth, requireStaff } from '../../guards/index.js';
+import { adminAuditRouter } from './audit/audit.routes.js';
 import { adminCatalogRouter } from './catalog/catalog.routes.js';
 import { adminConversationsRouter } from './conversations/conversations.routes.js';
 import { adminCustomersRouter } from './customers/customers.routes.js';
@@ -110,5 +111,16 @@ router.use('/reports', adminReportsRouter);
  * operational decision, not a line in a seed script.
  */
 router.use('/settings', adminSettingsRouter);
+/*
+ * The audit log — the read-only trail of who did what, across every section
+ * above. Until this mount existed the `AuditLog` table was written by every
+ * admin write and read by nothing, which makes a trail evidence nobody can
+ * examine.
+ *
+ * Read-only, and deliberately so: it offers two GETs and no write of any kind.
+ * Its own `audit` area rather than admin-only, so reviewing the trail can be
+ * delegated without also handing over the power to change what it records.
+ */
+router.use('/audit', adminAuditRouter);
 
 export const adminRouter = router;

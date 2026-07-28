@@ -2,6 +2,7 @@ import { SidebarDesktop } from './SidebarDesktop';
 import { SidebarMobileDrawer } from './SidebarMobileDrawer';
 import { SidebarTablet } from './SidebarTablet';
 import type { SidebarUser } from './SidebarUserBlock';
+import type { PortalNavBadges } from './nav-items';
 
 /*
  * Portal sidebar — the responsive shell. One design across three breakpoints:
@@ -16,6 +17,8 @@ import type { SidebarUser } from './SidebarUserBlock';
 
 type PortalSidebarProps = {
   user: SidebarUser;
+  // The live unread counters the shell holds, resolved per item by `badge` key.
+  badges?: PortalNavBadges;
   mobileOpen: boolean;
   onMobileClose: () => void;
   onLogout?: () => void;
@@ -23,18 +26,29 @@ type PortalSidebarProps = {
 
 export function PortalSidebar({
   user,
+  badges,
   mobileOpen,
   onMobileClose,
   onLogout,
 }: PortalSidebarProps) {
   return (
     <>
-      <SidebarTablet onLogout={onLogout} className="hidden md:flex lg:hidden" />
-      <SidebarDesktop user={user} onLogout={onLogout} className="hidden lg:flex" />
+      <SidebarTablet
+        badges={badges}
+        onLogout={onLogout}
+        className="hidden md:flex lg:hidden"
+      />
+      <SidebarDesktop
+        user={user}
+        badges={badges}
+        onLogout={onLogout}
+        className="hidden lg:flex"
+      />
       <SidebarMobileDrawer
         open={mobileOpen}
         onClose={onMobileClose}
         user={user}
+        badges={badges}
         onLogout={onLogout}
       />
     </>

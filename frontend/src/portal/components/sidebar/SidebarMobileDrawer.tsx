@@ -1,21 +1,22 @@
 import { useEffect, useRef } from 'react';
-import { HelpCircle, LogOut, X } from 'lucide-react';
+import { LogOut, X } from 'lucide-react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 
 import logoWhite from '@/assets/Marty-Logo-White.png';
 import { useOverlay } from '@/hooks/useOverlay';
+import { NavBadge } from './NavBadge';
 import { SidebarUserBlock, type SidebarUser } from './SidebarUserBlock';
 import {
   PORTAL_NAV_ITEMS,
-  PORTAL_SUPPORT_LINK,
   isNavItemActive,
+  type PortalNavBadges,
 } from './nav-items';
 import { isServiceNavItemActive, useServiceNavItems } from './useServiceNavItems';
 
 /*
  * Portal sidebar — mobile (below md). A 280px drawer that slides in over the
  * page behind a scrim. Same nav list as desktop, but the logo row carries a
- * close button and the foot reverses order: utility links, a hairline rule,
+ * close button and the foot reverses order: logout, a hairline rule,
  * then the user block.
  *
  * The design covers only the open panel; the overlay behaviour it implies —
@@ -27,6 +28,7 @@ type SidebarMobileDrawerProps = {
   open: boolean;
   onClose: () => void;
   user: SidebarUser;
+  badges?: PortalNavBadges;
   onLogout?: () => void;
 };
 
@@ -34,6 +36,7 @@ export function SidebarMobileDrawer({
   open,
   onClose,
   user,
+  badges,
   onLogout,
 }: SidebarMobileDrawerProps) {
   const { pathname } = useLocation();
@@ -132,6 +135,7 @@ export function SidebarMobileDrawer({
                     >
                       <Icon className="size-5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
                       <span className="min-w-0 flex-1 break-words">{item.label}</span>
+                      {item.badge ? <NavBadge count={badges?.[item.badge] ?? 0} /> : null}
                     </NavLink>
                   </li>
                 );
@@ -181,15 +185,6 @@ export function SidebarMobileDrawer({
 
         <div className="flex w-full flex-col gap-6 pt-8">
           <div className="flex w-full flex-col gap-3">
-            <Link
-              to={PORTAL_SUPPORT_LINK.to}
-              onClick={onClose}
-              className="flex items-center gap-2 text-body font-medium text-white/80 transition-colors hover:text-white"
-            >
-              <HelpCircle className="size-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
-              <span className="whitespace-nowrap">{PORTAL_SUPPORT_LINK.label}</span>
-            </Link>
-
             <button
               type="button"
               onClick={onLogout}

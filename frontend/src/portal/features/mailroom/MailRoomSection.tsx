@@ -16,7 +16,9 @@ import { MailRoomCard } from './MailRoomCard';
  * with no rooms yet gets a clear next step instead of a bare gap.
  */
 
-const NEW_ROOM_ROUTE = '/app/mailroom/new';
+// A mail room is bought like any other service, so there is no wizard of its
+// own: both Add-new-room actions drop the customer into the order flow.
+const NEW_ROOM_ROUTE = '/app/order';
 
 function EmptyState() {
   return (

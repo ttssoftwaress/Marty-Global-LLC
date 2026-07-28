@@ -118,8 +118,8 @@ export function KpiCards({ metrics }: { metrics: DashboardMetrics }) {
       <KpiCard
         label="Pending messages"
         value={String(metrics.pendingMessages)}
-        linkLabel="Messages"
-        to="/app/messages"
+        linkLabel="Support"
+        to="/app/support"
       />
     </div>
   );

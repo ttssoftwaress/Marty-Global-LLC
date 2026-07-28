@@ -1887,5 +1887,28 @@ model AuditLog {
 
   @@index([entityType, entityId])
   @@index([actorId, createdAt])
+  /*
+   * The two indexes above answer "what happened to this record" and "what did
+   * this person do". Neither answers the question the admin viewer actually
+   * asks, which is "what happened, newest first" — so every query on that screen
+   * was a sequential scan plus a sort over the whole table.
+   *
+   * Harmless at a few thousand rows, but this is the one table in the schema
+   * that only ever grows: nothing deletes from it, by design. A seq scan here is
+   * a screen that gets measurably slower every week it stays open.
+   *
+   * `createdAt DESC, id DESC` matches the list's ORDER BY exactly, including the
+   * id tiebreak — one request routinely writes several entries in the same
+   * millisecond, and without the tiebreak in the index the cursor could skip or
+   * repeat a row across pages.
+   */
+  @@index([createdAt(sort: Desc), id(sort: Desc)])
+  /*
+   * The category and action filters, and the failed-sign-in KPI. All three
+   * filter on `action` and then sort by time, which is the composite this
+   * serves — an index on `action` alone would still leave the sort to a heap
+   * scan on the largest category.
+   */
+  @@index([action, createdAt(sort: Desc)])
   @@map("audit_log")
 }

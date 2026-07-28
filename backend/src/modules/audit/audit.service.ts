@@ -36,6 +36,13 @@ export const AuditAction = {
    * customer's own words and routinely names them).
    */
   ORDER_DOCUMENT_ACCESSED: 'order.document_accessed',
+  /*
+   * Staff asking the customer to upload something. Recorded because it is the
+   * start of a request for identity paperwork and explains why a customer was
+   * emailed — the metadata carries the row id, never the requested name, which
+   * is free text a reviewer typed and can name the document's holder.
+   */
+  ORDER_DOCUMENT_REQUESTED: 'order.document_requested',
   QUOTE_SENT: 'billing.quote_sent',
   QUOTE_CANCELLED: 'billing.quote_cancelled',
   SERVICE_CREATED: 'catalog.service_created',
@@ -126,6 +133,51 @@ export const AuditAction = {
   STAFF_DELETED: 'team.member_deleted',
   CONVERSATION_ASSIGNED: 'support.conversation_assigned',
   CONVERSATION_STATUS_CHANGED: 'support.conversation_status_changed',
+  /*
+   * Authentication events, written by `audit.auth-hook.ts` from Better Auth's
+   * own request lifecycle rather than by a service.
+   *
+   * They are here because every other entry in this table answers "who changed
+   * this record", and none of them answer the question that comes first: who got
+   * in, when, and from where. A trail showing an admin changed a member's role
+   * is only evidence if it also shows that account signing in — otherwise a
+   * stolen session and a legitimate one are indistinguishable after the fact.
+   *
+   * SIGN_IN_FAILED is the one entry written for something that did NOT happen,
+   * and it is the most useful of the four: a burst of them against one account
+   * is a credential-stuffing attempt, and the rate limiter's counters live in
+   * Redis with a 15-minute window, so nothing else keeps that history.
+   *
+   * The metadata carries the reason and the auth method, never the submitted
+   * password, and never the email — a failed attempt's address is an unverified
+   * string from an anonymous caller, and storing it would fill the trail with
+   * attacker-chosen PII (AGENTS.md, Security & PII). The actor id identifies the
+   * account when one matched; when none did, that absence IS the finding.
+   */
+  SIGN_IN: 'auth.sign_in',
+  SIGN_IN_FAILED: 'auth.sign_in_failed',
+  SIGN_OUT: 'auth.sign_out',
+  SIGN_UP: 'auth.sign_up',
+  // Set, changed, or reset — see `audit.auth-hook.ts` for how the three are
+  // told apart. Never carries the password, only which route changed it.
+  PASSWORD_CHANGED: 'auth.password_changed',
+  PASSWORD_RESET_REQUESTED: 'auth.password_reset_requested',
+  // A customer changing their own email moves the address every notification
+  // and every reset link goes to, which makes it an account-takeover step worth
+  // recording. The addresses themselves are PII and stay out of the metadata.
+  EMAIL_CHANGED: 'auth.email_changed',
+  /*
+   * The authorization role on the user row — the only field the guards read
+   * (lib/roles.ts). STAFF_UPDATED already records a team edit's role change, but
+   * this fires wherever the column moves, including Better Auth's own admin
+   * plugin routes, which never pass through the team service.
+   */
+  ROLE_CHANGED: 'auth.role_changed',
+  // Better Auth's admin plugin can ban an account or revoke its sessions
+  // out-of-band from the team screen. Same reasoning as ROLE_CHANGED.
+  ACCOUNT_BANNED: 'auth.account_banned',
+  ACCOUNT_UNBANNED: 'auth.account_unbanned',
+  SESSIONS_REVOKED: 'auth.sessions_revoked',
 } as const;
 
 export type AuditAction = (typeof AuditAction)[keyof typeof AuditAction];

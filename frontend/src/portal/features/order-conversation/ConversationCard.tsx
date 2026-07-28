@@ -12,7 +12,7 @@ import { useSendOrderMessage } from './queries';
  * The conversation on an order — the customer talking to the specialist handling
  * their filing.
  *
- * This is not the Messages screen. Messages is general support, routed to
+ * This is not the Support screen. Support is general help, routed to
  * whichever agent is free; this thread belongs to one order and only its
  * assignee can answer it. The header says so in as many words, because a
  * customer who thinks they are talking to a 24/7 helpdesk will read a slow reply
@@ -232,7 +232,7 @@ export function ConversationCard({ conversation }: ConversationCardProps) {
       <p className="text-small text-gray-500">
         Messages about this order, with the specialist handling it. For anything
         else, use{' '}
-        <span className="font-medium text-gray-600">Messages</span>.
+        <span className="font-medium text-gray-600">Support</span>.
       </p>
 
       {count === 0 ? (

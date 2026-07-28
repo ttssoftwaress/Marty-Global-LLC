@@ -3,12 +3,14 @@ import { useNavigate } from 'react-router-dom';
 
 import {
   AdminNotificationsPanel,
+  adminNotificationsRootKey,
   useAdminNotificationPanel,
   useMarkAdminNotificationRead,
   useMarkAllAdminNotificationsRead,
 } from '@/admin/features/notifications';
 import { useAdminMe } from '@/admin/queries/admin-me';
 import { useCompactScale } from '@/hooks/useCompactScale';
+import { useUnreadCounts } from '@/hooks/useUnreadCounts';
 import type { AdminNotification } from '@/admin/types/notifications';
 import { AdminSidebar, type AdminSidebarUser } from './sidebar';
 import { AdminTopBar } from './topbar';
@@ -83,7 +85,16 @@ export function AdminLayout({
     () => panel.data?.notifications ?? [],
     [panel.data],
   );
-  const unreadCount = panel.data?.unreadCount ?? 0;
+
+  // The fetched count seeds the badge; the socket keeps it right afterwards, so
+  // a notification arriving while a member sits on a screen moves it without a
+  // refetch. Same hook the portal shell uses — the counters are per-user, and a
+  // staff member is a user like any other.
+  const unread = useUnreadCounts(
+    panel.data?.unreadCount ?? 0,
+    adminNotificationsRootKey,
+  );
+  const unreadCount = unread.notifications;
 
   // Opening a row marks it read and then navigates. The row is a Link, so the
   // navigation would happen on its own; doing it here keeps both halves in one
@@ -98,6 +109,7 @@ export function AdminLayout({
       <AdminSidebar
         user={sidebarUser}
         permissions={me.data?.permissions}
+        badges={{ notifications: unreadCount, support: unread.messages }}
         mobileOpen={mobileNavOpen}
         onMobileClose={() => setMobileNavOpen(false)}
         onLogout={onLogout}

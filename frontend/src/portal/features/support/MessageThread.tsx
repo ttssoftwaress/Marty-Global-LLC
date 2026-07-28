@@ -1,4 +1,4 @@
-import type { ConversationSummary, ConversationThread } from '../../types/messages';
+import type { ConversationSummary, ConversationThread } from '../../types/support';
 import { Composer } from './Composer';
 import { MessageList } from './MessageList';
 import { ThreadHeader } from './ThreadHeader';

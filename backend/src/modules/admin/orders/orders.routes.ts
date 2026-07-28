@@ -30,6 +30,16 @@ router.get(
   apiRateLimit,
   controller.getDocumentLink,
 );
+/*
+ * Asking the customer for a document. A write that leaves the building — it
+ * queues them an email and puts a row on their order — so it takes the same
+ * limiter as the reply below.
+ */
+router.post(
+  '/:orderId/documents/request',
+  sensitiveRateLimit,
+  controller.requestDocument,
+);
 router.patch('/:orderId', sensitiveRateLimit, controller.updateOrder);
 // Replying to a customer is a write that leaves the building (it queues them an
 // email), so it takes the same limiter as the status change beside it.

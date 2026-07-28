@@ -17,6 +17,7 @@ import {
   type ConversationAccess,
   type SocketIdentity,
 } from './access.js';
+import { readUnread } from './broadcast.js';
 import {
   ClientEvent,
   ServerEvent,
@@ -118,12 +119,9 @@ function emitPresence(
  * that those conversations exist.
  */
 async function pushUnread(io: Server, userId: string): Promise<void> {
-  const [messages, notifications] = await Promise.all([
-    support.countUnreadConversations(userId),
-    prisma.feedNotification.count({ where: { userId, deletedAt: null, readAt: null } }),
-  ]);
-
-  io.to(userRoom(userId)).emit(ServerEvent.UNREAD, { messages, notifications });
+  // Both counters come from `readUnread` so this push and the REST endpoint the
+  // badge loads from can never report different numbers.
+  io.to(userRoom(userId)).emit(ServerEvent.UNREAD, await readUnread(userId));
 }
 
 // --- Message fan-out -------------------------------------------------------

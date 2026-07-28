@@ -1,8 +1,10 @@
 import {
   ConversationKind,
+  FeedNotificationCategory,
   OrderActivityAuthor,
   OrderDocumentSource,
   OrderDocumentStatus,
+  type OrderDocument,
   OrderItemStatus,
   OrderStatus,
   Prisma,
@@ -10,6 +12,7 @@ import {
   StaffStatus,
 } from '@prisma/client';
 
+import { publicAppUrl } from '../../../config/env.js';
 import type { AuthContext } from '../../../guards/auth-context.js';
 import { AppError } from '../../../lib/app-error.js';
 import { toInitials } from '../../../lib/initials.js';
@@ -21,7 +24,13 @@ import { Role } from '../../../lib/roles.js';
 import { presignObject } from '../../../lib/storage.js';
 import { AuditAction, record } from '../../audit/audit.service.js';
 import { syncAssignee } from '../../conversations/conversations.service.js';
+import { channelsFor } from '../../notifications/notifications.preferences.js';
 import { queueEmail } from '../../notifications/notifications.service.js';
+import { notifyFeed } from '../../notifications/notifications.feed.js';
+import {
+  notifyDocumentRequested,
+  notifyOrderStatusChanged,
+} from '../../orders/orders.notifications.js';
 import {
   itemAnswerFields,
   orderAnswerKeys,
@@ -49,6 +58,7 @@ import type {
   AddActivityInput,
   DocumentLinkQuery,
   ListOrdersQuery,
+  RequestDocumentInput,
   UpdateOrderInput,
 } from './orders.validation.js';
 
@@ -546,9 +556,7 @@ const detailInclude = {
 
 type OrderDetailRecord = Prisma.OrderGetPayload<{ include: typeof detailInclude }>;
 
-function toDocument(
-  document: OrderDetailRecord['documents'][number],
-): AdminOrderDocument {
+function toDocument(document: OrderDocument): AdminOrderDocument {
   return {
     id: document.id,
     name: document.name,
@@ -782,7 +790,13 @@ export async function updateOrder(
   // Same scope as the read: a member can only move an order they hold.
   const existing = await prisma.order.findFirst({
     where: { id: orderId, ...ACTIVE_ORDERS, ...(await visibleScope(actor)) },
-    select: { id: true, status: true, assigneeId: true, reference: true },
+    select: {
+      id: true,
+      status: true,
+      assigneeId: true,
+      reference: true,
+      customerId: true,
+    },
   });
 
   if (!existing) throw AppError.notFound('Order not found');
@@ -957,13 +971,32 @@ export async function updateOrder(
     return tx.order.findFirstOrThrow({ where: { id: orderId }, include: rowInclude });
   });
 
-  if (statusChanged) {
+  if (statusChanged && nextStatus) {
     void record({
       actor,
       action: AuditAction.ORDER_STATUS_CHANGED,
       entityType: 'Order',
       entityId: orderId,
       metadata: { from: existing.status, to: order.status, reference: existing.reference },
+    });
+
+    /*
+     * Tell the customer their filing moved.
+     *
+     * The activity row written inside the transaction is the order's history —
+     * it is there whenever they open the order. This is the push that tells them
+     * to go and look, which is a different thing and is the one they can mute.
+     *
+     * After the commit, never inside it: a rolled back status change must not
+     * leave a notification claiming it happened. Fire-and-forget for the same
+     * reason the audit call above is — a reviewer's status change must not fail
+     * because the customer's feed row could not be written.
+     */
+    void notifyOrderStatusChanged({
+      customerId: existing.customerId,
+      orderId,
+      reference: existing.reference,
+      status: nextStatus,
     });
   }
 
@@ -1045,7 +1078,33 @@ export async function addActivity(
     metadata: { internal, reference: order.reference },
   });
 
+  /*
+   * An internal note never reaches the customer at all; a visible reply is a
+   * status update on their filing, so it is gated on that category. Muting it
+   * only silences the email — the reply itself is already on the order page,
+   * which is where a customer who turned emails off expects to read it.
+   */
+  const notify =
+    !internal && (await channelsFor(order.customerId, 'statusUpdates')).email;
+
+  /*
+   * The in-app half of the same reply. Without it a customer with email muted
+   * had no way at all to learn a reviewer had answered them — the reply sat on
+   * the order page waiting to be stumbled upon, which is the gap the bell exists
+   * to close. Gated independently of the email, because they are separate
+   * toggles on the settings screen.
+   */
   if (!internal) {
+    void notifyFeed({
+      userId: order.customerId,
+      preference: 'statusUpdates',
+      category: FeedNotificationCategory.ORDER,
+      message: `${authorName} replied to your order ${order.reference}.`,
+      href: `/app/orders/${order.id}`,
+    });
+  }
+
+  if (notify) {
     // The reply is already committed; a failure to queue the email must not undo
     // it or fail the request. Log the ids and move on — the customer still sees
     // the reply on their order page.
@@ -1062,6 +1121,89 @@ export async function addActivity(
   }
 
   return toActivityEntry(entry);
+}
+
+/*
+ * Ask the customer to upload a document.
+ *
+ * The row is the request. `OrderDocument` already models exactly this — a
+ * PENDING row is a placeholder with no object behind it — so a request is that
+ * row with `source: CUSTOMER`, meaning the customer owes us the file rather than
+ * the other way round. Their upload endpoint fills the same row in, so nothing
+ * downstream has to learn a second shape, and the Documents card renders the
+ * outstanding request beside the documents that already exist.
+ *
+ * This is the only writer of the DOCUMENT feed category, and the only caller of
+ * the `documentRequests` preference — the row of the settings screen that
+ * offered a toggle over nothing until now.
+ */
+export async function requestDocument(
+  actor: AuthContext,
+  orderId: string,
+  input: RequestDocumentInput,
+): Promise<AdminOrderDocument> {
+  // Same scope as replying to the customer: asking them for identity paperwork
+  // is acting on the filing.
+  const order = await prisma.order.findFirst({
+    where: { id: orderId, ...ACTIVE_ORDERS, ...(await visibleScope(actor)) },
+    select: { id: true, reference: true, customerId: true },
+  });
+
+  if (!order) throw AppError.notFound('Order not found');
+
+  const authorName = await staffDisplayName(actor.userId);
+
+  /*
+   * The placeholder and the activity row in one transaction. A request the
+   * customer can see on the card but that left no trace of who asked or when is
+   * the drift worth designing against — the order's history is how they tell a
+   * request from a document we simply have not filed yet.
+   */
+  const document = await prisma.$transaction(async (tx) => {
+    const created = await tx.orderDocument.create({
+      data: {
+        orderId,
+        name: input.name,
+        status: OrderDocumentStatus.PENDING,
+        source: OrderDocumentSource.CUSTOMER,
+      },
+    });
+
+    await tx.orderActivity.create({
+      data: {
+        orderId,
+        author: OrderActivityAuthor.TEAM,
+        authorName,
+        authorUserId: actor.userId,
+        message: `Requested ${input.name} from the customer.`,
+        // The customer is being asked for it — hiding the ask would be absurd.
+        internal: false,
+      },
+    });
+
+    return created;
+  });
+
+  void record({
+    actor,
+    action: AuditAction.ORDER_DOCUMENT_REQUESTED,
+    entityType: 'OrderDocument',
+    entityId: document.id,
+    // Ids and the order's reference only. The requested name is free text a
+    // reviewer typed and routinely names the customer.
+    metadata: { orderId, reference: order.reference },
+  });
+
+  // After the commit, so a rolled back request cannot email someone about a
+  // document nobody is waiting for.
+  void notifyDocumentRequested({
+    customerId: order.customerId,
+    orderId,
+    reference: order.reference,
+    documentLabel: input.name,
+  });
+
+  return toDocument(document);
 }
 
 async function queueOrderReply(
@@ -1081,7 +1223,7 @@ async function queueOrderReply(
     heading: `${authorName} replied to ${order.reference}`,
     body: message,
     actionLabel: 'View order',
-    actionUrl: `${process.env.FRONTEND_ORIGIN ?? ''}/app/orders/${order.id}`,
+    actionUrl: `${publicAppUrl}/app/orders/${order.id}`,
     userId: order.customerId,
   });
 }

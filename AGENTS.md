@@ -112,12 +112,12 @@ test it.**
 ```
 frontend/src/
 ├── app/          # router.tsx, providers.tsx, layouts/
-├── marketing/    # public pages: home, services, pricing, about, contact, faq, legal
+├── marketing/    # public pages: home, services, how-it-works, faq, about, contact, legal
 ├── portal/       # customer portal: pages/ + features/
 ├── admin/        # admin portal: pages/ + features/
 ├── auth/         # sign-in/up screens + auth client (used by portal & admin)
 ├── services/     # api.ts, socket.ts, upload.ts
-├── constants/    # local mirror: roles, statuses, plan catalog (backend = source of truth)
+├── constants/    # local mirror: roles, statuses (backend = source of truth)
 ├── types/        # local mirror of API shapes
 ├── hooks/        # cross-area hooks — useOverlay (all modals), useCompactScale, useSocket
 ├── lib/  styles/  assets/
@@ -137,8 +137,15 @@ frontend/src/
   (queries/mutations, feature components). `portal/features/payments` owns the
   branded checkout: the USDT screen, and the coming-soon card option beside it.
 - Marketing is **simple pages, no blog** — copy written directly in the page
-  components; prices render from `constants/` only. A shared `<Seo>` component
-  sets title/description/canonical/OG per page; sitemap + robots at build.
+  components. A shared `<Seo>` component sets title/description/canonical/OG
+  per page; sitemap + robots at build.
+- **Marketing never quotes a price.** There is no pricing page and no price
+  copy: an amount depends on the service, the jurisdiction, and that
+  jurisdiction's government fees, and the binding figure is the itemised quote
+  issued in the customer's portal after review. Services are priced from the
+  admin-managed catalog (`/admin/catalog`), never from a frontend constant, so
+  marketing points at the quote instead of naming a number it would be wrong
+  about. Money questions on `/faq` say exactly this.
 - Marty Global is a filing service provider, **not a law firm** — never write
   legal advice or imply attorney representation; keep the footer disclaimer.
   Never invent statistics, testimonials, or guarantees.

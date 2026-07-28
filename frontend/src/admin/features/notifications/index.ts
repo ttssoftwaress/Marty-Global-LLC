@@ -6,6 +6,7 @@ export { AdminNotificationPanelContent } from './AdminNotificationPanelContent';
 export { AdminNotificationsPanel } from './AdminNotificationsPanel';
 export { ADMIN_NOTIFICATION_ICONS } from './notificationIcons';
 export {
+  ROOT_KEY as adminNotificationsRootKey,
   adminNotificationFeedKey,
   adminNotificationPanelKey,
   useAdminNotificationFeed,

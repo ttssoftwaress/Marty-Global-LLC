@@ -1,4 +1,5 @@
-import { Download, Eye, FileText } from 'lucide-react';
+import { useState } from 'react';
+import { Download, Eye, FileText, Plus, X } from 'lucide-react';
 
 import { ApiError } from '@/services/api';
 import { formatFileSize, formatOrderDate } from '../../lib/format';
@@ -8,7 +9,10 @@ import type {
   AdminOrderDocument,
   AdminOrderDocumentStatus,
 } from '../../types/order-detail';
-import { useAdminOrderDocumentLink } from './queries';
+import {
+  useAdminOrderDocumentLink,
+  useRequestAdminOrderDocument,
+} from './queries';
 import { SectionCard } from './SectionCard';
 
 /*
@@ -27,9 +31,15 @@ import { SectionCard } from './SectionCard';
  * and `attachment` saves it under its own name — a "Download" button that merely
  * opened a PDF in a tab would be lying about what it does.
  *
- * A `pending` row is a placeholder — a document we have promised — which is why
- * it renders greyed rather than being hidden: the promise is the useful part. Its
- * controls are disabled, because the endpoint refuses it too.
+ * A `pending` row is a placeholder — a document we have promised, or one we have
+ * asked the customer for — which is why it renders greyed rather than being
+ * hidden: the promise is the useful part. Its controls are disabled, because the
+ * endpoint refuses it too.
+ *
+ * "Request a document" writes exactly such a placeholder, addressed the other way
+ * round (source: customer), and notifies them. Their upload then fills that row
+ * in rather than landing beside it — which is why the request and the file that
+ * answers it are one row here and not two.
  */
 
 const STATUS_CLASS: Record<AdminOrderDocumentStatus, string> = {
@@ -61,6 +71,29 @@ export function OrderDocumentsCard({
   orderId: string;
 }) {
   const link = useAdminOrderDocumentLink(orderId);
+  const request = useRequestAdminOrderDocument(orderId);
+
+  const [requesting, setRequesting] = useState(false);
+  const [name, setName] = useState('');
+
+  const submitRequest = (event: React.FormEvent) => {
+    event.preventDefault();
+    const trimmed = name.trim();
+    if (!trimmed || request.isPending) return;
+
+    request.mutate(trimmed, {
+      onSuccess: () => {
+        setName('');
+        setRequesting(false);
+      },
+    });
+  };
+
+  const closeRequest = () => {
+    setRequesting(false);
+    setName('');
+    request.reset();
+  };
 
   const open = (
     document: AdminOrderDocument,
@@ -79,7 +112,79 @@ export function OrderDocumentsCard({
   const busyId = link.isPending ? link.variables?.documentId : undefined;
 
   return (
-    <SectionCard title="Documents">
+    <SectionCard
+      title="Documents"
+      action={
+        requesting ? null : (
+          <button
+            type="button"
+            onClick={() => setRequesting(true)}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-input border border-primary bg-white px-3 py-1.5 text-small font-medium text-primary transition-colors hover:bg-primary-light"
+          >
+            <Plus className="size-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+            Request a document
+          </button>
+        )
+      }
+    >
+      {requesting ? (
+        <form
+          onSubmit={submitRequest}
+          className="flex flex-col gap-2 rounded-input border border-gray-200 bg-gray-50 p-3"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <label
+              htmlFor="request-document-name"
+              className="text-small font-medium text-text"
+            >
+              What do you need from the customer?
+            </label>
+            <button
+              type="button"
+              onClick={closeRequest}
+              aria-label="Cancel document request"
+              className="flex size-7 shrink-0 items-center justify-center rounded-input text-gray-400 transition-colors hover:bg-gray-200 hover:text-text"
+            >
+              <X className="size-4" strokeWidth={1.75} aria-hidden="true" />
+            </button>
+          </div>
+
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <input
+              id="request-document-name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              maxLength={120}
+              autoFocus
+              placeholder="e.g. Certified passport copy"
+              className="input-field flex-1"
+            />
+            <button
+              type="submit"
+              disabled={!name.trim() || request.isPending}
+              className="btn btn-primary shrink-0 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {request.isPending ? 'Sending request…' : 'Send request'}
+            </button>
+          </div>
+
+          {/* The name is what the customer is told to send, so it is worth
+              saying that out loud before they type something cryptic. */}
+          <p className="text-small text-gray-500">
+            The customer sees this wording and is notified. It appears below as
+            outstanding until they upload it.
+          </p>
+
+          {request.isError ? (
+            <p role="alert" className="text-small text-error">
+              {request.error instanceof ApiError
+                ? request.error.message
+                : 'That request could not be sent. Please try again.'}
+            </p>
+          ) : null}
+        </form>
+      ) : null}
+
       {documents.length === 0 ? (
         <p className="text-body text-gray-500">
           No documents on this order yet.
@@ -109,7 +214,14 @@ export function OrderDocumentsCard({
                 <div className="flex min-w-0 flex-1 flex-col">
                   <p className="truncate text-body font-medium text-text">{document.name}</p>
                   <p className="truncate text-small text-gray-400">
-                    {document.source === 'customer' ? 'Uploaded by customer' : 'From the team'}
+                    {/* A customer-source row with nothing behind it yet is a
+                        request we made, not something they sent — the two are
+                        the same row at different points in its life. */}
+                    {document.source === 'customer'
+                      ? document.downloadable
+                        ? 'Uploaded by customer'
+                        : 'Requested from customer'
+                      : 'From the team'}
                     <span aria-hidden="true"> · </span>
                     {formatOrderDate(document.createdAt)}
                     {size ? (

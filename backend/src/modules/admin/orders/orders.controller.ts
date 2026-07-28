@@ -8,6 +8,7 @@ import {
   addActivitySchema,
   documentLinkQuerySchema,
   listOrdersQuerySchema,
+  requestDocumentSchema,
   updateOrderSchema,
 } from './orders.validation.js';
 
@@ -91,6 +92,28 @@ export async function addActivity(
       parsed.data,
     );
     res.status(201).json({ data: entry });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function requestDocument(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const parsed = requestDocumentSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw AppError.validation('Invalid document request', parsed.error.issues);
+    }
+
+    const document = await service.requestDocument(
+      getAuth(req),
+      pathParam(req, 'orderId'),
+      parsed.data,
+    );
+    res.status(201).json({ data: document });
   } catch (error) {
     next(error);
   }

@@ -23,7 +23,9 @@ import type {
  * write refreshes the panel, the badge, and every filter tab together.
  */
 
-const ROOT_KEY = ['admin', 'notifications'] as const;
+// Exported so the shell's live-badge hook invalidates exactly this subtree
+// rather than re-declaring the same literal beside it.
+export const ROOT_KEY = ['admin', 'notifications'] as const;
 
 export const adminNotificationFeedKey = (filter: AdminNotificationFilter) =>
   [...ROOT_KEY, 'feed', filter] as const;

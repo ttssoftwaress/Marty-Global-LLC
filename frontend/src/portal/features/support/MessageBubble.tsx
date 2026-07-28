@@ -1,7 +1,7 @@
 import { Check, CheckCheck, Download } from 'lucide-react';
 
 import { formatFileSize, formatMessageTime } from '../../lib/format';
-import type { Message } from '../../types/messages';
+import type { Message } from '../../types/support';
 
 /*
  * A single message. Agent messages sit left with a grey bubble and, at the

@@ -135,3 +135,34 @@ export function formatActivityTimeShort(iso: string) {
 
   return format(date, 'MMM d');
 }
+
+/*
+ * An audit entry's timestamp — "Jul 29, 2026 · 14:32:07".
+ *
+ * The only place in the admin portal that prints seconds, and it needs them: an
+ * audit trail is read to reconstruct a sequence, and one request routinely
+ * writes several entries within the same minute. Truncating to minutes would
+ * collapse an ordered chain into a tie.
+ *
+ * 24-hour, for the same reason — "02:14" and "14:14" must not depend on reading
+ * a suffix correctly when the question is which of two rows came first.
+ */
+export function formatAuditTime(iso: string) {
+  return format(parseISO(iso), "MMM d, yyyy '·' HH:mm:ss");
+}
+
+/*
+ * The date half alone, for the day separators the trail groups rows under.
+ * Timestamps arrive as UTC (AGENTS.md, Dates); `parseISO` converts to the
+ * viewer's zone, so the grouping is by the reader's own days.
+ */
+export function formatAuditDay(iso: string) {
+  const date = parseISO(iso);
+  const now = new Date();
+
+  const days = differenceInDays(now, date);
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+
+  return format(date, 'EEEE, MMM d, yyyy');
+}

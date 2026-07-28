@@ -34,9 +34,9 @@ const SERVICES: FooterLink[] = [
 
 const COMPANY: FooterLink[] = [
   { label: 'About Us', href: '/about' },
+  { label: 'How It Works', href: '/how-it-works' },
+  { label: 'FAQ', href: '/faq' },
   { label: 'Our Markets', href: '/about' },
-  { label: 'Partner Program', href: '/about' },
-  { label: 'Careers', href: '/about' },
   { label: 'Contact Center', href: '/contact' },
 ];
 

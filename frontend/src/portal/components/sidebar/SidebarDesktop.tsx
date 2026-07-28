@@ -1,12 +1,13 @@
-import { HelpCircle, LogOut } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 
 import logoWhite from '@/assets/Marty-Logo-White.png';
+import { NavBadge } from './NavBadge';
 import { SidebarUserBlock, type SidebarUser } from './SidebarUserBlock';
 import {
   PORTAL_NAV_ITEMS,
-  PORTAL_SUPPORT_LINK,
   isNavItemActive,
+  type PortalNavBadges,
 } from './nav-items';
 import { isServiceNavItemActive, useServiceNavItems } from './useServiceNavItems';
 
@@ -19,11 +20,17 @@ import { isServiceNavItemActive, useServiceNavItems } from './useServiceNavItems
 
 type SidebarDesktopProps = {
   user: SidebarUser;
+  badges?: PortalNavBadges;
   onLogout?: () => void;
   className?: string;
 };
 
-export function SidebarDesktop({ user, onLogout, className }: SidebarDesktopProps) {
+export function SidebarDesktop({
+  user,
+  badges,
+  onLogout,
+  className,
+}: SidebarDesktopProps) {
   const { pathname } = useLocation();
   // One entry per service this customer owns records for. Empty until the query
   // resolves, and empty forever for a customer with nothing delivered — the
@@ -63,6 +70,7 @@ export function SidebarDesktop({ user, onLogout, className }: SidebarDesktopProp
                   >
                     <Icon className="size-5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
                     <span className="min-w-0 flex-1 break-words">{item.label}</span>
+                    {item.badge ? <NavBadge count={badges?.[item.badge] ?? 0} /> : null}
                   </NavLink>
                 </li>
               );
@@ -121,14 +129,6 @@ export function SidebarDesktop({ user, onLogout, className }: SidebarDesktopProp
         <SidebarUserBlock user={user} />
 
         <div className="flex w-full flex-col gap-3">
-          <Link
-            to={PORTAL_SUPPORT_LINK.to}
-            className="flex items-center gap-2 text-body font-medium text-white/80 transition-colors hover:text-white"
-          >
-            <HelpCircle className="size-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
-            <span className="whitespace-nowrap">{PORTAL_SUPPORT_LINK.label}</span>
-          </Link>
-
           <button
             type="button"
             onClick={onLogout}

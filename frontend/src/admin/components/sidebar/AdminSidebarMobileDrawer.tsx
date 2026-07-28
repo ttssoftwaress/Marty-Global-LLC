@@ -3,8 +3,13 @@ import { LogOut, X } from 'lucide-react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 
 import { useOverlay } from '@/hooks/useOverlay';
+import { AdminNavBadge } from './AdminNavBadge';
 import { AdminSidebarUserBlock, type AdminSidebarUser } from './AdminSidebarUserBlock';
-import { isAdminNavItemActive, type AdminNavItem } from './nav-items';
+import {
+  isAdminNavItemActive,
+  type AdminNavBadges,
+  type AdminNavItem,
+} from './nav-items';
 
 /*
  * Admin sidebar — mobile (below md). A drawer that slides in over the page
@@ -25,6 +30,7 @@ type AdminSidebarMobileDrawerProps = {
   onClose: () => void;
   user: AdminSidebarUser;
   items: AdminNavItem[];
+  badges?: AdminNavBadges;
   onLogout?: () => void;
 };
 
@@ -33,6 +39,7 @@ export function AdminSidebarMobileDrawer({
   onClose,
   user,
   items,
+  badges,
   onLogout,
 }: AdminSidebarMobileDrawerProps) {
   const { pathname } = useLocation();
@@ -109,6 +116,9 @@ export function AdminSidebarMobileDrawer({
                     >
                       <Icon className="size-5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
                       <span className="min-w-0 flex-1 break-words">{item.label}</span>
+                      {item.badge ? (
+                        <AdminNavBadge count={badges?.[item.badge] ?? 0} />
+                      ) : null}
                     </NavLink>
                   </li>
                 );

@@ -1,9 +1,11 @@
 import { FeedNotificationCategory, MessageAuthor } from '@prisma/client';
 
-import { env } from '../../config/env.js';
+import { env, publicAppUrl } from '../../config/env.js';
 import { enqueueSupportHandoff } from '../../jobs/queues.js';
 import { logger } from '../../lib/logger.js';
 import { prisma } from '../../lib/prisma.js';
+import { createFeedNotification } from '../notifications/notifications.feed.js';
+import { channelsFor } from '../notifications/notifications.preferences.js';
 import { queueEmail } from '../notifications/notifications.service.js';
 
 /*
@@ -64,32 +66,6 @@ async function stillWaiting(conversationId: string): Promise<boolean> {
 }
 
 /*
- * Which channels this customer wants. Mirrors mailroom.notifications.ts: the
- * master switch gates every email account-wide, and an absent preference row
- * means the schema defaults (on), which is what a customer who has never opened
- * the settings screen would see there.
- */
-async function channels(
-  customerId: string,
-): Promise<{ email: boolean; inApp: boolean }> {
-  const preference = await prisma.notificationPreference.findUnique({
-    where: { userId: customerId },
-    select: {
-      emailMaster: true,
-      newMessagesEmail: true,
-      newMessagesInApp: true,
-    },
-  });
-
-  if (!preference) return { email: true, inApp: true };
-
-  return {
-    email: preference.emailMaster && preference.newMessagesEmail,
-    inApp: preference.newMessagesInApp,
-  };
-}
-
-/*
  * Run by the job processor once the delay has elapsed. Idempotent and safe to
  * retry: it re-derives everything from the thread's current state, so running it
  * twice on an answered conversation sends nothing both times.
@@ -130,25 +106,26 @@ export async function deliverOfflineHandoff(conversationId: string): Promise<{
       heading: `Thanks for getting in touch, ${firstWord(conversation.guest.name)}`,
       body: "Our team has your message and will reply here shortly. You can reopen the chat on our site at any time to pick up where you left off — we'll keep your conversation for 7 days.",
       actionLabel: 'Return to the site',
-      actionUrl: env.FRONTEND_ORIGIN,
+      actionUrl: publicAppUrl,
     });
 
     return { sent: true };
   }
 
-  const { email, inApp } = await channels(conversation.customerId);
-  const href = `/app/messages/${conversation.id}`;
+  const { email, inApp } = await channelsFor(
+    conversation.customerId,
+    'newMessages',
+  );
+  const href = `/app/support/${conversation.id}`;
 
   if (!email && !inApp) return { sent: false, reason: 'muted' };
 
   if (inApp) {
-    await prisma.feedNotification.create({
-      data: {
-        userId: conversation.customerId,
-        category: FeedNotificationCategory.MESSAGE,
-        message: `Our team will reply to "${conversation.subject}" shortly.`,
-        href,
-      },
+    await createFeedNotification({
+      userId: conversation.customerId,
+      category: FeedNotificationCategory.MESSAGE,
+      message: `Our team will reply to "${conversation.subject}" shortly.`,
+      href,
     });
   }
 
@@ -160,7 +137,7 @@ export async function deliverOfflineHandoff(conversationId: string): Promise<{
       heading: `Thanks for getting in touch, ${firstWord(conversation.customer.name)}`,
       body: `Our team has your message about "${conversation.subject}" and will reply as soon as possible. You can follow the conversation in your portal.`,
       actionLabel: 'Open the conversation',
-      actionUrl: `${env.FRONTEND_ORIGIN}${href}`,
+      actionUrl: `${publicAppUrl}${href}`,
       userId: conversation.customerId,
     });
   }

@@ -12,7 +12,25 @@ const envSchema = z.object({
   LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace'])
     .default('info'),
-  FRONTEND_ORIGIN: z.url(),
+  /*
+   * The browser origins allowed to call this API — CORS, the Socket.io
+   * handshake, and Better Auth's trustedOrigins all read it.
+   *
+   * A comma-separated list so a tunnelled dev session (ngrok) can run alongside
+   * plain localhost without editing the file between them. Entries stay exact
+   * origins, never wildcards (AGENTS.md, CORS) — this is a finite allowlist from
+   * env, not a pattern match. Each entry is trimmed, so whitespace around a
+   * comma can't produce an origin that silently matches nothing.
+   */
+  FRONTEND_ORIGIN: z
+    .string()
+    .transform((value) =>
+      value
+        .split(',')
+        .map((origin) => origin.trim())
+        .filter(Boolean),
+    )
+    .pipe(z.array(z.url()).min(1)),
   DATABASE_URL: z.url(),
   REDIS_URL: z.url(),
 
@@ -261,3 +279,13 @@ if (!parsed.success) {
 
 export const env = parsed.data;
 export const isProduction = env.NODE_ENV === 'production';
+
+/*
+ * The canonical public URL of the frontend — the first FRONTEND_ORIGIN entry.
+ *
+ * FRONTEND_ORIGIN is an allowlist answering "may this origin call us?", which is
+ * the wrong question for an outbound link: an email has to name one URL. Every
+ * link we build (notifications, password reset) uses this, so put the origin a
+ * real user browses first in the list.
+ */
+export const publicAppUrl = env.FRONTEND_ORIGIN[0];

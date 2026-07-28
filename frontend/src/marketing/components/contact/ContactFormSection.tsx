@@ -82,18 +82,14 @@ function IntroColumn() {
       </div>
 
       {/*
-       * These were dead `#` anchors. The FAQ is a section of the services page
-       * rather than its own route, so it is reached by hash — hence the plain
-       * anchor on the second link.
+       * These were dead `#` anchors. Both now point at real routes — the FAQ
+       * has its own page, so this no longer reaches it by hash into /services.
        */}
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3 pt-1 text-[14px] font-semibold text-primary">
         <Link to="/services" className="inline-flex items-center gap-1 hover:underline">
           Browse Services →
         </Link>
-        <Link
-          to="/services#faq"
-          className="inline-flex items-center gap-1 hover:underline"
-        >
+        <Link to="/faq" className="inline-flex items-center gap-1 hover:underline">
           View FAQ →
         </Link>
       </div>

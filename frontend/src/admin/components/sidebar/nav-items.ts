@@ -9,6 +9,7 @@ import {
   ListChecks,
   Mail,
   MessagesSquare,
+  ScrollText,
   Settings,
   ShoppingBag,
   UserCheck,
@@ -43,11 +44,26 @@ import type { LucideIcon } from 'lucide-react';
  * item yet; it never hides a section it doesn't name.
  */
 
+/*
+ * `badge` names which counter this item's bubble reads, when it has one. The key
+ * rather than the number, because the nav list is a static module and the counts
+ * are live — the sidebar resolves the key against what the shell passes it.
+ *
+ * Only the member's own two counters, deliberately: a queue-depth badge ("12
+ * orders waiting") would be a number every staff member sees the same, on a
+ * screen whose scope differs per member, so it would contradict the list under
+ * it for anyone without the area's `.all` grant.
+ */
+export type AdminNavBadgeKey = 'notifications' | 'support';
+
+export type AdminNavBadges = Partial<Record<AdminNavBadgeKey, number>>;
+
 export type AdminNavItem = {
   label: string;
   to: string;
   icon: LucideIcon;
   permission?: string;
+  badge?: AdminNavBadgeKey;
 };
 
 export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
@@ -55,7 +71,13 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   { label: 'Orders queue', to: '/admin/orders', icon: ShoppingBag, permission: 'orders' },
   { label: 'Customers', to: '/admin/customers', icon: Users, permission: 'customers' },
   { label: 'Quotes & payments', to: '/admin/payments', icon: CreditCard, permission: 'payments' },
-  { label: 'Support inbox', to: '/admin/support', icon: Inbox, permission: 'support' },
+  {
+    label: 'Support inbox',
+    to: '/admin/support',
+    icon: Inbox,
+    permission: 'support',
+    badge: 'support',
+  },
   /*
    * Distinct from the support inbox above, and the two must not be conflated: the
    * inbox is the shared helpdesk queue any agent may claim from, while this lists
@@ -84,7 +106,12 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
     icon: ClipboardList,
     permission: 'requests',
   },
-  { label: 'Notifications', to: '/admin/notifications', icon: Bell },
+  {
+    label: 'Notifications',
+    to: '/admin/notifications',
+    icon: Bell,
+    badge: 'notifications',
+  },
   { label: 'Virtual mail ops', to: '/admin/mailroom', icon: Mail, permission: 'mailroom' },
   { label: 'Team & staff', to: '/admin/team', icon: UserCheck, permission: 'team' },
   { label: 'Service catalog', to: '/admin/catalog', icon: BookOpen, permission: 'catalog' },
@@ -105,6 +132,18 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
    * neither of which involves a service's price or its form.
    */
   { label: 'Admin settings', to: '/admin/settings', icon: Settings, permission: 'settings' },
+  /*
+   * The audit log — the read-only trail of who did what, across every section
+   * above it. Last in the list because it is read about the others rather than
+   * used to do work of its own.
+   *
+   * Its own area rather than admin-only: reviewing the trail is a compliance job
+   * that does not need the power to change anything, so a member can be given
+   * sight of it without being given the actions it records. It is not a default
+   * on any role except super-admin and operations manager, so for most members
+   * this item simply is not there.
+   */
+  { label: 'Audit log', to: '/admin/audit', icon: ScrollText, permission: 'audit' },
 ];
 
 /*

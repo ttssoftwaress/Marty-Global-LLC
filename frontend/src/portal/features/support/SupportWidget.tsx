@@ -2,20 +2,17 @@ import { useEffect, useMemo, useState } from 'react';
 import { ArrowUpRight, MessageCircle, X } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
-import {
-  MessageList,
-  useConversation,
-  useConversations,
-  useConversationSocket,
-  Composer,
-} from '../messages';
+import { Composer } from './Composer';
+import { MessageList } from './MessageList';
+import { useConversation, useConversations } from './queries';
+import { useConversationSocket } from './useConversationSocket';
 
 /*
  * The floating support widget — a chat bubble on every portal screen.
  *
  * It opens the customer's most recent open conversation rather than a list: the
  * widget is for continuing a conversation without leaving what you were doing,
- * and anyone who wants to browse threads has the Messages page, which the panel
+ * and anyone who wants to browse threads has the Support page, which the panel
  * links to.
  *
  * Bottom-RIGHT, unlike the marketing site's bottom-left bubble. The portal has a
@@ -23,7 +20,7 @@ import {
  * navigation; the marketing site has no such furniture. Deliberate divergence —
  * see the design deviations note in the task summary.
  *
- * It hides itself on /app/messages: a chat bubble floating over the chat screen
+ * It hides itself on /app/support: a chat bubble floating over the chat screen
  * would open a second copy of the conversation already filling the page.
  */
 
@@ -31,7 +28,7 @@ export function SupportWidget() {
   const [open, setOpen] = useState(false);
   const location = useLocation();
 
-  // The list is already cached by the Messages screen in most cases, so opening
+  // The list is already cached by the Support screen in most cases, so opening
   // the widget usually costs nothing.
   const conversationsQuery = useConversations('');
 
@@ -62,7 +59,7 @@ export function SupportWidget() {
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [open]);
 
-  if (location.pathname.startsWith('/app/messages')) return null;
+  if (location.pathname.startsWith('/app/support')) return null;
 
   const send = ({ text }: { text: string; files: File[] }) => {
     if (!activeId) return;
@@ -112,7 +109,7 @@ export function SupportWidget() {
             /*
              * No conversation yet. The widget does not open one — starting a
              * thread asks for a subject and a topic, which is a form, and a form
-             * belongs on the Messages screen rather than in a 380px panel.
+             * belongs on the Support screen rather than in a 380px panel.
              */
             <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
               <p className="text-body font-medium text-gray-600">
@@ -122,22 +119,22 @@ export function SupportWidget() {
                 Start one and our team will pick it up.
               </p>
               <Link
-                to="/app/messages"
+                to="/app/support"
                 onClick={() => setOpen(false)}
                 className="inline-flex h-10 items-center gap-2 rounded-input bg-primary px-4 text-small font-semibold text-white transition-colors hover:bg-primary-hover"
               >
-                New message
+                New conversation
               </Link>
             </div>
           )}
 
           {activeId ? (
             <Link
-              to={`/app/messages/${activeId}`}
+              to={`/app/support/${activeId}`}
               onClick={() => setOpen(false)}
               className="flex shrink-0 items-center justify-center gap-1.5 border-t border-gray-200 py-2.5 text-small font-medium text-primary hover:bg-gray-50"
             >
-              View all messages
+              View all conversations
               <ArrowUpRight className="size-4" strokeWidth={1.75} aria-hidden="true" />
             </Link>
           ) : null}

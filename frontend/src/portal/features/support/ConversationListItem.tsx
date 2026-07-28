@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 
 import { formatRelativeTimeShort } from '../../lib/format';
-import type { ConversationSummary } from '../../types/messages';
+import type { ConversationSummary } from '../../types/support';
 import { OrderStatusChip } from '../dashboard/OrderStatusChip';
 import { CONVERSATION_ICONS } from './conversationIcons';
 
@@ -32,7 +32,7 @@ export function ConversationListItem({
 
   return (
     <Link
-      to={`/app/messages/${conversation.id}`}
+      to={`/app/support/${conversation.id}`}
       aria-current={active ? 'true' : undefined}
       className={`flex w-full gap-3 p-4 text-left transition-colors rounded-card border border-gray-200 bg-white md:rounded-none md:border-transparent md:border-b-gray-200 md:last:border-b-transparent ${
         active

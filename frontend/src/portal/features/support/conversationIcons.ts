@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
-import type { ConversationCategory } from '../../types/messages';
+import type { ConversationCategory } from '../../types/support';
 
 /*
  * The glyph for a conversation's icon chip, one per category. Icons are read

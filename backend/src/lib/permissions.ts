@@ -67,6 +67,19 @@ export const PERMISSION_AREAS = [
    * of those screens reads.
    */
   { key: 'settings', label: 'Business settings' },
+  /*
+   * The audit log — the read-only trail of who did what, across every other
+   * area. Its own grantable area rather than admin-only, because reviewing the
+   * trail is a compliance job that does not need the power to change anything:
+   * a member holding this can see that a role was changed without being able to
+   * change one, which is the whole point of separating the reviewer from the
+   * actor.
+   *
+   * Never a default on any role. It reads across every section — including team
+   * changes and payment reconciliation — so it is granted deliberately, per
+   * member, from the team screen.
+   */
+  { key: 'audit', label: 'Audit log' },
 ] as const;
 
 export type PermissionAreaKey = (typeof PERMISSION_AREAS)[number]['key'];
@@ -194,6 +207,9 @@ export const STAFF_ROLES: readonly StaffRoleDefinition[] = [
       // Which jurisdictions we operate in and who we ship with are operational
       // decisions, which is exactly this role's remit.
       'settings',
+      // Overseeing the pipeline includes overseeing who acted on it. The only
+      // other role holding this by default is super-admin.
+      'audit',
       // Overseeing the pipeline means seeing all of it — this role is the reason
       // the org-wide scope exists.
       ...ALL_SCOPES,

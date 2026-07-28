@@ -3,7 +3,7 @@ import { Loader2, X } from 'lucide-react';
 
 import { useOverlay } from '@/hooks/useOverlay';
 import { ApiError } from '@/services/api';
-import type { ConversationCategory } from '../../types/messages';
+import type { ConversationCategory } from '../../types/support';
 import { useCreateConversation } from './queries';
 
 /*

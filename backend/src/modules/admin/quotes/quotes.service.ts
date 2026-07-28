@@ -6,11 +6,15 @@ import {
   QuoteStatus,
 } from '@prisma/client';
 
+import { publicAppUrl } from '../../../config/env.js';
 import type { AuthContext } from '../../../guards/auth-context.js';
 import { AppError } from '../../../lib/app-error.js';
 import { logger } from '../../../lib/logger.js';
 import { prisma } from '../../../lib/prisma.js';
+import { emitUnreadChanged } from '../../../sockets/broadcast.js';
 import { AuditAction, record } from '../../audit/audit.service.js';
+import { createFeedNotificationIn } from '../../notifications/notifications.feed.js';
+import { channelsFor } from '../../notifications/notifications.preferences.js';
 import { queueEmail } from '../../notifications/notifications.service.js';
 import { advanceOrderStatus } from '../../orders/orders.service.js';
 import { orderScope } from '../admin.scope.js';
@@ -362,6 +366,19 @@ export async function createQuote(
   const actorName = await staffDisplayName(actor.userId);
 
   /*
+   * What the customer chose to hear about a new quote. Resolved before the
+   * transaction opens rather than inside it: the preference is unrelated to the
+   * quote being written, and reading it inside would hold the transaction open
+   * across an extra round trip for no consistency gain.
+   *
+   * Only the notifications are gated. The order activity row below is not a
+   * notification — it is the order's own history, which the customer reads on
+   * the order page whenever they choose to look, so muting quote alerts must not
+   * blank out the record of what was sent.
+   */
+  const alerts = await channelsFor(order.customerId, 'quoteAlerts');
+
+  /*
    * One transaction: the quote, its lines, and the activity row that tells the
    * customer it arrived. An order can never show a price with no explanation of
    * where it came from, nor a feed entry pointing at a quote that failed to
@@ -415,14 +432,17 @@ export async function createQuote(
       });
 
       // The in-app feed entry behind the bell, pointing at the quote itself.
-      await tx.feedNotification.create({
-        data: {
+      // The transactional variant: the live push cannot fire from in here, since
+      // a client told to refetch before the commit would read the old count and
+      // keep it. It is emitted after the transaction returns.
+      if (alerts.inApp) {
+        await createFeedNotificationIn(tx, {
           userId: order.customerId,
           category: FeedNotificationCategory.BILLING,
           message: `You have a new quote (${reference}) for ${amount} on order ${order.reference}.`,
           href: `/app/billing/quotes/${created.id}`,
-        },
-      });
+        });
+      }
 
       /*
        * Sending the price is the approval. An order that has been reviewed and
@@ -443,6 +463,10 @@ export async function createQuote(
       return created;
     }),
   );
+
+  // The quote is committed, so the customer's unread count is now genuinely
+  // higher — safe to tell any tab they have open.
+  if (alerts.inApp) emitUnreadChanged(order.customerId);
 
   void record({
     actor,
@@ -474,16 +498,18 @@ export async function createQuote(
 
   // The quote is already committed; a failure to queue the email must not undo
   // it or fail the request (the same posture as an order reply).
-  await queueQuoteEmail(order, quote, actorName).catch((error) => {
-    logger.error(
-      {
-        orderId: order.id,
-        quoteId: quote.id,
-        err: error instanceof Error ? error.message : error,
-      },
-      'Failed to queue quote email',
-    );
-  });
+  if (alerts.email) {
+    await queueQuoteEmail(order, quote, actorName).catch((error) => {
+      logger.error(
+        {
+          orderId: order.id,
+          quoteId: quote.id,
+          err: error instanceof Error ? error.message : error,
+        },
+        'Failed to queue quote email',
+      );
+    });
+  }
 
   logger.info(
     { orderId: order.id, quoteId: quote.id, reference: quote.reference },
@@ -579,7 +605,7 @@ async function queueQuoteEmail(
     heading: `${authorName} sent you a quote`,
     body: `We've reviewed your application (${order.reference}) and prepared a quote of ${amount}. It's valid until ${quote.validUntil.toISOString().slice(0, 10)}.`,
     actionLabel: 'View quote',
-    actionUrl: `${process.env.FRONTEND_ORIGIN ?? ''}/app/orders/${order.id}`,
+    actionUrl: `${publicAppUrl}/app/orders/${order.id}`,
     userId: order.customerId,
   });
 }

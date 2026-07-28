@@ -1,6 +1,8 @@
 import type { Server } from 'socket.io';
 
 import { logger } from '../lib/logger.js';
+import { countUnreadFeed } from '../modules/notifications/notifications.service.js';
+import * as support from '../modules/support/support.service.js';
 import {
   SUPPORT_ALL_ROOM,
   ServerEvent,
@@ -114,4 +116,46 @@ export function evictFromConversation(conversationId: string, userId: string): v
     conversationRoom(conversationId),
     conversationStaffRoom(conversationId),
   ]);
+}
+
+/*
+ * Read someone's two unread counters. The one query behind both the socket
+ * handler's push and the REST endpoint the badge falls back to, so a number that
+ * arrives live and the same number fetched on load cannot disagree.
+ */
+export async function readUnread(
+  userId: string,
+): Promise<{ messages: number; notifications: number }> {
+  const [messages, notifications] = await Promise.all([
+    support.countUnreadConversations(userId),
+    countUnreadFeed(userId),
+  ]);
+
+  return { messages, notifications };
+}
+
+/*
+ * Tell one user their unread counters moved.
+ *
+ * This is the half of the notification pipeline that reaches a customer sitting
+ * on a page with nothing to refetch. It is called from wherever a feed row is
+ * written — including the payments job worker, which has no socket in hand and
+ * is the reason this lives beside the other broadcasters rather than inside the
+ * chat handlers.
+ *
+ * Fire-and-forget, like everything else in this file: the count is already
+ * correct in the database, and a failed push costs a stale badge until the next
+ * fetch. It must never fail the write that produced it.
+ */
+export function emitUnreadChanged(userId: string): void {
+  if (!io) return;
+  const server = io;
+
+  void readUnread(userId)
+    .then((counters) => {
+      server.to(userRoom(userId)).emit(ServerEvent.UNREAD, counters);
+    })
+    .catch((error: unknown) => {
+      logger.error({ err: error, userId }, 'Failed to push unread counters');
+    });
 }

@@ -8,7 +8,7 @@ import { acquireSocket } from '@/services/socket';
  *
  * Every screen that wants realtime calls `useSocket`; the module underneath
  * hands them all the same connection and closes it when the last one unmounts.
- * Nothing here owns the socket, which is why a customer can have the Messages
+ * Nothing here owns the socket, which is why a customer can have the Support
  * page and the floating widget open at once without two connections.
  */
 

@@ -13,16 +13,16 @@ import {
   useConversation,
   useConversationSocket,
   useConversations,
-} from '../features/messages';
+} from '../features/support';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { usePortalShell } from '../hooks/usePortalShell';
 
 /*
- * Messages — the customer's conversations with the team: a master list of
+ * Support — the customer's conversations with the team: a master list of
  * threads and the open thread's messages + composer. It is the portal's face of
  * the live-chat / support module (AGENTS.md, Live Chat).
  *
- * One tree, one route (/app/messages/:conversationId?), drives every viewport.
+ * One tree, one route (/app/support/:conversationId?), drives every viewport.
  * From tablet up both panes show side by side; on mobile only one shows at a
  * time — the list, or the thread once one is opened — so the open conversation
  * lives in the URL and deep-links. The whole screen fills the workspace height
@@ -36,7 +36,7 @@ import { usePortalShell } from '../hooks/usePortalShell';
  * when the server confirms it, and an agent's reply arrives without a refetch.
  */
 
-function MessagesHeader({ onNewMessage }: { onNewMessage: () => void }) {
+function SupportHeader({ onNewConversation }: { onNewConversation: () => void }) {
   return (
     <header className="hidden shrink-0 items-start justify-between gap-4 md:flex">
       <div className="flex flex-col gap-1">
@@ -45,10 +45,10 @@ function MessagesHeader({ onNewMessage }: { onNewMessage: () => void }) {
             Dashboard
           </Link>
           <span className="text-gray-400">/</span>
-          <span className="text-gray-500">Messages</span>
+          <span className="text-gray-500">Support</span>
         </p>
         <h1 className="text-[1.75rem] font-semibold leading-9 text-text lg:text-[2rem] lg:leading-10">
-          Messages
+          Support
         </h1>
         <p className="text-[0.8125rem] leading-5 text-gray-500 lg:text-[0.875rem]">
           All your conversations with our team, in one place.
@@ -57,17 +57,17 @@ function MessagesHeader({ onNewMessage }: { onNewMessage: () => void }) {
 
       <button
         type="button"
-        onClick={onNewMessage}
+        onClick={onNewConversation}
         className="inline-flex h-10 shrink-0 items-center gap-2 rounded-input bg-primary px-4 text-[0.875rem] font-semibold text-white transition-colors hover:bg-primary-hover lg:h-12 lg:px-5 lg:text-[1rem]"
       >
         <Plus className="size-4 shrink-0 lg:size-[1.125rem]" strokeWidth={2} aria-hidden="true" />
-        New message
+        New conversation
       </button>
     </header>
   );
 }
 
-export function MessagesPage() {
+export function SupportPage() {
   const { user, onLogout } = usePortalShell();
   const { conversationId } = useParams();
   const navigate = useNavigate();
@@ -86,7 +86,7 @@ export function MessagesPage() {
     ? conversationsQuery.data?.find((item) => item.id === conversationId)
     : undefined;
 
-  const backToList = () => navigate('/app/messages');
+  const backToList = () => navigate('/app/support');
 
   /*
    * Files are uploaded to R2 before the message is sent, so what travels with it
@@ -128,7 +128,7 @@ export function MessagesPage() {
     <PortalLayout user={user} onLogout={onLogout}>
       <div className="h-full w-full p-4 md:p-6 lg:p-content">
         <div className="relative mx-auto flex h-full w-full max-w-[75rem] flex-col gap-5">
-          <MessagesHeader onNewMessage={() => setComposing(true)} />
+          <SupportHeader onNewConversation={() => setComposing(true)} />
 
           <div className="flex min-h-0 flex-1 gap-4 md:gap-5 lg:gap-6">
             <ConversationList
@@ -171,7 +171,7 @@ export function MessagesPage() {
             <button
               type="button"
               onClick={() => setComposing(true)}
-              aria-label="New message"
+              aria-label="New conversation"
               className="absolute bottom-5 right-5 flex size-14 items-center justify-center rounded-full bg-accent text-white shadow-lg-elevation transition-colors hover:bg-accent-hover md:hidden"
             >
               <Plus className="size-6" strokeWidth={2} aria-hidden="true" />
@@ -187,7 +187,7 @@ export function MessagesPage() {
           setComposing(false);
           // Straight into the new thread — the customer just wrote the first
           // message, so the list is not where they want to land.
-          navigate(`/app/messages/${id}`);
+          navigate(`/app/support/${id}`);
         }}
       />
     </PortalLayout>

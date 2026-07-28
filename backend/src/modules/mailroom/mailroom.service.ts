@@ -12,6 +12,7 @@ import { assertFound } from '../../guards/ownership.js';
 import { AppError } from '../../lib/app-error.js';
 import { prisma } from '../../lib/prisma.js';
 import { presignObject, presignObjects } from '../../lib/storage.js';
+import { notifyStaffMailRequest } from '../admin/admin.notifications.js';
 import type {
   CreateMailRequestInput,
   ListMailItemsQuery,
@@ -437,7 +438,7 @@ export async function createRequest(
 
   const item = await prisma.mailItem.findFirst({
     where: { id: itemId, roomId: ownedRoomId, deletedAt: null },
-    select: { id: true, status: true },
+    select: { id: true, status: true, room: { select: { name: true } } },
   });
 
   if (!item) throw AppError.notFound('Mail item not found');
@@ -496,6 +497,14 @@ export async function createRequest(
     });
 
     return created;
+  });
+
+  // The mail-ops queue's arrival signal. After the commit, and never able to
+  // fail the customer's request.
+  void notifyStaffMailRequest({
+    requestId: request.id,
+    type: input.type,
+    roomName: item.room.name,
   });
 
   return {

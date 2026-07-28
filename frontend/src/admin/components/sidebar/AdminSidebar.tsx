@@ -4,7 +4,7 @@ import { AdminSidebarDesktop } from './AdminSidebarDesktop';
 import { AdminSidebarMobileDrawer } from './AdminSidebarMobileDrawer';
 import { AdminSidebarTablet } from './AdminSidebarTablet';
 import type { AdminSidebarUser } from './AdminSidebarUserBlock';
-import { visibleAdminNavItems } from './nav-items';
+import { visibleAdminNavItems, type AdminNavBadges } from './nav-items';
 
 /*
  * Admin sidebar — the responsive shell shared by every `/admin/*` page. One
@@ -28,6 +28,8 @@ import { visibleAdminNavItems } from './nav-items';
 type AdminSidebarProps = {
   user: AdminSidebarUser;
   permissions: readonly string[] | undefined;
+  // The live unread counters the shell holds, resolved per item by `badge` key.
+  badges?: AdminNavBadges;
   mobileOpen: boolean;
   onMobileClose: () => void;
   onLogout?: () => void;
@@ -36,6 +38,7 @@ type AdminSidebarProps = {
 export function AdminSidebar({
   user,
   permissions,
+  badges,
   mobileOpen,
   onMobileClose,
   onLogout,
@@ -47,12 +50,14 @@ export function AdminSidebar({
       <AdminSidebarTablet
         user={user}
         items={items}
+        badges={badges}
         onLogout={onLogout}
         className="hidden md:flex lg:hidden"
       />
       <AdminSidebarDesktop
         user={user}
         items={items}
+        badges={badges}
         onLogout={onLogout}
         className="hidden lg:flex"
       />
@@ -61,6 +66,7 @@ export function AdminSidebar({
         onClose={onMobileClose}
         user={user}
         items={items}
+        badges={badges}
         onLogout={onLogout}
       />
     </>

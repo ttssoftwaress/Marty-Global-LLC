@@ -38,6 +38,8 @@ export const ServerEvent = {
   // widget prints as "we're here" or "we'll email you back".
   AVAILABILITY: 'support:availability',
   // The viewer's own unread counters changed. Sent only to that user's sockets.
+  // Carries both halves — unread conversations and unread feed notifications —
+  // because a client that received only one would have to guess at the other.
   UNREAD: 'support:unread',
   // A handler refused something. Carries a code from the same enum the REST
   // envelope uses, so a client handles a failure identically either way.

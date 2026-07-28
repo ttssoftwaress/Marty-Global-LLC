@@ -2,8 +2,13 @@ import { LogOut } from 'lucide-react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 
 import logoWhite from '@/assets/Marty-Logo-White.png';
+import { AdminNavBadge } from './AdminNavBadge';
 import { AdminSidebarUserBlock, type AdminSidebarUser } from './AdminSidebarUserBlock';
-import { isAdminNavItemActive, type AdminNavItem } from './nav-items';
+import {
+  isAdminNavItemActive,
+  type AdminNavBadges,
+  type AdminNavItem,
+} from './nav-items';
 
 /*
  * Admin sidebar — desktop (lg and up). 280px wide, full-height navy column:
@@ -21,6 +26,7 @@ import { isAdminNavItemActive, type AdminNavItem } from './nav-items';
 type AdminSidebarDesktopProps = {
   user: AdminSidebarUser;
   items: AdminNavItem[];
+  badges?: AdminNavBadges;
   onLogout?: () => void;
   className?: string;
 };
@@ -28,6 +34,7 @@ type AdminSidebarDesktopProps = {
 export function AdminSidebarDesktop({
   user,
   items,
+  badges,
   onLogout,
   className,
 }: AdminSidebarDesktopProps) {
@@ -66,6 +73,9 @@ export function AdminSidebarDesktop({
                   >
                     <Icon className="size-5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
                     <span className="min-w-0 flex-1 break-words">{item.label}</span>
+                    {item.badge ? (
+                      <AdminNavBadge count={badges?.[item.badge] ?? 0} />
+                    ) : null}
                   </NavLink>
                 </li>
               );

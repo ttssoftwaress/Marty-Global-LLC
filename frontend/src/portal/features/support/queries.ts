@@ -8,10 +8,10 @@ import type {
   ConversationThread,
   Message,
   MessageAttachment,
-} from '../../types/messages';
+} from '../../types/support';
 
 /*
- * Messages data layer. The Messages UI is the customer's window onto the
+ * Support data layer. The Support UI is the customer's window onto the
  * live-chat / support module (AGENTS.md, Live Chat):
  *   - the conversation list (server-filtered by the search box)
  *   - a single conversation's full thread

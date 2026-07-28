@@ -3,9 +3,11 @@ export { SidebarDesktop } from './SidebarDesktop';
 export { SidebarTablet } from './SidebarTablet';
 export { SidebarMobileDrawer } from './SidebarMobileDrawer';
 export { SidebarUserBlock, type SidebarUser } from './SidebarUserBlock';
+export { NavBadge } from './NavBadge';
 export {
   PORTAL_NAV_ITEMS,
-  PORTAL_SUPPORT_LINK,
   isNavItemActive,
+  type PortalNavBadge,
+  type PortalNavBadges,
   type PortalNavItem,
 } from './nav-items';

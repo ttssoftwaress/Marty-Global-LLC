@@ -98,11 +98,17 @@ beforeEach(async () => {
   });
   await prisma.quote.deleteMany({ where: { customerId: CUSTOMER_ID } });
   await prisma.order.deleteMany({ where: { customerId: CUSTOMER_ID } });
+  // The preference-gate tests below mute this customer; without clearing the row
+  // the mute would leak into every test that runs after them.
+  await prisma.feedNotification.deleteMany({ where: { userId: CUSTOMER_ID } });
+  await prisma.notificationPreference.deleteMany({ where: { userId: CUSTOMER_ID } });
 });
 
 afterAll(async () => {
   await prisma.quote.deleteMany({ where: { customerId: CUSTOMER_ID } });
   await prisma.order.deleteMany({ where: { customerId: CUSTOMER_ID } });
+  await prisma.feedNotification.deleteMany({ where: { userId: CUSTOMER_ID } });
+  await prisma.notificationPreference.deleteMany({ where: { userId: CUSTOMER_ID } });
   await prisma.staffProfile.deleteMany({ where: { userId: { in: USER_IDS } } });
   await prisma.user.deleteMany({ where: { id: { in: USER_IDS } } });
   await prisma.$disconnect();
@@ -150,6 +156,76 @@ describe('createQuote', () => {
     });
     expect(entry.internal).toBe(false);
     expect(entry.message).toContain('Quote');
+  });
+
+  /*
+   * The customer turned quote alerts off on `/app/settings`. For a long time
+   * only the mailroom read that matrix and this path emailed regardless, which
+   * made the settings screen a lie — so the gate is asserted where it broke.
+   *
+   * What must still happen is the rest of it: the quote, the order activity row,
+   * and the approval are the order's own record, not a notification. A customer
+   * who muted alerts still expects to find the price waiting when they open the
+   * page — muting changes who gets told, never what was done.
+   */
+  it('sends nothing to a customer who turned quote alerts off', async () => {
+    const order = await createOrder();
+
+    await prisma.notificationPreference.upsert({
+      where: { userId: CUSTOMER_ID },
+      create: {
+        userId: CUSTOMER_ID,
+        quoteAlertsEmail: false,
+        quoteAlertsInApp: false,
+      },
+      update: { quoteAlertsEmail: false, quoteAlertsInApp: false },
+    });
+
+    const quote = await createQuote(auth(ADMIN_ID, Role.ADMIN), order.id, {
+      lineItems: LINES,
+      tax: 0,
+      discount: 0,
+      currency: 'USD',
+      validForDays: 14,
+    });
+
+    expect(queueEmail).not.toHaveBeenCalled();
+    expect(
+      await prisma.feedNotification.count({ where: { userId: CUSTOMER_ID } }),
+    ).toBe(0);
+
+    // The quote itself, and the order's record of it, are untouched.
+    expect(quote.total.amount).toBe(57_450);
+    expect(
+      await prisma.orderActivity.count({
+        where: { orderId: order.id, message: { startsWith: 'Quote' } },
+      }),
+    ).toBe(1);
+  });
+
+  // The master switch is account-wide, so it silences an email the category
+  // itself still permits — while leaving the bell alone.
+  it('honours the email master switch over an enabled category', async () => {
+    const order = await createOrder();
+
+    await prisma.notificationPreference.upsert({
+      where: { userId: CUSTOMER_ID },
+      create: { userId: CUSTOMER_ID, emailMaster: false, quoteAlertsEmail: true },
+      update: { emailMaster: false, quoteAlertsEmail: true },
+    });
+
+    await createQuote(auth(ADMIN_ID, Role.ADMIN), order.id, {
+      lineItems: LINES,
+      tax: 0,
+      discount: 0,
+      currency: 'USD',
+      validForDays: 14,
+    });
+
+    expect(queueEmail).not.toHaveBeenCalled();
+    expect(
+      await prisma.feedNotification.count({ where: { userId: CUSTOMER_ID } }),
+    ).toBe(1);
   });
 
   /*

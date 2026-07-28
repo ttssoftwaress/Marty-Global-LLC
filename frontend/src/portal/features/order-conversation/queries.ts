@@ -11,7 +11,7 @@ import type {
  * The order conversation's data layer — the thread on an order's detail screen,
  * between the customer and the staff member their order is assigned to.
  *
- * A different endpoint from the Messages screen's on purpose: that one is the
+ * A different endpoint from the Support screen's on purpose: that one is the
  * general support queue, this one is bound to an order and its assignee
  * (AGENTS.md two-apps sync rule — `modules/conversations` owns the rule).
  *

@@ -10,7 +10,7 @@ import {
   type SocketReadReceipt,
   type SocketTyping,
 } from '@/services/socket';
-import type { Message } from '../../types/messages';
+import type { Message } from '../../types/support';
 import {
   appendMessage,
   appendOptimistic,

@@ -328,7 +328,15 @@ export async function markFeedItemRead(
   return { id, read: true };
 }
 
-// The dashboard and top-bar badge read this rather than paging the whole feed.
+/*
+ * The unread total on its own, for callers that have no page to read it off.
+ *
+ * The panel and the feed screen both get `unreadCount` alongside their rows, so
+ * neither needs this — deliberately, because a badge fetched separately from the
+ * list beneath it is how the two come to disagree. This exists for the socket
+ * broadcaster (sockets/broadcast.ts), which pushes the number to a client that
+ * is not fetching anything at all.
+ */
 export async function countUnreadFeed(userId: string): Promise<number> {
   return prisma.feedNotification.count({
     where: { userId, deletedAt: null, readAt: null },

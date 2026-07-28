@@ -82,6 +82,19 @@ export const addActivitySchema = z.object({
 export type AddActivityInput = z.infer<typeof addActivitySchema>;
 
 /*
+ * Asking the customer to upload a document.
+ *
+ * `name` is what the customer is told to send ("a certified passport copy"), so
+ * it is the only field: the request is a placeholder row on the order's
+ * Documents card, not a message. A reviewer who needs to explain *why* posts an
+ * activity reply beside it, which already has its own visibility contract above.
+ */
+export const requestDocumentSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+});
+export type RequestDocumentInput = z.infer<typeof requestDocumentSchema>;
+
+/*
  * Opening one of the order's documents.
  *
  * `disposition` is the difference between the two controls on the card: `inline`

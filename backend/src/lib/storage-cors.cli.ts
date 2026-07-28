@@ -19,7 +19,7 @@ import { applyBucketCors, bucketCorsRules, storageEnabled } from './storage.js';
  * what the bucket ends up with, so list every origin that must reach it.
  */
 
-const origins = [...new Set([env.FRONTEND_ORIGIN, ...process.argv.slice(2)])];
+const origins = [...new Set([...env.FRONTEND_ORIGIN, ...process.argv.slice(2)])];
 
 const invalid = origins.filter((origin) => {
   try {

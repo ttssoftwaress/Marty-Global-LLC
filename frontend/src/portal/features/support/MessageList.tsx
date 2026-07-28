@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { isSameDay, parseISO } from 'date-fns';
 
 import { formatDayLabel } from '../../lib/format';
-import type { Message } from '../../types/messages';
+import type { Message } from '../../types/support';
 import { MessageBubble } from './MessageBubble';
 import { TypingIndicator } from './TypingIndicator';
 

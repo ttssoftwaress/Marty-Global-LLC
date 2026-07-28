@@ -4,6 +4,7 @@ import { adminRouter } from './modules/admin/admin.routes.js';
 import { billingRouter } from './modules/billing/billing.routes.js';
 import { conversationsRouter } from './modules/conversations/conversations.routes.js';
 import { dashboardRouter } from './modules/dashboard/dashboard.routes.js';
+import { documentsRouter } from './modules/documents/documents.routes.js';
 import { guestRouter } from './modules/guest/guest.routes.js';
 import { healthRouter } from './modules/health/health.routes.js';
 import { mailroomRouter } from './modules/mailroom/mailroom.routes.js';
@@ -34,6 +35,13 @@ router.use('/billing', billingRouter);
 // `billing` owns what is owed; `payments` owns collecting it (AGENTS.md).
 router.use('/payments', paymentsRouter);
 router.use('/mailrooms', mailroomRouter);
+/*
+ * Every file the customer has, gathered into one list. Read-only: it aggregates
+ * the three sources that already own files (order documents, delivered-record
+ * file values, mail scans) rather than introducing a fourth table nothing writes
+ * to — documents.service.ts records why.
+ */
+router.use('/documents', documentsRouter);
 /*
  * Delivered services — what the customer GOT, as distinct from `/orders`, which
  * is what they asked for. The virtual mail room keeps its own router above: it

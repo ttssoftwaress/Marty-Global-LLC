@@ -5,6 +5,7 @@ import type { ApiSuccess } from '@/types/api';
 import type {
   AdminDocumentDisposition,
   AdminOrderDetail,
+  AdminOrderDocument,
   AdminOrderDocumentLink,
   AdminOrderUpdate,
   AdminQuote,
@@ -87,6 +88,30 @@ export function useAdminOrderDocumentLink(orderId: string) {
       apiFetch<ApiSuccess<AdminOrderDocumentLink>>(
         `/admin/orders/${orderId}/documents/${documentId}?disposition=${disposition}`,
       ).then((res) => res.data),
+  });
+}
+
+/*
+ * POST /v1/admin/orders/:orderId/documents/request — ask the customer to upload
+ * something.
+ *
+ * The row it creates is the request: a pending placeholder on this same card,
+ * which the customer's upload fills in rather than landing beside. So this
+ * invalidates the order record — the card the reviewer is looking at gains a row
+ * the moment it succeeds — and the backend notifies the customer.
+ */
+export function useRequestAdminOrderDocument(orderId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (name: string) =>
+      apiFetch<ApiSuccess<AdminOrderDocument>>(
+        `/admin/orders/${orderId}/documents/request`,
+        { method: 'POST', body: JSON.stringify({ name }) },
+      ).then((res) => res.data),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ORDERS_SCOPE });
+    },
   });
 }
 

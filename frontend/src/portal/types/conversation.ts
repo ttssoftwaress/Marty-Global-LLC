@@ -2,10 +2,10 @@
  * Order conversation — local mirror of `GET /v1/orders/:orderId/conversation`.
  * The backend is the source of truth (AGENTS.md, two-apps sync rule).
  *
- * Distinct from `messages.ts` next door, and the distinction is the point:
+ * Distinct from `support.ts` next door, and the distinction is the point:
  *
- *   - a SUPPORT thread (messages.ts) is opened cold and routed to whichever
- *     agent is free — that is the Messages screen and the help widget
+ *   - a SUPPORT thread (support.ts) is opened cold and routed to whichever
+ *     agent is free — that is the Support screen and the help widget
  *   - an ORDER conversation (this file) is bound to one order and answerable
  *     only by that order's assigned specialist
  *

@@ -3,14 +3,13 @@ import { createBrowserRouter, Outlet } from 'react-router-dom';
 // Portal sections the sidebar links to that have no screen yet. Paths are
 // relative to `/app` and mirror PORTAL_NAV_ITEMS in
 // portal/components/sidebar/nav-items.ts — keep the two in sync.
-const PORTAL_PLACEHOLDER_ROUTES = [
-  { path: 'documents', title: 'Documents' },
-  { path: 'support', title: 'Support' },
-  // Mail-room sub-flows the mail-room screens link to (the add-room wizard)
-  // whose screens are not built yet — placeholders keep the links inside the
-  // portal instead of falling through to marketing.
-  { path: 'mailroom/new', title: 'Add new room' },
-];
+//
+// Empty: the add-room wizard placeholder was removed — a mail room is bought
+// like any other service, so "Add new room" now routes into the order flow
+// (`/app/order`) instead of a wizard of its own. Kept rather than deleted
+// because the next section to be scaffolded needs somewhere to land, and the
+// mapping below already handles it.
+const PORTAL_PLACEHOLDER_ROUTES: { path: string; title: string }[] = [];
 
 // Admin sections the sidebar links to that have no screen yet. Paths are
 // relative to `/admin` and mirror ADMIN_NAV_ITEMS in
@@ -67,6 +66,16 @@ export const router = createBrowserRouter([
         lazy: async () => {
           const { ContactPage } = await import('@/marketing/pages/ContactPage');
           return { Component: ContactPage };
+        },
+      },
+      {
+        // The full question library. The short FaqSection accordions on home,
+        // services, and how-it-works close with a link here; each topic group
+        // is an anchor, so `/faq#billing` deep-links from anywhere.
+        path: '/faq',
+        lazy: async () => {
+          const { FaqPage } = await import('@/marketing/pages/FaqPage');
+          return { Component: FaqPage };
         },
       },
       {
@@ -268,6 +277,20 @@ export const router = createBrowserRouter([
         },
       },
       {
+        /*
+         * Documents — every file the customer has, in one library: what we filed
+         * for them, what they attached to an application, and their scanned
+         * mail. The backend gathers these from the three sources that already
+         * own files rather than from a documents table, so each row links back
+         * to the order, record, or mail item it belongs to.
+         */
+        path: 'documents',
+        lazy: async () => {
+          const { DocumentsPage } = await import('@/portal/pages/DocumentsPage');
+          return { Component: DocumentsPage };
+        },
+      },
+      {
         // Account settings — the Profile-info frame (other sections show a
         // "coming soon" panel in the same shell). `?section=` selects the active
         // section and drives the mobile master/detail drill-in.
@@ -314,24 +337,25 @@ export const router = createBrowserRouter([
         },
       },
       {
-        // Messages — the customer's conversations with the team (the portal face
-        // of the live-chat / support module). The list-only and open-thread views
-        // share one screen; the conversation id in the URL selects the thread and
-        // drives the mobile master/detail. Data loads from the backend later.
-        path: 'messages',
+        // Support — the customer's conversations with the team (the portal face
+        // of the live-chat / support module). Conversations are the only thing
+        // here, so they get no page of their own: this IS that screen. The
+        // list-only and open-thread views share one route; the conversation id
+        // in the URL selects the thread and drives the mobile master/detail.
+        path: 'support',
         lazy: async () => {
-          const { MessagesPage } = await import('@/portal/pages/MessagesPage');
-          return { Component: MessagesPage };
+          const { SupportPage } = await import('@/portal/pages/SupportPage');
+          return { Component: SupportPage };
         },
       },
       {
-        // A single conversation open — the same Messages screen with that thread
+        // A single conversation open — the same Support screen with that thread
         // selected, so the view deep-links and Back returns to the list (the
         // mobile thread header carries the back control).
-        path: 'messages/:conversationId',
+        path: 'support/:conversationId',
         lazy: async () => {
-          const { MessagesPage } = await import('@/portal/pages/MessagesPage');
-          return { Component: MessagesPage };
+          const { SupportPage } = await import('@/portal/pages/SupportPage');
+          return { Component: SupportPage };
         },
       },
       {
@@ -889,6 +913,35 @@ export const router = createBrowserRouter([
             Component: () => (
               <RequirePermission area="settings" title="Admin settings">
                 <AdminSettingsPage />
+              </RequirePermission>
+            ),
+          };
+        },
+      },
+      {
+        /*
+         * Audit log — the read-only trail of who did what, across every section
+         * above. Reads `GET /v1/admin/audit` and `/audit/summary`; there is no
+         * write endpoint behind this screen and there must never be one, since
+         * a trail a screen can edit is not evidence.
+         *
+         * Its own `audit` area rather than admin-only, so reviewing the trail
+         * can be delegated without also handing over the power to change what
+         * it records. Not a default on any role except super-admin and
+         * operations manager.
+         */
+        path: 'audit',
+        lazy: async () => {
+          const { AdminAuditLogPage } = await import(
+            '@/admin/pages/AdminAuditLogPage'
+          );
+          const { RequirePermission } = await import(
+            '@/admin/components/RequirePermission'
+          );
+          return {
+            Component: () => (
+              <RequirePermission area="audit" title="Audit log">
+                <AdminAuditLogPage />
               </RequirePermission>
             ),
           };

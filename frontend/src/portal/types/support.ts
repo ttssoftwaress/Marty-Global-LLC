@@ -1,9 +1,9 @@
 /*
- * Messages — local mirror of the API shapes the Messages screen renders. The
+ * Support — local mirror of the API shapes the Support screen renders. The
  * backend is the source of truth (AGENTS.md, two-apps sync rule); these types
  * exist so the UI compiles and composes before the endpoints land.
  *
- * The Messages surface is the customer's view of the live-chat / support module
+ * The Support surface is the customer's view of the live-chat / support module
  * (AGENTS.md, Live Chat): each conversation is a persisted thread with the team.
  * Real-time delivery arrives over `services/socket.ts` once the support module
  * lands; until then the thread loads over REST like every other screen.

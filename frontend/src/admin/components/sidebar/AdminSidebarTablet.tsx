@@ -1,8 +1,13 @@
 import { LogOut } from 'lucide-react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 
+import { AdminNavBadge } from './AdminNavBadge';
 import { AdminSidebarAvatar, type AdminSidebarUser } from './AdminSidebarUserBlock';
-import { isAdminNavItemActive, type AdminNavItem } from './nav-items';
+import {
+  isAdminNavItemActive,
+  type AdminNavBadges,
+  type AdminNavItem,
+} from './nav-items';
 
 /*
  * Admin sidebar — tablet (md up to lg). A 72px icon rail: the wordmark collapses
@@ -22,6 +27,7 @@ import { isAdminNavItemActive, type AdminNavItem } from './nav-items';
 type AdminSidebarTabletProps = {
   user: AdminSidebarUser;
   items: AdminNavItem[];
+  badges?: AdminNavBadges;
   onLogout?: () => void;
   className?: string;
 };
@@ -29,6 +35,7 @@ type AdminSidebarTabletProps = {
 export function AdminSidebarTablet({
   user,
   items,
+  badges,
   onLogout,
   className,
 }: AdminSidebarTabletProps) {
@@ -52,6 +59,7 @@ export function AdminSidebarTablet({
             {items.map((item) => {
               const active = isAdminNavItemActive(item.to, pathname);
               const Icon = item.icon;
+              const count = item.badge ? (badges?.[item.badge] ?? 0) : 0;
 
               return (
                 <li key={item.to}>
@@ -59,15 +67,24 @@ export function AdminSidebarTablet({
                     to={item.to}
                     end={item.to === '/admin'}
                     title={item.label}
-                    aria-label={item.label}
+                    /* The rail has no visible labels, so the count has to be in
+                     * the accessible name — the badge itself is decorative. */
+                    aria-label={count > 0 ? `${item.label} — ${count} unread` : item.label}
                     aria-current={active ? 'page' : undefined}
                     className={
                       active
-                        ? 'flex size-10 items-center justify-center rounded-input bg-white text-accent'
-                        : 'flex size-10 items-center justify-center rounded-input text-white/80 transition-colors hover:bg-white/10 hover:text-white'
+                        ? 'relative flex size-10 items-center justify-center rounded-input bg-white text-accent'
+                        : 'relative flex size-10 items-center justify-center rounded-input text-white/80 transition-colors hover:bg-white/10 hover:text-white'
                     }
                   >
                     <Icon className="size-5" strokeWidth={1.75} aria-hidden="true" />
+                    {count > 0 ? (
+                      <AdminNavBadge
+                        count={count}
+                        decorative
+                        className="pointer-events-none absolute -right-0.5 -top-0.5"
+                      />
+                    ) : null}
                   </NavLink>
                 </li>
               );

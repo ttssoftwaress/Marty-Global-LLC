@@ -1,6 +1,6 @@
 import { AlertTriangle, MessageSquare, Search } from 'lucide-react';
 
-import type { ConversationSummary } from '../../types/messages';
+import type { ConversationSummary } from '../../types/support';
 import { ConversationListItem } from './ConversationListItem';
 
 /*
@@ -113,7 +113,7 @@ export function ConversationList({
       className={`w-full min-h-0 flex-col gap-4 md:w-[17.5rem] md:shrink-0 md:gap-0 md:overflow-hidden md:rounded-card md:border md:border-gray-200 md:bg-white lg:w-[22.5rem] ${className}`}
     >
       <h1 className="shrink-0 text-h4 font-semibold text-text md:hidden">
-        Messages
+        Support
       </h1>
 
       <div className="shrink-0 md:border-b md:border-gray-200 md:p-3 lg:p-4">

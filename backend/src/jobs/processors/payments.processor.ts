@@ -6,6 +6,7 @@ import {
   isTronConfigured,
   tronConfig,
 } from '../../config/tron.js';
+import { publicAppUrl } from '../../config/env.js';
 import { logger } from '../../lib/logger.js';
 import { formatUsdtRaw } from '../../lib/money.js';
 import { prisma } from '../../lib/prisma.js';
@@ -16,6 +17,15 @@ import {
   expireStalePayments,
   settleTransfer,
 } from '../../modules/payments/payments.service.js';
+import {
+  notifyStaffPaymentConfirmed,
+  notifyStaffPaymentMismatched,
+} from '../../modules/admin/admin.notifications.js';
+import {
+  createFeedNotification,
+  notifyFeed,
+} from '../../modules/notifications/notifications.feed.js';
+import { channelsFor } from '../../modules/notifications/notifications.preferences.js';
 import { queueEmail } from '../../modules/notifications/notifications.service.js';
 
 /*
@@ -269,20 +279,40 @@ async function onCredited(paymentId: string, txHash: string | null): Promise<voi
     currency: payment.currency,
   });
 
-  try {
-    await prisma.feedNotification.create({
-      data: {
-        userId: payment.customerId,
-        category: FeedNotificationCategory.PAYMENT,
-        message: `Payment of ${amount} received${
-          payment.quote?.reference ? ` for quote ${payment.quote.reference}` : ''
-        }. Thank you!`,
-        href: '/app/billing',
-      },
-    });
-  } catch (error) {
-    logger.error({ err: error, paymentId }, 'Failed to write payment feed entry');
-  }
+  /*
+   * Gated on `statusUpdates`, which is the category the settings screen files a
+   * payment event under — the "Status updates" tab covers the order, mailroom,
+   * and payment feed categories (notifications.service.ts, FILTER_CATEGORIES),
+   * so that toggle is the promise the customer was actually given here.
+   *
+   * The credit itself is never conditional on any of this. It is already
+   * committed and audited above; muting a receipt changes who hears about the
+   * money, never whether it was recorded.
+   */
+  const channels = await channelsFor(payment.customerId, 'statusUpdates');
+
+  // `notifyFeed` re-reads the same category, writes only if the in-app toggle is
+  // on, swallows its own failures, and pushes the new unread count to the
+  // customer's open tabs — this worker has no socket of its own.
+  await notifyFeed({
+    userId: payment.customerId,
+    preference: 'statusUpdates',
+    category: FeedNotificationCategory.PAYMENT,
+    message: `Payment of ${amount} received${
+      payment.quote?.reference ? ` for quote ${payment.quote.reference}` : ''
+    }. Thank you!`,
+    href: '/app/billing',
+  });
+
+  // Whoever works the payments queue hears about it too — reconciling the money
+  // is their job, and nothing announced a settled payment to them before.
+  void notifyStaffPaymentConfirmed({
+    paymentId,
+    amountLabel: amount,
+    quoteReference: payment.quote?.reference ?? null,
+  });
+
+  if (!channels.email) return;
 
   try {
     await queueEmail({
@@ -294,7 +324,7 @@ async function onCredited(paymentId: string, txHash: string | null): Promise<voi
         payment.quote?.serviceName ? ` for ${payment.quote.serviceName}` : ''
       } has been confirmed on-chain. Your order will continue processing.`,
       actionLabel: 'View billing',
-      actionUrl: `${process.env.FRONTEND_ORIGIN ?? ''}/app/billing`,
+      actionUrl: `${publicAppUrl}/app/billing`,
       userId: payment.customerId,
     });
   } catch (error) {
@@ -346,21 +376,36 @@ async function onMismatched(
     'USDT payment amount mismatch — needs manual resolution',
   );
 
+  /*
+   * Deliberately NOT gated on notification preferences, unlike the receipt above.
+   *
+   * AGENTS.md is explicit that an under- or overpayment is "an explicit status,
+   * never a silent pass". The customer sent the wrong amount and is the only
+   * person who can say what they intended; a preference toggle about routine
+   * updates is not consent to be kept unaware that their money is in limbo. The
+   * in-app feed is the quietest way to say so, so it is the one channel that
+   * still fires.
+   */
   try {
-    await prisma.feedNotification.create({
-      data: {
-        userId: payment.customerId,
-        category: FeedNotificationCategory.PAYMENT,
-        message:
-          kind === 'underpaid'
-            ? 'We received less than the quoted amount for your payment. Our team is reviewing it.'
-            : 'We received more than the quoted amount for your payment. Our team is reviewing it.',
-        href: '/app/billing',
-      },
+    // `createFeedNotification`, not `notifyFeed` — the ungated variant, for
+    // exactly the reason above.
+    await createFeedNotification({
+      userId: payment.customerId,
+      category: FeedNotificationCategory.PAYMENT,
+      message:
+        kind === 'underpaid'
+          ? 'We received less than the quoted amount for your payment. Our team is reviewing it.'
+          : 'We received more than the quoted amount for your payment. Our team is reviewing it.',
+      href: '/app/billing',
     });
   } catch (error) {
     logger.error({ err: error, paymentId }, 'Failed to write mismatch feed entry');
   }
+
+  // The half that actually gets it resolved. A mismatch needs a human to decide
+  // what happened, and until now the only trace was a log line and an audit row
+  // nobody watches.
+  void notifyStaffPaymentMismatched({ paymentId, kind });
 }
 
 // The BullMQ entry point. Returns the sweep summary so a failed job's logs carry

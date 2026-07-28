@@ -4,6 +4,7 @@ import { admin } from 'better-auth/plugins';
 
 import { logger } from '../lib/logger.js';
 import { prisma } from '../lib/prisma.js';
+import { auditAuthHook } from '../modules/audit/audit.auth-hook.js';
 import { queueEmail } from '../modules/notifications/notifications.service.js';
 import { env } from './env.js';
 
@@ -13,7 +14,7 @@ import { env } from './env.js';
 export const auth = betterAuth({
   baseURL: env.BETTER_AUTH_URL,
   secret: env.BETTER_AUTH_SECRET,
-  trustedOrigins: [env.FRONTEND_ORIGIN],
+  trustedOrigins: [...env.FRONTEND_ORIGIN],
 
   database: prismaAdapter(prisma, { provider: 'postgresql' }),
 
@@ -70,6 +71,18 @@ export const auth = betterAuth({
         input: true,
       },
     },
+  },
+
+  /*
+   * The audit trail for authentication (modules/audit/audit.auth-hook.ts).
+   *
+   * Better Auth owns this whole subtree, so there is no service of ours to put a
+   * `record` call in — this hook is that layer. It runs after every auth
+   * endpoint, including the ones that threw, which is what makes a failed
+   * sign-in auditable. It never modifies the response and never throws.
+   */
+  hooks: {
+    after: auditAuthHook,
   },
 
   plugins: [

@@ -13,6 +13,7 @@ import {
   type QuoteLineItem,
 } from '@prisma/client';
 
+import { publicAppUrl } from '../../config/env.js';
 import { getAuth } from '../../guards/index.js';
 import { assertFound } from '../../guards/ownership.js';
 import type { AuthContext } from '../../guards/auth-context.js';
@@ -20,6 +21,10 @@ import { AppError } from '../../lib/app-error.js';
 import { logger } from '../../lib/logger.js';
 import { prisma } from '../../lib/prisma.js';
 import { presignObject } from '../../lib/storage.js';
+import {
+  notifyStaffDocumentUploaded,
+  notifyStaffOrderSubmitted,
+} from '../admin/admin.notifications.js';
 import { queueEmail } from '../notifications/notifications.service.js';
 import { assertKeyForPurpose } from '../uploads/uploads.service.js';
 import {
@@ -355,14 +360,30 @@ export async function createOrder(
 
   const serviceNames = order.items.map((item) => item.serviceName);
 
-  // Queue the confirmation email through the notifications pipeline (never inline,
-  // AGENTS.md). A failure here must not fail the order — the order is already
-  // committed — so log and continue; the customer still sees the confirmation.
+  /*
+   * Queue the confirmation email through the notifications pipeline (never
+   * inline, AGENTS.md). A failure here must not fail the order — the order is
+   * already committed — so log and continue; the customer still sees the
+   * confirmation.
+   *
+   * Not gated on notification preferences: this is the receipt for a form the
+   * customer submitted seconds ago, not one of the recurring updates the
+   * settings screen offers to turn off (notifications.preferences.ts). The
+   * status updates that follow *are* gated.
+   */
   await sendOrderConfirmation(auth, order.reference, serviceNames).catch((error) => {
     logger.error(
       { orderId: order.id, err: error instanceof Error ? error.message : error },
       'Failed to queue order confirmation email',
     );
+  });
+
+  // The other half: telling the team a filing has landed in their queue. Also
+  // after the commit, and also unable to fail the customer's order.
+  void notifyStaffOrderSubmitted({
+    orderId: order.id,
+    reference: order.reference,
+    serviceName: serviceNames[0] ?? 'a service',
   });
 
   return {
@@ -410,7 +431,7 @@ async function sendOrderConfirmation(
     heading: 'Application submitted',
     body: `Thanks — we've received your application (${reference}) for ${list}. Our team will review your details and send a personalized quote with a secure payment link within 1–2 business days.`,
     actionLabel: 'View in My Orders',
-    actionUrl: `${process.env.FRONTEND_ORIGIN ?? ''}/app/orders`,
+    actionUrl: `${publicAppUrl}/app/orders`,
     userId: auth.userId,
   });
 }
@@ -963,22 +984,75 @@ export async function attachDocuments(
     select: { name: true },
   });
 
+  const order = await prisma.order.findUnique({
+    where: { id: ownedOrderId },
+    select: { reference: true, assigneeId: true },
+  });
+
+  /*
+   * Outstanding requests the team has made for this order — a PENDING row with
+   * no object behind it, addressed to the customer (admin `requestDocument`).
+   *
+   * An upload named the same as one of them FILLS that row rather than landing
+   * beside it. Otherwise the card would show the request still outstanding next
+   * to the file that answers it, and the reviewer who asked would have no way to
+   * tell they were the same thing.
+   */
+  const outstanding = await prisma.orderDocument.findMany({
+    where: {
+      orderId: ownedOrderId,
+      deletedAt: null,
+      status: OrderDocumentStatus.PENDING,
+      source: OrderDocumentSource.CUSTOMER,
+      objectKey: null,
+    },
+    select: { id: true, name: true },
+  });
+
+  const requestByName = new Map(
+    outstanding.map((row) => [row.name.trim().toLowerCase(), row.id]),
+  );
+  // One request per upload: two files with the same name must not both claim it.
+  const claimed = new Set<string>();
+
+  const resolved = input.documents.map((document) => {
+    const requestId = requestByName.get(document.name.trim().toLowerCase());
+    const fills = requestId && !claimed.has(requestId) ? requestId : null;
+    if (fills) claimed.add(fills);
+    return { document, fills };
+  });
+
   /*
    * The rows and the activity entry are written together: a document the team
    * cannot see arrived is a document the customer will be asked for again.
    */
   await prisma.$transaction(async (tx) => {
-    await tx.orderDocument.createMany({
-      data: input.documents.map((document) => ({
-        orderId: ownedOrderId,
-        name: document.name,
-        objectKey: document.objectKey,
-        contentType: document.contentType,
-        sizeBytes: document.sizeBytes ?? null,
-        status: OrderDocumentStatus.AVAILABLE,
-        source: OrderDocumentSource.CUSTOMER,
-      })),
-    });
+    for (const { document, fills } of resolved) {
+      if (fills) {
+        await tx.orderDocument.update({
+          where: { id: fills },
+          data: {
+            objectKey: document.objectKey,
+            contentType: document.contentType,
+            sizeBytes: document.sizeBytes ?? null,
+            status: OrderDocumentStatus.AVAILABLE,
+          },
+        });
+        continue;
+      }
+
+      await tx.orderDocument.create({
+        data: {
+          orderId: ownedOrderId,
+          name: document.name,
+          objectKey: document.objectKey,
+          contentType: document.contentType,
+          sizeBytes: document.sizeBytes ?? null,
+          status: OrderDocumentStatus.AVAILABLE,
+          source: OrderDocumentSource.CUSTOMER,
+        },
+      });
+    }
 
     await tx.orderActivity.create({
       data: {
@@ -991,6 +1065,18 @@ export async function attachDocuments(
         }.`,
       },
     });
+  });
+
+  // The reviewer holding the order is the one who was waiting on this, so they
+  // are told alongside whoever oversees the queue.
+  void notifyStaffDocumentUploaded({
+    orderId: ownedOrderId,
+    reference: order?.reference ?? '',
+    assigneeId: order?.assigneeId ?? null,
+    documentName:
+      input.documents.length === 1
+        ? (input.documents[0]?.name ?? 'A document')
+        : `${input.documents.length} documents`,
   });
 
   const documents = await prisma.orderDocument.findMany({

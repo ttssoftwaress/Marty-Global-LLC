@@ -12,7 +12,7 @@ import { GuestChatWidget } from '../chat';
  * in progress, so mounting it inside each page would tear the connection down
  * and rebuild it on every navigation, losing the open panel mid-sentence.
  *
- * One mount above the routes means a visitor can move from Services to Pricing
+ * One mount above the routes means a visitor can move from Services to the FAQ
  * with the chat still open and the agent still typing.
  */
 
@@ -29,8 +29,8 @@ export function PublicChrome() {
 
 /*
  * Scrolls to `#section` after a cross-page navigation. React Router does not do
- * this itself, so a link like `/services#faq` from the contact page would
- * otherwise land at the top of the services page with the fragment ignored.
+ * this itself, so a link like `/faq#billing` from another page would otherwise
+ * land at the top of the FAQ page with the fragment ignored.
  *
  * The target is looked up in an effect rather than on navigation because the
  * destination page is lazy-loaded — the element does not exist until its chunk

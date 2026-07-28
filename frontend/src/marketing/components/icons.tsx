@@ -283,6 +283,28 @@ export function ChevronDownIcon(props: SVGProps<SVGSVGElement>) {
 }
 
 /*
+ * FAQ page glyphs — Lucide search for the question filter and x for its clear
+ * control. Same inlined-Lucide convention; parent sets color/size.
+ */
+export function SearchIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...lineIconProps(props)}>
+      <path d="m21 21-4.34-4.34" />
+      <circle cx="11" cy="11" r="8" />
+    </svg>
+  );
+}
+
+export function XIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...lineIconProps(props)}>
+      <path d="M18 6 6 18" />
+      <path d="m6 6 12 12" />
+    </svg>
+  );
+}
+
+/*
  * Footer social glyphs — outline (stroke) style matching the Figma export.
  * Paths are the exact vectors from the design, drawn in a 17-unit box with a
  * 2px stroke; `currentColor` lets the parent set the color.

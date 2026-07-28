@@ -4,7 +4,7 @@ import { io, type Socket } from 'socket.io-client';
  * The live-chat socket client, shared by the portal, the admin inbox, and the
  * marketing widget (AGENTS.md, Live Chat).
  *
- * One connection per tab, not one per screen. A customer can have the Messages
+ * One connection per tab, not one per screen. A customer can have the Support
  * page and the floating widget mounted at once, and an agent can have the inbox
  * open beside a thread — each of those is a subscriber to the same socket, so
  * this module hands out a shared instance and reference-counts it.

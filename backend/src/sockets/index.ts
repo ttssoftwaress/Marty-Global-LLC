@@ -20,8 +20,9 @@ import { registerChatHandlers } from './chat.handlers.js';
 
 export function createSocketServer(httpServer: HttpServer): Server {
   const io = new Server(httpServer, {
-    // Exactly the frontend origin, from env — the same rule as the REST CORS
-    // policy, and credentials because the handshake carries the session cookie.
+    // Exactly the frontend origins, from env — the same allowlist the REST CORS
+    // policy uses, and credentials because the handshake carries the session
+    // cookie.
     cors: {
       origin: env.FRONTEND_ORIGIN,
       credentials: true,

@@ -21,6 +21,8 @@ export function createApp() {
   app.set('trust proxy', 1);
 
   app.use(helmet());
+  // An allowlist, not a wildcard: `cors` echoes back the request's origin only
+  // when it matches an entry exactly, which is what keeps `credentials` safe.
   app.use(cors({ origin: env.FRONTEND_ORIGIN, credentials: true }));
 
   // Better Auth reads the raw request body, so its handler is mounted before

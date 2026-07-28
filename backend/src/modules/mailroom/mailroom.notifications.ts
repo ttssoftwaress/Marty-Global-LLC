@@ -1,8 +1,9 @@
 import { FeedNotificationCategory } from '@prisma/client';
 
-import { env } from '../../config/env.js';
+import { publicAppUrl } from '../../config/env.js';
 import { logger } from '../../lib/logger.js';
-import { prisma } from '../../lib/prisma.js';
+import { notifyFeed } from '../notifications/notifications.feed.js';
+import { channelsFor } from '../notifications/notifications.preferences.js';
 import { queueEmail } from '../notifications/notifications.service.js';
 
 /*
@@ -31,50 +32,19 @@ type MailNotice = {
   actionLabel: string;
 };
 
-/*
- * Resolved per send rather than cached: a customer who turns mail email off
- * expects the next scan not to email them, and these are low-frequency events.
- *
- * A customer with no preference row has never opened the settings screen. The
- * schema's defaults are "on", so an absent row is treated as on — the same
- * answer `getNotificationPreferences` would materialise.
- */
-async function channels(
-  customerId: string,
-): Promise<{ email: boolean; inApp: boolean }> {
-  const preference = await prisma.notificationPreference.findUnique({
-    where: { userId: customerId },
-    select: {
-      emailMaster: true,
-      mailUpdatesEmail: true,
-      mailUpdatesInApp: true,
-    },
-  });
-
-  if (!preference) return { email: true, inApp: true };
-
-  return {
-    // The master switch gates every email account-wide, so an enabled category
-    // still sends nothing while it is off (the settings screen says the same).
-    email: preference.emailMaster && preference.mailUpdatesEmail,
-    inApp: preference.mailUpdatesInApp,
-  };
-}
-
 async function deliver(notice: MailNotice): Promise<void> {
   try {
-    const { email, inApp } = await channels(notice.customerId);
+    const { email } = await channelsFor(notice.customerId, 'mailUpdates');
 
-    if (inApp) {
-      await prisma.feedNotification.create({
-        data: {
-          userId: notice.customerId,
-          category: FeedNotificationCategory.MAILROOM,
-          message: notice.message,
-          href: notice.href,
-        },
-      });
-    }
+    // The in-app half re-reads the same matrix inside `notifyFeed` and pushes
+    // the customer's new unread count to any tab they have open.
+    await notifyFeed({
+      userId: notice.customerId,
+      preference: 'mailUpdates',
+      category: FeedNotificationCategory.MAILROOM,
+      message: notice.message,
+      href: notice.href,
+    });
 
     if (email) {
       await queueEmail({
@@ -84,7 +54,7 @@ async function deliver(notice: MailNotice): Promise<void> {
         heading: notice.heading,
         body: notice.body,
         actionLabel: notice.actionLabel,
-        actionUrl: `${env.FRONTEND_ORIGIN}${notice.href}`,
+        actionUrl: `${publicAppUrl}${notice.href}`,
         userId: notice.customerId,
       });
     }

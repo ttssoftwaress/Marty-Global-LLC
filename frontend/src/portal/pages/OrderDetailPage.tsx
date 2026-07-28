@@ -119,7 +119,7 @@ export function OrderDetailPage({
                    * The conversation sits directly under the activity feed: the
                    * feed is what happened to the order, the conversation is where
                    * the customer asks about it. Adjacent, but distinct records —
-                   * and both distinct from Messages, which is general support.
+                   * and both distinct from Support, which is general help.
                    */}
                   <div className="order-6 md:order-4">
                     <OrderConversationSection orderId={orderKey} />

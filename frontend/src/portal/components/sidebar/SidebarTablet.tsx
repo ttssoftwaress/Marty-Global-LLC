@@ -1,13 +1,18 @@
-import { HelpCircle, LogOut } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { NavLink, useLocation } from 'react-router-dom';
 
-import { PORTAL_NAV_ITEMS, PORTAL_SUPPORT_LINK, isNavItemActive } from './nav-items';
+import { NavBadge } from './NavBadge';
+import {
+  PORTAL_NAV_ITEMS,
+  isNavItemActive,
+  type PortalNavBadges,
+} from './nav-items';
 import { isServiceNavItemActive, useServiceNavItems } from './useServiceNavItems';
 
 /*
  * Portal sidebar — tablet (md up to lg). A 72px icon rail: no logo, no labels,
  * no user block. Nav icons sit in 48px rounded squares; the active one is a
- * white tile with a navy glyph. Support and logout are 40px pills at the foot.
+ * white tile with a navy glyph. Logout is a 40px pill at the foot.
  *
  * Labels are invisible here, so every control carries its nav label as both an
  * accessible name and a native tooltip — otherwise the rail is unusable with a
@@ -15,11 +20,12 @@ import { isServiceNavItemActive, useServiceNavItems } from './useServiceNavItems
  */
 
 type SidebarTabletProps = {
+  badges?: PortalNavBadges;
   onLogout?: () => void;
   className?: string;
 };
 
-export function SidebarTablet({ onLogout, className }: SidebarTabletProps) {
+export function SidebarTablet({ badges, onLogout, className }: SidebarTabletProps) {
   const { pathname } = useLocation();
   const serviceItems = useServiceNavItems();
 
@@ -32,6 +38,7 @@ export function SidebarTablet({ onLogout, className }: SidebarTabletProps) {
           {PORTAL_NAV_ITEMS.map((item) => {
             const active = isNavItemActive(item.to, pathname);
             const Icon = item.icon;
+            const count = item.badge ? (badges?.[item.badge] ?? 0) : 0;
 
             return (
               <li key={item.to}>
@@ -39,15 +46,24 @@ export function SidebarTablet({ onLogout, className }: SidebarTabletProps) {
                   to={item.to}
                   end={item.to === '/app'}
                   title={item.label}
-                  aria-label={item.label}
+                  /* The rail has no visible labels, so the count has to be in
+                   * the accessible name — the badge itself is decorative here. */
+                  aria-label={count > 0 ? `${item.label} — ${count} unread` : item.label}
                   aria-current={active ? 'page' : undefined}
                   className={
                     active
-                      ? 'flex size-12 items-center justify-center rounded-xl bg-white text-accent'
-                      : 'flex size-12 items-center justify-center rounded-xl text-white/80 transition-colors hover:bg-white/10 hover:text-white'
+                      ? 'relative flex size-12 items-center justify-center rounded-xl bg-white text-accent'
+                      : 'relative flex size-12 items-center justify-center rounded-xl text-white/80 transition-colors hover:bg-white/10 hover:text-white'
                   }
                 >
                   <Icon className="size-5" strokeWidth={1.75} aria-hidden="true" />
+                  {count > 0 ? (
+                    <NavBadge
+                      count={count}
+                      decorative
+                      className="pointer-events-none absolute right-1 top-1"
+                    />
+                  ) : null}
                 </NavLink>
               </li>
             );
@@ -87,15 +103,6 @@ export function SidebarTablet({ onLogout, className }: SidebarTabletProps) {
       </nav>
 
       <div className="flex w-full flex-col items-center gap-4">
-        <NavLink
-          to={PORTAL_SUPPORT_LINK.to}
-          title={PORTAL_SUPPORT_LINK.label}
-          aria-label={PORTAL_SUPPORT_LINK.label}
-          className="flex size-10 items-center justify-center rounded-[1.25rem] text-white/80 transition-colors hover:bg-white/10 hover:text-white"
-        >
-          <HelpCircle className="size-[1.125rem]" strokeWidth={1.75} aria-hidden="true" />
-        </NavLink>
-
         <button
           type="button"
           onClick={onLogout}
