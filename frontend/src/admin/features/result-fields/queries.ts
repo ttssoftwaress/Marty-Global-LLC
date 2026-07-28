@@ -110,9 +110,9 @@ export function useCreateResultField() {
  *
  * Also the archive/restore action: retiring one is `archived: true`, which
  * removes it from the picker while leaving every delivered record that holds a
- * value for it intact. There is no delete (AGENTS.md — ask before any hard
- * delete), and the database enforces the same with a `Restrict` on the value's
- * foreign key.
+ * value for it intact. It is what the backend points at when a delete is refused
+ * (AGENTS.md — ask before any hard delete), and the database enforces the same
+ * with a `Restrict` on the value's foreign key.
  *
  * A delivered record may render a changed label, so the catalog caches go too.
  */
@@ -131,6 +131,28 @@ export function useUpdateResultField() {
         `/admin/result-fields/${fieldId}`,
         { method: 'PATCH', body: JSON.stringify(payload) },
       ).then((res) => res.data),
+    onSuccess: () => {
+      invalidateResultFields(queryClient);
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'catalog'] });
+    },
+  });
+}
+
+/*
+ * DELETE /v1/admin/result-fields/:id — remove a registered fact outright.
+ *
+ * The mirror of the request registry's: it only succeeds while no service
+ * returns the fact and no delivered record holds a value for it, so something
+ * registered by mistake is removable and a delivered record stays readable.
+ */
+export function useDeleteResultField() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (fieldId: string) =>
+      apiFetch<ApiSuccess<{ id: string }>>(`/admin/result-fields/${fieldId}`, {
+        method: 'DELETE',
+      }).then((res) => res.data),
     onSuccess: () => {
       invalidateResultFields(queryClient);
       void queryClient.invalidateQueries({ queryKey: ['admin', 'catalog'] });

@@ -3,6 +3,13 @@ import { ArrowLeft } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 
 import { useSession } from '@/auth/client';
+import {
+  acceptAttr,
+  describeTypes,
+  IMAGE_TYPES,
+  isAcceptedType,
+  MAX_BYTES,
+} from '@/constants/uploads';
 import { ApiError } from '@/services/api';
 import { uploadFile } from '@/services/upload';
 import { PortalLayout } from '../components/PortalLayout';
@@ -64,9 +71,10 @@ import type {
 
 const SETTINGS_ROUTE = '/app/settings';
 
-// Matches the ceiling the uploads endpoint enforces for an avatar. Checked here
-// so the customer is told before anything is sent; the backend is the boundary.
-const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
+// Mirrors what the uploads endpoint enforces for an avatar. Checked here so the
+// customer is told before anything is sent; the backend is the boundary.
+const AVATAR_MAX_BYTES = MAX_BYTES.avatar;
+const AVATAR_MAX_MB = AVATAR_MAX_BYTES / (1024 * 1024);
 
 function isSettingsSection(value: string | null): value is SettingsSection {
   return SETTINGS_SECTIONS.some((section) => section.id === value);
@@ -79,7 +87,7 @@ function ComingSoonPanel({ label, bare }: { label: string; bare?: boolean }) {
   return (
     <div className={shell}>
       <p className="text-body-lg font-semibold text-text">{label}</p>
-      <p className="max-w-[420px] text-body text-gray-500">
+      <p className="max-w-[26.25rem] text-body text-gray-500">
         This section is being built. Your profile info is ready to edit now.
       </p>
     </div>
@@ -165,8 +173,15 @@ export function AccountSettingsPage() {
   const onAvatarPicked = async (file: File | undefined) => {
     if (!file) return;
 
+    // Type as well as size: a phone camera roll happily offers a HEIC through
+    // the picker, which the endpoint refuses — better to say so here.
+    if (!isAcceptedType(file, IMAGE_TYPES)) {
+      setAvatarError(`Use a ${describeTypes(IMAGE_TYPES)} image.`);
+      return;
+    }
+
     if (file.size > AVATAR_MAX_BYTES) {
-      setAvatarError('That image is larger than 5 MB.');
+      setAvatarError(`That image is larger than ${AVATAR_MAX_MB} MB.`);
       return;
     }
 
@@ -314,13 +329,13 @@ export function AccountSettingsPage() {
         <div className="w-full md:hidden">
           <div
             className={`flex flex-col gap-4 px-4 pt-4 ${
-              isProfile ? 'gap-6 pb-[100px]' : 'pb-6'
+              isProfile ? 'gap-6 pb-[6.25rem]' : 'pb-6'
             }`}
           >
             <button
               type="button"
               onClick={openMobileMenu}
-              className="flex items-center gap-2 self-start text-[14px] font-medium text-text-secondary"
+              className="flex items-center gap-2 self-start text-[0.875rem] font-medium text-text-secondary"
             >
               <ArrowLeft className="size-5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
               Account settings
@@ -361,7 +376,7 @@ export function AccountSettingsPage() {
                   <button
                     type="button"
                     onClick={onCancelCompany}
-                    className="px-4 py-3 text-[14px] font-semibold text-text-secondary"
+                    className="px-4 py-3 text-[0.875rem] font-semibold text-text-secondary"
                   >
                     Cancel
                   </button>
@@ -393,7 +408,7 @@ export function AccountSettingsPage() {
                   <button
                     type="button"
                     onClick={onCancelPassword}
-                    className="px-4 py-3 text-[14px] font-semibold text-text-secondary"
+                    className="px-4 py-3 text-[0.875rem] font-semibold text-text-secondary"
                   >
                     Cancel
                   </button>
@@ -429,11 +444,11 @@ export function AccountSettingsPage() {
 
           {/* Sticky save bar — only for the editable Profile frame. */}
           {isProfile && (
-            <div className="fixed inset-x-0 bottom-0 z-20 flex h-[72px] items-center justify-between border-t border-gray-200 bg-white px-4">
+            <div className="fixed inset-x-0 bottom-0 z-20 flex h-[4.5rem] items-center justify-between border-t border-gray-200 bg-white px-4">
               <button
                 type="button"
                 onClick={onCancel}
-                className="text-[14px] font-medium text-text-secondary"
+                className="text-[0.875rem] font-medium text-text-secondary"
               >
                 Cancel
               </button>
@@ -441,7 +456,7 @@ export function AccountSettingsPage() {
                 onClick={onSave}
                 disabled={!isDirty}
                 isSaving={false}
-                className="w-[240px]"
+                className="w-[15rem]"
               />
             </div>
           )}
@@ -450,7 +465,7 @@ export function AccountSettingsPage() {
 
       {/* ---------- Tablet & desktop ---------- */}
       <div className="hidden w-full p-6 md:block lg:p-content">
-        <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-6 lg:gap-8">
+        <div className="mx-auto flex w-full max-w-[75rem] flex-col gap-6 lg:gap-8">
           <header className="flex w-full flex-col gap-1.5">
             <p className="flex items-center gap-2 text-caption font-medium uppercase tracking-[0.4px]">
               <Link to="/app" className="text-primary hover:underline">
@@ -459,10 +474,10 @@ export function AccountSettingsPage() {
               <span className="text-gray-400">/</span>
               <span className="text-gray-500">Account settings</span>
             </p>
-            <h1 className="text-[32px] font-semibold leading-10 text-text">
+            <h1 className="text-[2rem] font-semibold leading-10 text-text">
               Account settings
             </h1>
-            <p className="text-[14px] text-text-secondary">
+            <p className="text-[0.875rem] text-text-secondary">
               Manage your profile, company details, security, and notification
               preferences.
             </p>
@@ -528,7 +543,7 @@ export function AccountSettingsPage() {
       <input
         ref={avatarInputRef}
         type="file"
-        accept="image/jpeg,image/png,image/webp"
+        accept={acceptAttr(IMAGE_TYPES)}
         className="sr-only"
         aria-label="Upload a profile photo"
         onChange={(event) => {

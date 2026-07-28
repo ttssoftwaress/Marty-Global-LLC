@@ -23,7 +23,7 @@ export function SettingsTabs({ active, onSelect }: SettingsTabsProps) {
   return (
     <nav aria-label="Account settings sections">
       {/* Desktop — vertical rail */}
-      <ul className="hidden w-[280px] shrink-0 flex-col gap-1 rounded-card border border-gray-200 bg-white p-4 lg:flex">
+      <ul className="hidden w-[17.5rem] shrink-0 flex-col gap-1 rounded-card border border-gray-200 bg-white p-4 lg:flex">
         {SETTINGS_SECTIONS.map(({ id, label, icon: Icon }) => {
           const isActive = id === active;
           return (
@@ -32,9 +32,9 @@ export function SettingsTabs({ active, onSelect }: SettingsTabsProps) {
                 type="button"
                 onClick={() => onSelect(id)}
                 aria-current={isActive ? 'page' : undefined}
-                className={`flex h-12 w-full items-center gap-3 rounded-input px-4 text-left text-[14px] font-medium transition-colors ${
+                className={`flex h-12 w-full items-center gap-3 rounded-input px-4 text-left text-[0.875rem] font-medium transition-colors ${
                   isActive
-                    ? 'bg-primary-light text-primary'
+                    ? 'bg-primary-light text-primary [&>svg]:text-accent'
                     : 'text-gray-600 hover:bg-gray-100'
                 }`}
               >
@@ -56,7 +56,7 @@ export function SettingsTabs({ active, onSelect }: SettingsTabsProps) {
                 type="button"
                 onClick={() => onSelect(id)}
                 aria-current={isActive ? 'page' : undefined}
-                className={`flex h-10 items-center gap-1.5 rounded-pill px-2.5 text-[12px] transition-colors ${
+                className={`flex h-10 items-center gap-1.5 rounded-pill px-2.5 text-[0.75rem] transition-colors ${
                   isActive
                     ? 'bg-primary font-medium text-white'
                     : 'font-normal text-text-secondary hover:bg-gray-100'

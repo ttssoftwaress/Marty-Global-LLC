@@ -97,6 +97,12 @@ export type ResultFieldDefinition = {
   sortOrder: number;
   updatedAt: string;
   usageCount: number;
+  /*
+   * Whether Delete is available on this row at all — false once a service
+   * returns the fact or a delivered record holds a value for it, since a record
+   * must keep rendering. Those are archived instead.
+   */
+  canDelete: boolean;
 };
 
 export type ResultFieldPage = {
@@ -137,8 +143,23 @@ export type ResultValue = {
   value: string | null;
   displayValue?: string;
   tone?: StatusTone;
+  /*
+   * A document on the record. The object key never reaches the browser — this is
+   * only what the form needs to describe the file that is already there. The link
+   * to open it is minted per click (`AdminResultFileLink`), after the backend's
+   * own scope check (AGENTS.md, Security & PII).
+   */
   file?: { name: string; sizeBytes: number | null; contentType: string | null };
   valueJson?: unknown;
+};
+
+// What `GET /v1/admin/records/:resultId/files/:fieldKey` hands back — a link that
+// lives for minutes, so it is used on arrival and never stored.
+export type AdminResultFileLink = {
+  fieldKey: string;
+  name: string;
+  url: string;
+  contentType: string | null;
 };
 
 // --- The result form ------------------------------------------------------

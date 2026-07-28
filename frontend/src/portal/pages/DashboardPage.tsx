@@ -38,20 +38,20 @@ type DashboardPageProps = {
 function DashboardSkeleton() {
   return (
     <div className="flex w-full flex-col gap-5 md:gap-6 lg:gap-8" aria-hidden="true">
-      <div className="h-[104px] w-full animate-pulse rounded-card bg-gray-200" />
+      <div className="h-[6.5rem] w-full animate-pulse rounded-card bg-gray-200" />
 
       <div className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4 lg:gap-6">
         {Array.from({ length: 4 }, (_, index) => (
           <div
             key={index}
-            className="h-[112px] animate-pulse rounded-card bg-gray-200"
+            className="h-[7rem] animate-pulse rounded-card bg-gray-200"
           />
         ))}
       </div>
 
       <div className="flex flex-col gap-6 lg:flex-row">
-        <div className="h-[360px] min-w-0 flex-1 animate-pulse rounded-card bg-gray-200" />
-        <div className="h-[360px] animate-pulse rounded-card bg-gray-200 lg:w-[380px]" />
+        <div className="h-[22.5rem] min-w-0 flex-1 animate-pulse rounded-card bg-gray-200" />
+        <div className="h-[22.5rem] animate-pulse rounded-card bg-gray-200 lg:w-[23.75rem]" />
       </div>
     </div>
   );
@@ -79,7 +79,7 @@ export function DashboardPage(props: DashboardPageProps = {}) {
       onLogout={onLogout}
     >
       <div className="w-full p-4 md:p-6 lg:p-content">
-        <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-5 md:gap-6 lg:gap-8">
+        <div className="mx-auto flex w-full max-w-[75rem] flex-col gap-5 md:gap-6 lg:gap-8">
           {isLoading || !summary ? (
             <DashboardSkeleton />
           ) : (
@@ -108,7 +108,7 @@ export function DashboardPage(props: DashboardPageProps = {}) {
                   <QuickActions />
                 </div>
 
-                <div className="flex flex-col gap-5 md:gap-6 lg:w-[380px] lg:shrink-0">
+                <div className="flex flex-col gap-5 md:gap-6 lg:w-[23.75rem] lg:shrink-0">
                   <RecentActivity activity={summary.recentActivity} />
                   <BillingSummaryCard billing={summary.billing} />
                   <MailRoomsCard mailRooms={summary.mailRooms} />

@@ -50,7 +50,7 @@ export function ApplicationStepCard({
   return (
     <section className="flex w-full flex-col gap-5 rounded-card border border-gray-200 bg-white p-4 shadow-sm-elevation md:p-6 lg:gap-6">
       <div className="flex items-start gap-3">
-        <span className="flex shrink-0 items-center justify-center rounded-[8px] bg-primary-light p-2">
+        <span className="flex shrink-0 items-center justify-center rounded-[0.5rem] bg-primary-light p-2">
           <Icon
             className="size-4 text-primary"
             strokeWidth={1.75}

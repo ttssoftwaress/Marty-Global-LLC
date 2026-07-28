@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import { Plus, Search } from 'lucide-react';
 
+import { ApiError } from '@/services/api';
 import { RESULT_FIELD_TYPE_OPTIONS, type ResultFieldDefinition } from '../../types/delivery';
-import { useAdminResultFields } from './queries';
+import { useAdminResultFields, useDeleteResultField } from './queries';
 import { ResultFieldDialog } from './ResultFieldDialog';
 import { ResultFieldsList } from './ResultFieldsList';
 
@@ -41,10 +42,34 @@ export function ResultFieldsPanel() {
   const total = fields.data?.pages[0]?.totalResults ?? 0;
   const hasFilter = Boolean(search.trim() || type);
 
+  const deleteField = useDeleteResultField();
+
+  // Which row is mid-delete, so only that row's button says "Deleting…".
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  /*
+   * Delete only reaches here for a row the API marked `canDelete`, and the
+   * endpoint re-checks it against both the services returning the fact and the
+   * delivered records holding a value for it. A refusal names the reason and
+   * points at archiving instead.
+   */
+  const onDelete = (field: ResultFieldDefinition) => {
+    if (deleteField.isPending) return;
+    deleteField.reset();
+    setDeletingId(field.id);
+    deleteField.mutate(field.id, { onSettled: () => setDeletingId(null) });
+  };
+
+  const deleteError = deleteField.isError
+    ? deleteField.error instanceof ApiError
+      ? deleteField.error.message
+      : 'Something went wrong deleting this field. Please try again.'
+    : null;
+
   return (
     <div className="flex w-full flex-col gap-5 md:gap-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <p className="text-body text-text-secondary lg:max-w-[640px]">
+        <p className="text-body text-text-secondary lg:max-w-[40rem]">
           The facts a completed service delivers back to the customer. Register a
           fact once here, then add it to a service&apos;s result schema — the
           customer&apos;s page for that service renders whatever it returns.
@@ -81,7 +106,7 @@ export function ResultFieldsPanel() {
           value={type}
           onChange={(event) => setType(event.target.value)}
           aria-label="Filter by value type"
-          className="h-input cursor-pointer rounded-input border border-gray-300 bg-white px-3 text-body text-text focus-visible:outline-2 focus-visible:outline-offset-[-1px] focus-visible:outline-primary md:w-[180px]"
+          className="h-input cursor-pointer rounded-input border border-gray-300 bg-white px-3 text-body text-text focus-visible:outline-2 focus-visible:outline-offset-[-1px] focus-visible:outline-primary md:w-[11.25rem]"
         >
           <option value="">All types</option>
           {RESULT_FIELD_TYPE_OPTIONS.map((option) => (
@@ -116,7 +141,7 @@ export function ResultFieldsPanel() {
           <p className="text-body-lg font-medium text-text">
             {hasFilter ? 'No fields match' : 'No result fields registered yet'}
           </p>
-          <p className="max-w-[440px] text-body text-text-secondary">
+          <p className="max-w-[27.5rem] text-body text-text-secondary">
             {hasFilter
               ? 'Try a different search or clear the type filter.'
               : 'Register what your services hand back — a company name, a registration number, a filed certificate — then add them to a service’s result schema.'}
@@ -138,7 +163,21 @@ export function ResultFieldsPanel() {
             {total} field{total === 1 ? '' : 's'}
           </p>
 
-          <ResultFieldsList fields={rows} onEdit={setEditing} />
+          {deleteError ? (
+            <p
+              role="alert"
+              className="rounded-input border border-error/30 bg-error/5 px-4 py-3 text-small text-error"
+            >
+              {deleteError}
+            </p>
+          ) : null}
+
+          <ResultFieldsList
+            fields={rows}
+            onEdit={setEditing}
+            onDelete={onDelete}
+            deletingId={deletingId}
+          />
 
           {fields.hasNextPage && (
             <button

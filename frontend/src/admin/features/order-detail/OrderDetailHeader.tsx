@@ -20,7 +20,7 @@ export function OrderDetailHeader({ order }: { order: AdminOrderDetail }) {
   return (
     <div className="flex w-full flex-col gap-3 rounded-card border border-gray-200 bg-white p-4 shadow-sm-elevation md:gap-2.5 md:border-0 md:bg-transparent md:p-0 md:shadow-none">
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-[22px] font-semibold leading-8 text-text md:text-[26px] lg:text-[32px] lg:leading-10">
+        <h1 className="text-[1.375rem] font-semibold leading-8 text-text md:text-[1.625rem] lg:text-[2rem] lg:leading-10">
           {order.reference}
         </h1>
         <OrderStatusChip status={order.status} label={order.statusLabel} />

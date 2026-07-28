@@ -65,7 +65,7 @@ export function ApplicationFooterActions({
           three on one row via the lg overrides. */}
       <div className="hidden flex-col gap-5 md:flex lg:flex-row lg:items-center lg:justify-between lg:gap-6">
         {isFinalStep ? (
-          <LockNote className="lg:order-2 lg:max-w-[500px] lg:justify-center" />
+          <LockNote className="lg:order-2 lg:max-w-[31.25rem] lg:justify-center" />
         ) : (
           // Keeps Back left / Continue right on desktop's three-column row when
           // the note isn't shown.
@@ -104,7 +104,7 @@ export function ApplicationFooterActions({
           `sticky bottom-0` in the scrolling workspace so it rides above the
           content without covering the sidebar; hidden from md up where the
           in-flow footer takes over. */}
-      <div className="sticky bottom-0 z-10 -mx-4 flex items-center gap-3 border-t border-gray-200 bg-white px-4 py-3 shadow-[0_-4px_10px_rgba(0,0,0,0.08)] md:hidden">
+      <div className="sticky bottom-0 z-10 -mx-4 flex items-center gap-3 border-t border-gray-200 bg-white px-4 py-3 shadow-[0_-0.25rem_0.625rem_rgba(0,0,0,0.08)] md:hidden">
         <button
           type="button"
           onClick={onBack}

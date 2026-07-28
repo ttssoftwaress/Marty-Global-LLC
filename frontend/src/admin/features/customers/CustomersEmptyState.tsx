@@ -29,7 +29,7 @@ export function CustomersEmptyState({
         <p className="text-h6 text-text">
           {isFiltered ? 'No customers match this search' : 'No customers yet'}
         </p>
-        <p className="max-w-[380px] text-body text-gray-500">
+        <p className="max-w-[23.75rem] text-body text-gray-500">
           {isFiltered
             ? 'Try a different segment, region, or search term.'
             : 'Customer accounts will appear here as people sign up.'}

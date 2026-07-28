@@ -5,6 +5,7 @@ import { Server } from 'socket.io';
 import { env } from '../config/env.js';
 import { logger } from '../lib/logger.js';
 import { authenticate } from './authenticate.js';
+import { registerBroadcaster } from './broadcast.js';
 import { registerChatHandlers } from './chat.handlers.js';
 
 /*
@@ -39,6 +40,15 @@ export function createSocketServer(httpServer: HttpServer): Server {
     // read as a disconnect and churn presence.
     pingTimeout: 25_000,
   });
+
+  /*
+   * Hand the server to the broadcast helper, so a service that changed a
+   * conversation over REST can tell the live inbox about it (broadcast.ts).
+   * Registered rather than imported because this function creates the instance,
+   * and because a test or CLI that never starts a socket server must still be
+   * able to call those services.
+   */
+  registerBroadcaster(io);
 
   // Authentication runs before any handler is registered: an unauthenticated
   // socket never reaches an event listener at all.

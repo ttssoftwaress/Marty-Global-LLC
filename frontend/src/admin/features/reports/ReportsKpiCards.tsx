@@ -36,7 +36,7 @@ function KpiCard({ kpi }: { kpi: ReportKpi }) {
 
   return (
     <div className="flex flex-col gap-3 rounded-card border border-gray-200 bg-white p-4 shadow-sm-elevation md:gap-4 md:p-5 lg:p-card">
-      <p className="text-[13px] font-medium leading-5 text-[var(--color-text-secondary)] md:text-body">
+      <p className="text-[0.8125rem] font-medium leading-5 text-[var(--color-text-secondary)] md:text-body">
         {kpi.label}
       </p>
 
@@ -48,7 +48,7 @@ function KpiCard({ kpi }: { kpi: ReportKpi }) {
        */}
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between md:gap-4">
         <div className="flex min-w-0 flex-col gap-1.5">
-          <p className="text-[24px] font-bold leading-8 text-[var(--color-gray-900)] md:text-[26px] md:leading-9 lg:text-[28px] lg:leading-10">
+          <p className="text-[1.5rem] font-bold leading-8 text-[var(--color-gray-900)] md:text-[1.625rem] md:leading-9 lg:text-[1.75rem] lg:leading-10">
             {kpi.value}
           </p>
 
@@ -61,11 +61,11 @@ function KpiCard({ kpi }: { kpi: ReportKpi }) {
           <div className="flex min-w-0 items-center gap-1.5">
             <TrendIcon className={`size-3.5 shrink-0 ${toneClass}`} aria-hidden="true" />
             <span
-              className={`shrink-0 text-[13px] font-semibold leading-5 ${toneClass}`}
+              className={`shrink-0 text-[0.8125rem] font-semibold leading-5 ${toneClass}`}
             >
               {kpi.trend.label}
             </span>
-            <span className="truncate text-[13px] leading-5 text-gray-400">
+            <span className="truncate text-[0.8125rem] leading-5 text-gray-400">
               {kpi.trend.caption}
             </span>
           </div>
@@ -75,7 +75,7 @@ function KpiCard({ kpi }: { kpi: ReportKpi }) {
           <Sparkline
             points={kpi.sparkline}
             tone={kpi.trend.tone}
-            className="h-8 w-full shrink-0 md:w-[84px] lg:w-[104px]"
+            className="h-8 w-full shrink-0 md:w-[5.25rem] lg:w-[6.5rem]"
           />
         ) : null}
       </div>

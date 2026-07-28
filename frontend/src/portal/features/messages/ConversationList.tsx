@@ -6,7 +6,7 @@ import { ConversationListItem } from './ConversationListItem';
 /*
  * The conversation list — the master pane. One tree serves every breakpoint:
  * on mobile it is a plain title + search + stacked cards that fill the screen;
- * from tablet up it becomes a fixed-width bordered column (280px tablet, 360px
+ * from tablet up it becomes a fixed-width bordered column (17.5rem tablet, 360px
  * desktop) with a search header and flat divider rows, its list scrolling on
  * its own so the search stays pinned.
  *
@@ -33,7 +33,7 @@ function ListSkeleton() {
       {Array.from({ length: 5 }).map((_, index) => (
         <div
           key={index}
-          className="h-[72px] w-full animate-pulse rounded-card bg-gray-200 md:rounded-none md:border-b md:border-gray-200 md:bg-transparent md:p-4"
+          className="h-[4.5rem] w-full animate-pulse rounded-card bg-gray-200 md:rounded-none md:border-b md:border-gray-200 md:bg-transparent md:p-4"
         >
           <div className="hidden size-full rounded-lg bg-gray-200 md:block" />
         </div>
@@ -48,13 +48,13 @@ function ListErrorState({ onRetry }: { onRetry?: () => void }) {
       role="alert"
       className="flex flex-col items-center gap-3 px-6 py-16 text-center"
     >
-      <span className="flex size-12 items-center justify-center rounded-[24px] bg-[var(--color-status-missing-bg)]">
+      <span className="flex size-12 items-center justify-center rounded-[1.5rem] bg-[var(--color-status-missing-bg)]">
         <AlertTriangle className="size-6 text-error" strokeWidth={1.75} aria-hidden="true" />
       </span>
       <p className="text-body-lg font-semibold text-text">
         We couldn&apos;t load your conversations
       </p>
-      <p className="max-w-[300px] text-body text-gray-500">
+      <p className="max-w-[18.75rem] text-body text-gray-500">
         Something went wrong fetching your messages. Please try again.
       </p>
       {onRetry ? (
@@ -73,7 +73,7 @@ function ListErrorState({ onRetry }: { onRetry?: () => void }) {
 function ListEmptyState({ searching }: { searching: boolean }) {
   return (
     <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
-      <span className="flex size-12 items-center justify-center rounded-[24px] bg-gray-100">
+      <span className="flex size-12 items-center justify-center rounded-[1.5rem] bg-gray-100">
         <MessageSquare
           className="size-6 text-gray-400"
           strokeWidth={1.75}
@@ -83,7 +83,7 @@ function ListEmptyState({ searching }: { searching: boolean }) {
       <p className="text-body-lg font-semibold text-text">
         {searching ? 'No matches' : 'No conversations yet'}
       </p>
-      <p className="max-w-[300px] text-body text-gray-500">
+      <p className="max-w-[18.75rem] text-body text-gray-500">
         {searching
           ? 'No conversations match your search. Try a different term.'
           : 'Messages with our team will appear here. Start one any time.'}
@@ -110,7 +110,7 @@ export function ConversationList({
 
   return (
     <section
-      className={`w-full min-h-0 flex-col gap-4 md:w-[280px] md:shrink-0 md:gap-0 md:overflow-hidden md:rounded-card md:border md:border-gray-200 md:bg-white lg:w-[360px] ${className}`}
+      className={`w-full min-h-0 flex-col gap-4 md:w-[17.5rem] md:shrink-0 md:gap-0 md:overflow-hidden md:rounded-card md:border md:border-gray-200 md:bg-white lg:w-[22.5rem] ${className}`}
     >
       <h1 className="shrink-0 text-h4 font-semibold text-text md:hidden">
         Messages
@@ -119,7 +119,7 @@ export function ConversationList({
       <div className="shrink-0 md:border-b md:border-gray-200 md:p-3 lg:p-4">
         <div className="flex h-12 items-center gap-2 rounded-input border border-gray-300 bg-white px-3.5 transition-shadow focus-within:border-primary focus-within:shadow-[0_0_0_1px_var(--ring-focus)] md:h-10">
           <Search
-            className="size-[18px] shrink-0 text-gray-400"
+            className="size-[1.125rem] shrink-0 text-gray-400"
             strokeWidth={1.75}
             aria-hidden="true"
           />

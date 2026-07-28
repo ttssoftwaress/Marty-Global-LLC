@@ -1,7 +1,8 @@
-import { useEffect, useRef } from 'react';
+import { useRef } from 'react';
 import { LogOut, X } from 'lucide-react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 
+import { useOverlay } from '@/hooks/useOverlay';
 import { AdminSidebarUserBlock, type AdminSidebarUser } from './AdminSidebarUserBlock';
 import { isAdminNavItemActive, type AdminNavItem } from './nav-items';
 
@@ -36,25 +37,11 @@ export function AdminSidebarMobileDrawer({
 }: AdminSidebarMobileDrawerProps) {
   const { pathname } = useLocation();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
 
-  useEffect(() => {
-    if (!open) return;
-
-    closeButtonRef.current?.focus();
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', onKeyDown);
-
-    const { overflow } = document.body.style;
-    document.body.style.overflow = 'hidden';
-
-    return () => {
-      document.removeEventListener('keydown', onKeyDown);
-      document.body.style.overflow = overflow;
-    };
-  }, [open, onClose]);
+  // Escape, the Tab trap, focus in and back out, and the scroll lock. Focus
+  // opens on the close button rather than the brand link that leads the panel.
+  useOverlay({ open, onClose, panelRef, initialFocusRef: closeButtonRef });
 
   if (!open) return null;
 
@@ -67,10 +54,12 @@ export function AdminSidebarMobileDrawer({
       />
 
       <aside
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label="Admin navigation"
-        className="absolute inset-y-0 left-0 flex w-[280px] max-w-[85vw] flex-col justify-between bg-primary px-4 py-6 shadow-[4px_0_8px_rgba(0,0,0,0.25)]"
+        tabIndex={-1}
+        className="absolute inset-y-0 left-0 flex w-[17.5rem] max-w-[85vw] flex-col justify-between bg-primary px-4 py-6 shadow-[0.25rem_0_0.5rem_rgba(0,0,0,0.25)] outline-none"
       >
         <div className="flex min-h-0 w-full flex-col gap-6">
           <div className="flex w-full items-start justify-between gap-3">
@@ -114,7 +103,7 @@ export function AdminSidebarMobileDrawer({
                       aria-current={active ? 'page' : undefined}
                       className={
                         active
-                          ? 'flex w-full items-center gap-3 rounded-input bg-white px-4 py-3 text-body font-semibold text-primary'
+                          ? 'flex w-full items-center gap-3 rounded-input bg-white px-4 py-3 text-body font-semibold text-primary [&>svg]:text-accent'
                           : 'flex w-full items-center gap-3 rounded-input px-4 py-3 text-body font-medium text-white/80 transition-colors hover:bg-white/10 hover:text-white'
                       }
                     >

@@ -39,11 +39,11 @@ function DetailError({ onRetry }: { onRetry: () => void }) {
       role="alert"
       className="flex w-full flex-col items-center gap-3 rounded-card border border-gray-200 bg-white px-6 py-14 text-center shadow-sm-elevation"
     >
-      <span className="flex size-12 items-center justify-center rounded-[24px] bg-[var(--color-status-missing-bg)]">
+      <span className="flex size-12 items-center justify-center rounded-[1.5rem] bg-[var(--color-status-missing-bg)]">
         <AlertTriangle className="size-6 text-error" strokeWidth={1.75} aria-hidden="true" />
       </span>
       <p className="text-body-lg font-semibold text-text">We couldn&apos;t load this record</p>
-      <p className="max-w-[360px] text-body text-gray-500">
+      <p className="max-w-[22.5rem] text-body text-gray-500">
         It may have been moved, or something went wrong. Please try again.
       </p>
       <div className="mt-1 flex flex-wrap items-center justify-center gap-3">
@@ -65,8 +65,8 @@ function DetailError({ onRetry }: { onRetry: () => void }) {
 function DetailSkeleton() {
   return (
     <div className="flex w-full flex-col gap-6" aria-hidden="true">
-      <div className="h-[220px] w-full animate-pulse rounded-card bg-gray-200" />
-      <div className="h-[160px] w-full animate-pulse rounded-card bg-gray-200" />
+      <div className="h-[13.75rem] w-full animate-pulse rounded-card bg-gray-200" />
+      <div className="h-[10rem] w-full animate-pulse rounded-card bg-gray-200" />
     </div>
   );
 }
@@ -82,7 +82,7 @@ export function ServiceRecordDetailPage() {
   return (
     <PortalLayout user={user} onLogout={onLogout}>
       <div className="w-full p-4 md:p-6 lg:p-content">
-        <div className="mx-auto flex w-full max-w-[1000px] flex-col gap-6 lg:gap-8">
+        <div className="mx-auto flex w-full max-w-[62.5rem] flex-col gap-6 lg:gap-8">
           <header className="flex w-full flex-col gap-1 md:gap-3">
             <p className="flex flex-wrap items-center gap-1.5 text-caption font-medium uppercase tracking-[0.6px]">
               <Link to="/app" className="text-primary hover:underline">

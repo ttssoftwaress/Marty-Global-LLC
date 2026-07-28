@@ -49,7 +49,7 @@ type MailLogPaginationProps = {
 };
 
 const STEP_BUTTON =
-  'flex h-8 items-center justify-center rounded-[8px] px-3 text-[13px] font-medium transition-colors disabled:cursor-default disabled:bg-gray-200 disabled:text-gray-400 enabled:border enabled:border-gray-300 enabled:bg-white enabled:text-text enabled:hover:bg-gray-50 lg:h-9 lg:rounded-control';
+  'flex h-8 items-center justify-center rounded-[0.5rem] px-3 text-[0.8125rem] font-medium transition-colors disabled:cursor-default disabled:bg-gray-200 disabled:text-gray-400 enabled:border enabled:border-gray-300 enabled:bg-white enabled:text-text enabled:hover:bg-gray-50 lg:h-9 lg:rounded-control';
 
 export function MailLogPagination({
   page,
@@ -65,7 +65,7 @@ export function MailLogPagination({
 
   return (
     <div className="flex w-full flex-col items-center gap-3 md:flex-row md:items-center md:justify-between md:gap-4">
-      <p className="text-[13px] text-text-secondary md:text-small lg:text-body">
+      <p className="text-[0.8125rem] text-text-secondary md:text-small lg:text-body">
         Showing {formatCount(rangeStart)}–{formatCount(rangeEnd)} of{' '}
         {formatCount(totalResults)} items
       </p>
@@ -101,7 +101,7 @@ export function MailLogPagination({
                 type="button"
                 onClick={() => onPageChange(entry)}
                 aria-current={entry === page ? 'page' : undefined}
-                className={`flex size-8 items-center justify-center rounded-[8px] text-[13px] transition-colors lg:size-9 lg:rounded-control lg:text-body ${
+                className={`flex size-8 items-center justify-center rounded-[0.5rem] text-[0.8125rem] transition-colors lg:size-9 lg:rounded-control lg:text-body ${
                   entry === page
                     ? 'bg-primary font-semibold text-white'
                     : 'font-medium text-text-secondary hover:bg-gray-100'

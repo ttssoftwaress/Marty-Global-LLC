@@ -11,9 +11,11 @@ import {
   useAdminCatalogRegions,
   useAdminCatalogServices,
   useCreateCatalogService,
+  useDeleteCatalogService,
 } from '../features/catalog';
 import { useAdminShell } from '../hooks/useAdminShell';
 import type { CatalogServiceRow, ServiceWritePayload } from '../types/catalog';
+import { ApiError } from '@/services/api';
 
 /*
  * Service catalog & pricing — the staff screen for what each service includes,
@@ -48,6 +50,10 @@ export function AdminServiceCatalogPage() {
   const [isAddOpen, setIsAddOpen] = useState(false);
 
   const createService = useCreateCatalogService();
+  const deleteService = useDeleteCatalogService();
+
+  // Which row is mid-delete, so only that row's button says "Deleting…".
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const rows = useMemo<CatalogServiceRow[]>(
     () => services.data?.pages.flatMap((page) => page.rows) ?? [],
@@ -72,6 +78,24 @@ export function AdminServiceCatalogPage() {
   const closeForm = () => setIsAddOpen(false);
 
   /*
+   * Delete only reaches here for a row the API marked `canDelete`, and the
+   * endpoint re-checks it. A service that has been ordered is refused with a
+   * message pointing at the alternative — turning it off, which lives on the
+   * service's own screen — so the failure is surfaced rather than swallowed.
+   */
+  const handleDelete = (row: CatalogServiceRow) => {
+    if (deleteService.isPending) return;
+    setDeletingId(row.id);
+    deleteService.mutate(row.id, { onSettled: () => setDeletingId(null) });
+  };
+
+  const deleteError = deleteService.isError
+    ? deleteService.error instanceof ApiError
+      ? deleteService.error.message
+      : 'Something went wrong deleting this service. Please try again.'
+    : null;
+
+  /*
    * A new service is created with its identifying fields, then opened on its own
    * screen so the rest — inclusions, regions, pricing, and the request form —
    * are filled in where there is room for them.
@@ -91,8 +115,17 @@ export function AdminServiceCatalogPage() {
   return (
     <AdminLayout user={user} onLogout={onLogout}>
       <div className="w-full p-4 md:p-6 lg:p-content">
-        <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 lg:gap-8">
+        <div className="mx-auto flex w-full max-w-[80rem] flex-col gap-6 lg:gap-8">
           <CatalogHeader onAddService={openCreate} />
+
+          {deleteError ? (
+            <p
+              role="alert"
+              className="rounded-input border border-error/30 bg-error/5 px-4 py-3 text-small text-error"
+            >
+              {deleteError}
+            </p>
+          ) : null}
 
           {isLoading ? (
             <CatalogSkeleton />
@@ -103,11 +136,21 @@ export function AdminServiceCatalogPage() {
           ) : (
             <>
               {/* Mobile — cards on the page background, no surrounding frame. */}
-              <CatalogCardList rows={rows} onManage={openManage} />
+              <CatalogCardList
+                rows={rows}
+                onManage={openManage}
+                onDelete={handleDelete}
+                deletingId={deletingId}
+              />
 
               {/* Tablet & desktop — the table in its own card. */}
               <div className="hidden w-full overflow-hidden rounded-table border border-gray-200 bg-white shadow-sm-elevation md:block">
-                <CatalogTable rows={rows} onManage={openManage} />
+                <CatalogTable
+                  rows={rows}
+                  onManage={openManage}
+                  onDelete={handleDelete}
+                  deletingId={deletingId}
+                />
               </div>
 
               {services.hasNextPage ? (
@@ -146,7 +189,7 @@ function CatalogSkeleton() {
         {Array.from({ length: 4 }, (_, index) => (
           <div
             key={index}
-            className="h-[168px] animate-pulse rounded-card bg-gray-200"
+            className="h-[10.5rem] animate-pulse rounded-card bg-gray-200"
           />
         ))}
       </div>
@@ -156,7 +199,7 @@ function CatalogSkeleton() {
         {Array.from({ length: 4 }, (_, index) => (
           <div
             key={index}
-            className="flex h-20 items-center border-b border-gray-200 px-6 last:border-b-0 lg:h-[72px]"
+            className="flex h-20 items-center border-b border-gray-200 px-6 last:border-b-0 lg:h-[4.5rem]"
           >
             <div className="h-4 w-full animate-pulse rounded bg-gray-200" />
           </div>

@@ -12,6 +12,7 @@ import {
   Type,
 } from 'lucide-react';
 
+import { RowActions } from '../../components/RowActions';
 import { formatFieldDate, formatUsage } from '../../lib/fields';
 import {
   resultFieldTypeLabel,
@@ -74,9 +75,17 @@ function PrimaryChip() {
   );
 }
 
+/*
+ * Delete is per row and absent rather than disabled: `canDelete` comes from the
+ * API and is false as soon as a service returns the fact or a delivered record
+ * holds a value for it, both of which are archived instead so the record keeps
+ * rendering.
+ */
 type ResultFieldsListProps = {
   fields: ResultFieldDefinition[];
   onEdit: (field: ResultFieldDefinition) => void;
+  onDelete: (field: ResultFieldDefinition) => void;
+  deletingId: string | null;
 };
 
 function Th({ children }: { children: React.ReactNode }) {
@@ -87,12 +96,48 @@ function Th({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function ResultFieldsList({ fields, onEdit }: ResultFieldsListProps) {
+type EditButtonProps = {
+  field: ResultFieldDefinition;
+  onEdit: (field: ResultFieldDefinition) => void;
+};
+
+function EditButton({ field, onEdit }: EditButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={() => onEdit(field)}
+      className="flex shrink-0 items-center gap-1.5 rounded-control px-3 py-1.5 text-body font-medium text-primary transition-colors hover:bg-primary-light focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+    >
+      <Pencil className="size-4" strokeWidth={1.75} aria-hidden="true" />
+      Edit
+    </button>
+  );
+}
+
+function CompactEditButton({ field, onEdit }: EditButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={() => onEdit(field)}
+      aria-label={`Edit ${field.label}`}
+      className="flex size-9 shrink-0 items-center justify-center rounded-control text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+    >
+      <Pencil className="size-4" strokeWidth={1.75} aria-hidden="true" />
+    </button>
+  );
+}
+
+export function ResultFieldsList({
+  fields,
+  onEdit,
+  onDelete,
+  deletingId,
+}: ResultFieldsListProps) {
   return (
     <>
       {/* Table — md and up */}
       <div className="hidden overflow-x-auto rounded-card border border-gray-200 bg-white shadow-sm-elevation md:block">
-        <table className="w-full min-w-[720px] border-collapse">
+        <table className="w-full min-w-[45rem] border-collapse">
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50">
               <Th>Field</Th>
@@ -146,14 +191,19 @@ export function ResultFieldsList({ fields, onEdit }: ResultFieldsListProps) {
                 </td>
 
                 <td className="px-4 py-3">
-                  <button
-                    type="button"
-                    onClick={() => onEdit(field)}
-                    className="flex items-center gap-1.5 rounded-control px-3 py-1.5 text-body font-medium text-primary transition-colors hover:bg-primary-light focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                  >
-                    <Pencil className="size-4" strokeWidth={1.75} aria-hidden="true" />
-                    Edit
-                  </button>
+                  {field.canDelete ? (
+                    <RowActions
+                      name={field.label}
+                      isDeleting={deletingId === field.id}
+                      onDelete={() => onDelete(field)}
+                    >
+                      <EditButton field={field} onEdit={onEdit} />
+                    </RowActions>
+                  ) : (
+                    <div className="flex items-center justify-end">
+                      <EditButton field={field} onEdit={onEdit} />
+                    </div>
+                  )}
                 </td>
               </tr>
             ))}
@@ -182,14 +232,17 @@ export function ResultFieldsList({ fields, onEdit }: ResultFieldsListProps) {
                 </code>
               </div>
 
-              <button
-                type="button"
-                onClick={() => onEdit(field)}
-                aria-label={`Edit ${field.label}`}
-                className="flex size-9 shrink-0 items-center justify-center rounded-control text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-              >
-                <Pencil className="size-4" strokeWidth={1.75} aria-hidden="true" />
-              </button>
+              {field.canDelete ? (
+                <RowActions
+                  name={field.label}
+                  isDeleting={deletingId === field.id}
+                  onDelete={() => onDelete(field)}
+                >
+                  <CompactEditButton field={field} onEdit={onEdit} />
+                </RowActions>
+              ) : (
+                <CompactEditButton field={field} onEdit={onEdit} />
+              )}
             </div>
 
             <div className="flex flex-wrap items-center gap-2 border-t border-gray-200 pt-3">

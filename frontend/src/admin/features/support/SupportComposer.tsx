@@ -90,7 +90,7 @@ export function SupportComposer({
               role="tab"
               aria-selected={isActive}
               onClick={() => onModeChange(item.value)}
-              className={`border-b-2 py-2 text-[13px] font-semibold transition-colors ${
+              className={`border-b-2 py-2 text-[0.8125rem] font-semibold transition-colors ${
                 isActive
                   ? 'border-primary text-primary'
                   : 'border-transparent text-text-secondary'
@@ -170,7 +170,7 @@ export function SupportComposer({
           aria-label={mode === 'note' ? 'Add note' : 'Send reply'}
           className="flex size-12 shrink-0 items-center justify-center rounded-full bg-primary text-white transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-40 md:hidden"
         >
-          <ArrowUp className="size-[18px]" strokeWidth={2} aria-hidden="true" />
+          <ArrowUp className="size-[1.125rem]" strokeWidth={2} aria-hidden="true" />
         </button>
 
         {/* Tablet & desktop — the labelled button. */}
@@ -184,7 +184,7 @@ export function SupportComposer({
         </button>
       </div>
 
-      <p className="text-[10px] font-normal text-gray-400 lg:text-caption">
+      <p className="text-[0.625rem] font-normal text-gray-400 lg:text-caption">
         Internal notes are never visible to the customer.
       </p>
     </div>

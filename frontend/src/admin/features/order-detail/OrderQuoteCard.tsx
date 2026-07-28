@@ -355,7 +355,7 @@ export function OrderQuoteCard({ orderId }: { orderId: string }) {
                       aria-label={`Line ${index + 1} description`}
                       className="input h-10 min-w-0 flex-1 rounded-input text-body"
                     />
-                    <div className="flex w-[110px] shrink-0 flex-col gap-1">
+                    <div className="flex w-[6.875rem] shrink-0 flex-col gap-1">
                       <input
                         type="text"
                         inputMode="decimal"

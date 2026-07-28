@@ -106,7 +106,7 @@ export function PasswordSecurityCard({
             <div key={field.id} className="flex w-full flex-col gap-1.5">
               <label
                 htmlFor={`security-${field.id}`}
-                className="text-[14px] font-medium text-gray-700"
+                className="text-[0.875rem] font-medium text-gray-700"
               >
                 {field.label}
               </label>
@@ -165,7 +165,7 @@ export function PasswordSecurityCard({
                       return (
                         <li
                           key={rule.id}
-                          className={`flex items-center gap-1.5 text-[12px] ${
+                          className={`flex items-center gap-1.5 text-[0.75rem] ${
                             met ? 'text-success' : 'text-gray-400'
                           }`}
                         >
@@ -180,7 +180,7 @@ export function PasswordSecurityCard({
 
               {/* Confirm-field mismatch error. */}
               {hasError && (
-                <p className="text-[12px] text-error">Passwords don&apos;t match</p>
+                <p className="text-[0.75rem] text-error">Passwords don&apos;t match</p>
               )}
             </div>
           );
@@ -193,7 +193,7 @@ export function PasswordSecurityCard({
           <button
             type="button"
             onClick={onCancel}
-            className="inline-flex h-10 items-center px-4 text-[14px] font-medium text-gray-500 transition-colors hover:text-gray-700"
+            className="inline-flex h-10 items-center px-4 text-[0.875rem] font-medium text-gray-500 transition-colors hover:text-gray-700"
           >
             Cancel
           </button>

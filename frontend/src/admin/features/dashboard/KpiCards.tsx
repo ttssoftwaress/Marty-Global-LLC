@@ -41,7 +41,7 @@ function TrendIndicator({ trend }: { trend: DashboardMetric['trend'] }) {
           aria-hidden="true"
         />
       )}
-      <span className="whitespace-nowrap text-[11px] font-medium leading-4 md:text-[12px]">
+      <span className="whitespace-nowrap text-[0.6875rem] font-medium leading-4 md:text-[0.75rem]">
         {trend.label}
       </span>
     </span>
@@ -56,11 +56,11 @@ function KpiCard({ metric }: { metric: DashboardMetric }) {
 
   return (
     <div className="flex flex-col gap-2.5 rounded-card border border-gray-200 bg-white p-4 shadow-sm-elevation md:gap-3 md:p-5 lg:p-card">
-      <p className="text-[11px] font-medium uppercase leading-4 text-gray-500">
+      <p className="text-[0.6875rem] font-medium uppercase leading-4 text-gray-500">
         {metric.label}
       </p>
 
-      <p className="text-[24px] font-bold leading-8 text-text lg:text-[32px] lg:leading-10">
+      <p className="text-[1.5rem] font-bold leading-8 text-text lg:text-[2rem] lg:leading-10">
         {value}
       </p>
 
@@ -69,7 +69,7 @@ function KpiCard({ metric }: { metric: DashboardMetric }) {
        * is what the tablet and desktop links show.
        */}
       <div className="mt-auto flex flex-col gap-0.5 md:flex-row md:flex-wrap md:items-center md:gap-x-1.5 md:gap-y-1">
-        <p className="text-[11px] leading-4 text-gray-500 md:text-[12px]">
+        <p className="text-[0.6875rem] leading-4 text-gray-500 md:text-[0.75rem]">
           {metric.caption}
         </p>
 

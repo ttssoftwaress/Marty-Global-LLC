@@ -52,7 +52,7 @@ export function CustomersHeader({ totalCustomers }: CustomersHeaderProps) {
               row and the pill moves below (tablet) or to the far right of the
               header (desktop). */}
           <div className="flex items-center justify-between gap-3">
-            <h1 className="text-[32px] font-semibold leading-10 text-text md:font-bold lg:font-semibold">
+            <h1 className="text-[2rem] font-semibold leading-10 text-text md:font-bold lg:font-semibold">
               Customers
             </h1>
             <span className="md:hidden">{pill}</span>

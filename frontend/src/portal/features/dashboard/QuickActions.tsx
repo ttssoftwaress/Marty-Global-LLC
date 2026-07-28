@@ -52,12 +52,12 @@ export function QuickActions() {
               className="flex h-full items-center gap-4 rounded-xl border border-gray-200 bg-white p-4 transition-colors hover:border-primary/30 hover:bg-primary-light/40 lg:flex-col lg:items-stretch lg:gap-4 lg:rounded-card lg:p-5"
             >
               <span className="flex items-start justify-between lg:w-full">
-                <span className="flex size-10 shrink-0 items-center justify-center rounded-[20px] bg-primary-light">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-[1.25rem] bg-primary-light">
                   <Icon className="size-5 text-primary" strokeWidth={1.75} aria-hidden="true" />
                 </span>
 
                 <ChevronRight
-                  className="hidden size-[18px] shrink-0 text-gray-400 lg:block"
+                  className="hidden size-[1.125rem] shrink-0 text-gray-400 lg:block"
                   strokeWidth={1.75}
                   aria-hidden="true"
                 />

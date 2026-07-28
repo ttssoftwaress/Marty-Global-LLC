@@ -18,7 +18,7 @@ type OrderConversationSectionProps = {
 function ConversationSkeleton() {
   return (
     <div
-      className="h-[280px] w-full animate-pulse rounded-card bg-gray-200"
+      className="h-[17.5rem] w-full animate-pulse rounded-card bg-gray-200"
       aria-hidden="true"
     />
   );

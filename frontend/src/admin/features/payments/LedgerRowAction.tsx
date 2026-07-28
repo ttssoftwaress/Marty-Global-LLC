@@ -29,7 +29,7 @@ export function LedgerRowAction({ row, onAction, fullWidth }: LedgerRowActionPro
       <button
         type="button"
         onClick={() => onAction(row)}
-        className={`items-center justify-center whitespace-nowrap rounded-control border border-primary bg-white px-3 text-[13px] font-semibold text-primary transition-colors hover:bg-primary-light ${
+        className={`items-center justify-center whitespace-nowrap rounded-control border border-primary bg-white px-3 text-[0.8125rem] font-semibold text-primary transition-colors hover:bg-primary-light ${
           fullWidth ? 'flex h-9 w-full' : 'inline-flex h-9'
         }`}
       >

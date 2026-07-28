@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/node';
 import { toNodeHandler } from 'better-auth/node';
 import cors from 'cors';
 import express from 'express';
@@ -6,6 +7,7 @@ import helmet from 'helmet';
 import { auth } from './config/auth.js';
 import { env } from './config/env.js';
 import { betterAuthRateLimit } from './guards/index.js';
+import { AppError } from './lib/app-error.js';
 import { errorHandler, notFoundHandler } from './middlewares/error-handler.js';
 import { routes } from './routes.js';
 
@@ -35,6 +37,20 @@ export function createApp() {
   app.use('/v1', routes);
 
   app.use(notFoundHandler);
+
+  /*
+   * Sentry's handler runs before ours because ours is terminal — it writes the
+   * response and the chain stops there.
+   *
+   * `shouldHandleError` keeps the signal honest: an AppError is the API
+   * behaving as designed (a rejected password, a 404, a business rule), and
+   * reporting those would bury the real faults under thousands of routine 4xx
+   * events. Only unexpected throws and 5xx reach Sentry.
+   */
+  Sentry.setupExpressErrorHandler(app, {
+    shouldHandleError: (error) => !(error instanceof AppError),
+  });
+
   app.use(errorHandler);
 
   return app;

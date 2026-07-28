@@ -75,7 +75,7 @@ export function OrderCardList({ orders }: OrderCardListProps) {
           <Link
             to={order.to}
             onClick={stopRowClick}
-            className="flex h-10 w-full items-center justify-center rounded-input border border-primary text-[13px] font-semibold text-primary transition-colors hover:bg-primary-light"
+            className="flex h-10 w-full items-center justify-center rounded-input border border-primary text-[0.8125rem] font-semibold text-primary transition-colors hover:bg-primary-light"
           >
             {order.actionLabel}
           </Link>

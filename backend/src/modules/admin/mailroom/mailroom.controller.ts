@@ -5,11 +5,12 @@ import { AppError } from '../../../lib/app-error.js';
 import { pathParam } from '../../../lib/params.js';
 import * as service from './mailroom.service.js';
 import {
-  customerSearchQuerySchema,
   listLogQuerySchema,
   listRequestsQuerySchema,
   listScansQuerySchema,
   resolveRequestSchema,
+  roomNameSearchQuerySchema,
+  roomsByNameQuerySchema,
   uploadScanSchema,
 } from './mailroom.validation.js';
 
@@ -27,22 +28,37 @@ export async function getSummary(
   }
 }
 
-export async function searchCustomers(
+export async function searchRoomNames(
   req: Request,
   res: Response,
   next: NextFunction,
 ) {
   try {
-    const parsed = customerSearchQuerySchema.safeParse(req.query);
+    const parsed = roomNameSearchQuerySchema.safeParse(req.query);
     if (!parsed.success) {
-      throw AppError.validation('Invalid customer search', parsed.error.issues);
+      throw AppError.validation('Invalid mail room search', parsed.error.issues);
     }
 
-    const customers = await service.searchCustomers(
-      getAuth(req),
-      parsed.data.search,
-    );
-    res.json({ data: { customers } });
+    const names = await service.searchRoomNames(getAuth(req), parsed.data.search);
+    res.json({ data: { names } });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function listRoomsByName(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const parsed = roomsByNameQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      throw AppError.validation('Invalid mail room name', parsed.error.issues);
+    }
+
+    const rooms = await service.listRoomsByName(getAuth(req), parsed.data.name);
+    res.json({ data: { rooms } });
   } catch (error) {
     next(error);
   }

@@ -68,7 +68,7 @@ export function OrdersLoadMore({
         type="button"
         onClick={onLoadMore}
         disabled={!hasMore || isLoadingMore}
-        className="flex h-10 items-center justify-center rounded-input border border-primary bg-white px-5 text-[13px] font-semibold text-primary transition-colors hover:bg-primary-light disabled:cursor-default disabled:border-gray-200 disabled:text-gray-400 disabled:hover:bg-white"
+        className="flex h-10 items-center justify-center rounded-input border border-primary bg-white px-5 text-[0.8125rem] font-semibold text-primary transition-colors hover:bg-primary-light disabled:cursor-default disabled:border-gray-200 disabled:text-gray-400 disabled:hover:bg-white"
       >
         {isLoadingMore ? 'Loading…' : 'Load more orders'}
       </button>

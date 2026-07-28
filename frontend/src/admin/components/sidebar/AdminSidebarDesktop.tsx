@@ -42,7 +42,7 @@ export function AdminSidebarDesktop({
           <img
             src={logoWhite}
             alt="Marty Global LLC"
-            className="h-[51px] w-[146px] object-contain"
+            className="h-[3.1875rem] w-[9.125rem] object-contain"
           />
         </Link>
 
@@ -60,7 +60,7 @@ export function AdminSidebarDesktop({
                     aria-current={active ? 'page' : undefined}
                     className={
                       active
-                        ? 'flex w-full items-center gap-3 rounded-input bg-white px-4 py-3 text-body font-semibold text-primary'
+                        ? 'flex w-full items-center gap-3 rounded-input bg-white px-4 py-3 text-body font-semibold text-primary [&>svg]:text-accent'
                         : 'flex w-full items-center gap-3 rounded-input px-4 py-3 text-body font-medium text-white/80 transition-colors hover:bg-white/10 hover:text-white'
                     }
                   >

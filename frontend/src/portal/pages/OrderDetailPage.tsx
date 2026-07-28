@@ -47,11 +47,11 @@ type OrderDetailPageProps = {
 function OrderDetailSkeleton() {
   return (
     <div className="flex w-full flex-col gap-6 lg:gap-7" aria-hidden="true">
-      <div className="h-16 w-full max-w-[520px] animate-pulse rounded-input bg-gray-200" />
+      <div className="h-16 w-full max-w-[32.5rem] animate-pulse rounded-input bg-gray-200" />
       <div className="h-40 w-full animate-pulse rounded-card bg-gray-200" />
       <div className="flex flex-col gap-6 lg:flex-row">
-        <div className="h-[520px] flex-1 animate-pulse rounded-card bg-gray-200" />
-        <div className="h-[520px] w-full animate-pulse rounded-card bg-gray-200 lg:w-[440px]" />
+        <div className="h-[32.5rem] flex-1 animate-pulse rounded-card bg-gray-200" />
+        <div className="h-[32.5rem] w-full animate-pulse rounded-card bg-gray-200 lg:w-[27.5rem]" />
       </div>
     </div>
   );
@@ -82,7 +82,7 @@ export function OrderDetailPage({
   return (
     <PortalLayout user={user} onLogout={onLogout}>
       <div className="w-full p-4 md:p-6 lg:p-content">
-        <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-6 lg:gap-8">
+        <div className="mx-auto flex w-full max-w-[75rem] flex-col gap-6 lg:gap-8">
           {showSkeleton ? (
             <OrderDetailSkeleton />
           ) : (
@@ -134,7 +134,7 @@ export function OrderDetailPage({
                  * desktop. Because these pairs are adjacent in the mobile order,
                  * pairing them doesn't disturb the mobile sequence.
                  */}
-                <div className="contents lg:flex lg:w-[440px] lg:shrink-0 lg:flex-col lg:gap-6">
+                <div className="contents lg:flex lg:w-[27.5rem] lg:shrink-0 lg:flex-col lg:gap-6">
                   <div className="order-1 flex flex-col gap-6 md:order-5 md:flex-row lg:flex-col">
                     <div className="flex-1">
                       <OrderSummaryCard summary={order.summary} />

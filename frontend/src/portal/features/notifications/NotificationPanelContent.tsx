@@ -10,15 +10,24 @@ import { NotificationItem } from './NotificationItem';
  * mobile bottom sheet. The two wrappers differ (a floating panel vs a sheet);
  * the content between them is the same, so it lives here once.
  *
- * `variant` only nudges the header's type scale to match each design (the sheet
- * runs a touch larger). Everything below the header is identical. States the
- * designs don't show are filled in per Design guide.md: a loading skeleton while
- * the feed's query is in flight and an empty state when there's nothing to show.
+ * The header's type scale differs between the two chromes (the sheet runs a
+ * touch larger). Since the surface is now a single element that changes shape at
+ * `md`, those deltas are responsive classes rather than a branch: sheet sizing is
+ * the mobile base, dropdown sizing takes over from `md` up. Everything below the
+ * header is identical. States the designs don't show are filled in per Design
+ * guide.md: a loading skeleton while the feed's query is in flight and an empty
+ * state when there's nothing to show.
  */
 
 type NotificationPanelContentProps = {
   notifications: Notification[];
   isLoading?: boolean;
+  /**
+   * Which chrome is hosting the content. The header's sizing is now handled by
+   * responsive classes (sheet below `md`, dropdown from `md` up), so this no
+   * longer switches styles — it stays as the caller-facing description of the
+   * surface.
+   */
   variant: 'dropdown' | 'sheet';
   settingsHref: string;
   viewAllHref: string;
@@ -54,7 +63,7 @@ function NotificationsEmptyState() {
         <BellOff className="size-6 text-gray-400" strokeWidth={1.75} aria-hidden="true" />
       </span>
       <p className="text-body font-semibold text-text">You&apos;re all caught up</p>
-      <p className="max-w-[240px] text-small text-gray-500">
+      <p className="max-w-[15rem] text-small text-gray-500">
         New notifications about your applications, quotes, and mail will appear here.
       </p>
     </div>
@@ -64,7 +73,6 @@ function NotificationsEmptyState() {
 export function NotificationPanelContent({
   notifications,
   isLoading,
-  variant,
   settingsHref,
   viewAllHref,
   onSelect,
@@ -72,18 +80,11 @@ export function NotificationPanelContent({
   onDismiss,
 }: NotificationPanelContentProps) {
   const hasUnread = notifications.some((notification) => !notification.read);
-  const isSheet = variant === 'sheet';
 
   return (
     <>
-      <div
-        className={`flex shrink-0 items-center justify-between border-b border-gray-200 px-4 ${
-          isSheet ? 'pb-3' : 'py-4'
-        }`}
-      >
-        <p
-          className={`font-semibold text-text ${isSheet ? 'text-h6' : 'text-body-lg'}`}
-        >
+      <div className="flex shrink-0 items-center justify-between border-b border-gray-200 px-4 pb-3 md:py-4">
+        <p className="text-h6 font-semibold text-text md:text-body-lg">
           Notifications
         </p>
         <div className="flex items-center gap-3">
@@ -91,9 +92,7 @@ export function NotificationPanelContent({
             type="button"
             onClick={onMarkAllRead}
             disabled={!hasUnread}
-            className={`font-medium text-primary transition-colors hover:text-primary-hover disabled:text-gray-400 disabled:hover:text-gray-400 focus-visible:outline-none focus-visible:underline ${
-              isSheet ? 'text-[13px]' : 'text-small'
-            }`}
+            className="text-[0.8125rem] font-medium text-primary transition-colors hover:text-primary-hover disabled:text-gray-400 disabled:hover:text-gray-400 focus-visible:outline-none focus-visible:underline md:text-small"
           >
             Mark all as read
           </button>
@@ -104,7 +103,7 @@ export function NotificationPanelContent({
             className="flex shrink-0 items-center justify-center rounded-pill text-gray-500 transition-colors hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
           >
             <Settings
-              className={isSheet ? 'size-[18px]' : 'size-4'}
+              className="size-[1.125rem] md:size-4"
               strokeWidth={1.75}
               aria-hidden="true"
             />

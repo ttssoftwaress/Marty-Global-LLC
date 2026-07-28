@@ -34,13 +34,13 @@ export function TeamToggleSwitch({
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-pill transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${
-        checked ? 'bg-primary' : 'bg-gray-300'
+        checked ? 'bg-accent' : 'bg-gray-300'
       } ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
     >
       <span
         aria-hidden="true"
         className={`pointer-events-none inline-block size-5 rounded-full bg-white shadow-sm-elevation transition-transform ${
-          checked ? 'translate-x-[22px]' : 'translate-x-0.5'
+          checked ? 'translate-x-[1.375rem]' : 'translate-x-0.5'
         }`}
       />
     </button>

@@ -44,6 +44,7 @@ const TERMINAL_STATUSES: Payment['status'][] = [
   'succeeded',
   'failed',
   'expired',
+  'cancelled',
   'underpaid',
   'overpaid',
 ];
@@ -103,6 +104,43 @@ export function useCreatePaymentIntent() {
       // round trip.
       queryClient.setQueryData(paymentKey(payment.id), payment);
       // What's owed has changed shape; let billing refetch when it's next shown.
+      void queryClient.invalidateQueries({ queryKey: billingOverviewKey() });
+    },
+  });
+}
+
+/*
+ * POST /v1/payments/:paymentId/cancel — close an open payment window on purpose.
+ *
+ * The checkout screen holds the customer on the page while the countdown runs,
+ * so this is the deliberate way out. The backend refuses once a transfer has
+ * matched, which is why the confirmation in front of this asks the one question
+ * that matters: have you already sent it?
+ *
+ * No `Idempotency-Key`: cancelling is guarded by the payment's own status rather
+ * than by a key, so a repeat lands on an already-cancelled row and changes
+ * nothing (AGENTS.md, API Conventions — mutating payment endpoints are
+ * retry-safe).
+ */
+export function useCancelPayment() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (paymentId: string) =>
+      apiFetch<ApiSuccess<Payment>>(`/payments/${paymentId}/cancel`, {
+        method: 'POST',
+      }).then((res) => res.data),
+
+    onSuccess: (payment) => {
+      queryClient.setQueryData(paymentKey(payment.id), payment);
+
+      // The quote carries the payment to resume, and there no longer is one.
+      if (payment.quoteId) {
+        void queryClient.invalidateQueries({
+          queryKey: checkoutQuoteKey(payment.quoteId),
+        });
+      }
+
       void queryClient.invalidateQueries({ queryKey: billingOverviewKey() });
     },
   });

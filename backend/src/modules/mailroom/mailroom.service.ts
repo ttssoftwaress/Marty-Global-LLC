@@ -69,6 +69,19 @@ const PENDING_REQUEST_STATUSES: MailItemStatus[] = [
 const liveItem: Prisma.MailItemWhereInput = { deletedAt: null };
 
 /*
+ * A request the customer has made that we haven't settled yet. This is what
+ * separates "we are waiting on the customer" from "the customer is waiting on
+ * us" — both states are stored as ACTION_REQUESTED on the item, so the open
+ * request is the only thing that tells them apart (see `hasOpenRequest`).
+ */
+const openRequest: Prisma.MailRequestWhereInput = {
+  deletedAt: null,
+  status: {
+    in: [PrismaMailRequestStatus.PENDING, PrismaMailRequestStatus.PROCESSING],
+  },
+};
+
+/*
  * What each of the room's three tabs narrows the SAME list of mail items to.
  *
  * All three render identical rows — an envelope with a sender, a date, and a
@@ -82,16 +95,7 @@ const liveItem: Prisma.MailItemWhereInput = { deletedAt: null };
  */
 const TAB_SCOPE: Record<MailRoomTab, Prisma.MailItemWhereInput> = {
   inbox: {},
-  requests: {
-    requests: {
-      some: {
-        deletedAt: null,
-        status: {
-          in: [PrismaMailRequestStatus.PENDING, PrismaMailRequestStatus.PROCESSING],
-        },
-      },
-    },
-  },
+  requests: { requests: { some: openRequest } },
   history: { actions: { some: {} } },
 };
 
@@ -205,6 +209,14 @@ export type MailItemView = {
   scanReady: boolean;
   note?: string;
   responseDueAt?: string;
+  /*
+   * True once the customer has asked us to forward or shred this item and we
+   * haven't settled it. The item reads as ACTION_REQUESTED either way, so
+   * without this the list cannot tell "we need something from you" from "you
+   * already told us, we're on it" — and offers the customer a Respond button
+   * for a request they themselves submitted.
+   */
+  hasOpenRequest: boolean;
   // Presigned page images, in order — what the viewer draws inline.
   scanPages?: string[];
   // The item's PDF, when one of the uploaded files was a PDF.
@@ -271,6 +283,9 @@ export async function listItems(
     orderBy: { receivedAt: 'desc' },
     take: query.limit + 1,
     ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
+    // One open request is enough to answer `hasOpenRequest` — take(1) keeps this
+    // from loading a request history the list never renders.
+    include: { requests: { where: openRequest, select: { id: true }, take: 1 } },
   });
 
   const hasMore = rows.length > query.limit;
@@ -286,6 +301,7 @@ export async function listItems(
       scanReady: item.scanReady,
       note: item.note ?? undefined,
       responseDueAt: item.responseDueAt?.toISOString(),
+      hasOpenRequest: item.requests.length > 0,
     })),
     totalItems,
     totalPages: Math.max(1, Math.ceil(totalItems / query.limit)),
@@ -305,7 +321,10 @@ export async function getItem(
 
   const item = await prisma.mailItem.findFirst({
     where: { id: itemId, roomId: ownedRoomId, deletedAt: null },
-    include: { pages: { orderBy: { pageNumber: 'asc' } } },
+    include: {
+      pages: { orderBy: { pageNumber: 'asc' } },
+      requests: { where: openRequest, select: { id: true }, take: 1 },
+    },
   });
 
   if (!item) {
@@ -364,6 +383,7 @@ export async function getItem(
     scanReady: item.scanReady,
     note: item.note ?? undefined,
     responseDueAt: item.responseDueAt?.toISOString(),
+    hasOpenRequest: item.requests.length > 0,
     scanPages: scanPages.length > 0 ? scanPages : undefined,
     pdfUrl: await presignObject(item.pdfObjectKey),
     files: files.length > 0 ? files : undefined,

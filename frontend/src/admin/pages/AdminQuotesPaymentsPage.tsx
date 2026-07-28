@@ -65,7 +65,7 @@ function TableSkeleton({ rows }: { rows: number }) {
     <div className="flex w-full flex-col gap-3 md:gap-0" aria-hidden="true">
       <div className="flex flex-col gap-3 md:hidden">
         {Array.from({ length: 4 }, (_, index) => (
-          <div key={index} className="h-[150px] animate-pulse rounded-card bg-gray-200" />
+          <div key={index} className="h-[9.375rem] animate-pulse rounded-card bg-gray-200" />
         ))}
       </div>
 
@@ -181,7 +181,7 @@ export function AdminQuotesPaymentsPage() {
   return (
     <AdminLayout user={user} onLogout={onLogout}>
       <div className="w-full p-4 md:p-6 lg:p-content">
-        <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 md:gap-6 lg:gap-8">
+        <div className="mx-auto flex w-full max-w-[80rem] flex-col gap-6 md:gap-6 lg:gap-8">
           <PaymentsHeader />
 
           {summary.isPending ? (
@@ -189,7 +189,7 @@ export function AdminQuotesPaymentsPage() {
               {Array.from({ length: 4 }, (_, index) => (
                 <div
                   key={index}
-                  className="h-[104px] animate-pulse rounded-card bg-gray-200 lg:h-[132px]"
+                  className="h-[6.5rem] animate-pulse rounded-card bg-gray-200 lg:h-[8.25rem]"
                 />
               ))}
             </div>
@@ -207,7 +207,7 @@ export function AdminQuotesPaymentsPage() {
           {/* Billing ledger */}
           <section className="flex w-full flex-col gap-4">
             <div className="flex w-full flex-col gap-3 lg:flex-row lg:items-center lg:justify-between lg:gap-6">
-              <h2 className="shrink-0 whitespace-nowrap text-[22px] font-semibold leading-8 text-text md:text-h6 lg:text-h4">
+              <h2 className="shrink-0 whitespace-nowrap text-[1.375rem] font-semibold leading-8 text-text md:text-h6 lg:text-h4">
                 Billing ledger
               </h2>
 

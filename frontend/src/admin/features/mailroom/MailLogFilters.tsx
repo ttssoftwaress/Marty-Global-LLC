@@ -46,7 +46,7 @@ export function MailLogFilters({
 }: MailLogFiltersProps) {
   return (
     <div className="flex w-full flex-col gap-2 md:flex-row md:flex-wrap md:items-center md:gap-3">
-      <div className="flex h-10 w-full items-center gap-2 rounded-input border border-gray-300 bg-white px-3 transition-colors focus-within:border-primary focus-within:shadow-[0_0_0_1px_var(--ring-focus)] md:min-w-[180px] md:flex-1 md:px-3.5 lg:max-w-[280px] lg:flex-none">
+      <div className="flex h-10 w-full items-center gap-2 rounded-input border border-gray-300 bg-white px-3 transition-colors focus-within:border-primary focus-within:shadow-[0_0_0_1px_var(--ring-focus)] md:min-w-[11.25rem] md:flex-1 md:px-3.5 lg:max-w-[17.5rem] lg:flex-none">
         <Search
           className="size-3.5 shrink-0 text-gray-400 md:size-4"
           strokeWidth={1.75}
@@ -69,7 +69,7 @@ export function MailLogFilters({
           options={MAIL_LOG_DATE_RANGES}
           value={range}
           onChange={onRangeChange}
-          className="flex-1 md:w-[160px] md:flex-none"
+          className="flex-1 md:w-[10rem] md:flex-none"
         />
 
         <MailLogFilterSelect
@@ -77,7 +77,7 @@ export function MailLogFilters({
           options={MAIL_LOG_ACTION_FILTERS}
           value={action}
           onChange={onActionChange}
-          className="flex-1 md:w-[160px] md:flex-none"
+          className="flex-1 md:w-[10rem] md:flex-none"
         />
       </div>
     </div>

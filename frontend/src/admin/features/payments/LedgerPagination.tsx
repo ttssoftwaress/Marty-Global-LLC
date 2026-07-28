@@ -101,7 +101,7 @@ export function LedgerPagination({
           type="button"
           onClick={() => onPageChange(page - 1)}
           disabled={!canPrev}
-          className="flex h-9 items-center justify-center rounded-control border px-3 text-[13px] font-medium transition-colors disabled:cursor-default enabled:border-gray-300 enabled:text-gray-700 enabled:hover:bg-gray-50 disabled:border-gray-200 disabled:text-gray-400"
+          className="flex h-9 items-center justify-center rounded-control border px-3 text-[0.8125rem] font-medium transition-colors disabled:cursor-default enabled:border-gray-300 enabled:text-gray-700 enabled:hover:bg-gray-50 disabled:border-gray-200 disabled:text-gray-400"
         >
           Prev
         </button>
@@ -121,7 +121,7 @@ export function LedgerPagination({
               type="button"
               onClick={() => onPageChange(entry)}
               aria-current={entry === page ? 'page' : undefined}
-              className={`flex h-9 min-w-9 items-center justify-center rounded-control px-2.5 text-[13px] transition-colors ${
+              className={`flex h-9 min-w-9 items-center justify-center rounded-control px-2.5 text-[0.8125rem] transition-colors ${
                 entry === page
                   ? 'bg-primary font-semibold text-white'
                   : 'border border-gray-300 font-medium text-gray-700 hover:bg-gray-50'
@@ -136,7 +136,7 @@ export function LedgerPagination({
           type="button"
           onClick={() => onPageChange(page + 1)}
           disabled={!canNext}
-          className="flex h-9 items-center justify-center rounded-control border px-3 text-[13px] font-medium transition-colors disabled:cursor-default enabled:border-gray-300 enabled:text-gray-700 enabled:hover:bg-gray-50 disabled:border-gray-200 disabled:text-gray-400"
+          className="flex h-9 items-center justify-center rounded-control border px-3 text-[0.8125rem] font-medium transition-colors disabled:cursor-default enabled:border-gray-300 enabled:text-gray-700 enabled:hover:bg-gray-50 disabled:border-gray-200 disabled:text-gray-400"
         >
           Next
         </button>

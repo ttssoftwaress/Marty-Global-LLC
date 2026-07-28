@@ -13,6 +13,7 @@ export {
   adminOrderKey,
   adminOrderQuotesKey,
   useAdminOrder,
+  useAdminOrderDocumentLink,
   useAdminOrderQuotes,
   useCancelAdminQuote,
   useCreateAdminQuote,

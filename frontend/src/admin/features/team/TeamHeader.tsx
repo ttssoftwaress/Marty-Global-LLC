@@ -44,7 +44,7 @@ export function TeamHeader({ onAddStaff }: TeamHeaderProps) {
 
       <div className="flex w-full flex-col gap-4 md:flex-row md:items-center md:justify-between md:gap-6">
         <div className="flex min-w-0 flex-col gap-1">
-          <h1 className="text-[32px] font-semibold leading-10 text-text">
+          <h1 className="text-[2rem] font-semibold leading-10 text-text">
             Team &amp; staff
           </h1>
           {/* The mobile link drops the subtitle; it is kept at every width so the
@@ -60,7 +60,7 @@ export function TeamHeader({ onAddStaff }: TeamHeaderProps) {
           onClick={onAddStaff}
           // Type sizes are arbitrary utilities, not the `.text-*` tokens: those
           // are `@layer components`, so their responsive variants emit no CSS.
-          className="flex h-12 w-full shrink-0 items-center justify-center gap-2 rounded-control bg-primary px-5 text-[16px] font-semibold leading-6 text-white transition-colors hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary md:h-10 md:w-auto md:gap-1.5 md:px-4 md:text-[14px] md:leading-5 lg:h-12 lg:gap-2 lg:px-5 lg:text-[16px] lg:leading-6"
+          className="flex h-12 w-full shrink-0 items-center justify-center gap-2 rounded-control bg-primary px-5 text-[1rem] font-semibold leading-6 text-white transition-colors hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary md:h-10 md:w-auto md:gap-1.5 md:px-4 md:text-[0.875rem] md:leading-5 lg:h-12 lg:gap-2 lg:px-5 lg:text-[1rem] lg:leading-6"
         >
           <Plus
             className="size-5 shrink-0 md:size-4 lg:size-5"

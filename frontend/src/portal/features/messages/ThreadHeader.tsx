@@ -43,7 +43,7 @@ export function ThreadHeader({
         </button>
 
         <div className="flex min-w-0 flex-col gap-0.5 md:flex-row md:items-center md:gap-3">
-          <p className="truncate text-[15px] font-semibold text-text lg:text-[16px]">
+          <p className="truncate text-[0.9375rem] font-semibold text-text lg:text-[1rem]">
             {subject}
           </p>
           {status ? (
@@ -58,7 +58,7 @@ export function ThreadHeader({
         {orderId ? (
           <Link
             to={`/app/orders/${orderId}`}
-            className="hidden items-center gap-1 text-[13px] font-medium text-primary hover:underline md:flex lg:text-[14px]"
+            className="hidden items-center gap-1 text-[0.8125rem] font-medium text-primary hover:underline md:flex lg:text-[0.875rem]"
           >
             View order
             <ArrowRight className="size-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />

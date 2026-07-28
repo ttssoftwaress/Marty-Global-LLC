@@ -55,7 +55,7 @@ export function NotificationFilterTabs({
             role="tab"
             aria-selected={isActive}
             onClick={() => onChange(tab.value)}
-            className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-pill px-4 text-[12px] font-medium transition-colors focus-visible:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary md:text-[14px] ${
+            className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-pill px-4 text-[0.75rem] font-medium transition-colors focus-visible:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary md:text-[0.875rem] ${
               isActive
                 ? 'bg-primary text-white'
                 : 'bg-gray-100 text-gray-500 hover:bg-gray-200 md:bg-transparent md:hover:bg-gray-100'
@@ -64,7 +64,7 @@ export function NotificationFilterTabs({
             {tab.label}
             {showCount ? (
               <span
-                className={`inline-flex items-center rounded-pill px-1.5 py-0.5 text-[10px] font-semibold md:text-[12px] ${
+                className={`inline-flex items-center rounded-pill px-1.5 py-0.5 text-[0.625rem] font-semibold md:text-[0.75rem] ${
                   isActive ? 'bg-white/20 text-white' : 'bg-primary-light text-primary'
                 }`}
               >

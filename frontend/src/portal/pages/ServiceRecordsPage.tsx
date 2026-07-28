@@ -31,11 +31,11 @@ function RecordsError({ onRetry }: { onRetry: () => void }) {
       role="alert"
       className="flex w-full flex-col items-center gap-3 rounded-card border border-gray-200 bg-white px-6 py-14 text-center shadow-sm-elevation"
     >
-      <span className="flex size-12 items-center justify-center rounded-[24px] bg-[var(--color-status-missing-bg)]">
+      <span className="flex size-12 items-center justify-center rounded-[1.5rem] bg-[var(--color-status-missing-bg)]">
         <AlertTriangle className="size-6 text-error" strokeWidth={1.75} aria-hidden="true" />
       </span>
       <p className="text-body-lg font-semibold text-text">We couldn&apos;t load this page</p>
-      <p className="max-w-[360px] text-body text-gray-500">
+      <p className="max-w-[22.5rem] text-body text-gray-500">
         Something went wrong fetching your records. Please try again.
       </p>
       <button
@@ -52,8 +52,8 @@ function RecordsError({ onRetry }: { onRetry: () => void }) {
 function RecordsSkeleton() {
   return (
     <div className="flex w-full flex-col gap-6" aria-hidden="true">
-      <div className="h-11 w-full animate-pulse rounded-input bg-gray-200 md:w-[320px]" />
-      <div className="h-[320px] w-full animate-pulse rounded-card bg-gray-200" />
+      <div className="h-11 w-full animate-pulse rounded-input bg-gray-200 md:w-[20rem]" />
+      <div className="h-[20rem] w-full animate-pulse rounded-card bg-gray-200" />
     </div>
   );
 }
@@ -82,7 +82,7 @@ export function ServiceRecordsPage() {
   return (
     <PortalLayout user={user} onLogout={onLogout}>
       <div className="w-full p-4 md:p-6 lg:p-content">
-        <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-6 lg:gap-8">
+        <div className="mx-auto flex w-full max-w-[75rem] flex-col gap-6 lg:gap-8">
           <header className="flex w-full flex-col gap-1 md:gap-3">
             <p className="flex items-center gap-1.5 text-caption font-medium uppercase tracking-[0.6px]">
               <Link to="/app" className="text-primary hover:underline">
@@ -95,7 +95,7 @@ export function ServiceRecordsPage() {
             <div className="flex flex-col gap-1 md:gap-1.5">
               <h1 className="flex items-center gap-2.5 text-h4 font-semibold text-text md:text-h3">
                 {Icon ? (
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-primary-light md:size-10">
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-[0.625rem] bg-primary-light md:size-10">
                     <Icon className="size-5 text-primary" strokeWidth={1.75} aria-hidden="true" />
                   </span>
                 ) : null}

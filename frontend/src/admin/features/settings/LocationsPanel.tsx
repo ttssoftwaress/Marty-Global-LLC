@@ -128,7 +128,7 @@ export function LocationsPanel({ canWrite }: { canWrite: boolean }) {
       >
         {/* Table — md and up */}
         <div className="hidden overflow-x-auto rounded-card border border-gray-200 bg-white shadow-sm-elevation md:block">
-          <table className="w-full min-w-[720px] border-collapse">
+          <table className="w-full min-w-[45rem] border-collapse">
             <thead>
               <tr className="border-b border-gray-200 bg-gray-50">
                 {canWrite && <SettingsTh>Order</SettingsTh>}

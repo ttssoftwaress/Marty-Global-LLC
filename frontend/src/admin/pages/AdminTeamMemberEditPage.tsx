@@ -107,6 +107,13 @@ export function AdminTeamMemberEditPage() {
    */
   const setRole = (role: string) => patch({ role });
 
+  /*
+   * On success the draft is re-seeded from the response here rather than left to
+   * the `loadedMember` effect: a password-only save returns a record deep-equal
+   * to the cached one, so structural sharing keeps the same object and the
+   * effect never re-fires — the typed password would sit in the field, Save
+   * would stay armed, and the "Changes saved." status would never show.
+   */
   const onSave = () => {
     if (!draft || !memberId || updateMember.isPending) return;
 
@@ -115,7 +122,15 @@ export function AdminTeamMemberEditPage() {
       return;
     }
 
-    updateMember.mutate({ memberId, payload: payloadFromDraft(draft) });
+    updateMember.mutate(
+      { memberId, payload: payloadFromDraft(draft) },
+      {
+        onSuccess: (saved) => {
+          setDraft(draftFromMember(saved));
+          setShowErrors(false);
+        },
+      },
+    );
   };
 
   /*
@@ -154,7 +169,7 @@ export function AdminTeamMemberEditPage() {
     return (
       <AdminLayout user={user} onLogout={onLogout}>
         <div className="w-full p-4 md:p-6 lg:p-content">
-          <div className="mx-auto flex w-full max-w-[840px] flex-col gap-6">
+          <div className="mx-auto flex w-full max-w-[52.5rem] flex-col gap-6">
             <EditMemberHeader />
             <p className="rounded-card border border-gray-200 bg-white p-card text-body text-gray-500">
               This team member could not be loaded. They may have been removed
@@ -170,10 +185,10 @@ export function AdminTeamMemberEditPage() {
     <AdminLayout user={user} onLogout={onLogout}>
       {/* The mobile action bar overlays the page, so the bottom padding keeps the
           last card clear of it; `md` and up have no bar to clear. */}
-      <div className="w-full p-4 pb-[110px] md:p-6 md:pb-6 lg:p-content">
+      <div className="w-full p-4 pb-[6.875rem] md:p-6 md:pb-6 lg:p-content">
         {/* Desktop centres the content in an 840px column; tablet and mobile run
             it full width inside the shell's padding. */}
-        <div className="mx-auto flex w-full max-w-[840px] flex-col gap-6 lg:gap-8">
+        <div className="mx-auto flex w-full max-w-[52.5rem] flex-col gap-6 lg:gap-8">
           {isLoading ? (
             <EditMemberSkeleton />
           ) : (
@@ -257,7 +272,7 @@ export function AdminTeamMemberEditPage() {
                   onClick={() => setConfirmingDelete(true)}
                   className="flex h-input w-full shrink-0 items-center justify-center gap-2 rounded-control border border-error bg-white px-5 text-button text-error transition-colors hover:bg-error/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-error md:w-auto"
                 >
-                  <Trash2 className="size-[18px]" strokeWidth={1.75} aria-hidden="true" />
+                  <Trash2 className="size-[1.125rem]" strokeWidth={1.75} aria-hidden="true" />
                   Delete account
                 </button>
               </section>
@@ -285,8 +300,8 @@ function EditMemberSkeleton() {
   return (
     <div className="flex w-full flex-col gap-6 lg:gap-8" aria-hidden="true">
       <div className="flex flex-col gap-3">
-        <div className="h-4 w-[220px] animate-pulse rounded bg-gray-200" />
-        <div className="h-9 w-[280px] animate-pulse rounded bg-gray-200" />
+        <div className="h-4 w-[13.75rem] animate-pulse rounded bg-gray-200" />
+        <div className="h-9 w-[17.5rem] animate-pulse rounded bg-gray-200" />
       </div>
       {[220, 620].map((height, index) => (
         <div

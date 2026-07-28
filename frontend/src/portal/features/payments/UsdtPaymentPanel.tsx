@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -7,11 +6,13 @@ import {
   ShieldCheck,
   Timer,
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 import type { Payment, PaymentStatusView } from '../../types/payments';
 import { CopyField } from './CopyField';
 import { PaymentStateChip } from './chips';
 import { QrCode } from './QrCode';
+import { formatCountdown } from './useCountdown';
 
 /*
  * The USDT (TRC-20) payment panel — what the customer looks at while paying.
@@ -45,23 +46,9 @@ const EXPLORER_BASE: Record<'mainnet' | 'nile', string> = {
   nile: 'https://nile.tronscan.org/#/transaction/',
 };
 
-// "12:45" — a plain mm:ss countdown. Time, not money, so ordinary arithmetic.
-function formatCountdown(msRemaining: number): string {
-  const total = Math.max(0, Math.floor(msRemaining / 1000));
-  const minutes = Math.floor(total / 60);
-  const seconds = total % 60;
-  return `${minutes}:${String(seconds).padStart(2, '0')}`;
-}
-
-function Countdown({ expiresAt }: { expiresAt: string }) {
-  const target = new Date(expiresAt).getTime();
-  const [remaining, setRemaining] = useState(() => target - Date.now());
-
-  useEffect(() => {
-    const tick = window.setInterval(() => setRemaining(target - Date.now()), 1_000);
-    return () => window.clearInterval(tick);
-  }, [target]);
-
+// The clock itself lives in `useCountdown` — the checkout page reads the same
+// value, because running out is what releases the customer from the page.
+function Countdown({ remaining }: { remaining: number }) {
   const expired = remaining <= 0;
 
   return (
@@ -69,6 +56,8 @@ function Countdown({ expiresAt }: { expiresAt: string }) {
       className={`flex items-center gap-1.5 text-small font-semibold ${
         expired ? 'text-error' : 'text-[var(--color-status-review-text)]'
       }`}
+      role="timer"
+      aria-live="off"
     >
       <Timer className="size-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
       {expired
@@ -92,7 +81,7 @@ function NetworkWarning({ network, contractAddress }: {
         Funds sent on another network, or as a different token, cannot be
         recovered. Check that the token contract matches:
       </p>
-      <p className="break-all rounded-input bg-white/70 px-2.5 py-1.5 font-mono text-[11px] leading-4 text-text">
+      <p className="break-all rounded-input bg-white/70 px-2.5 py-1.5 font-mono text-[0.6875rem] leading-4 text-text">
         {contractAddress}
       </p>
     </div>
@@ -111,7 +100,7 @@ function ConfirmingState({ payment }: { payment: Payment }) {
 
   return (
     <div className="flex flex-col items-center gap-4 px-4 py-8 text-center md:py-10">
-      <span className="flex size-14 items-center justify-center rounded-[28px] bg-[var(--color-status-submitted-bg)]">
+      <span className="flex size-14 items-center justify-center rounded-[1.75rem] bg-[var(--color-status-submitted-bg)]">
         <Loader2
           className="size-7 animate-spin text-[var(--color-status-submitted-text)]"
           strokeWidth={2}
@@ -123,13 +112,13 @@ function ConfirmingState({ payment }: { payment: Payment }) {
         <h3 className="text-h6 font-semibold text-text md:text-h5">
           We&apos;ve seen your transfer
         </h3>
-        <p className="max-w-[420px] text-body text-gray-500">
+        <p className="max-w-[26.25rem] text-body text-gray-500">
           It&apos;s confirming on the TRON network. You can safely close this
           page — we&apos;ll email you as soon as it clears.
         </p>
       </div>
 
-      <div className="flex w-full max-w-[360px] flex-col gap-2">
+      <div className="flex w-full max-w-[22.5rem] flex-col gap-2">
         <div className="h-2 w-full overflow-hidden rounded-pill bg-gray-200">
           <div
             className="h-full rounded-pill bg-primary transition-all duration-500"
@@ -172,13 +161,13 @@ function TransactionLink({ hash, network }: { hash: string; network: 'mainnet' |
 function SucceededState({ payment }: { payment: Payment }) {
   return (
     <div className="flex flex-col items-center gap-4 px-4 py-8 text-center md:py-10">
-      <span className="flex size-14 items-center justify-center rounded-[28px] bg-[var(--color-status-approved-bg)]">
+      <span className="flex size-14 items-center justify-center rounded-[1.75rem] bg-[var(--color-status-approved-bg)]">
         <CheckCircle2 className="size-7 text-success" strokeWidth={2} aria-hidden="true" />
       </span>
 
       <div className="flex flex-col gap-1.5">
         <h3 className="text-h6 font-semibold text-text md:text-h5">Payment received</h3>
-        <p className="max-w-[420px] text-body text-gray-500">
+        <p className="max-w-[26.25rem] text-body text-gray-500">
           Thank you — your payment is confirmed and your order is moving forward.
           A receipt is on its way to your email.
         </p>
@@ -219,16 +208,23 @@ function ProblemState({ payment }: { payment: Payment }) {
       title: 'This payment window closed',
       body: 'The exchange rate we quoted is no longer valid. Start the payment again to get a fresh amount — nothing has been charged.',
     },
+    cancelled: {
+      title: 'Transfer cancelled',
+      body: "We've stopped watching for this payment. Your quote is still open — start again from your billing page whenever you're ready.",
+    },
     failed: FALLBACK,
   };
 
   const { title, body } = copy[status] ?? FALLBACK;
-  const isMismatch = status === 'underpaid' || status === 'overpaid';
+  // Cancelling is a choice, not a fault, so it gets the amber treatment the
+  // mismatch states use rather than the red one failure does.
+  const isMismatch =
+    status === 'underpaid' || status === 'overpaid' || status === 'cancelled';
 
   return (
     <div className="flex flex-col items-center gap-4 px-4 py-8 text-center md:py-10">
       <span
-        className={`flex size-14 items-center justify-center rounded-[28px] ${
+        className={`flex size-14 items-center justify-center rounded-[1.75rem] ${
           isMismatch
             ? 'bg-[var(--color-status-review-bg)]'
             : 'bg-[var(--color-status-missing-bg)]'
@@ -245,7 +241,7 @@ function ProblemState({ payment }: { payment: Payment }) {
 
       <div className="flex flex-col gap-1.5">
         <h3 className="text-h6 font-semibold text-text md:text-h5">{title}</h3>
-        <p className="max-w-[440px] text-body text-gray-500">{body}</p>
+        <p className="max-w-[27.5rem] text-body text-gray-500">{body}</p>
       </div>
 
       {payment.transactionHash ? (
@@ -254,11 +250,33 @@ function ProblemState({ payment }: { payment: Payment }) {
           network={usdt?.network ?? 'nile'}
         />
       ) : null}
+
+      {/*
+        The window is closed by the time this renders, so the page is no longer
+        holding the customer — this is the way out, said plainly rather than left
+        to the breadcrumb.
+      */}
+      <Link
+        to="/app/billing"
+        className="btn btn-primary mt-1 h-11 rounded-input px-5 text-body"
+      >
+        Back to billing
+      </Link>
     </div>
   );
 }
 
-function AwaitingState({ payment }: { payment: Payment }) {
+function AwaitingState({
+  payment,
+  remaining,
+  onCancel,
+  isCancelling,
+}: {
+  payment: Payment;
+  remaining: number;
+  onCancel: () => void;
+  isCancelling: boolean;
+}) {
   const usdt = payment.usdt;
   if (!usdt) return null;
 
@@ -286,7 +304,7 @@ function AwaitingState({ payment }: { payment: Payment }) {
 
           <CopyField label="Deposit address" value={usdt.depositAddress} />
 
-          <Countdown expiresAt={usdt.expiresAt} />
+          <Countdown remaining={remaining} />
         </div>
       </div>
 
@@ -296,17 +314,60 @@ function AwaitingState({ payment }: { payment: Payment }) {
           strokeWidth={2}
           aria-hidden="true"
         />
+        {/*
+          This used to say the tab was safe to close. It isn't, quite: we are
+          watching one exact amount at one address for a fixed window, and a
+          customer who has wandered off can still send it to a screen they can no
+          longer see. The page now holds them here until the window closes — by
+          the countdown, or by the button below.
+        */}
         <p className="text-small leading-5 text-text-secondary">
           Waiting for your transfer. This page updates on its own once we see it
-          on-chain — you don&apos;t need to do anything else, and it&apos;s safe
-          to close this tab.
+          on-chain — keep it open until then, and we&apos;ll take it from there.
         </p>
+      </div>
+
+      <div className="flex flex-col gap-3 border-t border-gray-200 pt-4 md:flex-row md:items-center md:justify-between md:gap-6">
+        <p className="text-small leading-5 text-text-secondary">
+          Not sending after all? Cancelling closes this window and takes you back
+          to billing. Your quote stays open.
+        </p>
+
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={isCancelling}
+          className="flex h-11 w-full shrink-0 items-center justify-center rounded-control border border-error px-5 text-body font-semibold text-error transition-colors hover:bg-error/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-error disabled:cursor-not-allowed disabled:opacity-50 md:w-auto"
+        >
+          {isCancelling ? 'Cancelling…' : 'Cancel transfer'}
+        </button>
       </div>
     </div>
   );
 }
 
-export function UsdtPaymentPanel({ payment }: { payment: Payment }) {
+const PROBLEM_STATUSES: PaymentStatusView[] = [
+  'failed',
+  'expired',
+  'cancelled',
+  'underpaid',
+  'overpaid',
+];
+
+type UsdtPaymentPanelProps = {
+  payment: Payment;
+  /** Milliseconds left in the window, from the checkout screen's clock. */
+  remaining: number;
+  onCancel: () => void;
+  isCancelling: boolean;
+};
+
+export function UsdtPaymentPanel({
+  payment,
+  remaining,
+  onCancel,
+  isCancelling,
+}: UsdtPaymentPanelProps) {
   const { status } = payment;
 
   return (
@@ -316,12 +377,17 @@ export function UsdtPaymentPanel({ payment }: { payment: Payment }) {
         <PaymentStateChip status={status} />
       </header>
 
-      {status === 'awaiting_payment' ? <AwaitingState payment={payment} /> : null}
+      {status === 'awaiting_payment' ? (
+        <AwaitingState
+          payment={payment}
+          remaining={remaining}
+          onCancel={onCancel}
+          isCancelling={isCancelling}
+        />
+      ) : null}
       {status === 'confirming' ? <ConfirmingState payment={payment} /> : null}
       {status === 'succeeded' ? <SucceededState payment={payment} /> : null}
-      {['failed', 'expired', 'underpaid', 'overpaid'].includes(status) ? (
-        <ProblemState payment={payment} />
-      ) : null}
+      {PROBLEM_STATUSES.includes(status) ? <ProblemState payment={payment} /> : null}
     </section>
   );
 }

@@ -55,7 +55,7 @@ function CustomerDetailSkeleton() {
 
       <div className="grid w-full grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
         {Array.from({ length: 4 }, (_, index) => (
-          <div key={index} className="h-[88px] animate-pulse rounded-card bg-gray-200 lg:h-[92px]" />
+          <div key={index} className="h-[5.5rem] animate-pulse rounded-card bg-gray-200 lg:h-[5.75rem]" />
         ))}
       </div>
 
@@ -68,7 +68,7 @@ function CustomerDetailSkeleton() {
       {/* Mobile — a stack of cards. */}
       <div className="flex flex-col gap-3 md:hidden">
         {Array.from({ length: 4 }, (_, index) => (
-          <div key={index} className="h-[148px] animate-pulse rounded-card bg-gray-200" />
+          <div key={index} className="h-[9.25rem] animate-pulse rounded-card bg-gray-200" />
         ))}
       </div>
 
@@ -92,7 +92,7 @@ function NotFoundState() {
   return (
     <div className="flex w-full flex-col items-center gap-2 rounded-card border border-gray-200 bg-white px-6 py-16 text-center">
       <p className="text-h6 text-text">Customer not found</p>
-      <p className="max-w-[420px] text-body text-gray-500">
+      <p className="max-w-[26.25rem] text-body text-gray-500">
         This account may have been removed, or the link is no longer valid.
       </p>
     </div>
@@ -132,7 +132,7 @@ export function AdminCustomerDetailPage() {
   return (
     <AdminLayout user={user} onLogout={onLogout}>
       <div className="w-full p-4 md:p-6 lg:p-content">
-        <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-5 md:gap-6">
+        <div className="mx-auto flex w-full max-w-[87.5rem] flex-col gap-5 md:gap-6">
           <CustomerDetailBreadcrumbs customerName={customer.data?.name ?? ''} />
 
           {isLoading ? (
@@ -154,7 +154,7 @@ export function AdminCustomerDetailPage() {
                 {activeTab === 'orders' ? (
                   orders.isPending ? (
                     <div
-                      className="h-[320px] w-full animate-pulse rounded-card bg-gray-200 md:rounded-table"
+                      className="h-[20rem] w-full animate-pulse rounded-card bg-gray-200 md:rounded-table"
                       aria-hidden="true"
                     />
                   ) : (

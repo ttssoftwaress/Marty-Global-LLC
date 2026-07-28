@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 
 import logoColor from '@/assets/Marty-Logo-Color.PNG';
+import { useCompactScale } from '@/hooks/useCompactScale';
 import { LeftPanel, SecureTrust } from './components/auth-brand';
 import { ArrowLeftIcon, CheckIcon } from './components/icons';
 
@@ -14,6 +15,8 @@ const LOGIN_ROUTE = '/login';
  * logo + title header strip, mobile just the logo.
  */
 export function CheckYourEmailPage() {
+  useCompactScale();
+
   // ResetPasswordPage hands us the address it dispatched to via router state; a
   // visitor who lands here directly (no state) gets the generic wording.
   const location = useLocation();
@@ -43,9 +46,9 @@ function BrandHeader() {
       <img
         src={logoColor}
         alt="Marty Global LLC"
-        className="h-16 w-40 object-contain md:h-[60px] md:w-[180px]"
+        className="h-16 w-40 object-contain md:h-[3.75rem] md:w-[11.25rem]"
       />
-      <h1 className="hidden text-[28px] font-bold leading-none text-primary md:block">
+      <h1 className="hidden text-[1.75rem] font-bold leading-none text-primary md:block">
         Check Your Email
       </h1>
     </div>
@@ -54,7 +57,7 @@ function BrandHeader() {
 
 function RightPanel({ sentTo }: { sentTo: string | null }) {
   return (
-    <div className="flex flex-1 flex-col bg-white lg:min-h-screen lg:items-center lg:justify-between lg:px-24 lg:py-24 xl:w-[792px] xl:flex-none xl:shrink-0">
+    <div className="flex flex-1 flex-col bg-white lg:min-h-screen lg:items-center lg:justify-between lg:px-24 lg:py-24 xl:w-[49.5rem] xl:flex-none xl:shrink-0">
       <BrandHeader />
 
       <div className="flex w-full flex-1 flex-col items-center justify-center px-6 pb-6 pt-6 md:px-12 md:py-16 lg:p-0">
@@ -76,17 +79,17 @@ function RightPanel({ sentTo }: { sentTo: string | null }) {
 
 function SuccessCard({ sentTo }: { sentTo: string | null }) {
   return (
-    <div className="flex w-full max-w-[480px] flex-col items-center gap-6 md:gap-8">
+    <div className="flex w-full max-w-[30rem] flex-col items-center gap-6 md:gap-8">
       <div className="flex size-16 items-center justify-center rounded-full bg-status-approved-bg">
         <CheckIcon className="size-8 text-success" />
       </div>
 
       <div className="flex w-full flex-col items-center gap-2 text-center md:gap-3">
         {/* Mobile: Poppins SemiBold 24px. Tablet & desktop: Inter Semibold 28px. */}
-        <h2 className="font-marketing text-2xl font-semibold leading-none text-text md:font-sans md:text-[28px] md:leading-none">
+        <h2 className="font-marketing text-2xl font-semibold leading-none text-text md:font-sans md:text-[1.75rem] md:leading-none">
           Check Your Email
         </h2>
-        <p className="text-body leading-[22px] text-text-secondary">
+        <p className="text-body leading-[1.375rem] text-text-secondary">
           {sentTo ? (
             <>
               We&apos;ve sent a password reset link to{' '}

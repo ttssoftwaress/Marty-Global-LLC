@@ -3,7 +3,7 @@ import type { CustomerSegment, CustomerSegmentTab } from '../../types/customers'
 
 /*
  * The segment tab strip — one pill per cohort. The shape is the same at every
- * width; only the scale changes (14px labels on desktop, 13px on tablet, 12px on
+ * width; only the scale changes (0.875rem labels on desktop, 13px on tablet, 12px on
  * mobile, matching the links).
  *
  * The strip scrolls horizontally rather than wrapping, so a narrow screen keeps
@@ -45,7 +45,7 @@ export function CustomerSegmentTabs({
             role="tab"
             aria-selected={isActive}
             onClick={() => onChange(tab.value)}
-            className={`flex shrink-0 items-center gap-1.5 rounded-pill px-4 py-2 text-small transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary md:px-3.5 md:text-[13px] lg:px-4 lg:text-body ${
+            className={`flex shrink-0 items-center gap-1.5 rounded-pill px-4 py-2 text-small transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary md:px-3.5 md:text-[0.8125rem] lg:px-4 lg:text-body ${
               isActive
                 ? 'bg-primary font-medium text-white md:font-semibold'
                 : 'bg-gray-100 font-medium text-text-secondary hover:bg-gray-200 lg:text-gray-600'
@@ -55,7 +55,7 @@ export function CustomerSegmentTabs({
 
             {typeof tab.count === 'number' ? (
               <span
-                className={`text-[11px] font-semibold leading-4 ${
+                className={`text-[0.6875rem] font-semibold leading-4 ${
                   isActive ? 'text-white/75' : 'text-gray-500'
                 }`}
               >

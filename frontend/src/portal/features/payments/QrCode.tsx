@@ -15,7 +15,8 @@ import QRCode from 'qrcode';
 
 type QrCodeProps = {
   value: string;
-  /** Rendered pixel size of the square. */
+  /** Design-pixel size of the square (rendered in rem so it scales with the
+   * compact density). */
   size?: number;
   className?: string;
 };
@@ -52,11 +53,13 @@ export function QrCode({ value, size = 176, className }: QrCodeProps) {
     };
   }, [value, size]);
 
+  const squareStyle = { width: `${size / 16}rem`, height: `${size / 16}rem` };
+
   if (failed) {
     return (
       <div
         className={`flex flex-col items-center justify-center gap-2 rounded-card border border-dashed border-gray-300 bg-gray-50 p-4 text-center ${className ?? ''}`}
-        style={{ width: size, height: size }}
+        style={squareStyle}
       >
         <QrCodeIcon className="size-6 text-gray-400" strokeWidth={1.75} aria-hidden="true" />
         <p className="text-small text-gray-500">
@@ -70,7 +73,7 @@ export function QrCode({ value, size = 176, className }: QrCodeProps) {
     return (
       <div
         className={`animate-pulse rounded-card bg-gray-200 ${className ?? ''}`}
-        style={{ width: size, height: size }}
+        style={squareStyle}
         aria-hidden="true"
       />
     );
@@ -78,8 +81,10 @@ export function QrCode({ value, size = 176, className }: QrCodeProps) {
 
   return (
     <div
-      className={`overflow-hidden rounded-card bg-white ${className ?? ''}`}
-      style={{ width: size, height: size }}
+      // The generated SVG carries a fixed px width; stretching it to the box
+      // keeps the full symbol visible when the compact density shrinks the box.
+      className={`overflow-hidden rounded-card bg-white [&>svg]:h-full [&>svg]:w-full ${className ?? ''}`}
+      style={squareStyle}
       // The address is shown as selectable text beside this, so the code itself
       // is decorative to a screen reader rather than a second copy to read out.
       role="img"

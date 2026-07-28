@@ -144,7 +144,7 @@ export function LocationFormDialog({
           />
         </Field>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-[1fr_120px]">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-[1fr_7.5rem]">
           <Field
             label="Code"
             htmlFor="location-code"

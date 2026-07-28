@@ -56,7 +56,7 @@ export function BillingKpiCards({ kpis }: { kpis: BillingKpis }) {
             {card.label}
           </p>
           <p
-            className={`text-[20px] font-bold leading-tight md:text-h4 lg:text-h3 lg:font-semibold ${card.valueClassName}`}
+            className={`text-[1.25rem] font-bold leading-tight md:text-h4 lg:text-h3 lg:font-semibold ${card.valueClassName}`}
           >
             {card.value}
           </p>

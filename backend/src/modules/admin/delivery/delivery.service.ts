@@ -11,6 +11,7 @@ import { AppError } from '../../../lib/app-error.js';
 import { cursorArgs, takePage } from '../../../lib/pagination.js';
 import { prisma } from '../../../lib/prisma.js';
 import { Role } from '../../../lib/roles.js';
+import { presignObject } from '../../../lib/storage.js';
 import { AuditAction, record } from '../../audit/audit.service.js';
 import {
   isMailRoomService,
@@ -30,6 +31,7 @@ import { serviceRequestScope } from '../admin.scope.js';
 import { iso, isoOrNull, party, type Party } from '../admin.views.js';
 import type {
   ListAdminRequestsQuery,
+  ResultFileQuery,
   SaveResultInput,
   UpdateOrderItemStatusInput,
   UpdateRequestInput,
@@ -682,19 +684,18 @@ export async function updateOrderItemStatus(
 }
 
 /*
- * Archive or reactivate a delivered record — a dissolved company, a lapsed
- * registration. Still readable by the customer either way; `ARCHIVED` is what
- * puts it behind the list page's second tab and blocks new requests against it.
+ * Load a delivered record by id and prove this actor may work it.
+ *
+ * The record's own half of `loadWorkableItem` — same rule, reached from the other
+ * end. Both entry points into the result form resolve through an order item, but
+ * these two act on the record directly, so the scope has to be stated here too;
+ * shared so the two can never disagree about who may touch a record.
  */
-export async function updateResultStatus(
-  actor: AuthContext,
-  resultId: string,
-  input: UpdateResultStatusInput,
-): Promise<AdminResultView> {
+async function loadWorkableResult(actor: AuthContext, resultId: string) {
   const seesAll = await hasPermission(actor, 'orders.all');
   const canAssign = await hasPermission(actor, 'orders.assign');
 
-  const existing = await prisma.serviceResult.findFirst({
+  const result = await prisma.serviceResult.findFirst({
     where: {
       id: resultId,
       deletedAt: null,
@@ -706,7 +707,91 @@ export async function updateResultStatus(
     include: resultInclude,
   });
 
-  if (!existing) throw AppError.notFound('Record not found');
+  // 404 rather than 403, so a record this member does not hold is not confirmed
+  // to exist (guards/ownership.ts).
+  if (!result) throw AppError.notFound('Record not found');
+  return result;
+}
+
+/*
+ * A short-TTL link to one file on a delivered record — the View and Download
+ * controls beside a `file` field on the result form.
+ *
+ * Staff produce these documents, but they are the customer's paperwork the moment
+ * they are delivered, so the link is minted per click after the scope check above
+ * and never stored (AGENTS.md, Security & PII). The form previously offered
+ * Upload and Replace with no way to open what was already there, which made
+ * checking a colleague's delivery — or re-reading your own before amending it —
+ * impossible without asking the customer.
+ */
+export async function getResultFileLink(
+  actor: AuthContext,
+  resultId: string,
+  fieldKey: string,
+  query: ResultFileQuery,
+): Promise<{ fieldKey: string; name: string; url: string; contentType: string | null }> {
+  const result = await loadWorkableResult(actor, resultId);
+  const row = result.values.find((value) => value.fieldKey === fieldKey);
+
+  if (!row) throw AppError.notFound('File not found');
+
+  /*
+   * A file field's stored scalar is its display name and the object key is the
+   * document itself, so a row with a name and no key is a label the operator
+   * typed before uploading anything — nothing to sign.
+   */
+  if (!row.objectKey) {
+    throw AppError.businessRule('That field has no document uploaded yet');
+  }
+
+  const url = await presignObject(row.objectKey, {
+    disposition: query.disposition,
+    // The customer-facing label, which is what the operator wrote it under and
+    // what the customer's own download is named.
+    fileName: row.value ?? fieldKey,
+  });
+
+  if (!url) {
+    throw AppError.businessRule('That document cannot be opened right now');
+  }
+
+  /*
+   * Audited as a read. A delivered record holds the customer's own data — a
+   * certificate, a registration document — and who opened one is not recoverable
+   * from anywhere else. The metadata carries keys and ids, never the file's name
+   * or any value on the record.
+   */
+  void record({
+    actor,
+    action: AuditAction.RESULT_FILE_ACCESSED,
+    entityType: 'ServiceResult',
+    entityId: result.id,
+    metadata: {
+      fieldKey,
+      orderId: result.orderId,
+      disposition: query.disposition,
+    },
+  });
+
+  return {
+    fieldKey,
+    name: row.value ?? 'Document',
+    url,
+    contentType: row.contentType,
+  };
+}
+
+/*
+ * Archive or reactivate a delivered record — a dissolved company, a lapsed
+ * registration. Still readable by the customer either way; `ARCHIVED` is what
+ * puts it behind the list page's second tab and blocks new requests against it.
+ */
+export async function updateResultStatus(
+  actor: AuthContext,
+  resultId: string,
+  input: UpdateResultStatusInput,
+): Promise<AdminResultView> {
+  const existing = await loadWorkableResult(actor, resultId);
 
   // A draft has never been delivered, so there is nothing to archive yet.
   if (existing.status === ServiceResultStatus.DRAFT) {

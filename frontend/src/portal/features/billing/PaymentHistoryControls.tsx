@@ -37,7 +37,7 @@ export function PaymentHistoryControls({
   return (
     <div className="flex w-full items-center gap-2 md:gap-3 lg:w-auto lg:justify-end">
       {/* Search — full width on mobile/tablet, fixed on desktop */}
-      <div className="flex h-12 flex-1 items-center gap-2 rounded-input border border-gray-300 bg-white px-3 focus-within:border-primary focus-within:shadow-[0_0_0_1px_var(--ring-focus)] md:h-10 md:px-3.5 lg:w-[240px] lg:flex-none">
+      <div className="flex h-12 flex-1 items-center gap-2 rounded-input border border-gray-300 bg-white px-3 focus-within:border-primary focus-within:shadow-[0_0_0_1px_var(--ring-focus)] md:h-10 md:px-3.5 lg:w-[15rem] lg:flex-none">
         <Search className="size-4 shrink-0 text-gray-400" strokeWidth={1.75} aria-hidden="true" />
         <input
           type="search"
@@ -58,7 +58,7 @@ export function PaymentHistoryControls({
           value={range}
           onChange={(event) => onRangeChange(event.target.value as PaymentHistoryRange)}
           aria-label="Payment time range"
-          className="h-12 w-[132px] cursor-pointer appearance-none rounded-input border border-gray-300 bg-white pl-3.5 pr-9 text-body text-gray-800 outline-none focus:border-primary focus:shadow-[0_0_0_1px_var(--ring-focus)] md:h-10 md:w-auto"
+          className="h-12 w-[8.25rem] cursor-pointer appearance-none rounded-input border border-gray-300 bg-white pl-3.5 pr-9 text-body text-gray-800 outline-none focus:border-primary focus:shadow-[0_0_0_1px_var(--ring-focus)] md:h-10 md:w-auto"
         >
           {RANGE_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>

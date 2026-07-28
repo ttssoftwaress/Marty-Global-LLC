@@ -3,7 +3,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '@/services/api';
 import type { ApiSuccess } from '@/types/api';
 import type {
+  AdminDocumentDisposition,
   AdminOrderDetail,
+  AdminOrderDocumentLink,
   AdminOrderUpdate,
   AdminQuote,
   AdminQuoteTemplate,
@@ -61,6 +63,30 @@ export function useUpdateAdminOrder(orderId: string) {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ORDERS_SCOPE });
     },
+  });
+}
+
+/*
+ * GET /v1/admin/orders/:orderId/documents/:documentId — a short-TTL link to one
+ * of the order's documents.
+ *
+ * A mutation rather than a query, deliberately: a presigned URL is a bearer token
+ * for the customer's own paperwork and expires in minutes, so it is minted on the
+ * click that uses it rather than cached with the record and left to go stale (or
+ * to survive in a shared screenshot). The backend audits every one of these.
+ */
+export function useAdminOrderDocumentLink(orderId: string) {
+  return useMutation({
+    mutationFn: ({
+      documentId,
+      disposition,
+    }: {
+      documentId: string;
+      disposition: AdminDocumentDisposition;
+    }) =>
+      apiFetch<ApiSuccess<AdminOrderDocumentLink>>(
+        `/admin/orders/${orderId}/documents/${documentId}?disposition=${disposition}`,
+      ).then((res) => res.data),
   });
 }
 

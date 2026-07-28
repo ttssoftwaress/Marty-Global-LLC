@@ -1,6 +1,13 @@
 import { useRef, useState } from 'react';
 import { CloudUpload, FileText, X } from 'lucide-react';
 
+import {
+  acceptAttr,
+  describeTypes,
+  DOCUMENT_TYPES,
+  isAcceptedType,
+  MAX_BYTES,
+} from '@/constants/uploads';
 import { formatFileSize } from '../../lib/format';
 import type { ServiceFileField } from '../../types/order-new-service';
 
@@ -26,29 +33,10 @@ import type { ServiceFileField } from '../../types/order-new-service';
  * objects themselves are transferred.
  */
 
-const DEFAULT_ACCEPT = ['application/pdf', 'image/jpeg', 'image/png'];
-const DEFAULT_MAX_MB = 10;
-
-// What the file picker's `accept` attribute gets. Browsers take MIME types
-// directly, so the admin's list passes through unchanged.
-function acceptAttr(types: string[]): string {
-  return types.join(',');
-}
-
-// "PDF, JPG or PNG" from a MIME list — the human half of the helper line. The
-// subtype is the recognisable part of every type we accept, so it is what the
-// customer is shown rather than the full "application/pdf".
-function describeTypes(types: string[]): string {
-  const labels = [
-    ...new Set(
-      types.map((type) => (type.split('/')[1] ?? type).toUpperCase()),
-    ),
-  ];
-
-  if (labels.length === 0) return 'Any file';
-  if (labels.length === 1) return labels[0]!;
-  return `${labels.slice(0, -1).join(', ')} or ${labels.at(-1)}`;
-}
+// The defaults when the admin left `accept` / `maxSizeMb` blank: the backend's
+// own `order-document` policy, since that is what the upload is checked against.
+const DEFAULT_ACCEPT = DOCUMENT_TYPES;
+const DEFAULT_MAX_MB = MAX_BYTES.orderDocument / (1024 * 1024);
 
 type ApplicationFileFieldProps = {
   field: ServiceFileField;
@@ -69,7 +57,9 @@ export function ApplicationFileField({
   const [isDragging, setIsDragging] = useState(false);
   const [rejected, setRejected] = useState<string | null>(null);
 
-  const accepted = field.accept?.length ? field.accept : DEFAULT_ACCEPT;
+  const accepted: readonly string[] = field.accept?.length
+    ? field.accept
+    : DEFAULT_ACCEPT;
   const maxMb = field.maxSizeMb ?? DEFAULT_MAX_MB;
   const maxBytes = maxMb * 1024 * 1024;
 
@@ -82,8 +72,7 @@ export function ApplicationFileField({
     for (const file of Array.from(incoming)) {
       // An empty `accept` means the admin placed no restriction, so anything is
       // allowed; otherwise the type must be one they listed.
-      const typeOk = accepted.length === 0 || accepted.includes(file.type);
-      if (typeOk && file.size <= maxBytes) kept.push(file);
+      if (isAcceptedType(file, accepted) && file.size <= maxBytes) kept.push(file);
       else skipped.push(file.name);
     }
 
@@ -170,7 +159,7 @@ export function ApplicationFileField({
           {files.map((file, index) => (
             <li
               key={`${file.name}:${file.size}`}
-              className="flex items-center justify-between gap-3 rounded-[8px] border border-gray-200 bg-gray-100 px-3 py-2"
+              className="flex items-center justify-between gap-3 rounded-[0.5rem] border border-gray-200 bg-gray-100 px-3 py-2"
             >
               <div className="flex min-w-0 items-center gap-2.5">
                 <FileText

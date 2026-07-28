@@ -29,7 +29,7 @@ export function TeamEmptyState({
         <p className="text-h6 text-text">
           {isFiltered ? 'No team members match this search' : 'No team members yet'}
         </p>
-        <p className="max-w-[380px] text-body text-gray-500">
+        <p className="max-w-[23.75rem] text-body text-gray-500">
           {isFiltered
             ? 'Try a different status, role, or search term.'
             : 'Add a staff member to give them a login for the admin portal.'}

@@ -51,9 +51,35 @@ export type AdminOrderDocument = {
   status: AdminOrderDocumentStatus;
   statusLabel: string;
   source: 'team' | 'customer';
+  // What the card decides between previewing and saving with. Null on a row filed
+  // before the type was captured.
+  contentType: string | null;
   sizeBytes: number | null;
   createdAt: string; // ISO-8601 UTC
+  /*
+   * Whether there is a file to open. Decided by the backend rather than read off
+   * `status` here: the endpoint refuses a placeholder and a rejected row, and the
+   * disabled control has to agree with the refusal rather than guess at it.
+   */
+  downloadable: boolean;
 };
+
+// What `GET /v1/admin/orders/:orderId/documents/:documentId` hands back — a
+// link that lives for minutes, so it is used on arrival and never stored.
+export type AdminOrderDocumentLink = {
+  id: string;
+  name: string;
+  url: string;
+  contentType: string | null;
+};
+
+/*
+ * How the link should be served. `inline` previews the file in a new tab;
+ * `attachment` saves it under its own name. The choice is signed into the URL by
+ * the backend, so it travels with the request rather than being something the
+ * browser decides afterwards.
+ */
+export type AdminDocumentDisposition = 'inline' | 'attachment';
 
 /*
  * One step of the pipeline as this actor may use it. Every status travels, so

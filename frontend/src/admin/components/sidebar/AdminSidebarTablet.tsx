@@ -36,7 +36,7 @@ export function AdminSidebarTablet({
 
   return (
     <aside
-      className={`flex h-full w-[72px] shrink-0 flex-col items-center justify-between bg-primary px-3 pb-6 pt-8 ${className ?? ''}`}
+      className={`flex h-full w-[4.5rem] shrink-0 flex-col items-center justify-between bg-primary px-3 pb-6 pt-8 ${className ?? ''}`}
     >
       <div className="flex min-h-0 w-full flex-col items-center gap-8">
         <Link
@@ -63,7 +63,7 @@ export function AdminSidebarTablet({
                     aria-current={active ? 'page' : undefined}
                     className={
                       active
-                        ? 'flex size-10 items-center justify-center rounded-input bg-white text-primary'
+                        ? 'flex size-10 items-center justify-center rounded-input bg-white text-accent'
                         : 'flex size-10 items-center justify-center rounded-input text-white/80 transition-colors hover:bg-white/10 hover:text-white'
                     }
                   >

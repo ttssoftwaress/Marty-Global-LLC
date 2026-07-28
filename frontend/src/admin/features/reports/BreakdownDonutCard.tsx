@@ -49,12 +49,12 @@ export function BreakdownDonutCard({
       title={title}
       description={description}
       isLoading={isLoading}
-      skeletonClassName="h-[300px]"
+      skeletonClassName="h-[18.75rem]"
     >
       {breakdown && breakdown.slices.length > 0 ? (
         <Donut breakdown={breakdown} />
       ) : (
-        <div className="flex h-[260px] w-full items-center justify-center rounded-input bg-gray-50">
+        <div className="flex h-[16.25rem] w-full items-center justify-center rounded-input bg-gray-50">
           <p className="text-small text-gray-500">
             No orders recorded for this period yet
           </p>
@@ -102,7 +102,7 @@ function Donut({ breakdown }: { breakdown: ReportBreakdown }) {
       <div className="relative mx-auto py-3">
         <svg
           viewBox={`0 0 ${SIZE} ${SIZE}`}
-          className="size-[160px]"
+          className="size-[10rem]"
           role="img"
           aria-label={`${breakdown.totalLabel}: ${formatCount(breakdown.total)} total across ${breakdown.slices.length} categories`}
         >
@@ -121,7 +121,7 @@ function Donut({ breakdown }: { breakdown: ReportBreakdown }) {
 
         {/* The figure in the hole. HTML so it keeps its real type size. */}
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1">
-          <p className="text-[22px] font-bold leading-7 text-[var(--color-gray-900)]">
+          <p className="text-[1.375rem] font-bold leading-7 text-[var(--color-gray-900)]">
             {formatCount(breakdown.total)} total
           </p>
           <p className="text-caption font-semibold uppercase leading-none text-gray-400">

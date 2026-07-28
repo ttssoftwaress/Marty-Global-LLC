@@ -47,7 +47,7 @@ export function SettingsPanel({
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex flex-col gap-1">
           <h2 className="text-body-lg font-semibold text-text">{title}</h2>
-          <p className="text-body text-text-secondary lg:max-w-[640px]">
+          <p className="text-body text-text-secondary lg:max-w-[40rem]">
             {description}
           </p>
         </div>
@@ -75,7 +75,7 @@ export function SettingsPanel({
       ) : isEmpty ? (
         <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-gray-300 px-6 py-12 text-center">
           <p className="text-body-lg font-medium text-text">{emptyTitle}</p>
-          <p className="max-w-[460px] text-body text-text-secondary">{emptyBody}</p>
+          <p className="max-w-[28.75rem] text-body text-text-secondary">{emptyBody}</p>
           {canWrite && <AddButton label={addLabel} onClick={onAdd} className="mt-1" />}
         </div>
       ) : (

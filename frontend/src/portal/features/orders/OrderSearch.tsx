@@ -18,7 +18,7 @@ export function OrderSearch({ value, onChange, className }: OrderSearchProps) {
     <div
       className={`flex h-12 items-center gap-2 rounded-input border border-gray-300 bg-white px-4 focus-within:border-primary focus-within:shadow-[0_0_0_1px_var(--ring-focus)] ${className ?? ''}`}
     >
-      <Search className="size-[18px] shrink-0 text-gray-500" strokeWidth={1.75} aria-hidden="true" />
+      <Search className="size-[1.125rem] shrink-0 text-gray-500" strokeWidth={1.75} aria-hidden="true" />
       <input
         type="search"
         value={value}

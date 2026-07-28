@@ -94,7 +94,7 @@ export function PricingTemplatesCard({
             {tiers.map((tier, index) => (
               <li
                 key={tier.key}
-                className={`flex flex-col gap-3 rounded-[12px] border bg-white p-4 ${
+                className={`flex flex-col gap-3 rounded-[0.75rem] border bg-white p-4 ${
                   tierHasError(index) ? 'border-error' : 'border-gray-200'
                 }`}
               >
@@ -144,13 +144,13 @@ export function PricingTemplatesCard({
                 <tr className="h-12 bg-[var(--table-header-bg)] text-left">
                   <th
                     scope="col"
-                    className="w-[240px] border-b border-gray-200 px-4 text-caption font-medium uppercase text-gray-500 lg:w-[180px]"
+                    className="w-[15rem] border-b border-gray-200 px-4 text-caption font-medium uppercase text-gray-500 lg:w-[11.25rem]"
                   >
                     Region
                   </th>
                   <th
                     scope="col"
-                    className="w-[120px] border-b border-gray-200 px-4 text-caption font-medium uppercase text-gray-500 lg:w-[140px]"
+                    className="w-[7.5rem] border-b border-gray-200 px-4 text-caption font-medium uppercase text-gray-500 lg:w-[8.75rem]"
                   >
                     Base price
                   </th>
@@ -163,13 +163,13 @@ export function PricingTemplatesCard({
                   </th>
                   <th
                     scope="col"
-                    className="border-b border-gray-200 px-4 text-caption font-medium uppercase text-gray-500 lg:w-[180px]"
+                    className="border-b border-gray-200 px-4 text-caption font-medium uppercase text-gray-500 lg:w-[11.25rem]"
                   >
                     Est. turnaround
                   </th>
                   <th
                     scope="col"
-                    className="w-[100px] border-b border-gray-200 px-4 text-right text-caption font-medium uppercase text-gray-500"
+                    className="w-[6.25rem] border-b border-gray-200 px-4 text-right text-caption font-medium uppercase text-gray-500"
                   >
                     Action
                   </th>

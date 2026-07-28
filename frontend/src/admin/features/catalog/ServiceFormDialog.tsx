@@ -1,5 +1,7 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 import { X } from 'lucide-react';
+
+import { useOverlay } from '../../../hooks/useOverlay';
 
 /*
  * The dialog shell the service form renders inside.
@@ -13,10 +15,10 @@ import { X } from 'lucide-react';
  * The header and footer are fixed and the body between them scrolls, which is
  * what keeps a long form usable inside a sheet capped at 92dvh.
  *
- * Standard dialog behaviour, none of which the design covers: Escape and the
- * backdrop close it, body scroll is locked while it is up, focus moves into the
- * panel on open and returns to whatever opened it on close, and focus is trapped
- * inside while it is open.
+ * Standard dialog behaviour, none of which the design covers: the backdrop
+ * closes it, and `useOverlay` owns the rest — Escape, the body scroll lock,
+ * focus moving into the panel on open and back to whatever opened it on close,
+ * and the Tab trap while it is up.
  */
 
 type ServiceFormDialogProps = {
@@ -28,9 +30,6 @@ type ServiceFormDialogProps = {
   children: ReactNode;
 };
 
-const FOCUSABLE =
-  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
-
 export function ServiceFormDialog({
   open,
   title,
@@ -40,65 +39,8 @@ export function ServiceFormDialog({
   children,
 }: ServiceFormDialogProps) {
   const panelRef = useRef<HTMLDivElement>(null);
-  const restoreFocusRef = useRef<HTMLElement | null>(null);
 
-  // `onClose` is a fresh closure on every render of the page holding the form's
-  // draft, so it can't be an effect dependency: the effect would tear down and
-  // re-run on every keystroke, pulling focus out of the field being typed in and
-  // onto the panel's first focusable. The ref keeps the latest handler while the
-  // effect stays tied to `open` alone.
-  const onCloseRef = useRef(onClose);
-  useEffect(() => {
-    onCloseRef.current = onClose;
-  }, [onClose]);
-
-  useEffect(() => {
-    if (!open) return;
-
-    restoreFocusRef.current = document.activeElement as HTMLElement | null;
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onCloseRef.current();
-        return;
-      }
-
-      if (event.key !== 'Tab' || !panelRef.current) return;
-
-      const focusable = Array.from(
-        panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE),
-      ).filter((element) => element.offsetParent !== null);
-      if (focusable.length === 0) return;
-
-      // The length check above guarantees both, which the index signature can't
-      // express under `noUncheckedIndexedAccess`.
-      const first = focusable[0]!;
-      const last = focusable[focusable.length - 1]!;
-
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-
-    document.addEventListener('keydown', onKeyDown);
-
-    const { overflow } = document.body.style;
-    document.body.style.overflow = 'hidden';
-
-    panelRef.current
-      ?.querySelector<HTMLElement>(FOCUSABLE)
-      ?.focus({ preventScroll: true });
-
-    return () => {
-      document.removeEventListener('keydown', onKeyDown);
-      document.body.style.overflow = overflow;
-      restoreFocusRef.current?.focus({ preventScroll: true });
-    };
-  }, [open]);
+  useOverlay({ open, onClose, panelRef });
 
   if (!open) return null;
 
@@ -116,7 +58,8 @@ export function ServiceFormDialog({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="relative flex max-h-[92dvh] w-full flex-col rounded-t-modal bg-white shadow-lg-elevation md:max-h-[86dvh] md:max-w-[680px] md:rounded-modal lg:max-w-[760px]"
+        tabIndex={-1}
+        className="relative flex max-h-[92dvh] w-full flex-col rounded-t-modal bg-white shadow-lg-elevation outline-none md:max-h-[86dvh] md:max-w-[42.5rem] md:rounded-modal lg:max-w-[47.5rem]"
       >
         {/* The grabber reads as "drag me down", so it is mobile-only. */}
         <div className="flex justify-center pb-1 pt-3 md:hidden">

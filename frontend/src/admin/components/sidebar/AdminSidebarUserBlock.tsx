@@ -40,7 +40,7 @@ export function AdminSidebarAvatar({
   return (
     <span
       aria-hidden="true"
-      className={`flex size-8 shrink-0 items-center justify-center rounded-full bg-white/15 text-caption font-semibold text-white ${className ?? ''}`}
+      className={`flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-caption font-semibold text-white ${className ?? ''}`}
     >
       {adminUserInitials(user.name)}
     </span>

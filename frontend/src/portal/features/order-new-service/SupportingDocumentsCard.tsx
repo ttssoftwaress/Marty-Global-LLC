@@ -1,6 +1,13 @@
 import { useRef, useState } from 'react';
 import { CloudUpload, FileText, X } from 'lucide-react';
 
+import {
+  acceptAttr,
+  describeTypes,
+  DOCUMENT_TYPES,
+  isAcceptedType,
+  MAX_BYTES as MAX,
+} from '@/constants/uploads';
 import { formatFileSize } from '../../lib/format';
 
 /*
@@ -12,14 +19,15 @@ import { formatFileSize } from '../../lib/format';
  * that's a backend step this screen deliberately doesn't do.
  *
  * Same tree every viewport; only card padding changes. Accept and the size cap
- * come from the design's helper line ("PDF, JPG or PNG · max 10 MB"); files over
- * the cap or of another type are skipped with a short inline message rather than
- * silently dropped.
+ * mirror the backend's `order-document` policy rather than being restated here;
+ * files over the cap or of another type are skipped with a short inline message
+ * rather than silently dropped.
  */
 
-const ACCEPTED_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
-const ACCEPT_ATTR = '.pdf,.jpg,.jpeg,.png';
-const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
+const ACCEPT_ATTR = acceptAttr(DOCUMENT_TYPES);
+const TYPE_LABEL = describeTypes(DOCUMENT_TYPES);
+const MAX_BYTES = MAX.orderDocument;
+const MAX_MB = MAX_BYTES / (1024 * 1024);
 
 type SupportingDocumentsCardProps = {
   files: File[];
@@ -40,7 +48,7 @@ export function SupportingDocumentsCard({
     const accepted: File[] = [];
     const skipped: string[] = [];
     for (const file of Array.from(incoming)) {
-      const typeOk = ACCEPTED_TYPES.includes(file.type);
+      const typeOk = isAcceptedType(file, DOCUMENT_TYPES);
       const sizeOk = file.size <= MAX_BYTES;
       if (typeOk && sizeOk) accepted.push(file);
       else skipped.push(file.name);
@@ -58,7 +66,7 @@ export function SupportingDocumentsCard({
 
     setRejected(
       skipped.length > 0
-        ? `Skipped ${skipped.length} file${skipped.length > 1 ? 's' : ''} — use PDF, JPG, or PNG up to 10 MB.`
+        ? `Skipped ${skipped.length} file${skipped.length > 1 ? 's' : ''} — use ${TYPE_LABEL} up to ${MAX_MB} MB.`
         : null,
     );
   };
@@ -106,7 +114,9 @@ export function SupportingDocumentsCard({
         <span className="text-body font-medium text-gray-700">
           Drag files here or browse
         </span>
-        <span className="text-small text-gray-400">PDF, JPG or PNG · max 10 MB</span>
+        <span className="text-small text-gray-400">
+          {TYPE_LABEL} · max {MAX_MB} MB
+        </span>
       </button>
 
       <input
@@ -131,11 +141,11 @@ export function SupportingDocumentsCard({
           {files.map((file, index) => (
             <li
               key={`${file.name}:${file.size}`}
-              className="flex items-center justify-between gap-3 rounded-[8px] border border-gray-200 bg-gray-100 px-4 py-3"
+              className="flex items-center justify-between gap-3 rounded-[0.5rem] border border-gray-200 bg-gray-100 px-4 py-3"
             >
               <div className="flex min-w-0 items-center gap-3">
                 <FileText
-                  className="size-[18px] shrink-0 text-gray-500"
+                  className="size-[1.125rem] shrink-0 text-gray-500"
                   strokeWidth={1.75}
                   aria-hidden="true"
                 />

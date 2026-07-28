@@ -3,6 +3,7 @@ import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 
 import { env } from '../config/env.js';
 import { ErrorCode } from '../lib/error-codes.js';
+import { createRateLimitStore, storeFailureOptions } from './rate-limit-store.js';
 
 // Rate limiting for the Better Auth subtree (AGENTS.md "Auth" / "API
 // Conventions"). Better Auth owns every route under /api/auth/*, and those
@@ -23,7 +24,10 @@ function ipKey(req: Request): string {
   return ipKeyGenerator(req.ip ?? '');
 }
 
-function make(windowMs: number, limit: number, keyGenerator = ipKey) {
+// `name` namespaces this tier's counters in Redis. The tiers must not share a
+// bucket — the two credential windows below deliberately count the same requests
+// against different budgets, which only works if each has its own key space.
+function make(name: string, windowMs: number, limit: number, keyGenerator = ipKey) {
   return rateLimit({
     windowMs,
     limit,
@@ -31,6 +35,15 @@ function make(windowMs: number, limit: number, keyGenerator = ipKey) {
     standardHeaders: 'draft-7',
     legacyHeaders: false,
     message,
+    /*
+     * Counters live in Redis (guards/rate-limit-store.ts). This tier is the
+     * reason that file exists: with the in-memory default, "10 sign-in attempts
+     * per 15 minutes" reset on every deploy and counted per container, so the
+     * real budget was 10 x containers x deploys. Shared counters make the number
+     * above the actual number.
+     */
+    store: createRateLimitStore(name),
+    ...storeFailureOptions,
     // Local dev and tests would otherwise trip the limiter constantly.
     skip: () => env.NODE_ENV === 'test',
   });
@@ -39,25 +52,25 @@ function make(windowMs: number, limit: number, keyGenerator = ipKey) {
 // Credential attempts: sign-in, sign-up, password reset, OTP verification.
 // Tight, and counted even on success — a valid password does not buy a caller
 // more attempts, so a working account cannot be used as a free oracle.
-const credentialsLimiter = make(15 * 60 * 1000, 10);
+const credentialsLimiter = make('auth:credentials', 15 * 60 * 1000, 10);
 
 // A second, slower bucket over the same endpoints. The 15-minute window above
 // stops a burst; this one stops a patient attacker who paces just under it.
-const credentialsDailyLimiter = make(60 * 60 * 1000, 40);
+const credentialsDailyLimiter = make('auth:credentials-slow', 60 * 60 * 1000, 40);
 
 // Anything that sends mail or SMS — verification links, reset links, magic
 // links. Costs us money per call and spams the recipient's inbox, so it is the
 // tightest tier and keyed per IP.
-const dispatchLimiter = make(60 * 60 * 1000, 5);
+const dispatchLimiter = make('auth:dispatch', 60 * 60 * 1000, 5);
 
 // Session reads. Cheap, and the SPA calls /get-session on every page load and
 // every tab focus, so this is generous — it exists to catch a runaway client,
 // not to police normal use.
-const sessionLimiter = make(60 * 1000, 60);
+const sessionLimiter = make('auth:session', 60 * 1000, 60);
 
 // Everything else Better Auth exposes: sign-out, account listing, token
 // refresh, the admin plugin's routes.
-const defaultLimiter = make(15 * 60 * 1000, 60);
+const defaultLimiter = make('auth:default', 15 * 60 * 1000, 60);
 
 // Matched against the path *below* /api/auth. Prefixes, because Better Auth
 // nests (/sign-in/email, /sign-up/email) and plugins add their own suffixes.

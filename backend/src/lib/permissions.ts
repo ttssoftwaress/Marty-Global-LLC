@@ -42,6 +42,17 @@ export const PERMISSION_AREAS = [
   { key: 'payments', label: 'Quotes & payments' },
   { key: 'mailroom', label: 'Virtual mail operations' },
   { key: 'support', label: 'Support inbox' },
+  /*
+   * Moving a chat from one agent to another, as distinct from working the chats
+   * you hold. The exact mirror of `orders.assign` above, and separate for the
+   * same reason: incoming chats are routed automatically and balanced across the
+   * team (modules/support/support.assignment.ts), so overriding that routing is a
+   * supervisor's decision rather than part of answering customers.
+   *
+   * A member without this area still works every chat they are given — reply,
+   * note, status — the assignee control is the only thing that closes to them.
+   */
+  { key: 'support.assign', label: 'Assign chats to staff' },
   { key: 'reports', label: 'Reports & analytics' },
   { key: 'team', label: 'Team & staff management' },
   /*
@@ -78,10 +89,10 @@ export type PermissionAreaKey = (typeof PERMISSION_AREAS)[number]['key'];
  * themselves, which is why this needed no migration and why `hasPermission`
  * answers both kinds of question without knowing the difference.
  *
- * `orders.assign` is deliberately NOT derived from this: it grants a *write*
- * (choosing who owns a filing), not a view, so it stays its own area with its
- * own row. It does still widen the orders queue — distributing work you cannot
- * see is impossible — which `canSeeAll` folds in below.
+ * `orders.assign` and `support.assign` are deliberately NOT derived from this:
+ * they grant a *write* (choosing who owns a filing or a chat), not a view, so
+ * each stays its own area with its own row. Both do still widen their queue —
+ * distributing work you cannot see is impossible — which `canSeeAll` folds in.
  */
 const SCOPE_SUFFIX = '.all';
 
@@ -89,8 +100,8 @@ const SCOPE_SUFFIX = '.all';
  * Areas whose data belongs to somebody. `catalog`, `team`, and `settings` are
  * absent on purpose — a service's price, the staff directory, and the location
  * list are org-wide records with no owner to scope them to, so an "All data"
- * switch there would be a control that changes nothing. `orders.assign` is
- * absent because it is a write grant, not a section.
+ * switch there would be a control that changes nothing. `orders.assign` and
+ * `support.assign` are absent because they are write grants, not sections.
  */
 export const SCOPED_AREAS = [
   'orders',
@@ -177,6 +188,8 @@ export const STAFF_ROLES: readonly StaffRoleDefinition[] = [
       'payments',
       'mailroom',
       'support',
+      // Overriding the chat router — the same rota decision as `orders.assign`.
+      'support.assign',
       'reports',
       // Which jurisdictions we operate in and who we ship with are operational
       // decisions, which is exactly this role's remit.

@@ -51,7 +51,7 @@ export function OrderStatusChip({ status, label }: OrderStatusChipProps) {
 
   return (
     <span
-      className={`inline-flex items-center gap-1 whitespace-nowrap rounded-pill px-2.5 py-1 text-[11px] font-semibold leading-4 md:gap-1.5 md:text-small ${className}`}
+      className={`inline-flex items-center gap-1 whitespace-nowrap rounded-pill px-2.5 py-1 text-[0.6875rem] font-semibold leading-4 md:gap-1.5 md:text-small ${className}`}
     >
       <Icon className="size-3 shrink-0 md:size-3.5" strokeWidth={2} aria-hidden="true" />
       {label}

@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
+import { useOverlay } from '../../../hooks/useOverlay';
 import type { OrderFilterOptions, OrderFilters } from '../../types/orders';
 import { DEFAULT_ORDER_FILTERS } from '../../types/orders';
 import { OrderFilterDropdown } from './OrderFilterDropdown';
@@ -16,8 +17,10 @@ import { OrderFilterDropdown } from './OrderFilterDropdown';
  * closing, leaving Apply as the single commit point. Opening the sheet re-seeds
  * the draft from the live filters, so a dismissed edit is discarded.
  *
- * Escape and the backdrop close it, and the body scroll is locked while it is
- * up so the page behind does not move under the panel.
+ * The backdrop closes it, and `useOverlay` owns the rest of the modal
+ * behaviour: Escape, the body scroll lock that stops the page behind moving
+ * under the panel, focus moving into the sheet on open and back to the filter
+ * button on close, and the Tab trap while it is up.
  */
 
 type OrderFilterSheetProps = {
@@ -36,28 +39,14 @@ export function OrderFilterSheet({
   onClose,
 }: OrderFilterSheetProps) {
   const [draft, setDraft] = useState<OrderFilters>(filters);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   // Re-seed on open so the sheet always reflects what is actually applied.
   useEffect(() => {
     if (open) setDraft(filters);
   }, [open, filters]);
 
-  useEffect(() => {
-    if (!open) return;
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', onKeyDown);
-
-    const { overflow } = document.body.style;
-    document.body.style.overflow = 'hidden';
-
-    return () => {
-      document.removeEventListener('keydown', onKeyDown);
-      document.body.style.overflow = overflow;
-    };
-  }, [open, onClose]);
+  useOverlay({ open, onClose, panelRef });
 
   if (!open) return null;
 
@@ -74,10 +63,12 @@ export function OrderFilterSheet({
       />
 
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label="Filter orders"
-        className="absolute inset-x-0 bottom-0 flex max-h-[85dvh] flex-col rounded-t-modal bg-white shadow-lg-elevation"
+        tabIndex={-1}
+        className="absolute inset-x-0 bottom-0 flex max-h-[85dvh] flex-col rounded-t-modal bg-white shadow-lg-elevation outline-none"
       >
         <div className="flex justify-center pb-1 pt-3">
           <span aria-hidden="true" className="h-1 w-9 rounded-pill bg-gray-300" />

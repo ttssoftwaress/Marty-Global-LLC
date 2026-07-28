@@ -88,7 +88,7 @@ function MessageRow({
             {message.authorName}
           </p>
 
-          <span className="flex items-center gap-1 rounded bg-[#fef3c7] px-1.5 py-0.5 text-[10px] font-semibold uppercase leading-none text-[#b45309]">
+          <span className="flex items-center gap-1 rounded bg-[#fef3c7] px-1.5 py-0.5 text-[0.625rem] font-semibold uppercase leading-none text-[#b45309]">
             <Lock className="size-2.5" strokeWidth={2.5} aria-hidden="true" />
             Internal note
           </span>
@@ -111,7 +111,7 @@ function MessageRow({
         <div className="flex items-center gap-2">
           <span
             aria-hidden="true"
-            className={`flex size-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
+            className={`flex size-6 shrink-0 items-center justify-center rounded-full text-[0.625rem] font-bold ${
               isCustomer ? 'bg-gray-200 text-gray-600' : 'bg-primary text-white'
             }`}
           >
@@ -123,7 +123,7 @@ function MessageRow({
           </span>
 
           <span
-            className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase leading-none ${
+            className={`shrink-0 rounded px-1.5 py-0.5 text-[0.625rem] font-semibold uppercase leading-none ${
               isCustomer
                 ? 'bg-gray-100 text-gray-500'
                 : 'bg-primary-light text-primary'
@@ -135,10 +135,10 @@ function MessageRow({
       ) : null}
 
       <div
-        className={`flex max-w-[280px] flex-col gap-2 rounded-2xl p-3 md:max-w-[360px] md:px-3.5 md:py-2.5 lg:max-w-[480px] lg:px-4 lg:py-3 ${
+        className={`flex max-w-[17.5rem] flex-col gap-2 rounded-2xl p-3 md:max-w-[22.5rem] md:px-3.5 md:py-2.5 lg:max-w-[30rem] lg:px-4 lg:py-3 ${
           mine
-            ? `bg-primary-light ${firstOfRun ? 'rounded-tr-[4px]' : ''}`
-            : `bg-gray-100 ${firstOfRun ? 'rounded-tl-[4px]' : ''}`
+            ? `bg-primary-light ${firstOfRun ? 'rounded-tr-[0.25rem]' : ''}`
+            : `bg-gray-100 ${firstOfRun ? 'rounded-tl-[0.25rem]' : ''}`
         }`}
       >
         <p className="whitespace-pre-line break-words text-body leading-relaxed text-text">
@@ -194,7 +194,7 @@ function Composer({ orderId }: { orderId: string }) {
               role="radio"
               aria-checked={isActive}
               onClick={() => setKind(option.value)}
-              className={`flex flex-1 items-center justify-center gap-1.5 rounded-[7px] px-3 py-2 text-small font-semibold transition-colors ${
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-[0.4375rem] px-3 py-2 text-small font-semibold transition-colors ${
                 isActive
                   ? 'bg-white text-primary shadow-sm-elevation'
                   : 'text-gray-500 hover:text-gray-700'
@@ -287,7 +287,7 @@ export function OrderConversationCard({ orderId }: OrderConversationCardProps) {
   if (isLoading) {
     return (
       <div
-        className="h-[320px] w-full animate-pulse rounded-card bg-gray-200"
+        className="h-[20rem] w-full animate-pulse rounded-card bg-gray-200"
         aria-hidden="true"
       />
     );
@@ -305,7 +305,7 @@ export function OrderConversationCard({ orderId }: OrderConversationCardProps) {
         conversation.assignee ? (
           <span className="flex min-w-0 items-center gap-2">
             <span
-              className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary-light text-[10px] font-semibold text-primary"
+              className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary-light text-[0.625rem] font-semibold text-primary"
               aria-hidden="true"
             >
               {conversation.assignee.initials}
@@ -315,7 +315,7 @@ export function OrderConversationCard({ orderId }: OrderConversationCardProps) {
             </span>
           </span>
         ) : (
-          <span className="shrink-0 rounded bg-[#fef3c7] px-2 py-0.5 text-[10px] font-semibold uppercase leading-none text-[#b45309]">
+          <span className="shrink-0 rounded bg-[#fef3c7] px-2 py-0.5 text-[0.625rem] font-semibold uppercase leading-none text-[#b45309]">
             Unassigned
           </span>
         )
@@ -337,7 +337,7 @@ export function OrderConversationCard({ orderId }: OrderConversationCardProps) {
             />
           </span>
           <p className="text-body font-medium text-text">No messages yet</p>
-          <p className="max-w-[360px] text-small text-gray-500">
+          <p className="max-w-[22.5rem] text-small text-gray-500">
             Your first reply starts the conversation with the customer.
           </p>
         </div>

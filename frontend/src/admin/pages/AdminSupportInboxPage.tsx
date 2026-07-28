@@ -9,6 +9,7 @@ import {
   SupportInboxHeader,
   SupportThreadPane,
   useAdminSupportConversations,
+  useAdminSupportInboxSocket,
   useAdminSupportSocket,
   useAdminSupportThread,
   useAgentAvailability,
@@ -18,6 +19,7 @@ import { useAdminShell } from '../hooks/useAdminShell';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import {
   DEFAULT_SUPPORT_FILTER,
+  SUPPORT_FILTERS_FALLBACK,
   isSupportFilter,
   type ComposerMode,
   type SupportConversationSummary,
@@ -74,6 +76,14 @@ export function AdminSupportInboxPage() {
   const updateConversation = useUpdateAdminConversation(conversationId ?? '');
   const availability = useAgentAvailability();
 
+  /*
+   * A chat routed to this agent is not a thread they have joined, so nothing in
+   * the per-conversation rooms would announce it. This subscription is what makes
+   * a new conversation appear without a reload — mounted at the page, not inside
+   * the thread pane, because the list has to stay live with nothing open.
+   */
+  useAdminSupportInboxSocket(conversationId);
+
   const conversations = useMemo<SupportConversationSummary[]>(
     () => conversationsQuery.data?.pages.flatMap((page) => page.conversations) ?? [],
     [conversationsQuery.data],
@@ -120,12 +130,13 @@ export function AdminSupportInboxPage() {
   return (
     <AdminLayout user={user} onLogout={onLogout}>
       <div className="h-full w-full p-4 md:p-6 lg:p-content">
-        <div className="mx-auto flex h-full w-full max-w-[1400px] flex-col gap-4 md:gap-6">
+        <div className="mx-auto flex h-full w-full max-w-[87.5rem] flex-col gap-4 md:gap-6">
           {/* On mobile the header belongs to the list; an open thread is the whole screen. */}
           <div className={conversationId ? 'hidden md:block' : 'block'}>
             <SupportInboxHeader
               totalOpen={firstPage?.totalOpen}
               totalUnassigned={firstPage?.totalUnassigned}
+              scope={firstPage?.scope}
               availability={
                 <AgentAvailabilityToggle
                   available={availability.available}
@@ -140,6 +151,7 @@ export function AdminSupportInboxPage() {
             <SupportConversationList
               conversations={conversations}
               isLoading={conversationsQuery.isPending}
+              filters={firstPage?.filters ?? SUPPORT_FILTERS_FALLBACK}
               filter={filter}
               onFilterChange={setFilter}
               search={search}
@@ -152,7 +164,14 @@ export function AdminSupportInboxPage() {
               className={conversationId ? 'hidden md:flex' : 'flex'}
             />
 
-            {conversationId ? (
+            {/*
+              * A thread an admin reassigns while it is open here stops being
+              * readable, and its refetch 404s. Saying so beats a pane that sits on
+              * a skeleton forever.
+              */}
+            {conversationId && threadQuery.isError ? (
+              <SupportEmptyThread variant="unavailable" />
+            ) : conversationId ? (
               <SupportThreadPane
                 // Remount per conversation so the scroll position and composer
                 // draft reset on switch (and the pin-to-newest re-runs even

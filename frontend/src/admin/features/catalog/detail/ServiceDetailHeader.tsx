@@ -43,7 +43,7 @@ export function ServiceDetailHeader({
           className="flex items-center gap-2 text-body font-medium text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
         >
           <ArrowLeft
-            className="size-[18px] shrink-0"
+            className="size-[1.125rem] shrink-0"
             strokeWidth={1.75}
             aria-hidden="true"
           />
@@ -91,7 +91,7 @@ export function ServiceDetailHeader({
             <ArrowLeft className="size-5" strokeWidth={1.75} aria-hidden="true" />
           </Link>
 
-          <h1 className="min-w-0 text-[24px] font-semibold leading-[1.2] text-text md:text-gray-900 lg:text-[32px] lg:leading-[normal]">
+          <h1 className="min-w-0 text-[1.5rem] font-semibold leading-[1.2] text-text md:text-gray-900 lg:text-[2rem] lg:leading-[normal]">
             {title}
           </h1>
         </div>

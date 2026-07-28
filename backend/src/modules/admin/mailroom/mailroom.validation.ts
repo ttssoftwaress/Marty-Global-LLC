@@ -5,13 +5,28 @@ import { z } from 'zod';
  * `frontend/src/admin/types/mailroom.ts`.
  */
 
-export const customerSearchQuerySchema = z.object({
-  // The picker never fetches unfiltered: the frontend gates the call on two
-  // characters and the schema requires them, so "every customer" is not a query
-  // this endpoint can be asked for.
+/*
+ * Step one of the room picker: matching room names.
+ *
+ * The picker never fetches unfiltered — the frontend gates the call on two
+ * characters and the schema requires them, so "every mail room" is not a query
+ * this endpoint can be asked for.
+ */
+export const roomNameSearchQuerySchema = z.object({
   search: z.string().trim().min(2).max(120),
 });
-export type CustomerSearchQuery = z.infer<typeof customerSearchQuerySchema>;
+export type RoomNameSearchQuery = z.infer<typeof roomNameSearchQuerySchema>;
+
+/*
+ * Step two: the addresses carrying a chosen name. `name` comes from step one's
+ * list rather than free typing, so it is required in full — there is no
+ * two-character floor to enforce here, and an empty name would ask for every
+ * room in the table.
+ */
+export const roomsByNameQuerySchema = z.object({
+  name: z.string().trim().min(1).max(120),
+});
+export type RoomsByNameQuery = z.infer<typeof roomsByNameQuerySchema>;
 
 export const listScansQuerySchema = z.object({
   cursor: z.string().min(1).optional(),
@@ -37,14 +52,20 @@ export const scanFileSchema = z.object({
 export type ScanFileInput = z.infer<typeof scanFileSchema>;
 
 /*
- * Filing a scan into a customer's inbox.
+ * Filing a scan into a mail room's inbox.
+ *
+ * The target is the room, not the customer: a customer may hold several rooms
+ * (a Delaware address and a Wyoming one), and an envelope arrives at exactly one
+ * of them. Addressing the customer instead would leave the backend guessing
+ * which room the post came to — so the operator names the room and the customer
+ * follows from it.
  *
  * An envelope is rarely one file: an operator scans several sheets, or attaches
  * a single multi-page PDF. `files` is therefore ordered — position is what
  * becomes the page number — and at least one is required.
  */
 export const uploadScanSchema = z.object({
-  customerId: z.string().min(1).max(60),
+  roomId: z.string().min(1).max(60),
   sender: z.string().trim().min(1).max(160),
   // A plain calendar date — the day the physical mail arrived. It has no
   // time-of-day, so it must not be built from a zoneless timestamp

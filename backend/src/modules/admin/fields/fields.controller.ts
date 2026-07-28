@@ -68,3 +68,19 @@ export async function updateField(
     next(error);
   }
 }
+
+export async function deleteField(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const deleted = await service.deleteField(
+      getAuth(req),
+      pathParam(req, 'fieldId'),
+    );
+    res.json({ data: deleted });
+  } catch (error) {
+    next(error);
+  }
+}

@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 /*
  * The white rounded card every order-detail section sits in — one border,
  * radius, shadow, and title style so the sections read as one system. Padding
- * tightens on mobile (16px) and opens up from `md` (24px), matching all three
+ * tightens on mobile (1rem) and opens up from `md` (1.5rem), matching all three
  * Figma links. `titleAccessory` is the optional right-aligned element the
  * design puts beside a title (the Payment status chip).
  */

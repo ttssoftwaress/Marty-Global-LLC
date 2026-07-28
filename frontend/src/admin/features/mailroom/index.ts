@@ -7,7 +7,7 @@ export { MailLogPanel } from './MailLogPanel';
 export { MailLogTable } from './MailLogTable';
 export { MailOpsComingSoonPanel } from './MailOpsComingSoonPanel';
 export { MailOpsCustomerAvatar } from './MailOpsCustomerAvatar';
-export { MailOpsFindCustomer } from './MailOpsFindCustomer';
+export { MailOpsFindRoom } from './MailOpsFindRoom';
 export { MailOpsHeader } from './MailOpsHeader';
 export { MailOpsKpiCards } from './MailOpsKpiCards';
 export { MailOpsRecentUploads } from './MailOpsRecentUploads';
@@ -28,14 +28,16 @@ export { MailScanDetailsForm } from './MailScanDetailsForm';
 export { MailScanDropZone } from './MailScanDropZone';
 export {
   adminMailLogKey,
-  adminMailOpsCustomerSearchKey,
   adminMailOpsRecentKey,
+  adminMailOpsRoomNameSearchKey,
+  adminMailOpsRoomsByNameKey,
   adminMailOpsSummaryKey,
   adminMailRequestDetailKey,
   adminMailRequestsKey,
   useAdminMailLog,
-  useAdminMailOpsCustomerSearch,
   useAdminMailOpsRecentUploads,
+  useAdminMailOpsRoomNameSearch,
+  useAdminMailOpsRoomsByName,
   useAdminMailOpsSummary,
   useAdminMailRequestDetail,
   useAdminMailRequests,

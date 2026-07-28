@@ -82,7 +82,12 @@ export function FaqSection({
   };
 
   return (
-    <section className="flex w-full flex-col items-center gap-8 bg-gray-50 px-4 py-16 md:gap-12 md:px-10 md:py-20 lg:gap-16 lg:px-20 lg:py-24">
+    // `id` is the anchor the contact page's "View FAQ" link targets — the FAQ
+    // is a section of the services page, not a route of its own.
+    <section
+      id="faq"
+      className="flex w-full scroll-mt-8 flex-col items-center gap-8 bg-gray-50 px-4 py-16 md:gap-12 md:px-10 md:py-20 lg:gap-16 lg:px-20 lg:py-24"
+    >
       <div className="flex w-full flex-col items-center gap-2.5 text-center md:gap-3">
         <h2 className="w-full font-marketing text-[28px] font-bold leading-[1.2] text-text md:text-[32px] lg:text-[40px]">
           {heading}

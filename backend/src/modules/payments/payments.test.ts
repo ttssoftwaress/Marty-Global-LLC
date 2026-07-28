@@ -55,6 +55,7 @@ vi.mock('../notifications/notifications.service.js', () => ({
 
 const { prisma } = await import('../../lib/prisma.js');
 const {
+  cancelPayment,
   createIntent,
   creditConfirmedPayments,
   expireStalePayments,
@@ -891,6 +892,130 @@ describe('reads', () => {
 
     const view = await getQuoteForCheckout(reqAs(auth(CUSTOMER_ID)), quote.id);
     expect(view.status).toBe('expired');
+  });
+
+  // The resume. A checkout that only lived in the tab would hand the customer a
+  // fresh method choice on reload, while the window it opened kept watching an
+  // amount nobody was being shown.
+  it('carries an open payment back with the quote so checkout resumes', async () => {
+    const quote = await createQuote();
+    const intent = await intentFor(quote.id);
+
+    const view = await getQuoteForCheckout(reqAs(auth(CUSTOMER_ID)), quote.id);
+
+    expect(view.activePayment?.id).toBe(intent.id);
+    expect(view.activePayment?.status).toBe('awaiting_payment');
+  });
+
+  it('resumes a confirming payment even past its window', async () => {
+    // The window closing does not un-see money that is already on-chain.
+    const quote = await createQuote();
+    const intent = await intentFor(quote.id);
+
+    await settleTransfer(
+      transfer({ amountRaw: BigInt(intent.usdt!.amountRaw), confirmations: 1 }),
+    );
+    await prisma.payment.update({
+      where: { id: intent.id },
+      data: { expiresAt: new Date(Date.now() - 1_000) },
+    });
+
+    const view = await getQuoteForCheckout(reqAs(auth(CUSTOMER_ID)), quote.id);
+    expect(view.activePayment?.id).toBe(intent.id);
+    expect(view.activePayment?.status).toBe('confirming');
+  });
+
+  it('offers no payment to resume once the window has lapsed', async () => {
+    const quote = await createQuote();
+    const intent = await intentFor(quote.id);
+
+    await prisma.payment.update({
+      where: { id: intent.id },
+      data: { expiresAt: new Date(Date.now() - 1_000) },
+    });
+
+    const view = await getQuoteForCheckout(reqAs(auth(CUSTOMER_ID)), quote.id);
+    expect(view.activePayment).toBeNull();
+  });
+});
+
+// --- Cancelling ----------------------------------------------------------
+
+describe('cancelPayment', () => {
+  it('closes an untouched window and frees the amount it was watching', async () => {
+    const quote = await createQuote();
+    const intent = await intentFor(quote.id);
+
+    const cancelled = await cancelPayment(reqAs(auth(CUSTOMER_ID)), intent.id);
+    expect(cancelled.status).toBe('cancelled');
+
+    // The whole point of cancelling rather than waiting the window out: the
+    // (address, amount) pair leaves the partial unique index immediately, so the
+    // same quote can be paid again at the same figure.
+    const again = await intentFor(quote.id);
+    expect(again.id).not.toBe(intent.id);
+    expect(again.usdt?.amountRaw).toBe(intent.usdt?.amountRaw);
+  });
+
+  it('leaves the quote owing', async () => {
+    const quote = await createQuote();
+    const intent = await intentFor(quote.id);
+
+    await cancelPayment(reqAs(auth(CUSTOMER_ID)), intent.id);
+
+    const view = await getQuoteForCheckout(reqAs(auth(CUSTOMER_ID)), quote.id);
+    expect(view.status).toBe('pending');
+    expect(view.activePayment).toBeNull();
+  });
+
+  it('refuses once a transfer has matched — money outranks the intention', async () => {
+    const quote = await createQuote();
+    const intent = await intentFor(quote.id);
+
+    await settleTransfer(
+      transfer({ amountRaw: BigInt(intent.usdt!.amountRaw), confirmations: 1 }),
+    );
+
+    await expect(
+      cancelPayment(reqAs(auth(CUSTOMER_ID)), intent.id),
+    ).rejects.toMatchObject({ status: 422 });
+
+    const row = await prisma.payment.findUniqueOrThrow({ where: { id: intent.id } });
+    expect(row.status).toBe(PaymentStatus.PROCESSING);
+  });
+
+  it('refuses a payment that already completed', async () => {
+    const quote = await createQuote();
+    const intent = await intentFor(quote.id);
+
+    await settleTransfer(transfer({ amountRaw: BigInt(intent.usdt!.amountRaw) }));
+
+    await expect(
+      cancelPayment(reqAs(auth(CUSTOMER_ID)), intent.id),
+    ).rejects.toMatchObject({ status: 422 });
+  });
+
+  // Retry-safety without an idempotency key: the guard is the payment's own
+  // status, so running it twice cancels once (AGENTS.md, API Conventions).
+  it('runs twice and cancels once', async () => {
+    const quote = await createQuote();
+    const intent = await intentFor(quote.id);
+
+    const first = await cancelPayment(reqAs(auth(CUSTOMER_ID)), intent.id);
+    const second = await cancelPayment(reqAs(auth(CUSTOMER_ID)), intent.id);
+
+    expect(first.status).toBe('cancelled');
+    expect(second.status).toBe('cancelled');
+    expect(second.id).toBe(first.id);
+  });
+
+  it('refuses another customer\'s payment', async () => {
+    const quote = await createQuote();
+    const intent = await intentFor(quote.id);
+
+    await expect(
+      cancelPayment(reqAs(auth(OTHER_ID)), intent.id),
+    ).rejects.toMatchObject({ status: 404 });
   });
 });
 

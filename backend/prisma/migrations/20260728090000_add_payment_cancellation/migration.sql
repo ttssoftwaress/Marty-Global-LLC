@@ -1,0 +1,15 @@
+-- A customer can now close a USDT payment window on purpose ("Cancel transfer")
+-- instead of leaving it to lapse.
+--
+-- CANCELLED rather than reusing FAILED, because the two are different facts: a
+-- failure is a collection that went wrong, a cancellation is one that was never
+-- attempted. Billing's payment history lists SUCCEEDED and FAILED only, so a
+-- cancelled attempt drops out of it without any further change.
+--
+-- Nothing else moves. The partial unique index that guarantees at most one live
+-- payment watches a given (address, amount) pair lists the live statuses
+-- explicitly, so a cancelled row leaves that index and frees its amount for the
+-- next attempt — which is exactly what cancelling should do.
+--
+-- AlterEnum
+ALTER TYPE "PaymentStatus" ADD VALUE 'CANCELLED';

@@ -51,11 +51,11 @@ export function RecentActivity({ activity }: RecentActivityProps) {
               <li
                 key={item.id}
                 className={`flex gap-3 rounded-lg p-3 ${
-                  item.tone === 'alert' ? 'border-l-[3px] border-error' : ''
+                  item.tone === 'alert' ? 'border-l-[0.1875rem] border-error' : ''
                 }`}
               >
                 <span
-                  className={`flex size-8 shrink-0 items-center justify-center rounded-[16px] ${TONE_CHIP[item.tone]}`}
+                  className={`flex size-8 shrink-0 items-center justify-center rounded-[1rem] ${TONE_CHIP[item.tone]}`}
                 >
                   <Icon className="size-4" strokeWidth={1.75} aria-hidden="true" />
                 </span>

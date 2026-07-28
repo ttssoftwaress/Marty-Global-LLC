@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 
 import { ClockIcon, MailIcon, PhoneIcon } from '../icons';
 
@@ -80,13 +81,21 @@ function IntroColumn() {
         ))}
       </div>
 
+      {/*
+       * These were dead `#` anchors. The FAQ is a section of the services page
+       * rather than its own route, so it is reached by hash — hence the plain
+       * anchor on the second link.
+       */}
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3 pt-1 text-[14px] font-semibold text-primary">
-        <a href="#" className="inline-flex items-center gap-1 hover:underline">
+        <Link to="/services" className="inline-flex items-center gap-1 hover:underline">
           Browse Services →
-        </a>
-        <a href="#" className="inline-flex items-center gap-1 hover:underline">
+        </Link>
+        <Link
+          to="/services#faq"
+          className="inline-flex items-center gap-1 hover:underline"
+        >
           View FAQ →
-        </a>
+        </Link>
       </div>
     </div>
   );
@@ -159,6 +168,23 @@ function FormCard() {
         >
           Send Message
         </button>
+
+        {/*
+         * The form collects a name, an email, and free-text that often carries
+         * business details, so the privacy notice belongs at the point of
+         * submission — not only in the footer. Placed under the button because
+         * that is where a reader looks before sending.
+         */}
+        <p className="text-[12px] leading-[18px] text-text-secondary">
+          By sending this message you agree to our{' '}
+          <Link
+            to="/legal/privacy"
+            className="font-medium text-primary underline underline-offset-2"
+          >
+            Privacy Policy
+          </Link>
+          . We use your details only to reply — never to sell or share.
+        </p>
       </div>
     </div>
   );

@@ -135,43 +135,148 @@ const toCustomer = (user: {
   initials: toInitials(user.name),
 });
 
+// --- Room picker ---------------------------------------------------------
 /*
- * The picker an operator files a scan from. Scoped like every other read: a
- * member who may not see a customer's records must not be able to enumerate the
- * directory through a search box either — a `take: 10` on an unscoped query is
- * still the whole table, ten rows at a time.
+ * Filing a scan targets a room, not a customer: a customer may hold several
+ * rooms and an envelope arrives at exactly one of them, so letting the backend
+ * infer the room filed post into whichever was created last.
+ *
+ * The pick is two steps, because a room name is not unique — "Main Office"
+ * belongs to as many customers as chose it, and two of a customer's own rooms
+ * can share a name too. So the operator names the room, then chooses among the
+ * addresses carrying that name. The address is what disambiguates, and it is
+ * what is printed on the envelope in their hand.
  */
-export async function searchCustomers(
+
+// Step one: a room name, with how many active rooms answer to it. The count is
+// what tells the UI whether step two is a real choice or a formality.
+export type MailOpsRoomName = {
+  name: string;
+  rooms: number;
+};
+
+// Step two: one addressable room under the chosen name.
+export type MailOpsRoom = {
+  id: string;
+  name: string;
+  address: string;
+  customer: MailOpsCustomer;
+};
+
+const toRoom = (room: {
+  id: string;
+  name: string;
+  address: string;
+  customer: { id: string; name: string; email: string };
+}): MailOpsRoom => ({
+  id: room.id,
+  name: room.name,
+  address: room.address,
+  customer: toCustomer(room.customer),
+});
+
+/*
+ * The scope every room read in this picker shares.
+ *
+ * A member who may not see a customer's records must not be able to enumerate
+ * the directory through a search box either — a `take` on an unscoped query is
+ * still the whole table, a page at a time.
+ *
+ * Only ACTIVE rooms are offered: a pending or closed room is not somewhere post
+ * can be filed, so it must not appear as an option that fails on submit.
+ */
+async function pickableRoomWhere(
+  actor: AuthContext,
+): Promise<Prisma.MailRoomWhereInput> {
+  return {
+    deletedAt: null,
+    status: MailRoomStatus.ACTIVE,
+    customer: {
+      is: {
+        ...(await customerScope(actor)),
+        deletedAt: null,
+        OR: [{ role: Role.CUSTOMER }, { role: null }],
+      },
+    },
+  };
+}
+
+/*
+ * Step one — the room names matching what the operator typed, deduplicated.
+ *
+ * Grouped rather than listed: ten rooms all called "Main Office" are one choice
+ * at this step, not ten. The count rides along so the UI can tell the operator
+ * how many addresses they are about to choose between.
+ */
+export async function searchRoomNames(
   actor: AuthContext,
   search: string,
-): Promise<MailOpsCustomer[]> {
-  const customers = await prisma.user.findMany({
+): Promise<MailOpsRoomName[]> {
+  const groups = await prisma.mailRoom.groupBy({
+    by: ['name'],
     where: {
-      ...(await customerScope(actor)),
-      deletedAt: null,
-      OR: [{ role: Role.CUSTOMER }, { role: null }],
-      AND: [
-        {
-          OR: [
-            { name: { contains: search, mode: 'insensitive' } },
-            { email: { contains: search, mode: 'insensitive' } },
-          ],
-        },
-      ],
+      ...(await pickableRoomWhere(actor)),
+      name: { contains: search, mode: 'insensitive' },
     },
-    select: customerSelect,
+    _count: { _all: true },
     orderBy: { name: 'asc' },
     // A picker, not a list: enough to choose from, never the whole table.
     take: 10,
   });
 
-  return customers.map(toCustomer);
+  return groups.map((group) => ({ name: group.name, rooms: group._count._all }));
+}
+
+/*
+ * Step two — every active room carrying the chosen name, so the operator can
+ * pick the one whose address matches the envelope.
+ *
+ * The name is matched exactly here, not fuzzily: it came from step one's list
+ * rather than from free typing, and a `contains` would fold "Main Office" and
+ * "Main Office Annex" into one set the operator did not ask for.
+ *
+ * Ordered by customer so a name shared across accounts groups per customer, and
+ * the customer travels with each row — an address alone does not say whose mail
+ * room it is, and filing into the wrong account is the mistake this step exists
+ * to prevent.
+ */
+export async function listRoomsByName(
+  actor: AuthContext,
+  name: string,
+): Promise<MailOpsRoom[]> {
+  const rooms = await prisma.mailRoom.findMany({
+    where: {
+      ...(await pickableRoomWhere(actor)),
+      name: { equals: name, mode: 'insensitive' },
+    },
+    select: {
+      id: true,
+      name: true,
+      address: true,
+      customer: { select: customerSelect },
+    },
+    orderBy: [{ customer: { name: 'asc' } }, { address: 'asc' }],
+    take: 50,
+  });
+
+  return rooms.map(toRoom);
 }
 
 // --- Recently uploaded ---------------------------------------------------
+/*
+ * The room a listed piece of mail belongs to, as the read screens label it. Just
+ * enough to identify which of a customer's addresses the post arrived at — the
+ * full room record is the portal's business, not this feed's.
+ */
+export type MailOpsRoomRef = {
+  id: string;
+  name: string;
+};
+
 export type MailOpsRecentUpload = {
   id: string;
   customer: MailOpsCustomer;
+  room: MailOpsRoomRef;
   sender: string;
   uploadedAt: string;
 };
@@ -196,6 +301,7 @@ export async function listScans(
     uploads: page.rows.map((item) => ({
       id: item.id,
       customer: toCustomer(item.room.customer),
+      room: { id: item.room.id, name: item.room.name },
       sender: item.sender,
       uploadedAt: iso(item.createdAt),
     })),
@@ -204,36 +310,38 @@ export async function listScans(
 }
 
 /*
- * File a scan into a customer's inbox.
+ * File a scan into a mail room's inbox.
  *
- * A customer may hold several rooms; the scan lands in their active one. If they
- * have none, that is a business-rule failure rather than a silently created
- * room — mail arriving for a customer without an address means something is
- * wrong upstream, and an operator should see it.
+ * The room is named by the operator rather than derived from a customer. A
+ * customer may hold several rooms and an envelope arrives at exactly one of
+ * them; picking "their active one" filed every scan into whichever room happened
+ * to be created last, which is wrong the moment a second room exists.
  */
 export async function uploadScan(
   actor: AuthContext,
   input: UploadScanInput,
 ): Promise<MailOpsRecentUpload> {
   /*
-   * Scoped on the way in: filing a scan into a customer's inbox is a write
-   * against a record this actor must be entitled to reach. Out of scope reads as
-   * "no room to file into" — the same answer as a customer who genuinely has
-   * none, so the failure does not confirm the account exists.
+   * Scoped on the way in: filing a scan into a room is a write against a record
+   * this actor must be entitled to reach. Out of scope reads as "no such room" —
+   * the same answer as an id that does not exist, so the failure does not
+   * confirm the room is real.
+   *
+   * The ACTIVE clause is part of the lookup rather than a check afterwards, so a
+   * closed room is never a target regardless of what the client sends.
    */
   const room = await prisma.mailRoom.findFirst({
     where: {
-      customerId: input.customerId,
+      id: input.roomId,
       deletedAt: null,
       status: MailRoomStatus.ACTIVE,
       customer: { is: await customerScope(actor) },
     },
     include: { customer: { select: customerSelect } },
-    orderBy: { createdAt: 'desc' },
   });
 
   if (!room) {
-    throw AppError.businessRule('This customer has no active mail room to file into');
+    throw AppError.notFound('Mail room not found');
   }
 
   // A calendar date anchored at midnight UTC — the day the envelope arrived, not
@@ -297,7 +405,7 @@ export async function uploadScan(
     entityType: 'MailItem',
     entityId: item.id,
     // Ids and the room only — the sender is on an envelope and counts as PII.
-    metadata: { roomId: room.id, customerId: input.customerId, files: input.files.length },
+    metadata: { roomId: room.id, customerId: room.customerId, files: input.files.length },
   });
 
   /*
@@ -307,7 +415,7 @@ export async function uploadScan(
    * happened (AGENTS.md — email always from a queued job).
    */
   void notifyMailScanFiled({
-    customerId: input.customerId,
+    customerId: room.customerId,
     customerEmail: room.customer.email,
     roomId: room.id,
     roomName: room.name,
@@ -317,6 +425,7 @@ export async function uploadScan(
   return {
     id: item.id,
     customer: toCustomer(room.customer),
+    room: { id: room.id, name: room.name },
     sender: item.sender,
     uploadedAt: iso(item.createdAt),
   };
@@ -326,6 +435,9 @@ export async function uploadScan(
 export type MailRequestRow = {
   id: string;
   customer: MailOpsCustomer;
+  // Which of the customer's rooms the item arrived at — an operator working the
+  // queue needs the address, not only whose post it is.
+  room: MailOpsRoomRef;
   mailItem: string;
   type: 'forwarding' | 'shredding';
   typeLabel: string;
@@ -378,8 +490,10 @@ const requestInclude = {
       sender: true,
       pdfObjectKey: true,
       // The room the item sits in, so settling a request can link the customer
-      // straight to the inbox it came from.
+      // straight to the inbox it came from — and so the queue can name which of
+      // their addresses the post arrived at.
       roomId: true,
+      room: { select: { id: true, name: true } },
       pages: { orderBy: { pageNumber: 'asc' }, take: 1, select: { objectKey: true } },
     },
   },
@@ -391,6 +505,7 @@ function toRequestRow(request: RequestRow): MailRequestRow {
   return {
     id: request.id,
     customer: toCustomer(request.customer),
+    room: { id: request.mailItem.room.id, name: request.mailItem.room.name },
     mailItem: request.mailItem.sender,
     type: TYPE_VIEW[request.type],
     typeLabel: TYPE_LABEL[request.type],
@@ -668,6 +783,7 @@ export type MailLogPage = {
   entries: {
     id: string;
     customer: MailOpsCustomer;
+    room: MailOpsRoomRef;
     mailItem: string;
     action: 'forwarded' | 'shredded' | 'downloaded';
     actionLabel: string;
@@ -731,7 +847,13 @@ export async function listLog(
     prisma.mailActionLog.count({ where }),
     prisma.mailActionLog.findMany({
       where,
-      include: { mailItem: { select: { room: { select: { customer: { select: customerSelect } } } } } },
+      include: {
+        mailItem: {
+          select: {
+            room: { select: { id: true, name: true, customer: { select: customerSelect } } },
+          },
+        },
+      },
       orderBy: [{ closedAt: 'desc' }, { id: 'desc' }],
       ...offsetArgs(query.page, query.pageSize),
     }),
@@ -741,6 +863,7 @@ export async function listLog(
     entries: rows.map((entry) => ({
       id: entry.id,
       customer: toCustomer(entry.mailItem.room.customer),
+      room: { id: entry.mailItem.room.id, name: entry.mailItem.room.name },
       mailItem: entry.mailItemLabel,
       action: LOG_ACTION_VIEW[entry.action],
       actionLabel: LOG_ACTION_LABEL[entry.action],

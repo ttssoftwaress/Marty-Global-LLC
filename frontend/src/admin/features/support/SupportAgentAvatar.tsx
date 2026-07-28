@@ -47,7 +47,7 @@ export function SupportAgentAvatar({
     <span
       aria-hidden="true"
       className={`flex shrink-0 items-center justify-center rounded-full font-semibold ${tintFor(id)} ${
-        className ?? 'size-4 text-[8px]'
+        className ?? 'size-4 text-[0.5rem]'
       }`}
     >
       {initials}

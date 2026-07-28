@@ -53,7 +53,7 @@ function CustomersSkeleton() {
       {/* Mobile — a stack of cards */}
       <div className="flex flex-col gap-3 md:hidden">
         {Array.from({ length: 5 }, (_, index) => (
-          <div key={index} className="h-[188px] animate-pulse rounded-card bg-gray-200" />
+          <div key={index} className="h-[11.75rem] animate-pulse rounded-card bg-gray-200" />
         ))}
       </div>
 
@@ -140,7 +140,7 @@ export function AdminCustomersPage() {
   return (
     <AdminLayout user={user} onLogout={onLogout}>
       <div className="w-full p-4 md:p-6 lg:p-content">
-        <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-5 md:gap-6">
+        <div className="mx-auto flex w-full max-w-[87.5rem] flex-col gap-5 md:gap-6">
           <CustomersHeader totalCustomers={summary.data?.totalCustomers ?? 0} />
 
           {summary.data ? (
@@ -151,7 +151,7 @@ export function AdminCustomersPage() {
              * and the region/tabs pair splits apart below `md`.
              */
             <div className="flex w-full flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
-              <div className="w-full lg:w-[320px] lg:shrink-0">
+              <div className="w-full lg:w-[20rem] lg:shrink-0">
                 <CustomersSearch value={search} onChange={setSearch} />
               </div>
 
@@ -160,7 +160,7 @@ export function AdminCustomersPage() {
                   options={summary.data.regions}
                   value={region}
                   onChange={setRegion}
-                  className="w-full md:w-[180px] md:shrink-0 lg:w-[200px]"
+                  className="w-full md:w-[11.25rem] md:shrink-0 lg:w-[12.5rem]"
                 />
 
                 <CustomerSegmentTabs

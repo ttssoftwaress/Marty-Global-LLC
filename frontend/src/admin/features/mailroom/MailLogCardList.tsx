@@ -38,10 +38,16 @@ export function MailLogCardList({ entries, onView }: MailLogCardListProps) {
                 <MailOpsCustomerAvatar
                   id={entry.customer.id}
                   initials={entry.customer.initials}
-                  className="size-6 text-[10px]"
+                  className="size-6 text-[0.625rem]"
                 />
-                <span className="truncate text-body font-semibold text-text">
-                  {entry.customer.name}
+                {/* Which of the customer's rooms the item arrived at. */}
+                <span className="flex min-w-0 flex-col">
+                  <span className="truncate text-body font-semibold text-text">
+                    {entry.customer.name}
+                  </span>
+                  <span className="truncate text-small text-gray-400">
+                    {entry.room.name}
+                  </span>
                 </span>
               </div>
 
@@ -68,7 +74,7 @@ export function MailLogCardList({ entries, onView }: MailLogCardListProps) {
               />
 
               <div className="flex min-w-0 flex-col items-end gap-0.5">
-                <span className="text-[10px] font-normal uppercase tracking-[0.4px] text-gray-400">
+                <span className="text-[0.625rem] font-normal uppercase tracking-[0.4px] text-gray-400">
                   Processed by
                 </span>
                 <span className="truncate text-small font-medium text-text-secondary">

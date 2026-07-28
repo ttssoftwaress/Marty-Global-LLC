@@ -40,7 +40,7 @@ function RequestSkeleton() {
   return (
     <div className="flex w-full flex-col gap-5" aria-hidden="true">
       <div className="h-24 w-full animate-pulse rounded-card bg-gray-200" />
-      <div className="h-[320px] w-full animate-pulse rounded-card bg-gray-200" />
+      <div className="h-[20rem] w-full animate-pulse rounded-card bg-gray-200" />
     </div>
   );
 }
@@ -48,11 +48,11 @@ function RequestSkeleton() {
 function NotFound() {
   return (
     <div className="flex w-full flex-col items-center gap-3 rounded-card border border-gray-200 bg-white px-6 py-16 text-center shadow-sm-elevation">
-      <span className="flex size-12 items-center justify-center rounded-[24px] bg-[var(--color-status-missing-bg)]">
+      <span className="flex size-12 items-center justify-center rounded-[1.5rem] bg-[var(--color-status-missing-bg)]">
         <AlertTriangle className="size-6 text-error" strokeWidth={1.75} aria-hidden="true" />
       </span>
       <p className="text-body-lg font-semibold text-text">We couldn&apos;t open this request</p>
-      <p className="max-w-[380px] text-body text-gray-500">
+      <p className="max-w-[23.75rem] text-body text-gray-500">
         It may have been reassigned, or you may not have access to it.
       </p>
       <Link to="/admin/requests" className="btn btn-primary mt-1 h-11 rounded-input px-5 text-body">
@@ -105,7 +105,7 @@ export function AdminRequestDetailPage() {
   return (
     <AdminLayout {...shell}>
       <div className="w-full p-4 md:p-6 lg:p-content">
-        <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-5 md:gap-6">
+        <div className="mx-auto flex w-full max-w-[75rem] flex-col gap-5 md:gap-6">
           <p className="flex flex-wrap items-center gap-1.5 text-caption font-medium uppercase tracking-[0.6px]">
             <Link to="/admin" className="text-primary hover:underline">
               Dashboard
@@ -167,7 +167,7 @@ export function AdminRequestDetailPage() {
                               key={answer.label}
                               className="flex flex-col gap-0.5 md:flex-row md:items-baseline md:gap-4"
                             >
-                              <dt className="text-body font-medium text-gray-500 md:w-[200px] md:shrink-0">
+                              <dt className="text-body font-medium text-gray-500 md:w-[12.5rem] md:shrink-0">
                                 {answer.label}
                               </dt>
                               <dd className="min-w-0 break-words text-body text-text">
@@ -288,7 +288,7 @@ export function AdminRequestDetailPage() {
                 </div>
 
                 {/* Rail — what the operator does about it. */}
-                <div className="contents lg:flex lg:w-[380px] lg:shrink-0 lg:flex-col lg:gap-6">
+                <div className="contents lg:flex lg:w-[23.75rem] lg:shrink-0 lg:flex-col lg:gap-6">
                   <div className="order-1">
                     <SectionCard title="Work this request" className="gap-4">
                       <div className="flex flex-col gap-1.5">

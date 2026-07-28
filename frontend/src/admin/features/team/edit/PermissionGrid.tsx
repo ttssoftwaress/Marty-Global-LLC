@@ -67,10 +67,10 @@ export function PermissionGrid({
         <p className="min-w-0 flex-1 text-small font-medium text-gray-500">
           Permission
         </p>
-        <p className="w-[104px] shrink-0 text-center text-small font-medium text-gray-500">
+        <p className="w-[6.5rem] shrink-0 text-center text-small font-medium text-gray-500">
           Specific data
         </p>
-        <p className="w-[104px] shrink-0 text-center text-small font-medium text-gray-500">
+        <p className="w-[6.5rem] shrink-0 text-center text-small font-medium text-gray-500">
           All data
         </p>
       </div>
@@ -90,7 +90,7 @@ export function PermissionGrid({
             </p>
 
             <div className="flex items-center gap-6 sm:contents">
-              <div className="flex items-center gap-2 sm:w-[104px] sm:shrink-0 sm:justify-center">
+              <div className="flex items-center gap-2 sm:w-[6.5rem] sm:shrink-0 sm:justify-center">
                 <span className="text-small text-gray-500 sm:hidden">Specific</span>
                 <TeamToggleSwitch
                   checked={granted}
@@ -100,7 +100,7 @@ export function PermissionGrid({
                 />
               </div>
 
-              <div className="flex items-center gap-2 sm:w-[104px] sm:shrink-0 sm:justify-center">
+              <div className="flex items-center gap-2 sm:w-[6.5rem] sm:shrink-0 sm:justify-center">
                 <span className="text-small text-gray-500 sm:hidden">All data</span>
                 {area.scopeKey ? (
                   <TeamToggleSwitch

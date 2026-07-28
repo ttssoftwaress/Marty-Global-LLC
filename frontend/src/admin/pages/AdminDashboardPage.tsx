@@ -46,16 +46,16 @@ function DashboardSkeleton() {
         {Array.from({ length: 4 }, (_, index) => (
           <div
             key={index}
-            className="h-[120px] animate-pulse rounded-card bg-gray-200"
+            className="h-[7.5rem] animate-pulse rounded-card bg-gray-200"
           />
         ))}
       </div>
 
-      <div className="h-[180px] w-full animate-pulse rounded-card bg-gray-200" />
+      <div className="h-[11.25rem] w-full animate-pulse rounded-card bg-gray-200" />
 
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-        <div className="h-[420px] min-w-0 flex-1 animate-pulse rounded-card bg-gray-200" />
-        <div className="h-[420px] animate-pulse rounded-card bg-gray-200 lg:w-[348px] lg:shrink-0" />
+        <div className="h-[26.25rem] min-w-0 flex-1 animate-pulse rounded-card bg-gray-200" />
+        <div className="h-[26.25rem] animate-pulse rounded-card bg-gray-200 lg:w-[21.75rem] lg:shrink-0" />
       </div>
     </div>
   );
@@ -77,7 +77,7 @@ export function AdminDashboardPage(props: AdminDashboardPageProps = {}) {
   return (
     <AdminLayout user={user} onLogout={onLogout}>
       <div className="w-full p-4 md:p-6 lg:p-content">
-        <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-6 lg:gap-8">
+        <div className="mx-auto flex w-full max-w-[87.5rem] flex-col gap-6 lg:gap-8">
           {/*
            * Desktop puts the title block and the period pill on one line;
            * tablet and mobile stack them, so the pill can run full-width on
@@ -86,10 +86,10 @@ export function AdminDashboardPage(props: AdminDashboardPageProps = {}) {
            */}
           <div className="flex w-full flex-col gap-3 md:gap-4 lg:flex-row lg:items-center lg:justify-between lg:gap-6">
             <div className="flex min-w-0 flex-col gap-1">
-              <h1 className="text-[24px] font-semibold leading-8 text-text lg:text-[32px] lg:leading-10">
+              <h1 className="text-[1.5rem] font-semibold leading-8 text-text lg:text-[2rem] lg:leading-10">
                 Dashboard
               </h1>
-              <p className="hidden text-[14px] leading-5 text-gray-500 lg:block">
+              <p className="hidden text-[0.875rem] leading-5 text-gray-500 lg:block">
                 Here&rsquo;s what&rsquo;s happening across Marty Global LLC today.
               </p>
             </div>

@@ -6,7 +6,7 @@ import { AdminLayout } from '../components/AdminLayout';
 import {
   MailLogPanel,
   MailOpsComingSoonPanel,
-  MailOpsFindCustomer,
+  MailOpsFindRoom,
   MailOpsHeader,
   MailOpsKpiCards,
   MailOpsRecentUploads,
@@ -14,14 +14,15 @@ import {
   MailRequestDetailOverlay,
   MailRequestsPanel,
   MailScanDetailsForm,
-  useAdminMailOpsCustomerSearch,
   useAdminMailOpsRecentUploads,
+  useAdminMailOpsRoomNameSearch,
+  useAdminMailOpsRoomsByName,
   useAdminMailOpsSummary,
   useUploadMailScan,
 } from '../features/mailroom';
 import { useAdminShell } from '../hooks/useAdminShell';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
-import type { MailOpsCustomer, MailOpsTab } from '../types/mailroom';
+import type { MailOpsRoom, MailOpsTab } from '../types/mailroom';
 
 /*
  * Virtual mail room — operations. The admin screen for filing scanned mail into
@@ -39,9 +40,9 @@ import type { MailOpsCustomer, MailOpsTab } from '../types/mailroom';
  *     leaves the form card for a sticky bottom bar
  *
  * Every figure and row comes from the API; nothing on this page is hardcoded
- * business data. Three queries back it (endpoints land with the `mailroom`
- * module): the summary for the KPI cards and the tab counts, the customer
- * search behind the picker, and an infinite query for the recent feed.
+ * business data. The summary backs the KPI cards and tab counts, the two room
+ * queries back the picker (name, then address — see `MailOpsFindRoom`), and an
+ * infinite query backs the recent feed.
  *
  * "Upload mail" and "Pending requests" are designed. The other two tabs are
  * real — they carry the backlog counts the summary returns — but their screens
@@ -69,10 +70,10 @@ function MailOpsSkeleton() {
       aria-hidden="true"
     >
       <div className="flex min-w-0 flex-1 flex-col gap-4 lg:gap-card">
-        <div className="h-[132px] w-full animate-pulse rounded-card bg-gray-200" />
-        <div className="h-[460px] w-full animate-pulse rounded-card bg-gray-200" />
+        <div className="h-[8.25rem] w-full animate-pulse rounded-card bg-gray-200" />
+        <div className="h-[28.75rem] w-full animate-pulse rounded-card bg-gray-200" />
       </div>
-      <div className="h-[360px] w-full animate-pulse rounded-card bg-gray-200 lg:w-[380px] lg:shrink-0" />
+      <div className="h-[22.5rem] w-full animate-pulse rounded-card bg-gray-200 lg:w-[23.75rem] lg:shrink-0" />
     </div>
   );
 }
@@ -89,9 +90,14 @@ export function AdminVirtualMailOpsPage() {
    */
   const [openRequestId, setOpenRequestId] = useState<string | null>(null);
 
-  // The customer picker. `selected` is what the form files against; `search` is
-  // what the operator has typed, debounced into the server-side query.
-  const [selected, setSelected] = useState<MailOpsCustomer | null>(null);
+  /*
+   * The room picker, in two steps. A room name is not unique — "Main Office"
+   * belongs to as many customers as chose it — so the operator searches the name
+   * (`search`, debounced into the server-side query), picks one (`selectedName`),
+   * then picks the address carrying it (`selected`, what the form files against).
+   */
+  const [selected, setSelected] = useState<MailOpsRoom | null>(null);
+  const [selectedName, setSelectedName] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search, SEARCH_DEBOUNCE_MS);
 
@@ -107,7 +113,10 @@ export function AdminVirtualMailOpsPage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
 
   const summary = useAdminMailOpsSummary();
-  const customerSearch = useAdminMailOpsCustomerSearch(debouncedSearch);
+  const roomNames = useAdminMailOpsRoomNameSearch(debouncedSearch);
+  // Step two only fetches once a name is chosen, and not at all once the room is
+  // settled — the picker is done with it by then.
+  const rooms = useAdminMailOpsRoomsByName(selected ? null : selectedName);
   const recent = useAdminMailOpsRecentUploads();
   const uploadScan = useUploadMailScan();
 
@@ -116,13 +125,17 @@ export function AdminVirtualMailOpsPage() {
     [recent.data],
   );
 
-  const onSelectCustomer = (customer: MailOpsCustomer) => {
-    setSelected(customer);
+  const onSelectRoomName = (name: string) => {
+    setSelectedName(name);
     setSearch('');
   };
 
-  const onClearCustomer = () => {
+  const onSelectRoom = (room: MailOpsRoom) => setSelected(room);
+
+  // Back to step one, from either the address list or the settled row.
+  const onClearRoom = () => {
     setSelected(null);
+    setSelectedName(null);
     setSearch('');
   };
 
@@ -164,7 +177,7 @@ export function AdminVirtualMailOpsPage() {
 
       uploadScan.mutate(
         {
-          customerId: selected.id,
+          roomId: selected.id,
           sender: sender.trim(),
           receivedOn,
           files: uploaded.map((file) => ({
@@ -198,10 +211,10 @@ export function AdminVirtualMailOpsPage() {
        */}
       <div
         className={`w-full p-4 md:p-6 md:pb-8 lg:p-content ${
-          tab === 'upload' ? 'pb-[120px]' : 'pb-8'
+          tab === 'upload' ? 'pb-[7.5rem]' : 'pb-8'
         }`}
       >
-        <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-5 md:gap-card">
+        <div className="mx-auto flex w-full max-w-[80rem] flex-col gap-5 md:gap-card">
           <MailOpsHeader />
 
           {summary.data ? <MailOpsKpiCards kpis={summary.data.kpis} /> : null}
@@ -224,15 +237,20 @@ export function AdminVirtualMailOpsPage() {
                  */
                 <div className="flex w-full flex-col gap-4 lg:flex-row lg:items-start lg:gap-card">
                   <div className="flex min-w-0 flex-1 flex-col gap-4 lg:gap-card">
-                    <MailOpsFindCustomer
+                    <MailOpsFindRoom
                       selected={selected}
+                      selectedName={selectedName}
                       search={search}
                       onSearchChange={setSearch}
-                      results={customerSearch.data ?? []}
-                      isSearching={customerSearch.isFetching}
+                      names={roomNames.data ?? []}
+                      isSearching={roomNames.isFetching}
                       hasSearched={debouncedSearch.trim().length > 1}
-                      onSelect={onSelectCustomer}
-                      onClear={onClearCustomer}
+                      onSelectName={onSelectRoomName}
+                      rooms={rooms.data ?? []}
+                      isLoadingRooms={rooms.isFetching}
+                      onSelectRoom={onSelectRoom}
+                      onBackToNames={onClearRoom}
+                      onClear={onClearRoom}
                     />
 
                     <MailScanDetailsForm
@@ -270,7 +288,7 @@ export function AdminVirtualMailOpsPage() {
                     />
                   </div>
 
-                  <div className="w-full lg:w-[380px] lg:shrink-0">
+                  <div className="w-full lg:w-[23.75rem] lg:shrink-0">
                     <MailOpsRecentUploads
                       uploads={uploads}
                       isLoading={recent.isPending}
@@ -292,7 +310,7 @@ export function AdminVirtualMailOpsPage() {
               className="w-full"
             >
               <MailRequestsPanel
-                onView={(request) => setOpenRequestId(request.id)}
+                onOpen={(request) => setOpenRequestId(request.id)}
               />
             </div>
           ) : tab === 'log' ? (
@@ -337,7 +355,7 @@ export function AdminVirtualMailOpsPage() {
             disabled={!canSubmit}
             className="btn btn-primary w-full disabled:cursor-default disabled:bg-gray-300 disabled:hover:bg-gray-300"
           >
-            {uploadScan.isPending ? 'Adding…' : 'Add to customer inbox'}
+            {uploadScan.isPending ? 'Adding…' : 'Add to mail room inbox'}
           </button>
         </div>
       ) : null}

@@ -54,6 +54,24 @@ export async function getPayment(
   }
 }
 
+export async function cancelPayment(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const parsed = paymentIdParamSchema.safeParse(req.params);
+    if (!parsed.success) {
+      throw AppError.validation('Invalid payment id', parsed.error.issues);
+    }
+
+    const payment = await service.cancelPayment(req, parsed.data.paymentId);
+    res.json({ data: payment });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function getCheckoutQuote(
   req: Request,
   res: Response,

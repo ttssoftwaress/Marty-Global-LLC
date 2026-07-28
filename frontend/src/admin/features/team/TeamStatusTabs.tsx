@@ -4,7 +4,7 @@ import type { TeamStatusFilter, TeamStatusTab } from '../../types/team';
 /*
  * The status tab strip — All / Active / Deactivated.
  *
- * The shape is the same at every width; only the pill height changes (40px on
+ * The shape is the same at every width; only the pill height changes (2.5rem on
  * desktop, 36px from tablet down, matching the links).
  *
  * The strip scrolls horizontally rather than wrapping, so a narrow screen keeps
@@ -52,7 +52,7 @@ export function TeamStatusTabs({ tabs, value, onChange }: TeamStatusTabsProps) {
 
             {typeof tab.count === 'number' ? (
               <span
-                className={`text-[11px] font-semibold leading-4 ${
+                className={`text-[0.6875rem] font-semibold leading-4 ${
                   isActive ? 'text-white/75' : 'text-gray-500'
                 }`}
               >

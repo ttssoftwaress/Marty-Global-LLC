@@ -30,7 +30,7 @@ export function SelectedServicesRail({
   const hasSelection = selected.length > 0;
 
   return (
-    <aside className="hidden w-[380px] shrink-0 lg:block">
+    <aside className="hidden w-[23.75rem] shrink-0 lg:block">
       <div className="sticky top-6 flex w-full flex-col gap-5 rounded-card border border-gray-200 bg-white p-card shadow-sm-elevation">
         <h2 className="text-h6 font-semibold text-text">Selected services</h2>
 
@@ -48,7 +48,7 @@ export function SelectedServicesRail({
                   type="button"
                   onClick={() => onRemove(service.id)}
                   aria-label={`Remove ${service.shortName ?? service.name}`}
-                  className="flex size-[18px] shrink-0 items-center justify-center rounded-full bg-white text-primary transition-colors hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  className="flex size-[1.125rem] shrink-0 items-center justify-center rounded-full bg-white text-primary transition-colors hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
                   <X className="size-3" strokeWidth={2.5} aria-hidden="true" />
                 </button>
@@ -63,7 +63,7 @@ export function SelectedServicesRail({
 
         <div className="h-px w-full bg-gray-200" />
 
-        <p className="text-[13px] leading-[1.4] text-text-secondary">{QUOTE_NOTE}</p>
+        <p className="text-[0.8125rem] leading-[1.4] text-text-secondary">{QUOTE_NOTE}</p>
 
         <button
           type="button"

@@ -84,6 +84,14 @@ export type MailItem = {
   scanReady: boolean; // false → the scan is still processing ("Scanning" preview)
   note?: string; // e.g. "Forwarding address required" — the reason an item needs action
   responseDueAt?: string; // ISO-8601 UTC — the deadline for an action-requested item
+  /*
+   * The customer has already asked us to forward or shred this item and we
+   * haven't settled it yet. An item reads as `action_requested` in both
+   * directions — us waiting on them, and them waiting on us — so this is what
+   * separates the two: with an open request there is nothing left for the
+   * customer to respond to, and the row keeps its plain "View" action.
+   */
+  hasOpenRequest?: boolean;
   scanPages?: string[]; // presigned page-image URLs, in order — for the detail view
   pdfUrl?: string; // presigned PDF download, once available
   /*

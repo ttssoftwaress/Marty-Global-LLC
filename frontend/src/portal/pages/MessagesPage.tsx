@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
+import { ApiError } from '@/services/api';
 import { uploadFiles } from '@/services/upload';
 import { PortalLayout } from '../components/PortalLayout';
 import {
@@ -46,10 +47,10 @@ function MessagesHeader({ onNewMessage }: { onNewMessage: () => void }) {
           <span className="text-gray-400">/</span>
           <span className="text-gray-500">Messages</span>
         </p>
-        <h1 className="text-[28px] font-semibold leading-9 text-text lg:text-[32px] lg:leading-10">
+        <h1 className="text-[1.75rem] font-semibold leading-9 text-text lg:text-[2rem] lg:leading-10">
           Messages
         </h1>
-        <p className="text-[13px] leading-5 text-gray-500 lg:text-[14px]">
+        <p className="text-[0.8125rem] leading-5 text-gray-500 lg:text-[0.875rem]">
           All your conversations with our team, in one place.
         </p>
       </div>
@@ -57,9 +58,9 @@ function MessagesHeader({ onNewMessage }: { onNewMessage: () => void }) {
       <button
         type="button"
         onClick={onNewMessage}
-        className="inline-flex h-10 shrink-0 items-center gap-2 rounded-input bg-primary px-4 text-[14px] font-semibold text-white transition-colors hover:bg-primary-hover lg:h-12 lg:px-5 lg:text-[16px]"
+        className="inline-flex h-10 shrink-0 items-center gap-2 rounded-input bg-primary px-4 text-[0.875rem] font-semibold text-white transition-colors hover:bg-primary-hover lg:h-12 lg:px-5 lg:text-[1rem]"
       >
-        <Plus className="size-4 shrink-0 lg:size-[18px]" strokeWidth={2} aria-hidden="true" />
+        <Plus className="size-4 shrink-0 lg:size-[1.125rem]" strokeWidth={2} aria-hidden="true" />
         New message
       </button>
     </header>
@@ -75,6 +76,7 @@ export function MessagesPage() {
   const debouncedSearch = useDebouncedValue(search, 300);
   const [composing, setComposing] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
 
   const conversationsQuery = useConversations(debouncedSearch);
   const threadQuery = useConversation(conversationId ?? '');
@@ -91,9 +93,15 @@ export function MessagesPage() {
    * is a set of object keys rather than bytes (services/upload.ts). The composer
    * is held while that happens — a second send racing the first would attach the
    * files to whichever message won.
+   *
+   * A failed upload REJECTS rather than returning quietly: the composer clears
+   * its draft only once this resolves, so rethrowing is what keeps the message
+   * and its attachments on screen to retry.
    */
   const onSend = async ({ text, files }: { text: string; files: File[] }) => {
     if (!conversationId) return;
+
+    setSendError(null);
 
     if (files.length === 0) {
       chat.send({ body: text });
@@ -104,6 +112,13 @@ export function MessagesPage() {
     try {
       const uploaded = await uploadFiles(files, 'support-attachment');
       chat.send({ body: text, attachments: uploaded });
+    } catch (error) {
+      setSendError(
+        error instanceof ApiError
+          ? error.message
+          : 'Your attachment could not be uploaded. Please try again.',
+      );
+      throw error;
     } finally {
       setUploading(false);
     }
@@ -112,7 +127,7 @@ export function MessagesPage() {
   return (
     <PortalLayout user={user} onLogout={onLogout}>
       <div className="h-full w-full p-4 md:p-6 lg:p-content">
-        <div className="relative mx-auto flex h-full w-full max-w-[1200px] flex-col gap-5">
+        <div className="relative mx-auto flex h-full w-full max-w-[75rem] flex-col gap-5">
           <MessagesHeader onNewMessage={() => setComposing(true)} />
 
           <div className="flex min-h-0 flex-1 gap-4 md:gap-5 lg:gap-6">
@@ -141,10 +156,11 @@ export function MessagesPage() {
                 // rather than sitting on a skeleton forever.
                 isLoading={threadQuery.isLoading}
                 onBack={backToList}
-                onSend={(payload) => void onSend(payload)}
+                onSend={onSend}
                 onTyping={chat.notifyTyping}
                 agentTyping={chat.agentTyping}
                 busy={uploading}
+                sendError={sendError}
               />
             ) : (
               <EmptyThread className="hidden md:flex" />

@@ -48,7 +48,7 @@ function StepNode({
   }
   if (state === 'current') {
     return (
-      <span className="size-8 shrink-0 rounded-full border-[6px] border-primary bg-white" />
+      <span className="size-8 shrink-0 rounded-full border-[0.375rem] border-primary bg-white" />
     );
   }
   return (

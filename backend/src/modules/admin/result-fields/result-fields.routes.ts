@@ -20,9 +20,11 @@ import * as controller from './result-fields.controller.js';
  * under it renders — which is the account-level case AGENTS.md reserves for
  * admin.
  *
- * There is no DELETE, exactly as in the request registry: a delivered record
- * holding a value for a field must stay readable (AGENTS.md — ask before any
- * hard delete). Retiring one is a PATCH setting `archived`.
+ * DELETE behaves exactly as it does in the request registry: it only succeeds for
+ * a field no service returns and no delivered record holds a value for, so a
+ * fact registered by mistake is removable while a delivered record holding a
+ * value stays readable (AGENTS.md — ask before any hard delete). Anything else
+ * is retired with a PATCH setting `archived`.
  */
 
 const router = Router();
@@ -37,6 +39,12 @@ router.patch(
   requireAdmin,
   sensitiveRateLimit,
   controller.updateResultField,
+);
+router.delete(
+  '/:fieldId',
+  requireAdmin,
+  sensitiveRateLimit,
+  controller.deleteResultField,
 );
 
 export const adminResultFieldsRouter = router;

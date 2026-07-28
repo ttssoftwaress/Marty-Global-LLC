@@ -32,10 +32,15 @@ import type {
  *      field to a date would leave stored values that no longer parse, and the
  *      customer's page renders them.
  *
- * Deleting is not offered. A delivered record holding a value for a field must
- * stay readable (AGENTS.md — ask before any hard delete); archiving retires the
- * field from the picker while leaving every record intact. The `Restrict` on
- * `ServiceResultValue.definition` enforces the same thing at the database level.
+ *   3. A field anything has ever referenced cannot be deleted. Deleting one is
+ *      offered — a fact registered by mistake should be removable rather than
+ *      sitting archived forever — but only while no service returns it and no
+ *      delivered record holds a value for it. A delivered record must stay
+ *      readable (AGENTS.md — ask before any hard delete), so anything else is
+ *      archived, which retires the field from the picker and leaves every record
+ *      intact. The `Restrict` on `ServiceResultValue.definition` is the same rule
+ *      at the database level — the guard below is what turns it into an
+ *      explanation instead of a foreign-key error.
  */
 
 export type ResultFieldDefinitionView = {
@@ -54,6 +59,13 @@ export type ResultFieldDefinitionView = {
   // How many catalog services currently return this fact — the blast radius of
   // an edit, and what the UI reads to explain why a live field's type is locked.
   usageCount: number;
+  /*
+   * Whether removing this field outright is available at all. False as soon as a
+   * service returns it or a delivered record holds a value for it — the exact
+   * check `deleteResultField` re-runs, so a hidden button and a refused call
+   * cannot disagree.
+   */
+  canDelete: boolean;
 };
 
 export type ResultFieldDefinitionPage = {
@@ -65,6 +77,7 @@ export type ResultFieldDefinitionPage = {
 function toView(
   definition: ResultFieldDefinition,
   usageCount: number,
+  canDelete: boolean,
 ): ResultFieldDefinitionView {
   const parsed = resultFieldConfigSchema.safeParse(definition.config ?? {});
 
@@ -82,6 +95,7 @@ function toView(
     sortOrder: definition.sortOrder,
     updatedAt: iso(definition.updatedAt),
     usageCount,
+    canDelete,
   };
 }
 
@@ -140,6 +154,19 @@ async function usageByKey(): Promise<Map<string, number>> {
   return counts;
 }
 
+/*
+ * The definition ids delivered records hold a value for.
+ *
+ * A grouped count rather than the in-memory pass `usageByKey` does, because this
+ * one has a real relation and an index behind it (`ServiceResultValue.fieldId`)
+ * — and unlike the catalog, the value table grows with every filing, so it is
+ * the one thing here that must never be read into memory.
+ */
+async function deliveredFieldIds(): Promise<Set<string>> {
+  const grouped = await prisma.serviceResultValue.groupBy({ by: ['fieldId'] });
+  return new Set(grouped.map((row) => row.fieldId));
+}
+
 export async function listResultFields(
   query: ListResultFieldsQuery,
 ): Promise<ResultFieldDefinitionPage> {
@@ -156,7 +183,7 @@ export async function listResultFields(
       : {}),
   };
 
-  const [totalResults, rows, usage] = await Promise.all([
+  const [totalResults, rows, usage, delivered] = await Promise.all([
     prisma.resultFieldDefinition.count({ where }),
     prisma.resultFieldDefinition.findMany({
       where,
@@ -164,12 +191,16 @@ export async function listResultFields(
       ...cursorArgs(query.cursor, query.limit),
     }),
     usageByKey(),
+    deliveredFieldIds(),
   ]);
 
   const page = takePage(rows, query.limit);
 
   return {
-    fields: page.rows.map((row) => toView(row, usage.get(row.key) ?? 0)),
+    fields: page.rows.map((row) => {
+      const usageCount = usage.get(row.key) ?? 0;
+      return toView(row, usageCount, usageCount === 0 && !delivered.has(row.id));
+    }),
     nextCursor: page.nextCursor,
     totalResults,
   };
@@ -219,7 +250,8 @@ export async function createResultField(
     metadata: { key: definition.key, type: definition.type },
   });
 
-  return toView(definition, 0);
+  // Nothing can reference a fact that did not exist a moment ago.
+  return toView(definition, 0, true);
 }
 
 export async function updateResultField(
@@ -233,7 +265,10 @@ export async function updateResultField(
 
   if (!existing) throw AppError.notFound('Result field not found');
 
-  const usage = await usageByKey();
+  const [usage, valueCount] = await Promise.all([
+    usageByKey(),
+    prisma.serviceResultValue.count({ where: { fieldId } }),
+  ]);
   const usageCount = usage.get(existing.key) ?? 0;
 
   /*
@@ -287,7 +322,62 @@ export async function updateResultField(
     metadata: { key: definition.key, fields: Object.keys(input), usageCount },
   });
 
-  return toView(definition, usageCount);
+  return toView(definition, usageCount, usageCount === 0 && valueCount === 0);
+}
+
+/*
+ * Remove a registered fact outright — rule 3 above.
+ *
+ * A hard delete, unlike the catalog's own, and for the same reason the request
+ * registry's is: a `ResultFieldDefinition` is configuration, not a
+ * customer-facing record, so once nothing points at it there is nothing to
+ * retain. The guard is what makes that safe, and it runs here rather than being
+ * trusted from the UI.
+ *
+ * The `Restrict` on `ServiceResultValue.definition` would refuse a delete that
+ * slipped past this check, but as a foreign-key error with nothing an admin can
+ * act on — so the value count is read first and turned into a sentence.
+ */
+export async function deleteResultField(
+  actor: AuthContext,
+  fieldId: string,
+): Promise<{ id: string }> {
+  const existing = await prisma.resultFieldDefinition.findUnique({
+    where: { id: fieldId },
+  });
+
+  if (!existing) throw AppError.notFound('Result field not found');
+
+  const [usage, valueCount] = await Promise.all([
+    usageByKey(),
+    prisma.serviceResultValue.count({ where: { fieldId } }),
+  ]);
+
+  const usageCount = usage.get(existing.key) ?? 0;
+
+  if (usageCount > 0 || valueCount > 0) {
+    const reason =
+      valueCount > 0
+        ? `${valueCount} delivered record${valueCount === 1 ? '' : 's'} hold${valueCount === 1 ? 's' : ''} a value for it`
+        : `${usageCount} service${usageCount === 1 ? '' : 's'} still return${usageCount === 1 ? 's' : ''} it`;
+
+    throw AppError.businessRule(
+      `"${existing.label}" cannot be deleted because ${reason}. Archive it instead — it leaves the picker and every record already using it keeps rendering.`,
+      { fieldKey: existing.key, usageCount, valueCount },
+    );
+  }
+
+  await prisma.resultFieldDefinition.delete({ where: { id: fieldId } });
+
+  void record({
+    actor,
+    action: AuditAction.RESULT_FIELD_DELETED,
+    entityType: 'ResultFieldDefinition',
+    entityId: fieldId,
+    metadata: { key: existing.key, type: existing.type },
+  });
+
+  return { id: fieldId };
 }
 
 /*

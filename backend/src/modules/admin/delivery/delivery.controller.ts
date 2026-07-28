@@ -6,6 +6,7 @@ import { pathParam } from '../../../lib/params.js';
 import * as service from './delivery.service.js';
 import {
   listAdminRequestsQuerySchema,
+  resultFileQuerySchema,
   saveResultSchema,
   updateOrderItemStatusSchema,
   updateRequestSchema,
@@ -62,6 +63,29 @@ export async function updateOrderItemStatus(
     const data = await service.updateOrderItemStatus(
       getAuth(req),
       pathParam(req, 'orderItemId'),
+      parsed.data,
+    );
+    res.json({ data });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getResultFileLink(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const parsed = resultFileQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      throw AppError.validation('Invalid document request', parsed.error.issues);
+    }
+
+    const data = await service.getResultFileLink(
+      getAuth(req),
+      pathParam(req, 'resultId'),
+      pathParam(req, 'fieldKey'),
       parsed.data,
     );
     res.json({ data });

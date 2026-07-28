@@ -89,15 +89,18 @@ export async function resolveAccess(
   if (!(await hasPermission(auth, 'support'))) return null;
 
   /*
-   * And the same scope the inbox applies: a scoped agent works their own threads
-   * plus the unclaimed pool, never a colleague's. Re-checked here rather than
-   * assumed from the list they clicked through, because that list was rendered
-   * at some earlier point in time.
+   * And the same scope the inbox applies: a scoped agent works the threads
+   * assigned to them and nothing else — not a colleague's, and not one nobody
+   * owns yet. Re-checked here rather than assumed from the list they clicked
+   * through, because that list was rendered at some earlier point in time and a
+   * socket outlives it.
+   *
+   * This is also what makes reassignment mean something on the live transport: an
+   * agent who was moved off a thread fails the check on their next join, and the
+   * handler evicts the room membership they already had.
    */
   if (!(await canSeeAll(auth, 'support'))) {
-    const mineOrUnclaimed =
-      conversation.assigneeId === null || conversation.assigneeId === auth.userId;
-    if (!mineOrUnclaimed) return null;
+    if (conversation.assigneeId !== auth.userId) return null;
   }
 
   return { ...conversation, conversationId, as: 'staff' };

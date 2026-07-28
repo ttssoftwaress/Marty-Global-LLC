@@ -47,12 +47,12 @@ export function CustomerGrowthCard({ growth, isLoading }: CustomerGrowthCardProp
         { label: 'Cumulative total', color: 'var(--color-primary)' },
       ]}
       isLoading={isLoading}
-      skeletonClassName="h-[240px] md:h-[280px] lg:h-[300px]"
+      skeletonClassName="h-[15rem] md:h-[17.5rem] lg:h-[18.75rem]"
     >
       {growth && growth.points.length > 0 ? (
         <GrowthPlot growth={growth} />
       ) : (
-        <div className="flex h-[200px] w-full items-center justify-center rounded-input bg-gray-50 md:h-[240px]">
+        <div className="flex h-[12.5rem] w-full items-center justify-center rounded-input bg-gray-50 md:h-[15rem]">
           <p className="text-small text-gray-500">
             No customer growth recorded for this period yet
           </p>
@@ -109,13 +109,13 @@ function GrowthPlot({ growth }: { growth: GrowthSeries }) {
     <div className="w-full">
       <div className="flex w-full gap-3 md:gap-4">
         <div
-          className="flex h-[200px] shrink-0 flex-col justify-between text-right md:h-[240px] lg:h-[260px]"
+          className="flex h-[12.5rem] shrink-0 flex-col justify-between text-right md:h-[15rem] lg:h-[16.25rem]"
           aria-hidden="true"
         >
           {ticks.map((tick, index) => (
             <span
               key={index}
-              className="text-[10px] font-medium leading-none text-gray-400 md:text-small md:leading-none"
+              className="text-[0.625rem] font-medium leading-none text-gray-400 md:text-small md:leading-none"
             >
               {tick}
             </span>
@@ -134,7 +134,7 @@ function GrowthPlot({ growth }: { growth: GrowthSeries }) {
           </div>
 
           {/* Bars — new customers per bucket. */}
-          <div className="relative flex h-[200px] w-full items-end gap-1 md:h-[240px] md:gap-2 lg:h-[260px] lg:gap-4">
+          <div className="relative flex h-[12.5rem] w-full items-end gap-1 md:h-[15rem] md:gap-2 lg:h-[16.25rem] lg:gap-4">
             {growth.points.map((point, index) => (
               <div
                 key={point.label}
@@ -143,7 +143,7 @@ function GrowthPlot({ growth }: { growth: GrowthSeries }) {
                 onMouseLeave={() => setActiveIndex(null)}
               >
                 <div
-                  className="w-full rounded-t-[4px] bg-primary-light transition-opacity"
+                  className="w-full rounded-t-[0.25rem] bg-primary-light transition-opacity"
                   style={{
                     height: `${(point.newCustomers / barCeiling) * 100}%`,
                     opacity:
@@ -204,7 +204,7 @@ function GrowthPlot({ growth }: { growth: GrowthSeries }) {
               <p className="whitespace-nowrap text-caption font-semibold leading-4 text-white">
                 {formatCount(active.newCustomers)} new
               </p>
-              <p className="whitespace-nowrap text-[10px] leading-3 text-gray-300">
+              <p className="whitespace-nowrap text-[0.625rem] leading-3 text-gray-300">
                 {formatCount(active.cumulative)} total · {active.label}
               </p>
             </div>
@@ -215,7 +215,7 @@ function GrowthPlot({ growth }: { growth: GrowthSeries }) {
       {/* The x-axis, inset to line its captions up with the bars. */}
       <div className="mt-3 flex w-full gap-3 md:gap-4">
         <div
-          className="invisible shrink-0 text-right text-[10px] font-medium md:text-small"
+          className="invisible shrink-0 text-right text-[0.625rem] font-medium md:text-small"
           aria-hidden="true"
         >
           {ticks[0]}
@@ -224,7 +224,7 @@ function GrowthPlot({ growth }: { growth: GrowthSeries }) {
           {growth.points.map((point, index) => (
             <span
               key={point.label}
-              className={`min-w-0 flex-1 truncate text-center text-[10px] font-medium leading-none text-[var(--color-text-secondary)] md:text-small md:leading-none ${
+              className={`min-w-0 flex-1 truncate text-center text-[0.625rem] font-medium leading-none text-[var(--color-text-secondary)] md:text-small md:leading-none ${
                 shouldPrintAxisLabel(index, growth.points.length)
                   ? ''
                   : 'invisible'

@@ -47,7 +47,7 @@ export function TopBarMobile({
           <img
             src={logoColor}
             alt="Marty Global LLC"
-            className="h-[37px] w-[105px] object-contain"
+            className="h-[2.3125rem] w-[6.5625rem] object-contain"
           />
         </Link>
       </div>

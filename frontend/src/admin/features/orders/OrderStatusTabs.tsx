@@ -3,7 +3,7 @@ import type { OrderStatusFilter, OrderStatusTab } from '../../types/orders';
 
 /*
  * The status tab strip — one pill per status, each carrying its own count. The
- * shape is the same at every width; only the scale changes (14px labels with a
+ * shape is the same at every width; only the scale changes (0.875rem labels with a
  * badge pill on desktop and tablet, 12px with a bare count on mobile, matching
  * the links).
  *
@@ -52,7 +52,7 @@ export function OrderStatusTabs({ tabs, value, onChange }: OrderStatusTabsProps)
              * badge's padding and background only switch on at `md`.
              */}
             <span
-              className={`rounded-pill text-[11px] font-semibold leading-4 md:px-1.5 md:py-0.5 md:text-small ${
+              className={`rounded-pill text-[0.6875rem] font-semibold leading-4 md:px-1.5 md:py-0.5 md:text-small ${
                 isActive
                   ? 'text-white/80 md:bg-white/15 md:text-white'
                   : 'text-gray-500 md:bg-gray-200 md:text-gray-600'

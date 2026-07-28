@@ -8,6 +8,7 @@ import {
   useMarkAllAdminNotificationsRead,
 } from '@/admin/features/notifications';
 import { useAdminMe } from '@/admin/queries/admin-me';
+import { useCompactScale } from '@/hooks/useCompactScale';
 import type { AdminNotification } from '@/admin/types/notifications';
 import { AdminSidebar, type AdminSidebarUser } from './sidebar';
 import { AdminTopBar } from './topbar';
@@ -56,6 +57,8 @@ export function AdminLayout({
   onLogout,
   children,
 }: AdminLayoutProps) {
+  useCompactScale();
+
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
 

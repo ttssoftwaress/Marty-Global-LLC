@@ -27,15 +27,13 @@ import { MailRequestRowAction } from './MailRequestRowAction';
 type MailRequestCardListProps = {
   requests: MailRequestRow[];
   processingId: string | null;
-  onProcess: (request: MailRequestRow) => void;
-  onView: (request: MailRequestRow) => void;
+  onOpen: (request: MailRequestRow) => void;
 };
 
 export function MailRequestCardList({
   requests,
   processingId,
-  onProcess,
-  onView,
+  onOpen,
 }: MailRequestCardListProps) {
   return (
     <ul className="flex w-full flex-col gap-3 md:hidden">
@@ -49,10 +47,16 @@ export function MailRequestCardList({
               <MailOpsCustomerAvatar
                 id={request.customer.id}
                 initials={request.customer.initials}
-                className="size-7 text-[11px]"
+                className="size-7 text-[0.6875rem]"
               />
-              <span className="truncate text-small font-medium text-text-secondary">
-                {request.customer.name}
+              {/* Which of the customer's rooms the item arrived at. */}
+              <span className="flex min-w-0 flex-col">
+                <span className="truncate text-small font-medium text-text-secondary">
+                  {request.customer.name}
+                </span>
+                <span className="truncate text-[0.6875rem] text-gray-400">
+                  {request.room.name}
+                </span>
               </span>
             </div>
 
@@ -76,8 +80,7 @@ export function MailRequestCardList({
           <MailRequestRowAction
             request={request}
             isBusy={processingId === request.id}
-            onProcess={onProcess}
-            onView={onView}
+            onOpen={onOpen}
             fullWidth
           />
         </li>

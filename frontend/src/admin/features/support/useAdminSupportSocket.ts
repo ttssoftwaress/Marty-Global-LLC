@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSocket, useSocketEvent } from '@/hooks/useSocket';
 import {
   SocketEvent,
+  type SocketConversationChanged,
   type SocketMessage,
   type SocketPresence,
   type SocketReadReceipt,
@@ -11,6 +12,7 @@ import {
 } from '@/services/socket';
 import type { ComposerMode, SupportMessage } from '../../types/support';
 import {
+  adminSupportThreadKey,
   appendAdminMessage,
   applyAdminReadReceipt,
   failAdminMessage,
@@ -69,6 +71,10 @@ export function useAdminSupportSocket(conversationId: string, currentUserId?: st
       sentAt: payload.sentAt,
       clientId: payload.clientId,
       seen: payload.author === 'agent' ? false : undefined,
+      // Presigned by the server on the broadcast, so a file the customer sends
+      // mid-conversation is openable the moment it lands rather than after a
+      // reload.
+      attachments: payload.attachments,
     }),
     [currentUserId],
   );
@@ -182,6 +188,53 @@ export function useAdminSupportSocket(conversationId: string, currentUserId?: st
   );
 
   return { send, notifyTyping, customerTyping, customerOnline, connected };
+}
+
+/*
+ * The inbox's own realtime: conversations arriving, moving, and changing state.
+ *
+ * Separate from the thread hook above, and mounted whether or not a conversation
+ * is open, because it answers a different question. The thread hook is about the
+ * one conversation on screen; this is about the LIST — a chat the router has just
+ * assigned to this agent is not a thread they have joined, so nothing in the
+ * per-conversation rooms would ever tell them it exists. That is why new chats
+ * used to need a page reload while messages did not.
+ *
+ * The event carries ids only (services/socket.ts). Everything the list renders is
+ * re-read through the API, which applies the viewer's own scope — so what arrives
+ * live is exactly what a refresh would have shown, and the socket is never a way
+ * to see a conversation the endpoint would withhold.
+ *
+ * `activeConversationId` gets one extra step: a reassignment turns the previous
+ * agent's socket out of the thread's rooms, so anyone still entitled to be there
+ * re-joins here. The server re-checks access on that join — which is what makes
+ * evicting first and asking later safe.
+ */
+export function useAdminSupportInboxSocket(activeConversationId?: string) {
+  const queryClient = useQueryClient();
+  const { socket, connected } = useSocket();
+
+  useSocketEvent<SocketConversationChanged>(
+    socket,
+    SocketEvent.CONVERSATION,
+    (payload) => {
+      void queryClient.invalidateQueries({
+        queryKey: ['admin', 'support', 'conversations'],
+      });
+
+      if (!activeConversationId || payload.conversationId !== activeConversationId) {
+        return;
+      }
+
+      void queryClient.invalidateQueries({
+        queryKey: adminSupportThreadKey(activeConversationId),
+      });
+
+      if (connected) {
+        socket?.emit(SocketEvent.JOIN, { conversationId: activeConversationId });
+      }
+    },
+  );
 }
 
 /*

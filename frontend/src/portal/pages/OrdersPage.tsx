@@ -48,7 +48,7 @@ function OrdersSkeleton() {
     <div className="flex w-full flex-col gap-5" aria-hidden="true">
       <div className="h-10 w-64 animate-pulse rounded-input bg-gray-200" />
       <div className="h-12 w-full animate-pulse rounded-input bg-gray-200" />
-      <div className="h-[420px] w-full animate-pulse rounded-card bg-gray-200" />
+      <div className="h-[26.25rem] w-full animate-pulse rounded-card bg-gray-200" />
     </div>
   );
 }
@@ -126,14 +126,14 @@ export function OrdersPage() {
   return (
     <PortalLayout user={user} onLogout={onLogout}>
       <div className="w-full p-4 md:p-6 lg:p-content">
-        <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-5 md:gap-6 lg:gap-7">
+        <div className="mx-auto flex w-full max-w-[75rem] flex-col gap-5 md:gap-6 lg:gap-7">
           <p className="text-caption font-semibold uppercase tracking-[0.6px] text-gray-500">
             Dashboard / My orders
           </p>
 
           <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="flex flex-col gap-1.5">
-              <h1 className="text-h4 font-semibold text-text md:text-[28px] md:leading-[36px] lg:text-h3">
+              <h1 className="text-h4 font-semibold text-text md:text-[1.75rem] md:leading-[2.25rem] lg:text-h3">
                 My orders
               </h1>
               <p className="hidden text-body text-text-secondary md:block lg:text-body-lg">
@@ -143,9 +143,9 @@ export function OrdersPage() {
 
             <Link
               to="/app/order"
-              className="btn btn-accent h-11 w-full rounded-input px-6 text-[15px] md:h-10 md:w-auto md:text-body lg:h-input lg:text-button"
+              className="btn btn-accent h-11 w-full rounded-input px-6 text-[0.9375rem] md:h-10 md:w-auto md:text-body lg:h-input lg:text-button"
             >
-              <PlusCircle className="mr-2 size-[18px] shrink-0" strokeWidth={1.75} aria-hidden="true" />
+              <PlusCircle className="mr-2 size-[1.125rem] shrink-0" strokeWidth={1.75} aria-hidden="true" />
               Order new service
             </Link>
           </header>
@@ -168,7 +168,7 @@ export function OrdersPage() {
                 <OrderSearch
                   value={search}
                   onChange={setSearch}
-                  className="w-full lg:w-[320px] lg:shrink-0"
+                  className="w-full lg:w-[20rem] lg:shrink-0"
                 />
               </div>
 

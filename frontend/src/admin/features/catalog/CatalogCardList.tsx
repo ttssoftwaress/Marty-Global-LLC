@@ -1,3 +1,4 @@
+import { RowActions } from '../../components/RowActions';
 import { formatCatalogDate, formatTierCount } from '../../lib/catalog';
 import type { CatalogServiceRow } from '../../types/catalog';
 import { RegionChipList } from './RegionChip';
@@ -9,14 +10,25 @@ import { RegionChipList } from './RegionChip';
  * wrapping region chips, one meta line pairing the tier count with the updated
  * date ("4 pricing tiers • Updated Jul 8, 2026"), then a full-width Manage
  * button.
+ *
+ * Delete sits in the card's top-right rather than beside Manage: the mobile link
+ * gives Manage the full width, and pairing a primary action with a destructive
+ * one on the same line is exactly where a mis-tap happens.
  */
 
 type CatalogCardListProps = {
   rows: CatalogServiceRow[];
   onManage: (row: CatalogServiceRow) => void;
+  onDelete: (row: CatalogServiceRow) => void;
+  deletingId: string | null;
 };
 
-export function CatalogCardList({ rows, onManage }: CatalogCardListProps) {
+export function CatalogCardList({
+  rows,
+  onManage,
+  onDelete,
+  deletingId,
+}: CatalogCardListProps) {
   return (
     <div className="flex w-full flex-col gap-3 md:hidden">
       {rows.map((row) => (
@@ -25,13 +37,21 @@ export function CatalogCardList({ rows, onManage }: CatalogCardListProps) {
           className="flex w-full flex-col gap-2 rounded-card border border-gray-200 bg-white p-4 shadow-sm-elevation"
         >
           <div className="flex items-start gap-2">
-            <h3 className="min-w-0 flex-1 text-[15px] font-semibold leading-tight text-text">
+            <h3 className="min-w-0 flex-1 text-[0.9375rem] font-semibold leading-tight text-text">
               {row.name}
             </h3>
             {!row.active ? (
               <span className="shrink-0 rounded-pill bg-gray-100 px-2 py-0.5 text-caption font-medium text-gray-500">
                 Inactive
               </span>
+            ) : null}
+
+            {row.canDelete ? (
+              <RowActions
+                name={row.name}
+                isDeleting={deletingId === row.id}
+                onDelete={() => onDelete(row)}
+              />
             ) : null}
           </div>
 

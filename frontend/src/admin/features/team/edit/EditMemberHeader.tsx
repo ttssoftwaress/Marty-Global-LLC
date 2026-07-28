@@ -74,7 +74,7 @@ export function EditMemberHeader() {
       </div>
 
       <div className="flex w-full flex-col gap-1.5">
-        <h1 className="text-[24px] font-semibold leading-[32px] text-text md:text-[32px] md:leading-[40px]">
+        <h1 className="text-[1.5rem] font-semibold leading-[2rem] text-text md:text-[2rem] md:leading-[2.5rem]">
           Edit team member
         </h1>
         <p className="text-body leading-[1.4] text-text-secondary">

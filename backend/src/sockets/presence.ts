@@ -99,11 +99,26 @@ export function setStaffAvailability(
  * filing with the inbox open in another tab is connected and not available.
  */
 export function availableAgentCount(): number {
-  let count = 0;
+  return availableAgentIds().size;
+}
+
+/*
+ * Which agents those are, by id.
+ *
+ * The chat router prefers an agent who is here right now over one who is merely
+ * on the team (modules/support/support.assignment.ts). A set rather than a list
+ * because the router asks "is this candidate available" once per candidate.
+ */
+export function availableAgentIds(): Set<string> {
+  const available = new Set<string>();
+
   for (const [userId, availability] of staffAvailability) {
-    if (users.has(userId) && availability === StaffAvailability.ONLINE) count += 1;
+    if (users.has(userId) && availability === StaffAvailability.ONLINE) {
+      available.add(userId);
+    }
   }
-  return count;
+
+  return available;
 }
 
 // Test seam: the maps are module state, so a suite that connects sockets needs a

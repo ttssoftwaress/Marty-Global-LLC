@@ -23,39 +23,85 @@ const ADMIN_PLACEHOLDER_ROUTES: { path: string; title: string }[] = [];
 
 export const router = createBrowserRouter([
   {
-    path: '/',
+    /*
+     * The public marketing pages, grouped under a pathless parent so the
+     * live-chat bubble mounts once for the whole site. Per-page it would drop
+     * its socket and close its panel on every navigation — mid-conversation.
+     * Navbar and Footer stay per-page, as they were.
+     */
     lazy: async () => {
-      const { HomePage } = await import('@/marketing/pages/HomePage');
-      return { Component: HomePage };
+      const { PublicChrome } = await import('@/marketing/components/shared/PublicChrome');
+      return { Component: PublicChrome };
     },
-  },
-  {
-    path: '/services',
-    lazy: async () => {
-      const { ServicesPage } = await import('@/marketing/pages/ServicesPage');
-      return { Component: ServicesPage };
-    },
-  },
-  {
-    path: '/how-it-works',
-    lazy: async () => {
-      const { HowItWorksPage } = await import('@/marketing/pages/HowItWorksPage');
-      return { Component: HowItWorksPage };
-    },
-  },
-  {
-    path: '/about',
-    lazy: async () => {
-      const { AboutPage } = await import('@/marketing/pages/AboutPage');
-      return { Component: AboutPage };
-    },
-  },
-  {
-    path: '/contact',
-    lazy: async () => {
-      const { ContactPage } = await import('@/marketing/pages/ContactPage');
-      return { Component: ContactPage };
-    },
+    children: [
+      {
+        path: '/',
+        lazy: async () => {
+          const { HomePage } = await import('@/marketing/pages/HomePage');
+          return { Component: HomePage };
+        },
+      },
+      {
+        path: '/services',
+        lazy: async () => {
+          const { ServicesPage } = await import('@/marketing/pages/ServicesPage');
+          return { Component: ServicesPage };
+        },
+      },
+      {
+        path: '/how-it-works',
+        lazy: async () => {
+          const { HowItWorksPage } = await import('@/marketing/pages/HowItWorksPage');
+          return { Component: HowItWorksPage };
+        },
+      },
+      {
+        path: '/about',
+        lazy: async () => {
+          const { AboutPage } = await import('@/marketing/pages/AboutPage');
+          return { Component: AboutPage };
+        },
+      },
+      {
+        path: '/contact',
+        lazy: async () => {
+          const { ContactPage } = await import('@/marketing/pages/ContactPage');
+          return { Component: ContactPage };
+        },
+      },
+      {
+        // The three legal documents the footer links from every public page.
+        // They are public and unauthenticated by design — a visitor has to be
+        // able to read the terms before deciding to sign up.
+        path: '/legal/privacy',
+        lazy: async () => {
+          const { PrivacyPolicyPage } = await import(
+            '@/marketing/pages/PrivacyPolicyPage'
+          );
+          return { Component: PrivacyPolicyPage };
+        },
+      },
+      {
+        path: '/legal/terms',
+        lazy: async () => {
+          const { TermsOfServicePage } = await import(
+            '@/marketing/pages/TermsOfServicePage'
+          );
+          return { Component: TermsOfServicePage };
+        },
+      },
+      {
+        // Labelled "Cookie Settings" in the footer: the page leads with the
+        // working consent controls, then documents each category.
+        path: '/legal/cookies',
+        lazy: async () => {
+          const { CookiePolicyPage } = await import(
+            '@/marketing/pages/CookiePolicyPage'
+          );
+          return { Component: CookiePolicyPage };
+        },
+      },
+    ],
   },
   {
     // Marketing "Get Started" CTAs land here; it redirects to /login or /signup
@@ -775,13 +821,14 @@ export const router = createBrowserRouter([
         },
       },
       {
-        // Virtual mail ops — filing scanned mail into customer inboxes: the
-        // three KPI figures, the section tabs, then the customer picker, the
-        // scan form, and the recently-uploaded feed (a right rail on desktop, a
-        // card beneath the form on the narrower links). Data loads from
-        // `GET /v1/admin/mailroom/summary`, `/mailroom/customers`, and
-        // `/mailroom/scans`, with `POST /v1/admin/mailroom/scans` filing a
-        // scan, once those endpoints land.
+        // Virtual mail ops — filing scanned mail into mail room inboxes: the
+        // three KPI figures, the section tabs, then the room picker (name, then
+        // address — a name is not unique), the scan form, and the
+        // recently-uploaded feed (a right rail on desktop, a card beneath the
+        // form on the narrower links). Data loads from
+        // `GET /v1/admin/mailroom/summary`, `/mailroom/rooms/names`,
+        // `/mailroom/rooms`, and `/mailroom/scans`, with
+        // `POST /v1/admin/mailroom/scans` filing a scan.
         path: 'mailroom',
         lazy: async () => {
           const { AdminVirtualMailOpsPage } = await import(

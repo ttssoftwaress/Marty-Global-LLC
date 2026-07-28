@@ -35,6 +35,19 @@ export const updateResultStatusSchema = z.object({
 });
 export type UpdateResultStatusInput = z.infer<typeof updateResultStatusSchema>;
 
+/*
+ * Opening a document already on the record.
+ *
+ * `disposition` is the difference between the form's two controls: `inline`
+ * previews the file in a new tab, `attachment` saves it. It is signed into the
+ * presigned URL, so the choice has to be made when the link is minted rather than
+ * by the browser afterwards.
+ */
+export const resultFileQuerySchema = z.object({
+  disposition: z.enum(['inline', 'attachment']).default('inline'),
+});
+export type ResultFileQuery = z.infer<typeof resultFileQuerySchema>;
+
 // --- The requests queue ---------------------------------------------------
 
 export const requestStatusSchema = z.enum([

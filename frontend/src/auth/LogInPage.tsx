@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import logoColor from '@/assets/Marty-Logo-Color.PNG';
 import { signIn } from '@/auth/client';
 import { returnPathFor } from '@/auth/landing';
+import { useCompactScale } from '@/hooks/useCompactScale';
 import { deviceAccountName } from '@/lib/device-account';
 import { LeftPanel } from './components/auth-brand';
 import {
@@ -22,6 +23,7 @@ function welcomeBackText(name: string | null): string {
 }
 
 export function LogInPage() {
+  useCompactScale();
   const name = deviceAccountName();
 
   return (
@@ -46,9 +48,9 @@ function BrandHeader({ name }: { name: string | null }) {
       <img
         src={logoColor}
         alt="Marty Global LLC"
-        className="h-[100px] w-[200px] object-contain md:h-[60px] md:w-[180px]"
+        className="h-[6.25rem] w-[12.5rem] object-contain md:h-[3.75rem] md:w-[11.25rem]"
       />
-      <h1 className="hidden text-[28px] font-bold leading-none text-primary md:block">
+      <h1 className="hidden text-[1.75rem] font-bold leading-none text-primary md:block">
         {welcomeBackText(name)}
       </h1>
     </div>
@@ -57,11 +59,11 @@ function BrandHeader({ name }: { name: string | null }) {
 
 function RightPanel({ name }: { name: string | null }) {
   return (
-    <div className="flex flex-1 flex-col bg-white lg:items-center lg:justify-center lg:px-12 lg:py-16 xl:px-[88px]">
+    <div className="flex flex-1 flex-col bg-white lg:items-center lg:justify-center lg:px-12 lg:py-16 xl:px-[5.5rem]">
       <BrandHeader name={name} />
 
       <div className="flex w-full flex-1 flex-col items-center justify-center px-6 pb-12 pt-8 md:px-12 md:py-16 lg:p-0">
-        <div className="flex w-full max-w-[480px] flex-col gap-8 md:w-[352px] md:max-w-none md:gap-7 lg:w-[480px] lg:max-w-none lg:gap-8">
+        <div className="flex w-full max-w-[30rem] flex-col gap-8 md:w-[22rem] md:max-w-none md:gap-7 lg:w-[30rem] lg:max-w-none lg:gap-8">
           <FormHeader name={name} />
           <LogInForm />
         </div>
@@ -79,11 +81,11 @@ function RightPanel({ name }: { name: string | null }) {
 function FormHeader({ name }: { name: string | null }) {
   return (
     <div className="flex flex-col gap-1.5 lg:gap-2">
-      <h2 className="text-[26px] font-semibold leading-none text-text md:text-2xl lg:text-[28px]">
+      <h2 className="text-[1.625rem] font-semibold leading-none text-text md:text-2xl lg:text-[1.75rem]">
         <span className="md:hidden">Log In</span>
         <span className="hidden md:inline">{welcomeBackText(name)}</span>
       </h2>
-      <p className="text-[15px] leading-[1.5] text-text-secondary md:text-[13px] lg:text-body">
+      <p className="text-[0.9375rem] leading-[1.5] text-text-secondary md:text-[0.8125rem] lg:text-body">
         <span className="md:hidden">Access your secure corporate dashboard.</span>
         <span className="hidden md:inline">
           Log in to manage your services and orders.
@@ -201,7 +203,7 @@ function LogInForm() {
             role="checkbox"
             aria-checked={remember}
             onClick={() => setRemember((v) => !v)}
-            className={`flex size-4 shrink-0 items-center justify-center rounded transition-colors md:size-[14px] md:rounded-[3px] ${
+            className={`flex size-4 shrink-0 items-center justify-center rounded transition-colors md:size-[0.875rem] md:rounded-[0.1875rem] ${
               remember
                 ? 'bg-primary text-white'
                 : 'border border-gray-300 bg-gray-50 text-transparent'
@@ -209,14 +211,14 @@ function LogInForm() {
           >
             <CheckIcon className="h-2 w-2.5" />
           </button>
-          <span className="text-[13px] leading-none text-text-secondary md:text-xs">
+          <span className="text-[0.8125rem] leading-none text-text-secondary md:text-xs">
             Remember Me
           </span>
         </label>
 
         <Link
           to={RESET_PASSWORD_ROUTE}
-          className="text-[13px] font-medium leading-none text-primary md:text-xs"
+          className="text-[0.8125rem] font-medium leading-none text-accent transition-colors hover:text-accent-hover md:text-xs"
         >
           Forgot Password?
         </Link>
@@ -225,7 +227,7 @@ function LogInForm() {
       {formError && (
         <p
           role="alert"
-          className="rounded-lg border border-error/30 bg-error/5 px-4 py-3 text-[13px] leading-[1.4] text-error"
+          className="rounded-lg border border-error/30 bg-error/5 px-4 py-3 text-[0.8125rem] leading-[1.4] text-error"
         >
           {formError}
         </p>
@@ -235,22 +237,22 @@ function LogInForm() {
         <button
           type="submit"
           disabled={submitting}
-          className="btn btn-primary h-12 w-full rounded-input text-[15px] disabled:cursor-not-allowed disabled:opacity-50 md:h-11 md:rounded-lg md:text-body lg:h-12 lg:rounded-input lg:text-button"
+          className="btn btn-primary h-12 w-full rounded-input text-[0.9375rem] disabled:cursor-not-allowed disabled:opacity-50 md:h-11 md:rounded-lg md:text-body lg:h-12 lg:rounded-input lg:text-button"
         >
           {submitting ? 'Logging In…' : 'Log In'}
         </button>
 
         <div className="flex items-center gap-3 lg:gap-4">
           <span className="h-px flex-1 bg-gray-200" />
-          <span className="text-[13px] text-text-secondary md:text-xs">or</span>
+          <span className="text-[0.8125rem] text-text-secondary md:text-xs">or</span>
           <span className="h-px flex-1 bg-gray-200" />
         </div>
 
-        <p className="text-center text-[13px] text-text-secondary lg:text-body">
+        <p className="text-center text-[0.8125rem] text-text-secondary lg:text-body">
           Don&apos;t have an account?{' '}
           <Link
             to={SIGNUP_ROUTE}
-            className="font-semibold text-primary"
+            className="font-semibold text-accent transition-colors hover:text-accent-hover"
           >
             Sign Up
           </Link>
@@ -259,7 +261,7 @@ function LogInForm() {
 
       <div className="flex items-center justify-center gap-2 pt-3 md:gap-1.5 md:pt-0">
         <ShieldCheckIcon className="size-4 shrink-0 text-text-secondary md:size-3.5" />
-        <p className="text-xs leading-none text-text-secondary md:text-[11px]">
+        <p className="text-xs leading-none text-text-secondary md:text-[0.6875rem]">
           Your information is encrypted and secure.
         </p>
       </div>
@@ -279,13 +281,13 @@ function Field({ label, htmlFor, error, children }: FieldProps) {
     <div className="flex flex-col gap-2">
       <label
         htmlFor={htmlFor}
-        className="text-form-label text-text md:text-[13px]"
+        className="text-form-label text-text md:text-[0.8125rem]"
       >
         {label}
       </label>
       {children}
       {error && (
-        <p id={`${htmlFor}-error`} className="text-[13px] leading-[1.3] text-error">
+        <p id={`${htmlFor}-error`} className="text-[0.8125rem] leading-[1.3] text-error">
           {error}
         </p>
       )}
@@ -317,7 +319,7 @@ function PasswordInput({ id, value, onChange, visible, onToggle }: PasswordInput
         type="button"
         onClick={onToggle}
         aria-label={visible ? 'Hide password' : 'Show password'}
-        className="absolute right-4 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center text-gray-500 md:size-[18px]"
+        className="absolute right-4 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center text-gray-500 md:size-[1.125rem]"
       >
         <EyeIcon className="size-full" />
       </button>

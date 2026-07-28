@@ -92,7 +92,7 @@ function InboxSkeleton() {
         <div className="col-span-2 h-24 animate-pulse rounded-card bg-gray-200 md:col-span-1" />
       </div>
       <div className="h-11 w-full animate-pulse rounded-input bg-gray-200" />
-      <div className="h-[420px] w-full animate-pulse rounded-card bg-gray-200" />
+      <div className="h-[26.25rem] w-full animate-pulse rounded-card bg-gray-200" />
     </div>
   );
 }
@@ -114,11 +114,11 @@ function ComingSoonPanel({ tab }: { tab: Exclude<MailRoomTab, 'inbox'> }) {
 
   return (
     <div className="flex flex-col items-center gap-3 rounded-card border border-gray-200 bg-white px-6 py-16 text-center shadow-sm-elevation">
-      <span className="flex size-12 items-center justify-center rounded-[24px] bg-primary-light">
+      <span className="flex size-12 items-center justify-center rounded-[1.5rem] bg-primary-light">
         <Icon className="size-6 text-primary" strokeWidth={1.75} aria-hidden="true" />
       </span>
       <p className="text-body-lg font-semibold text-text">{copy.title}</p>
-      <p className="max-w-[360px] text-body text-gray-500">{copy.body}</p>
+      <p className="max-w-[22.5rem] text-body text-gray-500">{copy.body}</p>
     </div>
   );
 }
@@ -181,7 +181,11 @@ export function MailRoomInboxPage() {
   const listItem = itemId
     ? loadedItems.find((candidate) => candidate.id === itemId)
     : undefined;
+  // The list copy carries no scan pages by design, so it fills the header while
+  // the detail resolves — but merging it under the detail would leave the list's
+  // stale status/scanReady masking the fresh ones once they land.
   const slideOverItem = openedItem.data ?? listItem;
+  const scanError = openedItem.isError;
   const openIndex = itemId
     ? loadedItems.findIndex((candidate) => candidate.id === itemId)
     : -1;
@@ -229,7 +233,7 @@ export function MailRoomInboxPage() {
   return (
     <PortalLayout user={user} onLogout={onLogout}>
       <div className="w-full p-4 md:p-6 lg:p-content">
-        <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-6 lg:gap-8">
+        <div className="mx-auto flex w-full max-w-[75rem] flex-col gap-6 lg:gap-8">
           {showSkeleton ? (
             <>
               <div className="flex flex-col gap-2" aria-hidden="true">
@@ -312,6 +316,9 @@ export function MailRoomInboxPage() {
           onDownload={() => recordDownload.mutate(slideOverItem.id)}
           isRequesting={createRequest.isPending}
           requestError={requestError}
+          isScanLoading={openedItem.isPending}
+          scanError={scanError}
+          onRetryScan={() => void openedItem.refetch()}
         />
       ) : null}
     </PortalLayout>

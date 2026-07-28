@@ -111,7 +111,7 @@ export function TeamPagination({
     <div className="hidden w-full items-center justify-between gap-4 md:flex">
       {/* Arbitrary type utilities, not the `.text-*` tokens — those are
           `@layer components`, so `lg:text-body` would emit no CSS. */}
-      <p className="text-[12px] leading-4 text-text-secondary lg:text-[14px] lg:leading-5 lg:text-gray-500">
+      <p className="text-[0.75rem] leading-4 text-text-secondary lg:text-[0.875rem] lg:leading-5 lg:text-gray-500">
         Showing {formatCount(rangeStart)}–{formatCount(rangeEnd)} of{' '}
         {formatCount(totalResults)} results
       </p>

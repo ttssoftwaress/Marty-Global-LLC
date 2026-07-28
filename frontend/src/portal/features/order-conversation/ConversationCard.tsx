@@ -32,7 +32,7 @@ const VISIBLE_MESSAGES = 6;
 function Avatar({ message }: { message: ConversationMessage }) {
   return (
     <span
-      className="flex size-5 shrink-0 items-center justify-center rounded-[10px] bg-primary-light text-[10px] font-semibold text-primary"
+      className="flex size-5 shrink-0 items-center justify-center rounded-[0.625rem] bg-primary-light text-[0.625rem] font-semibold text-primary"
       aria-hidden="true"
     >
       {message.authorInitials}
@@ -61,13 +61,13 @@ function MessageRow({
       ) : null}
 
       <div
-        className={`flex max-w-[280px] flex-col gap-2 rounded-2xl p-3 md:max-w-[360px] md:px-3.5 md:py-2.5 lg:max-w-[480px] lg:px-4 lg:py-3 ${
+        className={`flex max-w-[17.5rem] flex-col gap-2 rounded-2xl p-3 md:max-w-[22.5rem] md:px-3.5 md:py-2.5 lg:max-w-[30rem] lg:px-4 lg:py-3 ${
           mine
-            ? `bg-primary-light ${firstOfRun ? 'rounded-tr-[4px]' : ''}`
-            : `bg-gray-100 ${firstOfRun ? 'rounded-tl-[4px]' : ''}`
+            ? `bg-primary-light ${firstOfRun ? 'rounded-tr-[0.25rem]' : ''}`
+            : `bg-gray-100 ${firstOfRun ? 'rounded-tl-[0.25rem]' : ''}`
         }`}
       >
-        <p className="whitespace-pre-wrap break-words text-[14px] leading-5 text-text">
+        <p className="whitespace-pre-wrap break-words text-[0.875rem] leading-5 text-text">
           {message.body}
         </p>
       </div>
@@ -90,7 +90,7 @@ function EmptyThread({ assigneeName }: { assigneeName: string | null }) {
         />
       </span>
       <p className="text-body font-medium text-text">No messages yet</p>
-      <p className="max-w-[320px] text-small text-gray-500">
+      <p className="max-w-[20rem] text-small text-gray-500">
         {assigneeName
           ? `Ask ${assigneeName} anything about this order — they are handling your filing.`
           : 'Once a specialist is assigned to this order, you can talk to them here.'}
@@ -217,7 +217,7 @@ export function ConversationCard({ conversation }: ConversationCardProps) {
         assigneeName ? (
           <span className="flex min-w-0 items-center gap-2">
             <span
-              className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary-light text-[10px] font-semibold text-primary"
+              className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary-light text-[0.625rem] font-semibold text-primary"
               aria-hidden="true"
             >
               {conversation.assignee?.initials}

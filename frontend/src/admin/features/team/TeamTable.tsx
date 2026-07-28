@@ -49,33 +49,33 @@ export function TeamTable({
 }: TeamTableProps) {
   return (
     <div className="hidden w-full overflow-x-auto md:block">
-      <table className="w-full min-w-[640px] table-fixed border-collapse text-left lg:min-w-[900px] lg:table-auto">
+      <table className="w-full min-w-[40rem] table-fixed border-collapse text-left lg:min-w-[56.25rem] lg:table-auto">
         <thead>
           <tr className="h-12 border-b border-gray-200 bg-[var(--table-header-bg)]">
-            <th scope="col" className={`${HEAD_CELL} pl-5 pr-4 lg:w-[220px] lg:pl-card`}>
+            <th scope="col" className={`${HEAD_CELL} pl-5 pr-4 lg:w-[13.75rem] lg:pl-card`}>
               Name
             </th>
             <th
               scope="col"
-              className={`${HEAD_CELL} hidden w-[240px] pr-4 lg:table-cell`}
+              className={`${HEAD_CELL} hidden w-[15rem] pr-4 lg:table-cell`}
             >
               Email
             </th>
-            <th scope="col" className={`${HEAD_CELL} w-[180px] pr-4`}>
+            <th scope="col" className={`${HEAD_CELL} w-[11.25rem] pr-4`}>
               Role
             </th>
-            <th scope="col" className={`${HEAD_CELL} w-[140px] pr-4`}>
+            <th scope="col" className={`${HEAD_CELL} w-[8.75rem] pr-4`}>
               Status
             </th>
             <th
               scope="col"
-              className={`${HEAD_CELL} hidden w-[140px] pr-4 lg:table-cell`}
+              className={`${HEAD_CELL} hidden w-[8.75rem] pr-4 lg:table-cell`}
             >
               Date joined
             </th>
             <th
               scope="col"
-              className={`${HEAD_CELL} w-[200px] pr-5 text-right lg:w-[260px] lg:pr-card`}
+              className={`${HEAD_CELL} w-[12.5rem] pr-5 text-right lg:w-[16.25rem] lg:pr-card`}
             >
               <span className="inline-block w-full text-right">Action</span>
             </th>
@@ -148,7 +148,7 @@ export function TeamTable({
                     <button
                       type="button"
                       onClick={() => onEdit(member)}
-                      className="whitespace-nowrap rounded-[8px] text-[14px] font-medium leading-5 text-gray-500 transition-colors hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary lg:h-8 lg:border lg:border-gray-300 lg:bg-white lg:px-3 lg:text-[12px] lg:font-semibold lg:leading-4 lg:text-text lg:hover:bg-gray-50"
+                      className="whitespace-nowrap rounded-[0.5rem] text-[0.875rem] font-medium leading-5 text-gray-500 transition-colors hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary lg:h-8 lg:border lg:border-gray-300 lg:bg-white lg:px-3 lg:text-[0.75rem] lg:font-semibold lg:leading-4 lg:text-text lg:hover:bg-gray-50"
                     >
                       Edit
                     </button>
@@ -156,7 +156,7 @@ export function TeamTable({
                     <button
                       type="button"
                       onClick={() => onToggleActive(member)}
-                      className="whitespace-nowrap rounded-[8px] px-0 text-[14px] font-medium leading-5 text-gray-500 transition-colors hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary lg:h-8 lg:px-3 lg:text-[12px] lg:leading-4"
+                      className="whitespace-nowrap rounded-[0.5rem] px-0 text-[0.875rem] font-medium leading-5 text-gray-500 transition-colors hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary lg:h-8 lg:px-3 lg:text-[0.75rem] lg:leading-4"
                     >
                       {statusLabel}
                     </button>
@@ -164,7 +164,7 @@ export function TeamTable({
                     <button
                       type="button"
                       onClick={() => onDelete(member)}
-                      className="whitespace-nowrap rounded-[8px] px-0 text-[14px] font-medium leading-5 text-error transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-error lg:h-8 lg:px-3 lg:text-[12px] lg:leading-4"
+                      className="whitespace-nowrap rounded-[0.5rem] px-0 text-[0.875rem] font-medium leading-5 text-error transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-error lg:h-8 lg:px-3 lg:text-[0.75rem] lg:leading-4"
                     >
                       Delete
                     </button>

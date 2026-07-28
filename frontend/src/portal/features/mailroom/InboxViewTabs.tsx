@@ -27,7 +27,7 @@ export function InboxViewTabs({ active, onChange, className }: InboxViewTabsProp
     <div
       role="tablist"
       aria-label="Mail room view"
-      className={`hidden w-full gap-1 rounded-input bg-gray-200 p-1 md:flex lg:w-auto lg:rounded-[12px] lg:bg-gray-100 ${className ?? ''}`}
+      className={`hidden w-full gap-1 rounded-input bg-gray-200 p-1 md:flex lg:w-auto lg:rounded-[0.75rem] lg:bg-gray-100 ${className ?? ''}`}
     >
       {TABS.map(({ id, label }) => {
         const isActive = id === active;
@@ -38,7 +38,7 @@ export function InboxViewTabs({ active, onChange, className }: InboxViewTabsProp
             role="tab"
             aria-selected={isActive}
             onClick={() => onChange(id)}
-            className={`flex-1 rounded-[8px] py-2 text-center text-body transition-colors lg:flex-none lg:rounded-[10px] lg:px-4 ${
+            className={`flex-1 rounded-[0.5rem] py-2 text-center text-body transition-colors lg:flex-none lg:rounded-[0.625rem] lg:px-4 ${
               isActive
                 ? 'bg-white font-semibold text-primary shadow-sm-elevation lg:bg-primary lg:text-white lg:shadow-none'
                 : 'font-medium text-gray-500 hover:text-text lg:text-gray-700'

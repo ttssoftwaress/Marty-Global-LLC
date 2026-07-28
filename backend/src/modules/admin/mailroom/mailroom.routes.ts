@@ -18,7 +18,18 @@ const router = Router();
 router.use(requirePermission('mailroom'));
 
 router.get('/summary', apiRateLimit, controller.getSummary);
-router.get('/customers', apiRateLimit, controller.searchCustomers);
+
+/*
+ * The room picker, in two steps: rooms rather than customers, because a scan is
+ * filed into one of a customer's addresses. `/rooms/names` returns the matching
+ * names deduplicated, and `/rooms` the addresses under a chosen one — a name
+ * alone cannot identify a room, since two rooms may share it.
+ *
+ * The literal segment is declared first so `/rooms/names` is never read as a
+ * room lookup.
+ */
+router.get('/rooms/names', apiRateLimit, controller.searchRoomNames);
+router.get('/rooms', apiRateLimit, controller.listRoomsByName);
 
 router.get('/scans', apiRateLimit, controller.listScans);
 router.post('/scans', sensitiveRateLimit, controller.uploadScan);

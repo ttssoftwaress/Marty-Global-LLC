@@ -64,8 +64,8 @@ export type ConversationCategoryInput = z.infer<typeof conversationCategory>;
  * Opening a new support thread: a subject, a category, and the first message.
  *
  * Nothing about routing is accepted from the client — no assignee, no status, no
- * priority. The thread lands unassigned in the claimable pool, and which agent
- * picks it up is the helpdesk's decision, not the customer's.
+ * priority. Which agent answers it is decided server-side as the thread is
+ * created, balanced across the team (support.assignment.ts), not by the customer.
  */
 export const createConversationSchema = z.object({
   subject: z.string().trim().min(3).max(140),

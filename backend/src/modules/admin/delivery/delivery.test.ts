@@ -4,9 +4,12 @@ import { Role } from '../../../lib/roles.js';
 import type { AuthContext } from '../../../guards/auth-context.js';
 
 const { prisma } = await import('../../../lib/prisma.js');
-const { getItemResult, saveResult, updateOrderItemStatus } = await import(
-  './delivery.service.js'
-);
+const {
+  getItemResult,
+  getResultFileLink,
+  saveResult,
+  updateOrderItemStatus,
+} = await import('./delivery.service.js');
 
 /*
  * The delivery gate — the one rule that makes a result page trustworthy: a
@@ -65,6 +68,18 @@ async function seedRegistry() {
     create: { key: 'delivery_test_filed_on', label: 'Filed on', type: 'date' },
     update: {},
   });
+
+  // Optional on purpose: the delivery-gate tests above must keep passing with
+  // nothing uploaded, and what this field exists for is the download path below.
+  await prisma.resultFieldDefinition.upsert({
+    where: { key: 'delivery_test_certificate' },
+    create: {
+      key: 'delivery_test_certificate',
+      label: 'Certificate',
+      type: 'file',
+    },
+    update: {},
+  });
 }
 
 async function seedServices() {
@@ -80,12 +95,14 @@ async function seedServices() {
       resultFields: [
         { fieldKey: 'delivery_test_company_name', required: true, isPrimary: true },
         { fieldKey: 'delivery_test_filed_on' },
+        { fieldKey: 'delivery_test_certificate' },
       ],
     },
     update: {
       resultFields: [
         { fieldKey: 'delivery_test_company_name', required: true, isPrimary: true },
         { fieldKey: 'delivery_test_filed_on' },
+        { fieldKey: 'delivery_test_certificate' },
       ],
     },
   });
@@ -245,6 +262,89 @@ describe('the delivery gate', () => {
     // rest of the admin portal follows.
     await expect(
       getItemResult(auth('delivery_test_stranger', Role.STAFF), itemId),
+    ).rejects.toMatchObject({ status: 404 });
+  });
+});
+
+/*
+ * Opening a document already on a delivered record — the result form's View and
+ * Download controls.
+ *
+ * Only the refusals are asserted: minting a real URL needs a configured R2
+ * bucket, which the test environment deliberately does not have (AGENTS.md —
+ * tests never reach a real service). What matters here is the boundary, since the
+ * link is a bearer token for the customer's own paperwork.
+ */
+describe('getResultFileLink', () => {
+  const inline = { disposition: 'inline' } as const;
+  const CERTIFICATE = 'delivery_test_certificate';
+
+  // A delivered record carrying a document, returned with its own id.
+  async function seedRecordWithFile(): Promise<string> {
+    const itemId = await seedOrder(SERVICE_ID);
+    await getItemResult(auth(ADMIN_ID), itemId);
+
+    const saved = await saveResult(auth(ADMIN_ID), itemId, {
+      values: [
+        { fieldKey: 'delivery_test_company_name', value: 'North Peak LLC' },
+        {
+          fieldKey: CERTIFICATE,
+          value: 'Certificate of Formation.pdf',
+          objectKey: 'results/fixture/certificate.pdf',
+          contentType: 'application/pdf',
+          sizeBytes: 2048,
+        },
+      ],
+      deliver: true,
+    });
+
+    return saved.result!.id;
+  }
+
+  it('404s a field with no value stored at all', async () => {
+    const itemId = await seedOrder(SERVICE_ID);
+    const opened = await getItemResult(auth(ADMIN_ID), itemId);
+
+    await expect(
+      getResultFileLink(auth(ADMIN_ID), opened.result!.id, CERTIFICATE, inline),
+    ).rejects.toMatchObject({ status: 404 });
+  });
+
+  /*
+   * A row whose object key is null. `saveResult` cannot produce one — a file
+   * value with no key is dropped rather than stored — so this is written directly,
+   * which is exactly the state the guard exists for: a row left behind by a
+   * migration or a manual fix must not present as a document.
+   */
+  it('refuses a stored row with no object behind it', async () => {
+    const resultId = await seedRecordWithFile();
+
+    await prisma.serviceResultValue.update({
+      where: { resultId_fieldKey: { resultId, fieldKey: CERTIFICATE } },
+      data: { objectKey: null },
+    });
+
+    await expect(
+      getResultFileLink(auth(ADMIN_ID), resultId, CERTIFICATE, inline),
+    ).rejects.toMatchObject({
+      status: 422,
+      message: 'That field has no document uploaded yet',
+    });
+  });
+
+  // The same scope the result form itself applies: a record on somebody else's
+  // order is not theirs to read, and the refusal must not confirm the id.
+  it("refuses a record on another staff member's order", async () => {
+    const resultId = await seedRecordWithFile();
+    await ensureUser('delivery_test_stranger', 'staff');
+
+    await expect(
+      getResultFileLink(
+        auth('delivery_test_stranger', Role.STAFF),
+        resultId,
+        CERTIFICATE,
+        inline,
+      ),
     ).rejects.toMatchObject({ status: 404 });
   });
 });

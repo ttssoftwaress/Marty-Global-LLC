@@ -1,6 +1,11 @@
 import { randomUUID } from 'node:crypto';
 
-import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  GetObjectCommand,
+  PutBucketCorsCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 import { env } from '../config/env.js';
@@ -38,8 +43,49 @@ const client = storageEnabled
         accessKeyId: env.R2_ACCESS_KEY_ID as string,
         secretAccessKey: env.R2_SECRET_ACCESS_KEY as string,
       },
+      /*
+       * Both must stay WHEN_REQUIRED, and this is load-bearing for uploads.
+       *
+       * The SDK defaults to WHEN_SUPPORTED, which makes it attach a CRC32 of the
+       * request body to every PutObject. While PRESIGNING there is no body yet,
+       * so it hashes an empty one and hoists the result into the URL's query
+       * string as `x-amz-checksum-crc32=AAAAAA==` — inside the signature, so the
+       * browser cannot drop it. R2 then checks that empty-body checksum against
+       * the real file and rejects every upload with a 400.
+       *
+       * The signed content-type and content-length below are what actually bind
+       * an upload to what we authorised; the SDK's body checksum adds nothing we
+       * rely on and breaks the one thing we need.
+       */
+      requestChecksumCalculation: 'WHEN_REQUIRED',
+      responseChecksumValidation: 'WHEN_REQUIRED',
     })
   : null;
+
+/*
+ * How the browser should treat the object behind a presigned GET.
+ *
+ * `attachment` is what separates a "Download" control from a "View" one: the
+ * disposition is signed into the URL and comes back as a response header, so the
+ * file saves under `fileName` instead of rendering in the tab. Without it a PDF
+ * always previews and a download link is a lie. Omit the option entirely and the
+ * object is served exactly as it was stored, which is what every inline consumer
+ * (avatars, scan pages, invoice links) already relies on.
+ */
+export type PresignOptions = {
+  disposition: 'inline' | 'attachment';
+  // The name the file saves under. Sanitised before signing — see below.
+  fileName?: string;
+};
+
+function contentDisposition({ disposition, fileName }: PresignOptions): string {
+  if (!fileName) return disposition;
+
+  // Run through the same sanitiser as an upload key: this value is signed into a
+  // URL and echoed back as a header, so a quote or newline in a customer's own
+  // filename would be a header injection rather than a cosmetic problem.
+  return `${disposition}; filename="${safeFileName(fileName)}"`;
+}
 
 /*
  * A presigned GET for one object. Returns `undefined` for a missing key or an
@@ -50,6 +96,7 @@ const client = storageEnabled
  */
 export async function presignObject(
   objectKey: string | null | undefined,
+  options?: PresignOptions,
 ): Promise<string | undefined> {
   if (!objectKey) return undefined;
 
@@ -61,7 +108,13 @@ export async function presignObject(
   try {
     return await getSignedUrl(
       client,
-      new GetObjectCommand({ Bucket: env.R2_BUCKET, Key: objectKey }),
+      new GetObjectCommand({
+        Bucket: env.R2_BUCKET,
+        Key: objectKey,
+        ...(options
+          ? { ResponseContentDisposition: contentDisposition(options) }
+          : {}),
+      }),
       { expiresIn: PRESIGNED_URL_TTL_SECONDS },
     );
   } catch (error) {
@@ -140,6 +193,48 @@ export async function presignUpload(input: {
  */
 export function buildObjectKey(prefix: string, fileName: string): string {
   return `${prefix}/${randomUUID()}/${safeFileName(fileName)}`;
+}
+
+/*
+ * The bucket's CORS policy — applied out of band by `npm run storage:cors`.
+ *
+ * This is not decoration. Uploads are browser-to-R2 by design, and a
+ * cross-origin PUT carrying a Content-Type is always preflighted. A bucket with
+ * no CORS rule answers that preflight with `403 CORS not configured for this
+ * bucket`, so the PUT never leaves the browser: no API log, no R2 log, just a
+ * network error on a screen where everything else is configured correctly.
+ *
+ * Origins are exact, never wildcards (AGENTS.md, CORS). GET is included because
+ * a presigned download link is fetched by the page for some viewers rather than
+ * being followed as a plain href.
+ */
+export function bucketCorsRules(origins: string[]) {
+  return [
+    {
+      AllowedOrigins: origins,
+      AllowedMethods: ['PUT', 'GET'],
+      // The only header the browser sends that needs clearing: Content-Length is
+      // set by the browser itself and is not preflightable.
+      AllowedHeaders: ['content-type'],
+      ExposeHeaders: ['etag'],
+      // Preflight once per hour rather than once per file — a 50-page scan batch
+      // would otherwise double its request count for no benefit.
+      MaxAgeSeconds: 3600,
+    },
+  ];
+}
+
+export async function applyBucketCors(origins: string[]): Promise<void> {
+  if (!client) {
+    throw new Error('R2 is not configured — nothing to apply a CORS policy to');
+  }
+
+  await client.send(
+    new PutBucketCorsCommand({
+      Bucket: env.R2_BUCKET,
+      CORSConfiguration: { CORSRules: bucketCorsRules(origins) },
+    }),
+  );
 }
 
 const MAX_FILE_NAME_LENGTH = 120;

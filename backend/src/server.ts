@@ -1,4 +1,11 @@
+// Must stay the FIRST import: it initialises Sentry before Express, http, and
+// Postgres are loaded, which is the only point at which they can be
+// instrumented. See instrument.ts.
+import './instrument.js';
+
 import { createServer } from 'node:http';
+
+import * as Sentry from '@sentry/node';
 
 import { createApp } from './app.js';
 import { env } from './config/env.js';
@@ -24,6 +31,11 @@ try {
   await ensureAdminAccount();
 } catch (err) {
   logger.fatal({ err }, 'Admin account bootstrap failed');
+  // A boot failure is the one error nobody is watching a dashboard for, so it
+  // is reported and flushed before the process leaves — exiting first would
+  // discard the still-buffered event.
+  Sentry.captureException(err);
+  await Sentry.flush(2000).catch(() => undefined);
   process.exit(1);
 }
 
@@ -48,8 +60,13 @@ function shutdown(signal: string) {
   // server open past its close callback and the process would linger.
   void io.close(() => {
     server.close(() => {
-      // Let in-flight jobs finish before the connections drop.
-      void closeWorkers().finally(() => process.exit(0));
+      // Let in-flight jobs finish before the connections drop, then give Sentry
+      // a bounded window to deliver whatever is still queued. On a SIGTERM from
+      // the VPS/Docker the events that explain the restart are usually the most
+      // recent ones, and an unflushed transport drops them.
+      void closeWorkers()
+        .finally(() => Sentry.flush(2000).catch(() => undefined))
+        .finally(() => process.exit(0));
     });
   });
 }

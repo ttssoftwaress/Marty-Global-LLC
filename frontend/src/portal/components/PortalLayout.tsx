@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 
+import { useCompactScale } from '@/hooks/useCompactScale';
 import { NotificationsPanel } from '../features/notifications';
 import { SupportWidget } from '../features/support';
 import type { Notification } from '../types/notifications';
@@ -41,6 +42,8 @@ export function PortalLayout({
   onLogout,
   children,
 }: PortalLayoutProps) {
+  useCompactScale();
+
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
 

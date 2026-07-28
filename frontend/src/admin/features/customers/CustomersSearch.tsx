@@ -21,7 +21,7 @@ export function CustomersSearch({ value, onChange }: CustomersSearchProps) {
   return (
     <div className="flex h-12 w-full items-center gap-2 rounded-input border border-gray-300 bg-white px-3 transition-colors focus-within:border-primary focus-within:shadow-[0_0_0_1px_var(--ring-focus)] md:h-10 md:border-gray-200 lg:border-gray-300">
       <Search
-        className="size-[18px] shrink-0 text-gray-400 md:size-4"
+        className="size-[1.125rem] shrink-0 text-gray-400 md:size-4"
         strokeWidth={1.75}
         aria-hidden="true"
       />

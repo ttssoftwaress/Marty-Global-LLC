@@ -52,7 +52,7 @@ export function NotificationFeedRow({
         event.stopPropagation();
         onMarkRead(notification);
       }}
-      className="whitespace-nowrap rounded-input px-1 text-[12px] font-medium text-gray-500 transition-colors hover:text-primary focus-visible:outline-none focus-visible:underline"
+      className="whitespace-nowrap rounded-input px-1 text-[0.75rem] font-medium text-gray-500 transition-colors hover:text-primary focus-visible:outline-none focus-visible:underline"
     >
       Mark as read
     </button>
@@ -73,7 +73,7 @@ export function NotificationFeedRow({
       {/* Message + (mobile-only) time/actions stacked beneath it */}
       <span className="flex min-w-0 flex-1 flex-col gap-1.5 md:gap-0">
         <span
-          className={`text-[13px] leading-[18px] text-text md:text-[14px] md:leading-5 ${
+          className={`text-[0.8125rem] leading-[1.125rem] text-text md:text-[0.875rem] md:leading-5 ${
             read ? 'font-normal' : 'font-semibold'
           }`}
         >
@@ -82,7 +82,7 @@ export function NotificationFeedRow({
 
         {/* Mobile metadata line — time, then the read+actionable extras */}
         <span className="flex items-center gap-2 md:hidden">
-          <span className="text-[12px] text-gray-500">
+          <span className="text-[0.75rem] text-gray-500">
             {formatFeedTime(createdAt)}
           </span>
           {read && href ? (
@@ -98,7 +98,7 @@ export function NotificationFeedRow({
       {/* Tablet right side (md → lg): time, then the trailing bit — an unread
           dot, or a read+actionable row's "· Mark as read" inline (no chevron). */}
       <span className="hidden items-center gap-3 md:flex lg:hidden">
-        <span className="whitespace-nowrap text-right text-[13px] text-gray-500">
+        <span className="whitespace-nowrap text-right text-[0.8125rem] text-gray-500">
           {formatFeedTime(createdAt)}
         </span>
         {!read ? (
@@ -120,7 +120,7 @@ export function NotificationFeedRow({
           </span>
         ) : null}
 
-        <span className="whitespace-nowrap text-right text-[13px] text-gray-500">
+        <span className="whitespace-nowrap text-right text-[0.8125rem] text-gray-500">
           {formatFeedTime(createdAt)}
         </span>
 

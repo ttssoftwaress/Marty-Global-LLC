@@ -1,4 +1,4 @@
-import { ConversationStatus, MessageAuthor } from '@prisma/client';
+import { ConversationStatus, MessageAuthor, StaffStatus } from '@prisma/client';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import type { AuthContext } from '../../../guards/auth-context.js';
@@ -20,8 +20,17 @@ const portalSupport = await import('../../support/support.service.js');
  */
 
 const CUSTOMER_ID = 'note_test_customer';
+// The agent the chat was routed to. Chats are assigned on arrival and an agent
+// reads only their own, so the thread below is theirs — that is what the admin
+// service's scope now requires (support.service.ts).
 const STAFF_ID = 'note_test_staff';
-// A second agent on the same thread — the viewer `mine` has to tell apart.
+/*
+ * A second agent on the same thread — the viewer `mine` has to tell apart.
+ *
+ * A supervisor, because that is the only way a second person is on a colleague's
+ * thread now: they read the whole queue. A plain agent could not open it at all,
+ * which is the point of the scope and not something this suite should work around.
+ */
 const OTHER_STAFF_ID = 'note_test_staff_other';
 const CONVERSATION_ID = 'note_test_conversation';
 
@@ -51,6 +60,17 @@ beforeEach(async () => {
     });
   }
 
+  await prisma.staffProfile.upsert({
+    where: { userId: OTHER_STAFF_ID },
+    create: {
+      userId: OTHER_STAFF_ID,
+      roleKey: 'operations-manager',
+      status: StaffStatus.ACTIVE,
+      permissions: ['support', 'support.all'],
+    },
+    update: { status: StaffStatus.ACTIVE, permissions: ['support', 'support.all'] },
+  });
+
   await prisma.message.deleteMany({ where: { conversationId: CONVERSATION_ID } });
   await prisma.conversation.deleteMany({ where: { id: CONVERSATION_ID } });
 
@@ -60,6 +80,8 @@ beforeEach(async () => {
       customerId: CUSTOMER_ID,
       subject: 'Formation question',
       status: ConversationStatus.OPEN,
+      assigneeId: STAFF_ID,
+      assignedAt: new Date(),
       lastMessageAt: new Date(),
       preview: 'Initial question',
       messages: {
@@ -79,6 +101,9 @@ beforeEach(async () => {
 afterAll(async () => {
   await prisma.message.deleteMany({ where: { conversationId: CONVERSATION_ID } });
   await prisma.conversation.deleteMany({ where: { id: CONVERSATION_ID } });
+  await prisma.staffProfile.deleteMany({
+    where: { userId: { in: [STAFF_ID, OTHER_STAFF_ID] } },
+  });
   await prisma.user.deleteMany({
     where: { id: { in: [CUSTOMER_ID, STAFF_ID, OTHER_STAFF_ID] } },
   });

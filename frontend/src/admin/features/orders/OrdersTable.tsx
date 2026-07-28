@@ -56,7 +56,7 @@ export function OrdersTable({
 
   return (
     <div className="hidden w-full overflow-x-auto md:block">
-      <table className="w-full min-w-[680px] table-fixed border-collapse text-left lg:min-w-[900px] lg:table-auto">
+      <table className="w-full min-w-[42.5rem] table-fixed border-collapse text-left lg:min-w-[56.25rem] lg:table-auto">
         <thead>
           <tr className="h-12 border-b border-gray-200 bg-[var(--table-header-bg)]">
             <th scope="col" className="w-10 pl-4 pr-2 lg:pl-6">
@@ -68,31 +68,31 @@ export function OrdersTable({
                 }}
                 onChange={onToggleAll}
                 aria-label="Select all orders on this page"
-                className="size-[18px] cursor-pointer rounded-[4px] border-[1.5px] border-gray-300 accent-primary"
+                className="size-[1.125rem] cursor-pointer rounded-[0.25rem] border-[1.5px] border-gray-300 accent-primary"
               />
             </th>
-            <th scope="col" className={`${HEAD_CELL} w-[100px] pr-3 lg:w-[110px] lg:pr-4`}>
+            <th scope="col" className={`${HEAD_CELL} w-[6.25rem] pr-3 lg:w-[6.875rem] lg:pr-4`}>
               Order ID
             </th>
-            <th scope="col" className={`${HEAD_CELL} w-[130px] pr-3 lg:w-auto lg:pr-4`}>
+            <th scope="col" className={`${HEAD_CELL} w-[8.125rem] pr-3 lg:w-auto lg:pr-4`}>
               Customer
             </th>
             <th scope="col" className={`${HEAD_CELL} pr-3 lg:pr-4`}>
               Service
             </th>
-            <th scope="col" className={`${HEAD_CELL} hidden w-[110px] pr-4 lg:table-cell`}>
+            <th scope="col" className={`${HEAD_CELL} hidden w-[6.875rem] pr-4 lg:table-cell`}>
               Region
             </th>
-            <th scope="col" className={`${HEAD_CELL} w-[95px] pr-3 lg:w-[110px] lg:pr-4`}>
+            <th scope="col" className={`${HEAD_CELL} w-[5.9375rem] pr-3 lg:w-[6.875rem] lg:pr-4`}>
               Submitted
             </th>
-            <th scope="col" className={`${HEAD_CELL} w-[120px] pr-3 lg:w-[130px] lg:pr-4`}>
+            <th scope="col" className={`${HEAD_CELL} w-[7.5rem] pr-3 lg:w-[8.125rem] lg:pr-4`}>
               Status
             </th>
-            <th scope="col" className={`${HEAD_CELL} hidden w-[150px] pr-4 lg:table-cell`}>
+            <th scope="col" className={`${HEAD_CELL} hidden w-[9.375rem] pr-4 lg:table-cell`}>
               Assigned to
             </th>
-            <th scope="col" className={`${HEAD_CELL} w-[100px] pr-4 text-right lg:w-auto lg:pr-6`}>
+            <th scope="col" className={`${HEAD_CELL} w-[6.25rem] pr-4 text-right lg:w-auto lg:pr-6`}>
               <span className="inline-block w-full text-right">Action</span>
             </th>
           </tr>
@@ -119,7 +119,7 @@ export function OrdersTable({
                     checked={isSelected}
                     onChange={() => onToggleRow(order.id)}
                     aria-label={`Select order ${order.reference}`}
-                    className="size-[18px] cursor-pointer rounded-[4px] border-[1.5px] border-gray-300 accent-primary"
+                    className="size-[1.125rem] cursor-pointer rounded-[0.25rem] border-[1.5px] border-gray-300 accent-primary"
                   />
                 </td>
 
@@ -137,7 +137,7 @@ export function OrdersTable({
                   <div className="flex items-center gap-2">
                     <span
                       aria-hidden="true"
-                      className="flex size-6 shrink-0 items-center justify-center rounded-full bg-gray-200 text-[10px] font-semibold text-gray-700"
+                      className="flex size-6 shrink-0 items-center justify-center rounded-full bg-gray-200 text-[0.625rem] font-semibold text-gray-700"
                     >
                       {order.customer.initials}
                     </span>
@@ -189,7 +189,7 @@ export function OrdersTable({
                     <div className="flex items-center gap-2">
                       <span
                         aria-hidden="true"
-                        className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary-light text-[9px] font-semibold text-primary"
+                        className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary-light text-[0.5625rem] font-semibold text-primary"
                       >
                         {order.assignee.initials}
                       </span>

@@ -65,7 +65,7 @@ export function PickedFieldRow({
         error || !definition ? 'border-error' : 'border-gray-200'
       }`}
     >
-      <span className="flex size-8 shrink-0 items-center justify-center rounded-[8px] bg-gray-100">
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-[0.5rem] bg-gray-100">
         <Icon className="size-4 text-gray-600" strokeWidth={1.75} aria-hidden="true" />
       </span>
 

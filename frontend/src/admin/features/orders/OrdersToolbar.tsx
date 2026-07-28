@@ -8,7 +8,7 @@ import { OrderFilterSheet } from './OrderFilterSheet';
 
 /*
  * The queue toolbar — search plus the three filters, arranged per link:
- *   - desktop (lg): search (320px) and the three dropdowns on one row
+ *   - desktop (lg): search (20rem) and the three dropdowns on one row
  *   - tablet (md):  full-width search on its own row, then the three dropdowns
  *                   sharing the next row equally
  *   - mobile:       search beside a square filter button that opens the sheet
@@ -67,7 +67,7 @@ export function OrdersToolbar({
       {/* Tablet & desktop — search with the three dropdowns beside it (lg) or
           on a second row (md). */}
       <div className="hidden w-full flex-col gap-3 md:flex lg:flex-row lg:items-center lg:gap-4">
-        <div className="w-full lg:w-[320px] lg:shrink-0">{searchField}</div>
+        <div className="w-full lg:w-[20rem] lg:shrink-0">{searchField}</div>
 
         <div className="grid grid-cols-3 gap-3 lg:flex lg:gap-4">
           <OrderFilterDropdown
@@ -75,21 +75,21 @@ export function OrdersToolbar({
             options={options.services}
             value={filters.service}
             onChange={setField('service')}
-            className="lg:w-[160px]"
+            className="lg:w-[10rem]"
           />
           <OrderFilterDropdown
             label="Region"
             options={options.regions}
             value={filters.region}
             onChange={setField('region')}
-            className="lg:w-[160px]"
+            className="lg:w-[10rem]"
           />
           <OrderFilterDropdown
             label="Date range"
             options={options.dateRanges}
             value={filters.dateRange}
             onChange={setField('dateRange')}
-            className="lg:w-[160px]"
+            className="lg:w-[10rem]"
           />
         </div>
       </div>

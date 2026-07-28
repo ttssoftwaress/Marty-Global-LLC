@@ -7,10 +7,12 @@ import {
 
 import { apiFetch } from '@/services/api';
 import type { ApiSuccess } from '@/types/api';
+import type { FileDisposition } from '../../lib/open-file';
 import type {
   AdminOrderItemDelivery,
   AdminRequestDetail,
   AdminRequestPage,
+  AdminResultFileLink,
   ResultValueInput,
   ServiceRequestStatus,
 } from '../../types/delivery';
@@ -101,6 +103,31 @@ export function useUpdateOrderItemStatus(orderItemId: string, orderId?: string) 
         void queryClient.invalidateQueries({ queryKey: adminOrderKey(orderId) });
       }
     },
+  });
+}
+
+/*
+ * GET /v1/admin/records/:resultId/files/:fieldKey — a short-TTL link to a
+ * document already on the record.
+ *
+ * A mutation rather than a query, deliberately: a presigned URL is a bearer token
+ * for the customer's paperwork and expires in minutes, so it is minted on the
+ * click that uses it rather than cached with the record. Hung off the record id,
+ * which both the order screen and the follow-up queue already hold — one endpoint
+ * for both entry points into the form.
+ */
+export function useResultFileLink(resultId: string) {
+  return useMutation({
+    mutationFn: ({
+      fieldKey,
+      disposition,
+    }: {
+      fieldKey: string;
+      disposition: FileDisposition;
+    }) =>
+      apiFetch<ApiSuccess<AdminResultFileLink>>(
+        `/admin/records/${resultId}/files/${encodeURIComponent(fieldKey)}?disposition=${disposition}`,
+      ).then((res) => res.data),
   });
 }
 

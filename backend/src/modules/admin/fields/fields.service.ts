@@ -34,9 +34,12 @@ import type {
  *      given, and the orders module validates a select's value against its
  *      options — so previously-valid answers would start failing.
  *
- * Deleting is not offered: a field a historical order holds an answer for must
- * stay resolvable (AGENTS.md — ask before any hard delete). Archiving retires it
- * from the picker while leaving every existing form and answer intact.
+ *   3. A field ANYTHING has ever referenced cannot be deleted. Deleting one is
+ *      offered — a question registered by mistake should be removable rather
+ *      than sitting archived forever — but it only ever reaches the write when
+ *      no service form, no request type, and no stored answer points at the key.
+ *      Everything else is archived, which retires it from the picker while
+ *      leaving every existing form and answer intact.
  */
 
 export type FieldDefinitionView = {
@@ -55,6 +58,13 @@ export type FieldDefinitionView = {
   // management screen honest about the blast radius of an edit — and what the UI
   // reads to explain why a live field's type is locked.
   usageCount: number;
+  /*
+   * Whether removing this field outright is available at all. False the moment
+   * any service form or request type references the key; `deleteField` runs the
+   * fuller check — stored answers included — because a field dropped from a form
+   * after orders were placed has a usage count of zero and answers behind it.
+   */
+  canDelete: boolean;
 };
 
 export type FieldDefinitionPage = {
@@ -66,6 +76,7 @@ export type FieldDefinitionPage = {
 function toView(
   definition: FieldDefinition,
   usageCount: number,
+  canDelete: boolean,
 ): FieldDefinitionView {
   const parsed = fieldConfigSchema.safeParse(definition.config ?? {});
 
@@ -82,6 +93,7 @@ function toView(
     sortOrder: definition.sortOrder,
     updatedAt: iso(definition.updatedAt),
     usageCount,
+    canDelete,
   };
 }
 
@@ -145,6 +157,55 @@ async function usageByKey(): Promise<Map<string, number>> {
   return counts;
 }
 
+/*
+ * The keys the follow-up request forms reference — the second place a service
+ * points at this registry, `ServiceRequestType.fields` holding the same
+ * `{ fieldKey }` shape.
+ *
+ * Read separately rather than folded into `usageByKey`, because the "Used by"
+ * column answers a narrower question — how many services ASK this on their order
+ * form — and a request type is not that. It still has to block a delete, so it
+ * is counted here. Small, admin-curated table; same in-memory reasoning as above.
+ */
+async function requestTypeKeys(): Promise<Set<string>> {
+  const types = await prisma.serviceRequestType.findMany({
+    where: { deletedAt: null },
+    select: { fields: true },
+  });
+
+  const keys = new Set<string>();
+
+  for (const type of types) {
+    const refs = fieldRefsSchema.safeParse(type.fields ?? []);
+    if (refs.success) for (const ref of refs.data) keys.add(ref.fieldKey);
+  }
+
+  return keys;
+}
+
+/*
+ * Whether any customer answer is stored under this key.
+ *
+ * `OrderItem.answers` and `ServiceRequest.answers` are Json objects keyed by
+ * `FieldDefinition.key`, so this asks Postgres whether the key is present rather
+ * than reading the blobs back. Called only when a delete is actually attempted:
+ * a field dropped from a form after orders were placed has a usage count of zero
+ * and answers sitting behind it, and that is the one case the cheap check the
+ * list runs cannot see.
+ */
+async function hasStoredAnswers(key: string): Promise<boolean> {
+  const [orderItems, requests] = await Promise.all([
+    prisma.orderItem.count({
+      where: { answers: { path: [key], not: Prisma.DbNull } },
+    }),
+    prisma.serviceRequest.count({
+      where: { answers: { path: [key], not: Prisma.DbNull } },
+    }),
+  ]);
+
+  return orderItems + requests > 0;
+}
+
 export async function listFields(
   query: ListFieldsQuery,
 ): Promise<FieldDefinitionPage> {
@@ -161,7 +222,7 @@ export async function listFields(
       : {}),
   };
 
-  const [totalResults, rows, usage] = await Promise.all([
+  const [totalResults, rows, usage, requestKeys] = await Promise.all([
     prisma.fieldDefinition.count({ where }),
     prisma.fieldDefinition.findMany({
       where,
@@ -169,12 +230,20 @@ export async function listFields(
       ...cursorArgs(query.cursor, query.limit),
     }),
     usageByKey(),
+    requestTypeKeys(),
   ]);
 
   const page = takePage(rows, query.limit);
 
   return {
-    fields: page.rows.map((row) => toView(row, usage.get(row.key) ?? 0)),
+    fields: page.rows.map((row) => {
+      const usageCount = usage.get(row.key) ?? 0;
+      return toView(
+        row,
+        usageCount,
+        usageCount === 0 && !requestKeys.has(row.key),
+      );
+    }),
     nextCursor: page.nextCursor,
     totalResults,
   };
@@ -221,7 +290,8 @@ export async function createField(
     metadata: { key: definition.key, type: definition.type },
   });
 
-  return toView(definition, 0);
+  // Nothing can reference a field that did not exist a moment ago.
+  return toView(definition, 0, true);
 }
 
 export async function updateField(
@@ -235,7 +305,7 @@ export async function updateField(
 
   if (!existing) throw AppError.notFound('Field not found');
 
-  const usage = await usageByKey();
+  const [usage, requestKeys] = await Promise.all([usageByKey(), requestTypeKeys()]);
   const usageCount = usage.get(existing.key) ?? 0;
 
   /*
@@ -291,7 +361,69 @@ export async function updateField(
     metadata: { key: definition.key, fields: Object.keys(input), usageCount },
   });
 
-  return toView(definition, usageCount);
+  return toView(
+    definition,
+    usageCount,
+    usageCount === 0 && !requestKeys.has(definition.key),
+  );
+}
+
+/*
+ * Remove a registered question outright — rule 3 above.
+ *
+ * A hard delete, unlike the catalog's own, and deliberately: a `FieldDefinition`
+ * is configuration rather than a customer-facing record, so once nothing points
+ * at it there is nothing to retain. The guard is what makes that safe, and it is
+ * checked here rather than trusted from the UI — every place a key can be
+ * referenced is counted before the row goes.
+ *
+ * A field that fails any of those checks is archived instead, which is the same
+ * outcome the admin wanted (it leaves the picker) without orphaning the answers
+ * already given under it (AGENTS.md — ask before any hard delete).
+ */
+export async function deleteField(
+  actor: AuthContext,
+  fieldId: string,
+): Promise<{ id: string }> {
+  const existing = await prisma.fieldDefinition.findUnique({
+    where: { id: fieldId },
+  });
+
+  if (!existing) throw AppError.notFound('Field not found');
+
+  const [usage, requestKeys, hasAnswers] = await Promise.all([
+    usageByKey(),
+    requestTypeKeys(),
+    hasStoredAnswers(existing.key),
+  ]);
+
+  const usageCount = usage.get(existing.key) ?? 0;
+  const inRequestType = requestKeys.has(existing.key);
+
+  if (usageCount > 0 || inRequestType || hasAnswers) {
+    const reason = hasAnswers
+      ? 'customers have already answered it'
+      : usageCount > 0
+        ? `${usageCount} service${usageCount === 1 ? '' : 's'} still ask${usageCount === 1 ? 's' : ''} it`
+        : 'a service request form still asks it';
+
+    throw AppError.businessRule(
+      `"${existing.label}" cannot be deleted because ${reason}. Archive it instead — it leaves the picker and every form and answer already using it keeps working.`,
+      { fieldKey: existing.key, usageCount, inRequestType, hasAnswers },
+    );
+  }
+
+  await prisma.fieldDefinition.delete({ where: { id: fieldId } });
+
+  void record({
+    actor,
+    action: AuditAction.FIELD_DELETED,
+    entityType: 'FieldDefinition',
+    entityId: fieldId,
+    metadata: { key: existing.key, type: existing.type },
+  });
+
+  return { id: fieldId };
 }
 
 /*

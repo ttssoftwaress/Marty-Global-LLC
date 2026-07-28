@@ -1459,6 +1459,17 @@ model Conversation {
   // entitled to the person working their filing. The service keeps the two in
   // step; reassigning the order reassigns the thread.
   assigneeId String?
+  /*
+   * When the thread was routed to `assigneeId` — set by the auto-assignment
+   * router and by an admin's manual reassignment alike
+   * (modules/support/support.assignment.ts).
+   *
+   * It is what makes the rotation fair rather than merely balanced: two agents
+   * holding the same number of open threads are tied on load, and the tie-break
+   * is "whoever waited longest for their last chat". Derived from `updatedAt`
+   * instead would break the moment any other column on the row changed.
+   */
+  assignedAt DateTime? @db.Timestamptz(3)
   // The order this thread belongs to. Required in practice for an ORDER thread
   // and null for a SUPPORT one — the pairing is enforced in the service layer,
   // since Prisma cannot express "required when kind = ORDER".
@@ -1509,6 +1520,10 @@ model Conversation {
   @@index([kind, status, lastMessageAt])
   @@index([status, lastMessageAt])
   @@index([assigneeId])
+  // A support agent's inbox is now always "the threads assigned to me", newest
+  // first, optionally narrowed by status — so the assignee leads the index
+  // rather than trailing it. The router's load count reads the same columns.
+  @@index([assigneeId, kind, status, lastMessageAt])
   @@map("conversation")
 }
 
@@ -1649,6 +1664,10 @@ enum PaymentStatus {
   PROCESSING
   SUCCEEDED
   FAILED
+  // The customer abandoned the payment window before any transfer arrived. Kept
+  // apart from FAILED because nothing went wrong: no money was sent, the quote is
+  // still owed, and billing's payment history deliberately leaves it out.
+  CANCELLED
   // USDT only: the chain settled an amount that doesn't match the quote. Never a
   // silent pass — an explicit state a human resolves (AGENTS.md, Money).
   UNDERPAID

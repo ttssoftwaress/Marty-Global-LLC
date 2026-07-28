@@ -62,8 +62,8 @@ corporate-filing-system/
 | --- | --- |
 | Core | **PERN** — PostgreSQL, Express, React, Node (all TypeScript, npm) |
 | Frontend | React + Vite + React Router |
-| UI | Tailwind + shadcn/ui |
-| State | TanStack Query (server) + Zustand (client-only) |
+| UI | Tailwind (first-party design system — **not** shadcn/ui; see Design.md) |
+| State | TanStack Query (server). No client-state library — see below. |
 | SEO | react-helmet-async (marketing meta tags) |
 | Dates | date-fns — the only date library |
 | ORM / DB | Prisma / PostgreSQL |
@@ -79,6 +79,14 @@ corporate-filing-system/
 | Deploy | Backend: Docker on a VPS · Frontend: static build (host TBD) |
 
 This list is the budget. Never add a library without asking first.
+
+**Client state:** Zustand was in this table but was never imported anywhere, so
+it was uninstalled (July 2026). Server state is TanStack Query's; everything
+else has been local `useState` or props, and no genuinely global client state
+has appeared yet. If one does, ask before adding a store library — a React
+context is usually enough. The same applies to the UI row: shadcn/ui was
+specified here and never installed, and the first-party system that exists
+instead is now the one of record (Design.md, *Why not shadcn*).
 
 ---
 
@@ -108,13 +116,19 @@ frontend/src/
 ├── portal/       # customer portal: pages/ + features/
 ├── admin/        # admin portal: pages/ + features/
 ├── auth/         # sign-in/up screens + auth client (used by portal & admin)
-├── components/   # cross-area UI; shadcn base in components/ui
 ├── services/     # api.ts, socket.ts, upload.ts
 ├── constants/    # local mirror: roles, statuses, plan catalog (backend = source of truth)
 ├── types/        # local mirror of API shapes
-├── hooks/  stores/  lib/  styles/
-├── assets/ 
+├── hooks/        # cross-area hooks — useOverlay (all modals), useCompactScale, useSocket
+├── lib/  styles/  assets/
 ```
+
+- There is no top-level `components/` directory. Shared styling lives in the
+  token + `@layer components` layer in `styles/index.css`, and UI components
+  live inside the area that owns them (`portal/features/*`, `admin/features/*`,
+  `marketing/components/*`) — areas never import from each other, so a pattern
+  two areas need is implemented in each. Design.md owns the full rationale.
+- No `stores/` — see the client-state note under Tech Stack.
 
 - Route groups: `/` marketing (public) · `/app/*` portal (authenticated) ·
   `/admin/*` admin (staff/admin roles). Each area lazy-loads at the router;
@@ -303,7 +317,8 @@ the source of truth.
 - Naming: `PascalCase.tsx` components, `useThing.ts` hooks,
   `thing.service.ts` module files, kebab-case folders.
 
-(Tailwind + `cn()`/CVA, design tokens, and shadcn live in **Design.md**.)
+(Tailwind, design tokens, the component-class layer, and the overlay hook live
+in **Design.md**.)
 
 ---
 

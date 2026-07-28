@@ -47,7 +47,7 @@ type MailRequestsPaginationProps = {
 };
 
 const STEP_BUTTON =
-  'flex h-8 items-center justify-center rounded-[6px] px-2.5 text-small font-medium transition-colors disabled:cursor-default enabled:text-text-secondary enabled:hover:bg-gray-50 disabled:opacity-40 lg:h-9 lg:px-3 lg:text-[13px]';
+  'flex h-8 items-center justify-center rounded-[0.375rem] px-2.5 text-small font-medium transition-colors disabled:cursor-default enabled:text-text-secondary enabled:hover:bg-gray-50 disabled:opacity-40 lg:h-9 lg:px-3 lg:text-[0.8125rem]';
 
 export function MailRequestsPagination({
   page,
@@ -98,7 +98,7 @@ export function MailRequestsPagination({
                 type="button"
                 onClick={() => onPageChange(entry)}
                 aria-current={entry === page ? 'page' : undefined}
-                className={`flex size-6 items-center justify-center rounded-full text-small transition-colors lg:size-7 lg:text-[13px] ${
+                className={`flex size-6 items-center justify-center rounded-full text-small transition-colors lg:size-7 lg:text-[0.8125rem] ${
                   entry === page
                     ? 'bg-primary font-semibold text-white'
                     : 'font-medium text-text-secondary hover:bg-gray-100'

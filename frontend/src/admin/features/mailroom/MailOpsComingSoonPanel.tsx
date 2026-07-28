@@ -31,7 +31,7 @@ export function MailOpsComingSoonPanel({
       </span>
 
       <h2 className="text-h6 text-text">{title}</h2>
-      <p className="max-w-[420px] text-body text-text-secondary">{description}</p>
+      <p className="max-w-[26.25rem] text-body text-text-secondary">{description}</p>
     </section>
   );
 }

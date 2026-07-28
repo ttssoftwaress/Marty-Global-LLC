@@ -4,6 +4,7 @@ import { Inbox } from 'lucide-react';
 import type {
   SupportConversationSummary,
   SupportFilter,
+  SupportFilterOption,
 } from '../../types/support';
 import { SupportConversationItem } from './SupportConversationItem';
 import { SupportFilterTabs } from './SupportFilterTabs';
@@ -15,7 +16,7 @@ import { SupportSearch } from './SupportSearch';
  *
  * The frame differs across the links, so one tree carries both: on mobile the
  * controls sit on the page tint above a stack of standalone cards, while from
- * tablet up the whole pane becomes a bordered white card (300px on tablet, 380px
+ * tablet up the whole pane becomes a bordered white card (18.75rem on tablet, 380px
  * on desktop) with the controls in a hairline-separated header and the rows
  * flush inside it.
  *
@@ -30,6 +31,8 @@ import { SupportSearch } from './SupportSearch';
 type SupportConversationListProps = {
   conversations: SupportConversationSummary[];
   isLoading: boolean;
+  // The cohorts this member is offered, resolved by the backend with the list.
+  filters: SupportFilterOption[];
   filter: SupportFilter;
   onFilterChange: (value: SupportFilter) => void;
   search: string;
@@ -77,7 +80,7 @@ function ConversationsEmptyState({
         <Inbox className="size-5 text-gray-400" strokeWidth={1.75} aria-hidden="true" />
       </span>
       <p className="text-body font-semibold text-text">No conversations</p>
-      <p className="max-w-[240px] text-small text-gray-500">
+      <p className="max-w-[15rem] text-small text-gray-500">
         {isFiltered
           ? 'No conversation matches this filter or search.'
           : 'New customer conversations will appear here.'}
@@ -89,6 +92,7 @@ function ConversationsEmptyState({
 export function SupportConversationList({
   conversations,
   isLoading,
+  filters,
   filter,
   onFilterChange,
   search,
@@ -110,7 +114,7 @@ export function SupportConversationList({
       (entries) => {
         if (entries.some((entry) => entry.isIntersecting)) onLoadMore();
       },
-      { rootMargin: '200px' },
+      { rootMargin: '12.5rem' },
     );
 
     observer.observe(sentinel);
@@ -123,12 +127,12 @@ export function SupportConversationList({
   return (
     <section
       aria-label="Conversations"
-      className={`min-h-0 w-full flex-col md:w-[300px] md:shrink-0 md:overflow-hidden md:rounded-card md:border md:border-gray-200 md:bg-white lg:w-[380px] ${
+      className={`min-h-0 w-full flex-col md:w-[18.75rem] md:shrink-0 md:overflow-hidden md:rounded-card md:border md:border-gray-200 md:bg-white lg:w-[23.75rem] ${
         className ?? 'flex'
       }`}
     >
       <div className="flex shrink-0 flex-col gap-3 md:border-b md:border-gray-200 md:p-3 lg:gap-3 lg:p-4">
-        <SupportFilterTabs value={filter} onChange={onFilterChange} />
+        <SupportFilterTabs filters={filters} value={filter} onChange={onFilterChange} />
         <SupportSearch value={search} onChange={onSearchChange} />
       </div>
 

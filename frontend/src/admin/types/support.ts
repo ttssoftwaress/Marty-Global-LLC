@@ -15,23 +15,59 @@
  * validating against the server first.
  *
  * The desktop link shows four tabs and the tablet link three — desktop is the
- * source of truth for copy and content (Design.md), so `resolved` is present at
- * every width and the strip scrolls when it does not fit.
+ * source of truth for copy and content (Design.md), so the strip is complete at
+ * every width and scrolls when it does not fit.
+ *
+ * Which four a given member is OFFERED is not a frontend decision: a supervisor
+ * reads the whole queue, so "Unassigned" and "Assigned" answer their question,
+ * while an agent's inbox is by definition the chats assigned to them and gets the
+ * workflow states instead. The list response carries the right set (`filters`),
+ * for the same reason the permission grid comes from the API — who sees which
+ * cohorts is an authorization question.
  */
-export type SupportFilter = 'all' | 'unassigned' | 'assigned' | 'resolved';
+export type SupportFilter =
+  | 'all'
+  | 'unassigned'
+  | 'assigned'
+  | 'open'
+  | 'pending'
+  | 'resolved';
 
-export const SUPPORT_FILTERS: { value: SupportFilter; label: string }[] = [
+export type SupportFilterOption = { value: SupportFilter; label: string };
+
+// Every value the backend will accept. Used to validate `?filter=` off the URL
+// before any response has arrived, never to decide which tabs to draw.
+const SUPPORT_FILTER_VALUES: SupportFilter[] = [
+  'all',
+  'unassigned',
+  'assigned',
+  'open',
+  'pending',
+  'resolved',
+];
+
+/*
+ * What the strip renders until the first page lands. `all` is in both server-side
+ * sets, so the tab that is selected on arrival is never one that then disappears.
+ */
+export const SUPPORT_FILTERS_FALLBACK: SupportFilterOption[] = [
   { value: 'all', label: 'All' },
-  { value: 'unassigned', label: 'Unassigned' },
-  { value: 'assigned', label: 'Assigned' },
-  { value: 'resolved', label: 'Resolved' },
 ];
 
 export const DEFAULT_SUPPORT_FILTER: SupportFilter = 'all';
 
 export function isSupportFilter(value: unknown): value is SupportFilter {
-  return SUPPORT_FILTERS.some((filter) => filter.value === value);
+  return SUPPORT_FILTER_VALUES.some((filter) => filter === value);
 }
+
+/*
+ * How much of the queue this member is looking at. `assigned` is an agent, who
+ * sees only the chats routed to them; `all` is a supervisor. The backend decides
+ * it and sends it down — the header prints it rather than deriving it from a
+ * role, because "12 open" and "12 open assigned to you" are the same figure
+ * meaning very different things.
+ */
+export type SupportScope = 'all' | 'assigned';
 
 /*
  * A conversation's workflow state. `open` and `resolved` are the two the design
@@ -90,13 +126,18 @@ export type SupportConversationSummary = {
  *
  * `totalOpen` and `totalUnassigned` back the amber header pill; they are counts
  * over the whole inbox, not the loaded page, so the pill stays truthful as the
- * list pages in.
+ * list pages in. Both are scoped like the list itself — an agent's "open" is
+ * their own, and their "unassigned" is zero by construction.
  */
 export type SupportConversationsPage = {
   conversations: SupportConversationSummary[];
   nextCursor: string | null;
   totalOpen: number;
   totalUnassigned: number;
+  scope: SupportScope;
+  // Whether this member may move a chat between agents (`support.assign`).
+  canAssign: boolean;
+  filters: SupportFilterOption[];
 };
 
 /*
@@ -112,6 +153,21 @@ export type SupportConversationsPage = {
  * of its own beyond the "— Support" suffix the design gives staff replies.
  */
 export type SupportMessageKind = 'customer' | 'staff' | 'internal_note';
+
+/*
+ * A file sent with a message — in practice, something the customer attached.
+ *
+ * `href` is a short-TTL presigned link the backend mints on the read that
+ * returned this message, after its own access check (AGENTS.md, Security & PII).
+ * It can be absent — an unconfigured bucket, or a signature that failed — which
+ * the chip renders as a name without a link rather than a dead href.
+ */
+export type SupportMessageAttachment = {
+  id: string;
+  name: string;
+  size: number; // bytes
+  href?: string;
+};
 
 export type SupportMessage = {
   id: string;
@@ -134,6 +190,9 @@ export type SupportMessage = {
    * the agent — and absent on an internal note, which has no other side.
    */
   seen?: boolean;
+  // Files sent with the message. Absent on most of them, which is why the thread
+  // renders the chips only when there is something to render.
+  attachments?: SupportMessageAttachment[];
   // Local-only: drawn optimistically, not yet confirmed by the server. Carries
   // the id the send was tagged with so the delivered copy replaces it.
   pending?: boolean;
@@ -149,7 +208,8 @@ export type SupportMessage = {
  *
  * `assignableAgents` comes with the thread so the assignee menu can open without
  * a second round trip, and so staff who may not take this conversation are never
- * offered.
+ * offered. It is empty for a member without `canAssign` — the two travel together
+ * so the capsule can say "not by you" rather than "nobody to assign to".
  */
 export type SupportThread = {
   id: string;
@@ -167,6 +227,15 @@ export type SupportThread = {
   statusLabel: string;
   assignee: SupportAgent | null;
   assignableAgents: SupportAgent[];
+  /*
+   * Whether this member may reassign the thread. Incoming chats are routed
+   * automatically and balanced across the team, so overriding that routing is a
+   * supervisor's call — the exact mirror of `canAssign` on an order.
+   *
+   * The backend decides it: the disabled control and the endpoint's 403 have to
+   * agree, and the endpoint is the real boundary (AGENTS.md, Auth).
+   */
+  canAssign: boolean;
   messages: SupportMessage[];
 };
 

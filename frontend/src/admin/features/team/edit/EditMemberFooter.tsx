@@ -58,7 +58,7 @@ export function EditMemberFooter({
       <div className="fixed inset-x-0 bottom-0 z-20 flex items-center gap-4 border-t border-gray-200 bg-white px-4 pb-6 pt-4 shadow-footer-raised md:hidden">
         <Link
           to={cancelTo}
-          className="shrink-0 rounded-input px-2 py-1 text-[15px] font-medium leading-5 text-text-secondary transition-colors hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          className="shrink-0 rounded-input px-2 py-1 text-[0.9375rem] font-medium leading-5 text-text-secondary transition-colors hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
         >
           Cancel
         </Link>

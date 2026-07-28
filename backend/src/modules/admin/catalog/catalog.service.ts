@@ -51,6 +51,13 @@ export type CatalogServiceRow = {
   tierCount: number;
   updatedAt: string;
   active: boolean;
+  /*
+   * Whether removing this service is available at all — false as soon as a
+   * customer has ordered it or a record has been delivered under it. Computed
+   * here rather than in the UI so the rule has one definition, and re-checked in
+   * `deleteService` so it is a guard and not just a hidden button.
+   */
+  canDelete: boolean;
 };
 
 export type CatalogServicePage = {
@@ -67,7 +74,16 @@ const listInclude = {
     include: { region: true },
     orderBy: { sortOrder: 'asc' },
   },
-  _count: { select: { pricingTiers: { where: { deletedAt: null } } } },
+  _count: {
+    select: {
+      pricingTiers: { where: { deletedAt: null } },
+      // What decides `canDelete`: the two things a customer owns that point at a
+      // service. Counted in the same query the rows come from, so the list costs
+      // no more than it did.
+      orderItems: true,
+      results: true,
+    },
+  },
 } satisfies Prisma.ServiceInclude;
 
 export async function listServices(
@@ -101,6 +117,7 @@ export async function listServices(
       tierCount: service._count.pricingTiers,
       updatedAt: iso(service.updatedAt),
       active: service.active,
+      canDelete: service._count.orderItems === 0 && service._count.results === 0,
     })),
     nextCursor: page.nextCursor,
     totalResults,
@@ -474,6 +491,71 @@ export async function updateService(
   });
 
   return toDetail(service);
+}
+
+/*
+ * Remove a service from the catalog.
+ *
+ * Two rules, and both are the reason this is offered at all rather than leaving
+ * "deactivate" as the only exit:
+ *
+ *   1. It only ever reaches the write for a service nothing points at — no order
+ *      line, no delivered record. A service a customer has bought is part of
+ *      that order's history, so it is deactivated instead: the row stays
+ *      resolvable and simply leaves the customer's catalog.
+ *
+ *   2. Even then it is `deletedAt`, not a row disappearing (AGENTS.md — ask
+ *      before any hard delete). Every catalog read already filters soft-deleted
+ *      rows, so the service leaves both apps immediately while the record of
+ *      what was configured survives. `active: false` goes with it, so a row
+ *      restored by hand comes back hidden rather than silently on sale.
+ *
+ * The service's own children — tiers, offerings, request types — are left as
+ * they are: they are only ever read through the service, which no query can
+ * reach any more, and untouching them keeps a restore lossless.
+ */
+export async function deleteService(
+  actor: AuthContext,
+  serviceId: string,
+): Promise<{ id: string }> {
+  const existing = await prisma.service.findFirst({
+    where: { id: serviceId, deletedAt: null },
+    select: {
+      id: true,
+      name: true,
+      _count: { select: { orderItems: true, results: true } },
+    },
+  });
+
+  if (!existing) throw AppError.notFound('Service not found');
+
+  const usage = {
+    orderItems: existing._count.orderItems,
+    results: existing._count.results,
+  };
+  const references = usage.orderItems + usage.results;
+
+  if (references > 0) {
+    throw AppError.businessRule(
+      `"${existing.name}" is on ${references} customer record${references === 1 ? '' : 's'}, so it cannot be deleted. Turn it off instead — it stays on those records and disappears from the customer's catalog.`,
+      { serviceId, usage },
+    );
+  }
+
+  await prisma.service.update({
+    where: { id: serviceId },
+    data: { deletedAt: new Date(), active: false },
+  });
+
+  void record({
+    actor,
+    action: AuditAction.SERVICE_DELETED,
+    entityType: 'Service',
+    entityId: serviceId,
+    metadata: { name: existing.name },
+  });
+
+  return { id: serviceId };
 }
 
 /*

@@ -51,7 +51,7 @@ export function AdminNotificationItem({
 
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span
-          className={`text-[13px] leading-[18px] text-text ${
+          className={`text-[0.8125rem] leading-[1.125rem] text-text ${
             read ? 'font-normal' : 'font-semibold'
           }`}
         >

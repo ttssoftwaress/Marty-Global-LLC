@@ -1,4 +1,9 @@
-import { OrderStatus, StaffStatus } from '@prisma/client';
+import {
+  OrderDocumentSource,
+  OrderDocumentStatus,
+  OrderStatus,
+  StaffStatus,
+} from '@prisma/client';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Role } from '../../../lib/roles.js';
@@ -24,9 +29,14 @@ const queueEmail = vi.hoisted(() => vi.fn(async () => ({ id: 'notif_test' })));
 vi.mock('../../notifications/notifications.service.js', () => ({ queueEmail }));
 
 const { prisma } = await import('../../../lib/prisma.js');
-const { addActivity, getOrder, getSummary, listOrders, updateOrder } = await import(
-  './orders.service.js'
-);
+const {
+  addActivity,
+  getDocumentLink,
+  getOrder,
+  getSummary,
+  listOrders,
+  updateOrder,
+} = await import('./orders.service.js');
 const { getOrderDetail } = await import('../../orders/orders.service.js');
 
 const CUSTOMER_ID = 'admin_orders_test_customer';
@@ -207,6 +217,94 @@ describe('the assignee scope', () => {
     const unchanged = await prisma.order.findFirstOrThrow({ where: { id: theirs.id } });
     expect(unchanged.status).toBe(OrderStatus.SUBMITTED);
     expect(queueEmail).not.toHaveBeenCalled();
+  });
+
+  /*
+   * The documents are the sharpest case of the scope, which is why they get their
+   * own assertion rather than riding along above: the link this mints is a bearer
+   * token for a customer's identity paperwork, so a member reaching one on an
+   * order they do not hold would not merely be seeing a row they shouldn't — they
+   * would be holding the file.
+   */
+  it("refuses to mint a document link on someone else's order", async () => {
+    const theirs = await createOrder(OrderStatus.SUBMITTED, OTHER_STAFF_ID);
+    const document = await prisma.orderDocument.create({
+      data: {
+        orderId: theirs.id,
+        name: 'passport.pdf',
+        status: OrderDocumentStatus.AVAILABLE,
+        source: OrderDocumentSource.CUSTOMER,
+        objectKey: 'orders/some-customer/uuid/passport.pdf',
+        contentType: 'application/pdf',
+      },
+    });
+
+    await expect(
+      getDocumentLink(auth(STAFF_ID, Role.STAFF), theirs.id, document.id, {
+        disposition: 'inline',
+      }),
+    ).rejects.toMatchObject({ status: 404 });
+  });
+});
+
+/*
+ * The Documents card's View and Download controls.
+ *
+ * Only the refusals are asserted here: minting a real URL needs a configured R2
+ * bucket, which the test environment deliberately does not have (AGENTS.md —
+ * tests never reach a real service). What matters at this layer is that a row
+ * with nothing behind it is refused rather than handed a link to an object that
+ * was never uploaded.
+ */
+describe('getDocumentLink', () => {
+  const inline = { disposition: 'inline' } as const;
+
+  it('refuses a pending placeholder, which has no object behind it', async () => {
+    const order = await createOrder(OrderStatus.PROCESSING);
+    const placeholder = await prisma.orderDocument.create({
+      data: {
+        orderId: order.id,
+        name: 'Certificate of Formation',
+        status: OrderDocumentStatus.PENDING,
+        source: OrderDocumentSource.TEAM,
+      },
+    });
+
+    await expect(
+      getDocumentLink(auth(STAFF_ID, Role.STAFF), order.id, placeholder.id, inline),
+    ).rejects.toMatchObject({
+      status: 422,
+      message: 'That document has no file behind it yet',
+    });
+  });
+
+  it('404s an unknown document rather than confirming the id', async () => {
+    const order = await createOrder(OrderStatus.UNDER_REVIEW);
+
+    await expect(
+      getDocumentLink(auth(STAFF_ID, Role.STAFF), order.id, 'no_such_document', inline),
+    ).rejects.toMatchObject({ status: 404 });
+  });
+
+  // A document filed against a different order is not reachable through this one,
+  // even by the member who holds both.
+  it('refuses a document that belongs to another order', async () => {
+    const order = await createOrder(OrderStatus.UNDER_REVIEW);
+    const other = await createOrder(OrderStatus.UNDER_REVIEW);
+
+    const document = await prisma.orderDocument.create({
+      data: {
+        orderId: other.id,
+        name: 'proof-of-address.pdf',
+        status: OrderDocumentStatus.AVAILABLE,
+        source: OrderDocumentSource.CUSTOMER,
+        objectKey: 'orders/some-customer/uuid/proof-of-address.pdf',
+      },
+    });
+
+    await expect(
+      getDocumentLink(auth(STAFF_ID, Role.STAFF), order.id, document.id, inline),
+    ).rejects.toMatchObject({ status: 404 });
   });
 
   it('refuses an unassigned order to a member who cannot assign', async () => {

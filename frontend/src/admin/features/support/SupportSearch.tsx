@@ -30,7 +30,7 @@ export function SupportSearch({ value, onChange }: SupportSearchProps) {
         onChange={(event) => onChange(event.target.value)}
         placeholder="Search by name or order ref..."
         aria-label="Search conversations by name or order reference"
-        className="h-12 w-full rounded-input border border-gray-200 bg-gray-50 pl-10 pr-3.5 text-[13px] text-text outline-none transition-colors placeholder:text-gray-400 focus:border-primary focus:bg-white focus:ring-1 focus:ring-primary md:h-9 md:rounded-lg md:pl-8 md:pr-2.5 md:text-small lg:h-10 lg:rounded-input lg:pl-9 lg:text-[13px]"
+        className="h-12 w-full rounded-input border border-gray-200 bg-gray-50 pl-10 pr-3.5 text-[0.8125rem] text-text outline-none transition-colors placeholder:text-gray-400 focus:border-primary focus:bg-white focus:ring-1 focus:ring-primary md:h-9 md:rounded-lg md:pl-8 md:pr-2.5 md:text-small lg:h-10 lg:rounded-input lg:pl-9 lg:text-[0.8125rem]"
       />
     </div>
   );

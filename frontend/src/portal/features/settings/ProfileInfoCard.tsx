@@ -106,7 +106,7 @@ export function ProfileInfoCard({
             type="button"
             onClick={onChangePhoto}
             disabled={isUploadingPhoto}
-            className="inline-flex h-10 items-center justify-center rounded-input border border-primary bg-white px-4 text-[14px] font-semibold text-primary transition-colors hover:bg-primary-light disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex h-10 items-center justify-center rounded-input border border-primary bg-white px-4 text-[0.875rem] font-semibold text-primary transition-colors hover:bg-primary-light disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isUploadingPhoto ? 'Uploading…' : 'Change photo'}
           </button>
@@ -124,7 +124,7 @@ export function ProfileInfoCard({
           <div key={field.id} className="flex w-full flex-col gap-1.5">
             <label
               htmlFor={`profile-${field.id}`}
-              className="text-[14px] font-medium text-gray-700"
+              className="text-[0.875rem] font-medium text-gray-700"
             >
               {field.label}
             </label>
@@ -146,7 +146,7 @@ export function ProfileInfoCard({
           <button
             type="button"
             onClick={onCancel}
-            className="inline-flex h-10 items-center px-4 text-[14px] font-medium text-gray-500 transition-colors hover:text-gray-700"
+            className="inline-flex h-10 items-center px-4 text-[0.875rem] font-medium text-gray-500 transition-colors hover:text-gray-700"
           >
             Cancel
           </button>
@@ -182,7 +182,7 @@ export function SaveButton({
       type="button"
       onClick={onClick}
       disabled={disabled || isSaving}
-      className={`inline-flex h-12 items-center justify-center rounded-input px-5 text-[14px] font-semibold transition-colors ${
+      className={`inline-flex h-12 items-center justify-center rounded-input px-5 text-[0.875rem] font-semibold transition-colors ${
         disabled
           ? 'cursor-not-allowed bg-gray-200 text-gray-400'
           : 'bg-primary text-white hover:bg-primary-hover'

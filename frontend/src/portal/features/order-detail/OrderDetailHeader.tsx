@@ -62,7 +62,7 @@ export function OrderDetailHeader({ order }: { order: OrderDetail }) {
             <ArrowLeft className="size-5" strokeWidth={1.75} aria-hidden="true" />
           </Link>
           <div className="flex flex-col gap-1">
-            <h1 className="text-[28px] font-semibold leading-tight text-text lg:text-h3">
+            <h1 className="text-[1.75rem] font-semibold leading-tight text-text lg:text-h3">
               {order.serviceName}
             </h1>
             <p className="text-body text-text-secondary">

@@ -83,10 +83,10 @@ export function ConfirmationCard({ confirmation }: ConfirmationCardProps) {
   ];
 
   return (
-    <div className="flex w-full max-w-[560px] flex-col items-center gap-8 rounded-card border border-gray-200 bg-white p-6 shadow-sm-elevation md:p-10">
+    <div className="flex w-full max-w-[35rem] flex-col items-center gap-8 rounded-card border border-gray-200 bg-white p-6 shadow-sm-elevation md:p-10">
       {/* Success badge — approved-green circle with a check (lucide, not the
           exported asset per the design guide). */}
-      <div className="flex size-[72px] shrink-0 items-center justify-center rounded-full bg-status-approved-bg">
+      <div className="flex size-[4.5rem] shrink-0 items-center justify-center rounded-full bg-status-approved-bg">
         <Check className="size-8 text-status-approved-text" strokeWidth={2.5} aria-hidden="true" />
       </div>
 

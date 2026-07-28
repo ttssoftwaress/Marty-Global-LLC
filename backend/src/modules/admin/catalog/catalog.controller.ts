@@ -95,6 +95,22 @@ export async function updateService(
   }
 }
 
+export async function deleteService(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const deleted = await service.deleteService(
+      getAuth(req),
+      pathParam(req, 'serviceId'),
+    );
+    res.json({ data: deleted });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function updateResultSchema(
   req: Request,
   res: Response,

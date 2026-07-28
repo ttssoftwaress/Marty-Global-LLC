@@ -158,6 +158,13 @@ export type CatalogServiceRow = {
   tierCount: number;
   updatedAt: string;
   active: boolean;
+  /*
+   * Whether Delete is available on this row at all — false once a customer has
+   * ordered the service or a record has been delivered under it, because those
+   * point at it and it is deactivated instead. Computed by the backend so the
+   * rule has one definition and the button cannot disagree with the endpoint.
+   */
+  canDelete: boolean;
 };
 
 /*
@@ -310,6 +317,10 @@ export type ServiceDetailDraft = {
   regions: ServiceRegionSetting[];
   pricingTiers: PricingTierDraft[];
   steps: ServiceFormStepDraft[];
+  // Whether customers can order it. The create modal sets it once; after that
+  // this screen is the only place it can be flipped, and it is the alternative
+  // the list offers when a service has been ordered and so cannot be deleted.
+  active: boolean;
 };
 
 export type FeatureDraft = {
@@ -364,6 +375,7 @@ export type ServiceDetailWritePayload = {
   }[];
   formSteps: ServiceFormStep[];
   detailFields: ServiceFieldRef[];
+  active: boolean;
 };
 
 // Field-level messages the form renders under the control that failed. Keyed by

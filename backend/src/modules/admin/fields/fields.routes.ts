@@ -18,10 +18,13 @@ import * as controller from './fields.controller.js';
  * change here reshapes what every service asking the field collects, which is
  * the "account-level" case AGENTS.md reserves for admin.
  *
- * There is no DELETE. A field a historical order holds an answer for must stay
- * resolvable (AGENTS.md — ask before any hard delete); retiring one is a PATCH
- * setting `archived`, which removes it from the picker without touching the
- * forms or answers that already reference it.
+ * DELETE only ever succeeds for a field nothing has ever referenced — no service
+ * form, no request type, no stored answer. A question registered by mistake
+ * should be removable rather than sitting archived forever, but a field a
+ * historical order holds an answer for must stay resolvable (AGENTS.md — ask
+ * before any hard delete), so the service refuses those and the caller archives
+ * instead: a PATCH setting `archived`, which removes it from the picker without
+ * touching the forms or answers that already reference it.
  */
 
 const router = Router();
@@ -32,5 +35,6 @@ router.get('/', apiRateLimit, controller.listFields);
 
 router.post('/', requireAdmin, sensitiveRateLimit, controller.createField);
 router.patch('/:fieldId', requireAdmin, sensitiveRateLimit, controller.updateField);
+router.delete('/:fieldId', requireAdmin, sensitiveRateLimit, controller.deleteField);
 
 export const adminFieldsRouter = router;

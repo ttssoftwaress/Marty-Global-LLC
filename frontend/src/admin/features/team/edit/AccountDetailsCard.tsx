@@ -129,9 +129,9 @@ export function AccountDetailsCard({
             className="absolute right-3 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-control text-gray-500 transition-colors hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
           >
             {showPassword ? (
-              <EyeOff className="size-[18px]" strokeWidth={1.75} aria-hidden="true" />
+              <EyeOff className="size-[1.125rem]" strokeWidth={1.75} aria-hidden="true" />
             ) : (
-              <Eye className="size-[18px]" strokeWidth={1.75} aria-hidden="true" />
+              <Eye className="size-[1.125rem]" strokeWidth={1.75} aria-hidden="true" />
             )}
           </button>
         </div>
@@ -153,7 +153,7 @@ export function AccountDetailsCard({
       <div className="flex w-full items-center justify-between gap-4">
         <div className="flex min-w-0 flex-col gap-1">
           <p className="text-form-label text-gray-800">Member status</p>
-          <p className="text-small leading-[1.3] text-text-secondary md:text-[13px]">
+          <p className="text-small leading-[1.3] text-text-secondary md:text-[0.8125rem]">
             {statusDescription}
           </p>
         </div>

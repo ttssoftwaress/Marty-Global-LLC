@@ -53,7 +53,7 @@ export function ResultListControls({
               role="tab"
               aria-selected={active}
               onClick={() => onStatusChange(tab.value)}
-              className={`flex-1 whitespace-nowrap rounded-[8px] px-4 py-2 text-[13px] font-semibold transition-colors md:flex-none ${
+              className={`flex-1 whitespace-nowrap rounded-[0.5rem] px-4 py-2 text-[0.8125rem] font-semibold transition-colors md:flex-none ${
                 active
                   ? 'bg-white text-text shadow-sm-elevation'
                   : 'text-gray-500 hover:text-text'
@@ -66,7 +66,7 @@ export function ResultListControls({
       </div>
 
       <div className="flex w-full items-center gap-3 md:w-auto">
-        <label className="relative flex w-full items-center md:w-[280px]">
+        <label className="relative flex w-full items-center md:w-[17.5rem]">
           <span className="sr-only">Search {noun}s</span>
           <Search
             className="pointer-events-none absolute left-3 size-4 text-gray-400"

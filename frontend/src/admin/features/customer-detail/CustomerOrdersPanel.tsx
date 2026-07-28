@@ -36,7 +36,7 @@ function EmptyState() {
 
       <div className="flex flex-col gap-1">
         <p className="text-h6 text-text">No orders yet</p>
-        <p className="max-w-[380px] text-body text-gray-500">
+        <p className="max-w-[23.75rem] text-body text-gray-500">
           Orders this customer submits will appear here.
         </p>
       </div>

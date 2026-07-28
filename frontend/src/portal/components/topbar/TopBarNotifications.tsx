@@ -6,8 +6,8 @@ import { Bell } from 'lucide-react';
  *
  * The three Figma links each use a slightly different red for the badge
  * (#ef4444 / #dc2626 / #b91c1c). That reads as drift rather than intent, so all
- * three breakpoints render the design system's `error` token instead — logged
- * as a deviation.
+ * three breakpoints render the design system's `accent` token instead — the
+ * brand magenta, part of the accent-visibility pass. Logged as a deviation.
  *
  * Counts above 9 would overflow the 16px badge, so they clamp to "9+"; a zero
  * count hides the badge entirely — neither state is in the design.
@@ -16,7 +16,7 @@ import { Bell } from 'lucide-react';
 type TopBarNotificationsProps = {
   count?: number;
   onOpenNotifications?: () => void;
-  /** Mobile draws a slightly smaller badge (14px vs 16px). */
+  /** Mobile draws a slightly smaller badge (0.875rem vs 16px). */
   compact?: boolean;
 };
 
@@ -35,7 +35,7 @@ export function TopBarNotifications({
       type="button"
       onClick={onOpenNotifications}
       aria-label={label}
-      className="relative flex size-6 shrink-0 items-center justify-center rounded-pill text-gray-600 transition-colors hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+      className="relative flex size-6 shrink-0 items-center justify-center rounded-pill text-gray-600 transition-colors hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
     >
       <Bell className="size-6" strokeWidth={1.75} aria-hidden="true" />
 
@@ -44,8 +44,8 @@ export function TopBarNotifications({
           aria-hidden="true"
           className={
             compact
-              ? 'absolute -top-0.5 left-3 flex size-[14px] items-center justify-center rounded-pill bg-error px-0.5 text-[9px] font-bold leading-none text-white'
-              : 'absolute -top-0.5 left-3 flex size-4 items-center justify-center rounded-pill bg-error px-0.5 text-[10px] font-bold leading-none text-white'
+              ? 'absolute -top-0.5 left-3 flex size-[0.875rem] items-center justify-center rounded-pill bg-accent px-0.5 text-[0.5625rem] font-bold leading-none text-white'
+              : 'absolute -top-0.5 left-3 flex size-4 items-center justify-center rounded-pill bg-accent px-0.5 text-[0.625rem] font-bold leading-none text-white'
           }
         >
           {count > 9 ? '9+' : count}

@@ -32,6 +32,19 @@ router.patch(
   sensitiveRateLimit,
   controller.updateService,
 );
+/*
+ * DELETE is offered, but only ever succeeds for a service nothing was ordered or
+ * delivered under — the service refuses it otherwise and the caller deactivates
+ * instead. That keeps "added by mistake" cleanable without letting a service
+ * disappear out from under the orders placed for it, and even a successful call
+ * writes `deletedAt` rather than removing the row.
+ */
+router.delete(
+  '/services/:serviceId',
+  requireAdmin,
+  sensitiveRateLimit,
+  controller.deleteService,
+);
 
 /*
  * The delivery half of a service — what it RETURNS, and the follow-up actions it

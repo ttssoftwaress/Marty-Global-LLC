@@ -51,10 +51,10 @@ type NotificationPreferencesCardProps = {
 /* The toggle block's width, shared by the header labels and every row so the
  * columns line up. Steps 136 → 220 → 300 across the three designs. */
 const TOGGLE_BLOCK =
-  'flex shrink-0 items-center justify-end gap-2.5 w-[136px] md:w-[220px] md:gap-5 lg:w-[300px] lg:gap-10';
+  'flex shrink-0 items-center justify-end gap-2.5 w-[8.5rem] md:w-[13.75rem] md:gap-5 lg:w-[18.75rem] lg:gap-10';
 
 /* One column cell — fixed width so a missing switch still holds its place. */
-const CELL = 'flex shrink-0 items-center justify-center w-[38px] md:w-[60px]';
+const CELL = 'flex shrink-0 items-center justify-center w-[2.375rem] md:w-[3.75rem]';
 
 export function NotificationPreferencesCard({
   value,
@@ -72,7 +72,7 @@ export function NotificationPreferencesCard({
 
   return (
     <div className={shell}>
-      <h2 className="text-[16px] font-semibold text-text lg:text-[18px]">
+      <h2 className="text-[1rem] font-semibold text-text lg:text-[1.125rem]">
         Notification preferences
       </h2>
 
@@ -84,7 +84,7 @@ export function NotificationPreferencesCard({
             {NOTIFICATION_CHANNELS.map((channel) => (
               <p
                 key={channel.id}
-                className={`${CELL} text-center text-[9px] font-semibold uppercase tracking-[0.2px] text-text-secondary md:text-[11px] md:font-medium md:text-gray-500`}
+                className={`${CELL} text-center text-[0.5625rem] font-semibold uppercase tracking-[0.2px] text-text-secondary md:text-[0.6875rem] md:font-medium md:text-gray-500`}
               >
                 {channel.label}
               </p>
@@ -96,10 +96,10 @@ export function NotificationPreferencesCard({
             switch; the other two columns stay empty per the design. */}
         <div className="flex w-full items-center border-b border-gray-200 py-3.5 md:py-4 lg:py-5">
           <div className="flex min-w-0 flex-1 flex-col gap-0.5 pr-3">
-            <p className="text-[13px] font-semibold text-text md:text-[14px] md:font-medium">
+            <p className="text-[0.8125rem] font-semibold text-text md:text-[0.875rem] md:font-medium">
               {NOTIFICATION_MASTER.label}
             </p>
-            <p className="text-[11px] leading-[1.3] text-text-secondary md:text-[12px] md:leading-normal">
+            <p className="text-[0.6875rem] leading-[1.3] text-text-secondary md:text-[0.75rem] md:leading-normal">
               {NOTIFICATION_MASTER.description}
             </p>
           </div>
@@ -127,10 +127,10 @@ export function NotificationPreferencesCard({
             }`}
           >
             <div className="flex min-w-0 flex-1 flex-col gap-0.5 pr-3">
-              <p className="text-[13px] font-semibold text-text md:text-[14px] md:font-normal">
+              <p className="text-[0.8125rem] font-semibold text-text md:text-[0.875rem] md:font-normal">
                 {category.label}
               </p>
-              <p className="text-[11px] leading-[1.3] text-text-secondary md:text-[12px] md:leading-normal">
+              <p className="text-[0.6875rem] leading-[1.3] text-text-secondary md:text-[0.75rem] md:leading-normal">
                 {category.description}
               </p>
             </div>
@@ -162,7 +162,7 @@ export function NotificationPreferencesCard({
           <button
             type="button"
             onClick={onCancel}
-            className="inline-flex h-10 items-center px-4 text-[13px] font-medium text-gray-600 transition-colors hover:text-gray-700 lg:text-[14px] lg:text-gray-500"
+            className="inline-flex h-10 items-center px-4 text-[0.8125rem] font-medium text-gray-600 transition-colors hover:text-gray-700 lg:text-[0.875rem] lg:text-gray-500"
           >
             Cancel
           </button>
@@ -170,7 +170,7 @@ export function NotificationPreferencesCard({
             onClick={onSave}
             disabled={!canSave}
             isSaving={isSaving}
-            className="h-10 rounded-input px-4 text-[13px] lg:h-12 lg:px-5 lg:text-[14px]"
+            className="h-10 rounded-input px-4 text-[0.8125rem] lg:h-12 lg:px-5 lg:text-[0.875rem]"
           />
         </div>
       )}

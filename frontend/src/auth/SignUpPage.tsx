@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 
 import logoColor from '@/assets/Marty-Logo-Color.PNG';
 import { signUp } from '@/auth/client';
+import { useCompactScale } from '@/hooks/useCompactScale';
 import { markAccountOnDevice } from '@/lib/device-account';
 import { LeftPanel } from './components/auth-brand';
 import {
@@ -12,12 +13,16 @@ import {
   ShieldCheckIcon,
 } from './components/icons';
 
-const TERMS_URL = 'https://example.com/terms';
-const PRIVACY_URL = 'https://example.com/privacy';
+// The real published documents. Opened in a new tab so reading them does not
+// discard a part-filled signup form.
+const TERMS_ROUTE = '/legal/terms';
+const PRIVACY_ROUTE = '/legal/privacy';
 const LOGIN_ROUTE = '/login';
 const MIN_PASSWORD_LENGTH = 8;
 
 export function SignUpPage() {
+  useCompactScale();
+
   return (
     <div className="flex min-h-screen w-full flex-col items-stretch bg-white lg:flex-row">
       <LeftPanel
@@ -40,9 +45,9 @@ function BrandHeader() {
       <img
         src={logoColor}
         alt="Marty Global LLC"
-        className="h-20 w-40 object-contain md:h-[60px] md:w-[180px]"
+        className="h-20 w-40 object-contain md:h-[3.75rem] md:w-[11.25rem]"
       />
-      <h1 className="hidden text-[28px] font-bold leading-none text-primary md:block">
+      <h1 className="hidden text-[1.75rem] font-bold leading-none text-primary md:block">
         Create Your Account
       </h1>
     </div>
@@ -51,13 +56,13 @@ function BrandHeader() {
 
 function RightPanel() {
   return (
-    <div className="flex flex-1 flex-col bg-white lg:items-center lg:justify-center lg:px-12 lg:py-16 xl:px-[88px]">
+    <div className="flex flex-1 flex-col bg-white lg:items-center lg:justify-center lg:px-12 lg:py-16 xl:px-[5.5rem]">
       <BrandHeader />
 
       <div className="flex flex-1 flex-col items-center justify-center px-6 pb-8 pt-6 md:px-10 md:py-12 lg:p-0">
-        <div className="flex w-full max-w-[480px] flex-col gap-6 md:gap-6 lg:gap-8">
+        <div className="flex w-full max-w-[30rem] flex-col gap-6 md:gap-6 lg:gap-8">
           <div className="flex flex-col gap-2">
-            <h2 className="text-2xl font-semibold leading-none text-text md:text-[26px] lg:text-[28px]">
+            <h2 className="text-2xl font-semibold leading-none text-text md:text-[1.625rem] lg:text-[1.75rem]">
               Create Your Account
             </h2>
             <p className="text-body leading-[1.5] text-text-secondary">
@@ -265,32 +270,32 @@ function SignUpForm() {
         >
           <CheckIcon className="h-2 w-2.5" />
         </button>
-        <span className="text-[13px] leading-[1.4] text-text-secondary">
+        <span className="text-[0.8125rem] leading-[1.4] text-text-secondary">
           I agree to the{' '}
-          <a
-            href={TERMS_URL}
+          <Link
+            to={TERMS_ROUTE}
             target="_blank"
             rel="noreferrer"
             className="font-semibold text-primary underline"
           >
             Terms of Service
-          </a>{' '}
+          </Link>{' '}
           and{' '}
-          <a
-            href={PRIVACY_URL}
+          <Link
+            to={PRIVACY_ROUTE}
             target="_blank"
             rel="noreferrer"
             className="font-semibold text-primary underline"
           >
             Privacy Policy
-          </a>
+          </Link>
         </span>
       </label>
 
       {formError && (
         <p
           role="alert"
-          className="rounded-lg border border-error/30 bg-error/5 px-4 py-3 text-[13px] leading-[1.4] text-error"
+          className="rounded-lg border border-error/30 bg-error/5 px-4 py-3 text-[0.8125rem] leading-[1.4] text-error"
         >
           {formError}
         </p>
@@ -300,7 +305,7 @@ function SignUpForm() {
         <button
           type="submit"
           disabled={!agreed || submitting}
-          className="btn btn-primary h-[52px] w-full rounded-xl shadow-[0px_8px_10px_rgba(3,18,109,0.15)] disabled:cursor-not-allowed disabled:opacity-50 md:h-11 md:rounded-input md:shadow-[0px_4px_6px_rgba(3,18,109,0.1)] lg:h-12"
+          className="btn btn-primary h-[3.25rem] w-full rounded-xl shadow-[0px_0.5rem_0.625rem_rgba(3,18,109,0.15)] disabled:cursor-not-allowed disabled:opacity-50 md:h-11 md:rounded-input md:shadow-[0px_0.25rem_0.375rem_rgba(3,18,109,0.1)] lg:h-12"
         >
           {submitting ? 'Creating Account…' : 'Create Account'}
         </button>
@@ -315,14 +320,14 @@ function SignUpForm() {
           Already have an account?{' '}
           <Link
             to={LOGIN_ROUTE}
-            className="font-semibold text-primary underline"
+            className="font-semibold text-accent underline transition-colors hover:text-accent-hover"
           >
             Log In
           </Link>
         </p>
       </div>
 
-      <div className="flex items-center gap-2.5 rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-[0px_2px_5px_rgba(0,0,0,0.04)] md:gap-2 md:rounded-lg md:border-gray-200 md:bg-gray-50 md:shadow-none">
+      <div className="flex items-center gap-2.5 rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-[0px_2px_0.3125rem_rgba(0,0,0,0.04)] md:gap-2 md:rounded-lg md:border-gray-200 md:bg-gray-50 md:shadow-none">
         <ShieldCheckIcon className="size-4 shrink-0 text-text-secondary" />
         <p className="text-small leading-[1.4] text-text-secondary">
           Your information is encrypted and secure. We never share your details
@@ -348,7 +353,7 @@ function Field({ label, htmlFor, error, children }: FieldProps) {
       </label>
       {children}
       {error && (
-        <p id={`${htmlFor}-error`} className="text-[13px] leading-[1.3] text-error">
+        <p id={`${htmlFor}-error`} className="text-[0.8125rem] leading-[1.3] text-error">
           {error}
         </p>
       )}

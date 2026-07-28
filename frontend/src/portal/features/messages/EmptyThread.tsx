@@ -16,11 +16,11 @@ export function EmptyThread({ className = '' }: EmptyThreadProps) {
     <div
       className={`min-h-0 flex-1 flex-col items-center justify-center gap-3 rounded-card border border-gray-200 bg-white p-6 text-center ${className}`}
     >
-      <span className="flex size-14 items-center justify-center rounded-[28px] bg-primary-light">
+      <span className="flex size-14 items-center justify-center rounded-[1.75rem] bg-primary-light">
         <MessagesSquare className="size-7 text-primary" strokeWidth={1.75} aria-hidden="true" />
       </span>
       <p className="text-body-lg font-semibold text-text">Select a conversation</p>
-      <p className="max-w-[320px] text-body text-gray-500">
+      <p className="max-w-[20rem] text-body text-gray-500">
         Choose a conversation from the list to read and reply to messages with our
         team.
       </p>

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 
 import { ApiError } from '@/services/api';
+import { useOverlay } from '../../../hooks/useOverlay';
 import { formatOrderDate } from '../../lib/format';
 import type { UnmatchedTransferRow } from '../../types/payments';
 import { shortHash } from './UnmatchedTransferTable';
@@ -24,13 +25,11 @@ import { shortHash } from './UnmatchedTransferTable';
  * One component, two presentations — a bottom sheet on mobile, a centred modal
  * from `md` up — mirroring `team/AddStaffDialog`. The two are not shared because
  * features never import from each other (AGENTS.md, route-group rule). Standard
- * dialog behaviour the design never covers: Escape and the backdrop close it,
- * body scroll locks, focus moves in on open, returns on close, and is trapped
- * while open (Design.md — filling in states the design left out).
+ * dialog behaviour the design never covers: the backdrop closes it, and
+ * `useOverlay` owns Escape, the body scroll lock, focus moving in on open and
+ * back on close, and the Tab trap while open (Design.md — filling in states the
+ * design left out).
  */
-
-const FOCUSABLE =
-  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 // Matches the backend's `resolveUnmatchedSchema`, so the field cannot submit a
 // value the API will reject.
@@ -52,18 +51,9 @@ export function ResolveTransferDialog({
   onClose,
 }: ResolveTransferDialogProps) {
   const panelRef = useRef<HTMLDivElement>(null);
-  const restoreFocusRef = useRef<HTMLElement | null>(null);
   const [note, setNote] = useState('');
 
   const open = transfer !== null;
-
-  // `onClose` is a fresh closure on every keystroke of the note being typed, so
-  // it can't be an effect dependency — the effect would tear down mid-typing and
-  // pull focus back to the panel's first focusable.
-  const onCloseRef = useRef(onClose);
-  useEffect(() => {
-    onCloseRef.current = onClose;
-  }, [onClose]);
 
   // A fresh note per transfer: carrying the last one over would risk filing the
   // wrong explanation against a permanent record.
@@ -71,53 +61,7 @@ export function ResolveTransferDialog({
     if (open) setNote('');
   }, [open, transfer?.id]);
 
-  useEffect(() => {
-    if (!open) return;
-
-    restoreFocusRef.current = document.activeElement as HTMLElement | null;
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onCloseRef.current();
-        return;
-      }
-
-      if (event.key !== 'Tab' || !panelRef.current) return;
-
-      const focusable = Array.from(
-        panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE),
-      ).filter((element) => element.offsetParent !== null);
-      if (focusable.length === 0) return;
-
-      // The length check above guarantees both, which the index signature can't
-      // express under `noUncheckedIndexedAccess`.
-      const first = focusable[0]!;
-      const last = focusable[focusable.length - 1]!;
-
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-
-    document.addEventListener('keydown', onKeyDown);
-
-    const { overflow } = document.body.style;
-    document.body.style.overflow = 'hidden';
-
-    panelRef.current
-      ?.querySelector<HTMLElement>(FOCUSABLE)
-      ?.focus({ preventScroll: true });
-
-    return () => {
-      document.removeEventListener('keydown', onKeyDown);
-      document.body.style.overflow = overflow;
-      restoreFocusRef.current?.focus({ preventScroll: true });
-    };
-  }, [open]);
+  useOverlay({ open, onClose, panelRef });
 
   if (!transfer) return null;
 
@@ -147,7 +91,8 @@ export function ResolveTransferDialog({
         role="dialog"
         aria-modal="true"
         aria-label="Reconcile transfer"
-        className="relative flex max-h-[92dvh] w-full flex-col rounded-t-modal bg-white shadow-lg-elevation md:max-h-[86dvh] md:max-w-[560px] md:rounded-modal"
+        tabIndex={-1}
+        className="relative flex max-h-[92dvh] w-full flex-col rounded-t-modal bg-white shadow-lg-elevation outline-none md:max-h-[86dvh] md:max-w-[35rem] md:rounded-modal"
       >
         {/* The grabber reads as "drag me down", so it is mobile-only. */}
         <div className="flex justify-center pb-1 pt-3 md:hidden">

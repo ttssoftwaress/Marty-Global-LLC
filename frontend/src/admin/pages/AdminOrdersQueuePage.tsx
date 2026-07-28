@@ -52,7 +52,7 @@ function QueueSkeleton() {
       {/* Mobile — a stack of cards */}
       <div className="flex flex-col gap-3 md:hidden">
         {Array.from({ length: 5 }, (_, index) => (
-          <div key={index} className="h-[168px] animate-pulse rounded-card bg-gray-200" />
+          <div key={index} className="h-[10.5rem] animate-pulse rounded-card bg-gray-200" />
         ))}
       </div>
 
@@ -168,7 +168,7 @@ export function AdminOrdersQueuePage() {
   return (
     <AdminLayout user={user} onLogout={onLogout}>
       <div className="w-full p-4 md:p-6 lg:p-content">
-        <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-4 md:gap-5 lg:gap-6">
+        <div className="mx-auto flex w-full max-w-[87.5rem] flex-col gap-4 md:gap-5 lg:gap-6">
           <OrdersQueueHeader
             totalOrders={summary.data?.totalOrders ?? 0}
             awaitingReview={summary.data?.awaitingReview ?? 0}

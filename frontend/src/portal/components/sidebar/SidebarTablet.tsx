@@ -25,7 +25,7 @@ export function SidebarTablet({ onLogout, className }: SidebarTabletProps) {
 
   return (
     <aside
-      className={`flex h-full w-[72px] flex-col justify-between bg-primary px-3 py-8 ${className ?? ''}`}
+      className={`flex h-full w-[4.5rem] flex-col justify-between bg-primary px-3 py-8 ${className ?? ''}`}
     >
       <nav aria-label="Portal" className="w-full">
         <ul className="flex w-full flex-col items-center gap-3">
@@ -43,7 +43,7 @@ export function SidebarTablet({ onLogout, className }: SidebarTabletProps) {
                   aria-current={active ? 'page' : undefined}
                   className={
                     active
-                      ? 'flex size-12 items-center justify-center rounded-xl bg-white text-primary'
+                      ? 'flex size-12 items-center justify-center rounded-xl bg-white text-accent'
                       : 'flex size-12 items-center justify-center rounded-xl text-white/80 transition-colors hover:bg-white/10 hover:text-white'
                   }
                 >
@@ -74,7 +74,7 @@ export function SidebarTablet({ onLogout, className }: SidebarTabletProps) {
                   aria-current={active ? 'page' : undefined}
                   className={
                     active
-                      ? 'flex size-12 items-center justify-center rounded-xl bg-white text-primary'
+                      ? 'flex size-12 items-center justify-center rounded-xl bg-white text-accent'
                       : 'flex size-12 items-center justify-center rounded-xl text-white/80 transition-colors hover:bg-white/10 hover:text-white'
                   }
                 >
@@ -91,9 +91,9 @@ export function SidebarTablet({ onLogout, className }: SidebarTabletProps) {
           to={PORTAL_SUPPORT_LINK.to}
           title={PORTAL_SUPPORT_LINK.label}
           aria-label={PORTAL_SUPPORT_LINK.label}
-          className="flex size-10 items-center justify-center rounded-[20px] text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+          className="flex size-10 items-center justify-center rounded-[1.25rem] text-white/80 transition-colors hover:bg-white/10 hover:text-white"
         >
-          <HelpCircle className="size-[18px]" strokeWidth={1.75} aria-hidden="true" />
+          <HelpCircle className="size-[1.125rem]" strokeWidth={1.75} aria-hidden="true" />
         </NavLink>
 
         <button
@@ -101,9 +101,9 @@ export function SidebarTablet({ onLogout, className }: SidebarTabletProps) {
           onClick={onLogout}
           title="Logout"
           aria-label="Logout"
-          className="flex size-10 items-center justify-center rounded-[20px] text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+          className="flex size-10 items-center justify-center rounded-[1.25rem] text-white/80 transition-colors hover:bg-white/10 hover:text-white"
         >
-          <LogOut className="size-[18px]" strokeWidth={1.75} aria-hidden="true" />
+          <LogOut className="size-[1.125rem]" strokeWidth={1.75} aria-hidden="true" />
         </button>
       </div>
     </aside>

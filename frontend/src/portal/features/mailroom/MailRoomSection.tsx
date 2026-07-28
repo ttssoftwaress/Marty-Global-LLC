@@ -21,18 +21,18 @@ const NEW_ROOM_ROUTE = '/app/mailroom/new';
 function EmptyState() {
   return (
     <div className="flex flex-col items-center gap-3 rounded-card border border-gray-200 bg-white px-6 py-14 text-center shadow-sm-elevation">
-      <span className="flex size-12 items-center justify-center rounded-[24px] bg-primary-light">
+      <span className="flex size-12 items-center justify-center rounded-[1.5rem] bg-primary-light">
         <Mail className="size-6 text-primary" strokeWidth={1.75} aria-hidden="true" />
       </span>
       <p className="text-body-lg font-semibold text-text">No mail rooms yet</p>
-      <p className="max-w-[360px] text-body text-gray-500">
+      <p className="max-w-[22.5rem] text-body text-gray-500">
         Add a virtual mail room to start receiving and managing scanned mail.
       </p>
       <Link
         to={NEW_ROOM_ROUTE}
         className="btn btn-primary mt-1 h-11 rounded-input px-5 text-body"
       >
-        <Plus className="mr-2 size-[18px] shrink-0" strokeWidth={1.75} aria-hidden="true" />
+        <Plus className="mr-2 size-[1.125rem] shrink-0" strokeWidth={1.75} aria-hidden="true" />
         Add new room
       </Link>
     </div>
@@ -48,7 +48,7 @@ export function MailRoomSection({ rooms }: { rooms: MailRoom[] }) {
         <h2 className="text-h6 font-semibold text-text md:text-h4">Your mail rooms</h2>
         <Link
           to={NEW_ROOM_ROUTE}
-          className="btn btn-primary w-full md:h-10 md:w-auto md:px-4 md:text-[14px] lg:h-input lg:px-6 lg:text-button"
+          className="btn btn-primary w-full md:h-10 md:w-auto md:px-4 md:text-[0.875rem] lg:h-input lg:px-6 lg:text-button"
         >
           <Plus
             className="mr-2 size-5 shrink-0 md:size-4 lg:size-5"

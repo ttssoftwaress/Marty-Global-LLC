@@ -124,7 +124,7 @@ export function RevenueChart({ series }: RevenueChartProps) {
 
   if (points.length === 0) {
     return (
-      <div className="flex h-[150px] w-full items-center justify-center rounded-input bg-gray-50 md:h-[200px] lg:h-[260px]">
+      <div className="flex h-[9.375rem] w-full items-center justify-center rounded-input bg-gray-50 md:h-[12.5rem] lg:h-[16.25rem]">
         <p className="text-small text-gray-500">
           No revenue recorded for this period yet
         </p>
@@ -142,13 +142,13 @@ export function RevenueChart({ series }: RevenueChartProps) {
        */}
       <div className="flex w-full gap-2 md:gap-3">
         <div
-          className="flex h-[120px] shrink-0 flex-col justify-between text-right md:h-[160px] lg:h-[200px]"
+          className="flex h-[7.5rem] shrink-0 flex-col justify-between text-right md:h-[10rem] lg:h-[12.5rem]"
           aria-hidden="true"
         >
           {ticks.map((tick, index) => (
             <span
               key={index}
-              className="text-[9px] leading-none text-gray-400 md:text-[10px] lg:text-caption lg:leading-none"
+              className="text-[0.5625rem] leading-none text-gray-400 md:text-[0.625rem] lg:text-caption lg:leading-none"
             >
               {tick}
             </span>
@@ -159,7 +159,7 @@ export function RevenueChart({ series }: RevenueChartProps) {
           <svg
             viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
             preserveAspectRatio="none"
-            className="h-[120px] w-full md:h-[160px] lg:h-[200px]"
+            className="h-[7.5rem] w-full md:h-[10rem] lg:h-[12.5rem]"
             role="img"
             aria-label={`Revenue over time — ${points.length} periods, peaking at ${formatMoney(
               { amount: ceiling, currency },
@@ -274,13 +274,13 @@ export function RevenueChart({ series }: RevenueChartProps) {
               className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full rounded-input bg-text px-2.5 py-1.5 shadow-md-elevation"
               style={{
                 left: `${(active.x / VIEW_W) * 100}%`,
-                top: `calc(${(active.y / VIEW_H) * 100}% - 8px)`,
+                top: `calc(${(active.y / VIEW_H) * 100}% - 0.5rem)`,
               }}
             >
               <p className="whitespace-nowrap text-caption font-semibold leading-4 text-white">
                 {formatMoney(active.collected)}
               </p>
-              <p className="whitespace-nowrap text-[10px] leading-3 text-gray-300">
+              <p className="whitespace-nowrap text-[0.625rem] leading-3 text-gray-300">
                 {active.label}
               </p>
             </div>
@@ -296,7 +296,7 @@ export function RevenueChart({ series }: RevenueChartProps) {
        */}
       <div className="mt-2 flex w-full gap-2 md:gap-3">
         <div
-          className="invisible shrink-0 text-right text-[9px] md:text-[10px] lg:text-caption"
+          className="invisible shrink-0 text-right text-[0.5625rem] md:text-[0.625rem] lg:text-caption"
           aria-hidden="true"
         >
           {ticks[0]}
@@ -305,7 +305,7 @@ export function RevenueChart({ series }: RevenueChartProps) {
           {points.map((point, index) => (
             <span
               key={index}
-              className={`text-[9px] leading-none text-gray-500 md:text-[10px] lg:text-caption lg:leading-none ${
+              className={`text-[0.5625rem] leading-none text-gray-500 md:text-[0.625rem] lg:text-caption lg:leading-none ${
                 shouldPrintLabel(index, points.length) ? '' : 'invisible'
               }`}
             >

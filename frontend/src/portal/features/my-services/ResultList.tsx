@@ -73,13 +73,13 @@ function EmptyState({
 }) {
   return (
     <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
-      <span className="flex size-12 items-center justify-center rounded-[24px] bg-gray-100">
+      <span className="flex size-12 items-center justify-center rounded-[1.5rem] bg-gray-100">
         <FolderOpen className="size-6 text-gray-400" strokeWidth={1.75} aria-hidden="true" />
       </span>
       <p className="text-body-lg font-semibold text-text">
         {hasFilter ? 'Nothing matches this view' : `No ${service.noun}s here yet`}
       </p>
-      <p className="max-w-[380px] text-body text-gray-500">
+      <p className="max-w-[23.75rem] text-body text-gray-500">
         {hasFilter
           ? 'Try another status or clear your search.'
           : `Once our team completes your ${service.name} order, the details will appear here.`}
@@ -148,7 +148,7 @@ export function ResultList({
     <div className="w-full rounded-card border border-gray-200 bg-white shadow-sm-elevation">
       {/* --- Table: tablet and up ------------------------------------------ */}
       <div className="hidden overflow-x-auto md:block">
-        <table className="w-full min-w-[640px] border-collapse">
+        <table className="w-full min-w-[40rem] border-collapse">
           <thead>
             <tr className="border-b border-gray-200">
               <th
@@ -220,7 +220,7 @@ export function ResultList({
                 <td className="px-card py-4 text-right align-top">
                   <Link
                     to={recordHref(row.id)}
-                    className="inline-flex items-center justify-center rounded-[10px] border border-primary bg-white px-4 py-2 text-[13px] font-semibold text-primary transition-colors hover:bg-primary-light"
+                    className="inline-flex items-center justify-center rounded-[0.625rem] border border-primary bg-white px-4 py-2 text-[0.8125rem] font-semibold text-primary transition-colors hover:bg-primary-light"
                   >
                     View
                   </Link>

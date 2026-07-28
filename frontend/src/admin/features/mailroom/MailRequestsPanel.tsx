@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Inbox } from 'lucide-react';
 
+import { isRequestActionable } from '../../lib/mail-requests';
 import type { MailRequestFilter, MailRequestRow } from '../../types/mailroom';
 import { MailRequestCardList } from './MailRequestCardList';
 import { MailRequestFilters } from './MailRequestFilters';
@@ -27,14 +28,14 @@ import { useAdminMailRequests, useProcessMailRequest } from './queries';
  */
 
 type MailRequestsPanelProps = {
-  onView: (request: MailRequestRow) => void;
+  onOpen: (request: MailRequestRow) => void;
 };
 
 function TableSkeleton() {
   return (
     <div className="flex w-full flex-col gap-3" aria-hidden="true">
-      <div className="h-9 w-[280px] animate-pulse rounded-pill bg-gray-200" />
-      <div className="h-[420px] w-full animate-pulse rounded-card bg-gray-200" />
+      <div className="h-9 w-[17.5rem] animate-pulse rounded-pill bg-gray-200" />
+      <div className="h-[26.25rem] w-full animate-pulse rounded-card bg-gray-200" />
     </div>
   );
 }
@@ -78,7 +79,7 @@ function EmptyState({
   );
 }
 
-export function MailRequestsPanel({ onView }: MailRequestsPanelProps) {
+export function MailRequestsPanel({ onOpen }: MailRequestsPanelProps) {
   const [filter, setFilter] = useState<MailRequestFilter>('all');
   const [page, setPage] = useState(1);
 
@@ -92,12 +93,26 @@ export function MailRequestsPanel({ onView }: MailRequestsPanelProps) {
 
   const clearFilter = () => onFilterChange('all');
 
-  // Tracked per row so working one request does not disable every other button.
+  // Tracked per row so claiming one request does not disable every other button.
   const processingId = processRequest.isPending
     ? (processRequest.variables ?? null)
     : null;
 
-  const onProcess = (request: MailRequestRow) => processRequest.mutate(request.id);
+  /*
+   * A row opens the detail panel, which is the only place a request can actually
+   * be settled — the row itself has nowhere to put a tracking number or a shred
+   * confirmation.
+   *
+   * An outstanding request is also claimed on the way in: `process` moves it
+   * pending → processing, so the queue shows the rest of the team that someone
+   * is already on it. The panel opens either way — claiming is bookkeeping, and
+   * a failed claim must not block the operator from working the request (the
+   * resolve call re-checks status server-side regardless).
+   */
+  const onOpenRequest = (request: MailRequestRow) => {
+    if (isRequestActionable(request.status)) processRequest.mutate(request.id);
+    onOpen(request);
+  };
 
   if (requests.isPending) return <TableSkeleton />;
 
@@ -132,9 +147,15 @@ export function MailRequestsPanel({ onView }: MailRequestsPanelProps) {
     <div className="flex w-full flex-col gap-4">
       <MailRequestFilters value={filter} onChange={onFilterChange} />
 
+      {/*
+       * The claim failing is not the operator's action failing — the panel is
+       * open and the request can still be settled from it — so this reports what
+       * did not happen rather than asking for a retry.
+       */}
       {processRequest.isError ? (
         <p role="alert" className="text-small text-error">
-          That request could not be processed. Try again.
+          That request could not be marked as in progress. You can still work it
+          from its panel.
         </p>
       ) : null}
 
@@ -153,8 +174,7 @@ export function MailRequestsPanel({ onView }: MailRequestsPanelProps) {
             <MailRequestCardList
               requests={rows}
               processingId={processingId}
-              onProcess={onProcess}
-              onView={onView}
+              onOpen={onOpenRequest}
             />
 
             {/*
@@ -166,8 +186,7 @@ export function MailRequestsPanel({ onView }: MailRequestsPanelProps) {
               <MailRequestsTable
                 requests={rows}
                 processingId={processingId}
-                onProcess={onProcess}
-                onView={onView}
+                onOpen={onOpenRequest}
               />
 
               <MailRequestsPagination

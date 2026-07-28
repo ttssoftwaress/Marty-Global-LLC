@@ -46,7 +46,7 @@ function CatalogSkeleton() {
       {Array.from({ length: 4 }).map((_, index) => (
         <div
           key={index}
-          className="h-[240px] w-full animate-pulse rounded-card bg-gray-200 md:h-[260px]"
+          className="h-[15rem] w-full animate-pulse rounded-card bg-gray-200 md:h-[16.25rem]"
         />
       ))}
     </div>
@@ -112,14 +112,14 @@ export function OrderNewServicePage({
           at the viewport bottom even when the cards are short. */}
       <div className="flex min-h-full flex-col">
       <div className="w-full flex-1 p-4 md:p-6 lg:p-content">
-        <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-5 md:gap-6 lg:gap-8">
+        <div className="mx-auto flex w-full max-w-[75rem] flex-col gap-5 md:gap-6 lg:gap-8">
           {/* Breadcrumb — md+ only; mobile uses a back chevron in the title row. */}
           <p className="hidden text-caption font-medium uppercase tracking-[0.6px] text-gray-500 md:block">
             Dashboard / Order new service
           </p>
 
           <header className="flex flex-col gap-4 md:gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex flex-col gap-2 lg:max-w-[640px]">
+            <div className="flex flex-col gap-2 lg:max-w-[40rem]">
               <div className="flex items-center gap-2.5">
                 <button
                   type="button"
@@ -129,7 +129,7 @@ export function OrderNewServicePage({
                 >
                   <ChevronLeft className="size-5" strokeWidth={2} aria-hidden="true" />
                 </button>
-                <h1 className="text-h4 font-semibold text-text md:text-[28px] md:leading-[36px] lg:text-h3">
+                <h1 className="text-h4 font-semibold text-text md:text-[1.75rem] md:leading-[2.25rem] lg:text-h3">
                   Order new service
                 </h1>
               </div>

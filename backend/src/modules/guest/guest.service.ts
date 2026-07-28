@@ -11,6 +11,12 @@ import { env } from '../../config/env.js';
 import { AppError } from '../../lib/app-error.js';
 import { logger } from '../../lib/logger.js';
 import { prisma } from '../../lib/prisma.js';
+import { emitConversationChanged } from '../../sockets/broadcast.js';
+import {
+  ensureAssigned,
+  pickAssignee,
+  recordAutoAssignment,
+} from '../support/support.assignment.js';
 import { notifyNewSupportMessage } from '../support/support.notifications.js';
 import type { GuestMessageInput, StartGuestChatInput } from './guest.validation.js';
 
@@ -172,6 +178,11 @@ export async function startChat(
   const token = mintToken();
   const sentAt = new Date();
 
+  // A visitor's thread is routed exactly like a customer's — same queue, same
+  // balancing rule (support.assignment.ts). Chosen before the transaction so the
+  // staff-table reads are not held inside it.
+  const { assigneeId, assignedAt } = await pickAssignee();
+
   const { guest, conversation } = await prisma.$transaction(async (tx) => {
     const createdGuest = await tx.guestVisitor.create({
       data: {
@@ -192,6 +203,8 @@ export async function startChat(
         category: ConversationCategory.SUPPORT,
         status: ConversationStatus.OPEN,
         subject: `Website chat — ${input.name}`,
+        assigneeId,
+        assignedAt,
         lastMessageAt: sentAt,
         preview: input.body.slice(0, 160),
       },
@@ -216,7 +229,13 @@ export async function startChat(
 
   logger.info({ conversationId: conversation.id }, 'Guest chat started');
 
+  if (assigneeId) await recordAutoAssignment(conversation.id, assigneeId);
+
   await notifyNewSupportMessage({ conversationId: conversation.id });
+
+  // Persist, then emit — this is what drops the new chat into its agent's inbox
+  // without a reload (sockets/broadcast.ts).
+  emitConversationChanged({ conversationId: conversation.id, assigneeId });
 
   const identity: GuestIdentity = {
     id: guest.id,
@@ -271,7 +290,27 @@ export async function sendMessage(
 
   await notifyNewSupportMessage({ conversationId: guest.conversationId });
 
+  // The routing safety net, then the inbox refresh — both for the same reason as
+  // the customer path (modules/support/support.service.ts).
+  const assigneeId = await ensureAssignedOwner(guest.conversationId);
+  emitConversationChanged({ conversationId: guest.conversationId, assigneeId });
+
   return toGuestView({ ...message, authorName: message.authorName });
+}
+
+// `ensureAssigned` is a no-op on a thread that already has an owner, but it
+// answers with null either way — so the current owner is read back for the
+// broadcast, which has to name whichever agent's inbox needs refreshing.
+async function ensureAssignedOwner(conversationId: string): Promise<string | null> {
+  const assigned = await ensureAssigned(conversationId);
+  if (assigned) return assigned;
+
+  const conversation = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    select: { assigneeId: true },
+  });
+
+  return conversation?.assigneeId ?? null;
 }
 
 /*

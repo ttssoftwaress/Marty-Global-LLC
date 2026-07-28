@@ -1,4 +1,4 @@
-import { Calendar, Clock, FileCheck2, MoreVertical } from 'lucide-react';
+import { Calendar, Clock, FileCheck2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import { formatMoney, formatOrderDate } from '../../lib/format';
@@ -10,11 +10,11 @@ import { QuoteStatusChip } from './chips';
  * breakpoint (a table row can't reflow into a card, so each renders its own
  * markup, the same approach the orders list takes):
  *   - desktop (lg): full table — service · amount · date issued · valid until ·
- *     status · action (Pay now + a kebab for the row menu)
- *   - tablet (md):  same table, folding away the DATE ISSUED column and the
- *     kebab to fit the narrower width
+ *     status · action (Pay now)
+ *   - tablet (md):  same table, folding away the DATE ISSUED column to fit the
+ *     narrower width
  *   - mobile:       one card per quote — title + amount, status, valid-until,
- *     then a full-width Pay now beside the row menu
+ *     then a full-width Pay now
  *
  * "Pay now" routes into the branded checkout for the quote. The design shows a
  * populated list; the empty state is added so a settled account explains itself
@@ -28,27 +28,14 @@ const payHref = (quoteId: string) => `/app/billing/pay/${quoteId}`;
 function EmptyState() {
   return (
     <div className="flex flex-col items-center gap-3 px-6 py-14 text-center">
-      <span className="flex size-12 items-center justify-center rounded-[24px] bg-[var(--color-status-approved-bg)]">
+      <span className="flex size-12 items-center justify-center rounded-[1.5rem] bg-[var(--color-status-approved-bg)]">
         <FileCheck2 className="size-6 text-success" strokeWidth={1.75} aria-hidden="true" />
       </span>
       <p className="text-body-lg font-semibold text-text">You're all caught up</p>
-      <p className="max-w-[360px] text-body text-gray-500">
+      <p className="max-w-[22.5rem] text-body text-gray-500">
         No quotes are awaiting payment right now. New quotes will appear here.
       </p>
     </div>
-  );
-}
-
-function QuoteMenuButton({ className }: { className?: string }) {
-  return (
-    <button
-      type="button"
-      aria-label="More quote actions"
-      aria-haspopup="menu"
-      className={`flex items-center justify-center rounded-input text-gray-500 transition-colors hover:bg-gray-100 ${className ?? ''}`}
-    >
-      <MoreVertical className="size-5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
-    </button>
   );
 }
 
@@ -95,7 +82,6 @@ export function QuotesAwaitingPayment({ quotes }: { quotes: BillingQuote[] }) {
                 >
                   Pay now
                 </Link>
-                <QuoteMenuButton className="size-12 shrink-0 border border-gray-200 bg-white" />
               </div>
             </li>
           ))
@@ -115,31 +101,31 @@ export function QuotesAwaitingPayment({ quotes }: { quotes: BillingQuote[] }) {
               </th>
               <th
                 scope="col"
-                className="w-[100px] text-caption font-semibold uppercase tracking-[0.6px] text-gray-500 lg:w-[140px]"
+                className="w-[6.25rem] text-caption font-semibold uppercase tracking-[0.6px] text-gray-500 lg:w-[8.75rem]"
               >
                 Quote amount
               </th>
               <th
                 scope="col"
-                className="hidden text-caption font-semibold uppercase tracking-[0.6px] text-gray-500 lg:table-cell lg:w-[140px]"
+                className="hidden text-caption font-semibold uppercase tracking-[0.6px] text-gray-500 lg:table-cell lg:w-[8.75rem]"
               >
                 Date issued
               </th>
               <th
                 scope="col"
-                className="w-[120px] text-caption font-semibold uppercase tracking-[0.6px] text-gray-500 lg:w-[160px]"
+                className="w-[7.5rem] text-caption font-semibold uppercase tracking-[0.6px] text-gray-500 lg:w-[10rem]"
               >
                 Valid until
               </th>
               <th
                 scope="col"
-                className="w-[110px] text-caption font-semibold uppercase tracking-[0.6px] text-gray-500 lg:w-[150px]"
+                className="w-[6.875rem] text-caption font-semibold uppercase tracking-[0.6px] text-gray-500 lg:w-[9.375rem]"
               >
                 Status
               </th>
               <th
                 scope="col"
-                className="w-[130px] px-4 text-right text-caption font-semibold uppercase tracking-[0.6px] text-gray-500 lg:w-[180px] lg:px-6"
+                className="w-[8.125rem] px-4 text-right text-caption font-semibold uppercase tracking-[0.6px] text-gray-500 lg:w-[11.25rem] lg:px-6"
               >
                 Action
               </th>
@@ -162,13 +148,13 @@ export function QuotesAwaitingPayment({ quotes }: { quotes: BillingQuote[] }) {
                   <td className="min-w-0 px-4 lg:px-6">
                     <Link
                       to={payHref(quote.id)}
-                      className="block truncate text-[13px] font-semibold text-primary hover:underline lg:text-body"
+                      className="block truncate text-[0.8125rem] font-semibold text-primary hover:underline lg:text-body"
                     >
                       {quote.serviceName}
                     </Link>
                   </td>
 
-                  <td className="text-[13px] font-semibold text-text lg:text-body">
+                  <td className="text-[0.8125rem] font-semibold text-text lg:text-body">
                     {formatMoney(quote.amount)}
                   </td>
 
@@ -177,7 +163,7 @@ export function QuotesAwaitingPayment({ quotes }: { quotes: BillingQuote[] }) {
                   </td>
 
                   <td>
-                    <span className="flex items-center gap-1.5 text-[13px] font-medium text-[var(--color-status-review-text)] lg:text-body">
+                    <span className="flex items-center gap-1.5 text-[0.8125rem] font-medium text-[var(--color-status-review-text)] lg:text-body">
                       <Clock className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
                       {formatOrderDate(quote.validUntil)}
                     </span>
@@ -191,11 +177,10 @@ export function QuotesAwaitingPayment({ quotes }: { quotes: BillingQuote[] }) {
                     <div className="flex items-center justify-end gap-2">
                       <Link
                         to={payHref(quote.id)}
-                        className="btn btn-accent h-9 whitespace-nowrap rounded-input px-4 text-[13px] lg:h-10 lg:text-body"
+                        className="btn btn-accent h-9 whitespace-nowrap rounded-input px-4 text-[0.8125rem] lg:h-10 lg:text-body"
                       >
                         Pay now
                       </Link>
-                      <QuoteMenuButton className="hidden size-10 lg:flex" />
                     </div>
                   </td>
                 </tr>

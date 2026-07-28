@@ -30,10 +30,10 @@ export function AdminTopBarSearchField({
         const input = event.currentTarget.elements.namedItem('q');
         if (input instanceof HTMLInputElement) onSearch?.(input.value.trim());
       }}
-      className="flex h-10 w-[400px] shrink-0 items-center gap-2 rounded-input border border-gray-200 bg-gray-50 px-3 focus-within:border-primary"
+      className="flex h-10 w-[25rem] shrink-0 items-center gap-2 rounded-input border border-gray-200 bg-gray-50 px-3 focus-within:border-primary"
     >
       <Search
-        className="size-[18px] shrink-0 text-gray-400"
+        className="size-[1.125rem] shrink-0 text-gray-400"
         strokeWidth={1.75}
         aria-hidden="true"
       />
@@ -71,7 +71,7 @@ export function AdminTopBarSearchButton({
       }
     >
       <Search
-        className={variant === 'framed' ? 'size-[18px]' : 'size-5'}
+        className={variant === 'framed' ? 'size-[1.125rem]' : 'size-5'}
         strokeWidth={1.75}
         aria-hidden="true"
       />

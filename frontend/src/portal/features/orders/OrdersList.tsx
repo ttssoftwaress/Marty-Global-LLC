@@ -68,11 +68,11 @@ const stopRowClick = (event: MouseEvent) => event.stopPropagation();
 function EmptyState() {
   return (
     <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
-      <span className="flex size-12 items-center justify-center rounded-[24px] bg-gray-100">
+      <span className="flex size-12 items-center justify-center rounded-[1.5rem] bg-gray-100">
         <PackageOpen className="size-6 text-gray-400" strokeWidth={1.75} aria-hidden="true" />
       </span>
       <p className="text-body-lg font-semibold text-text">No orders found</p>
-      <p className="max-w-[360px] text-body text-gray-500">
+      <p className="max-w-[22.5rem] text-body text-gray-500">
         No orders match this view yet. Try another filter or start a new order.
       </p>
     </div>
@@ -152,22 +152,22 @@ export function OrdersList({
               </th>
               <th
                 scope="col"
-                className="hidden px-0 text-caption font-semibold uppercase tracking-[0.6px] text-gray-500 lg:table-cell lg:w-[150px]"
+                className="hidden px-0 text-caption font-semibold uppercase tracking-[0.6px] text-gray-500 lg:table-cell lg:w-[9.375rem]"
               >
                 Order ID
               </th>
-              <th scope="col" className="w-[128px] px-0 lg:w-[160px]">
+              <th scope="col" className="w-[8rem] px-0 lg:w-[10rem]">
                 <DateSortHeader onToggle={onToggleDateSort} />
               </th>
               <th
                 scope="col"
-                className="w-[132px] px-0 text-caption font-semibold uppercase tracking-[0.6px] text-gray-500 lg:w-[150px]"
+                className="w-[8.25rem] px-0 text-caption font-semibold uppercase tracking-[0.6px] text-gray-500 lg:w-[9.375rem]"
               >
                 Status
               </th>
               <th
                 scope="col"
-                className="w-[150px] px-0 pr-4 text-right text-caption font-semibold uppercase tracking-[0.6px] text-gray-500 lg:w-[170px] lg:pr-6"
+                className="w-[9.375rem] px-0 pr-4 text-right text-caption font-semibold uppercase tracking-[0.6px] text-gray-500 lg:w-[10.625rem] lg:pr-6"
               >
                 Action
               </th>
@@ -205,7 +205,7 @@ export function OrdersList({
                     #{order.reference}
                   </td>
 
-                  <td className="text-[13px] text-gray-500 lg:text-body">
+                  <td className="text-[0.8125rem] text-gray-500 lg:text-body">
                     {formatOrderDate(order.submittedAt)}
                   </td>
 

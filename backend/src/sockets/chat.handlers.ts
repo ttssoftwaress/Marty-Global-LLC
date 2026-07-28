@@ -7,6 +7,7 @@ import { ErrorCode } from '../lib/error-codes.js';
 import { logger } from '../lib/logger.js';
 import { prisma } from '../lib/prisma.js';
 import * as adminSupport from '../modules/admin/support/support.service.js';
+import { canSeeAll } from '../modules/admin/admin.guards.js';
 import * as guestChat from '../modules/guest/guest.service.js';
 import * as support from '../modules/support/support.service.js';
 import { presignObject } from '../lib/storage.js';
@@ -20,6 +21,7 @@ import {
   ClientEvent,
   ServerEvent,
   STAFF_ROOM,
+  SUPPORT_ALL_ROOM,
   availabilityPayload,
   conversationPayload,
   conversationRoom,
@@ -122,21 +124,6 @@ async function pushUnread(io: Server, userId: string): Promise<void> {
   ]);
 
   io.to(userRoom(userId)).emit(ServerEvent.UNREAD, { messages, notifications });
-}
-
-// The staff badge counts threads waiting on the team, which is a different
-// question from the customer's and is answered across the whole inbox.
-async function pushStaffUnread(io: Server): Promise<void> {
-  const waiting = await prisma.conversation.count({
-    where: {
-      deletedAt: null,
-      kind: 'SUPPORT',
-      status: { not: 'RESOLVED' },
-      assigneeId: null,
-    },
-  });
-
-  io.to(STAFF_ROOM).emit(ServerEvent.UNREAD, { unassigned: waiting });
 }
 
 // --- Message fan-out -------------------------------------------------------
@@ -316,11 +303,22 @@ async function onConnect(
 
   if (isStaff(auth)) {
     await socket.join(STAFF_ROOM);
+
+    /*
+     * Supervisors — whoever reads the whole queue — get the room that carries
+     * every conversation change. An ordinary agent does not: they are told about
+     * their own threads through their user room, and telling them about a
+     * colleague's would leak a conversation the list endpoint would never show
+     * them.
+     */
+    if (await canSeeAll(auth, 'support')) {
+      await socket.join(SUPPORT_ALL_ROOM);
+    }
+
     await presence.loadStaffAvailability(auth.userId);
     broadcastAvailability(io);
-    await pushStaffUnread(io);
     // An agent joins threads on demand — the inbox is too large to auto-join, and
-    // they are already told about new arrivals through the staff room.
+    // a new chat routed to them arrives as a `conversation:updated` event.
     return;
   }
 
@@ -423,7 +421,8 @@ async function handleSend(
       clientId: payload.clientId,
     });
 
-    await pushStaffUnread(io);
+    // The inbox list is refreshed by the service, which emits it for both
+    // transports (modules/guest/guest.service.ts).
     return;
   }
 
@@ -449,10 +448,7 @@ async function handleSend(
     });
 
     // A reply is what the customer's unread badge counts; a note is not.
-    if (!isNote) {
-      if (access.customerId) await pushUnread(io, access.customerId);
-      await pushStaffUnread(io);
-    }
+    if (!isNote && access.customerId) await pushUnread(io, access.customerId);
     return;
   }
 
@@ -472,8 +468,6 @@ async function handleSend(
     clientId: payload.clientId,
     attachments: message.attachments,
   });
-
-  await pushStaffUnread(io);
 }
 
 // --- Read ------------------------------------------------------------------

@@ -38,27 +38,27 @@ export function CustomerOrdersTable({ orders }: CustomerOrdersTableProps) {
 
   return (
     <div className="hidden w-full overflow-x-auto md:block">
-      <table className="w-full min-w-[620px] table-fixed border-collapse text-left lg:min-w-[820px]">
+      <table className="w-full min-w-[38.75rem] table-fixed border-collapse text-left lg:min-w-[51.25rem]">
         <thead>
           <tr className="h-12 border-b border-gray-200 bg-[var(--table-header-bg)]">
             <th scope="col" className={`${HEAD_CELL} pl-5 pr-4 lg:pl-card lg:pr-4`}>
               Service
             </th>
-            <th scope="col" className={`${HEAD_CELL} w-[130px] pr-4 lg:w-[140px]`}>
+            <th scope="col" className={`${HEAD_CELL} w-[8.125rem] pr-4 lg:w-[8.75rem]`}>
               Order ID
             </th>
             <th
               scope="col"
-              className={`${HEAD_CELL} hidden w-[160px] pr-4 lg:table-cell`}
+              className={`${HEAD_CELL} hidden w-[10rem] pr-4 lg:table-cell`}
             >
               Date submitted
             </th>
-            <th scope="col" className={`${HEAD_CELL} w-[150px] pr-4 lg:w-[180px]`}>
+            <th scope="col" className={`${HEAD_CELL} w-[9.375rem] pr-4 lg:w-[11.25rem]`}>
               Status
             </th>
             <th
               scope="col"
-              className={`${HEAD_CELL} w-[110px] pr-5 text-right lg:w-[120px] lg:pr-card`}
+              className={`${HEAD_CELL} w-[6.875rem] pr-5 text-right lg:w-[7.5rem] lg:pr-card`}
             >
               <span className="inline-block w-full text-right">Action</span>
             </th>
@@ -103,7 +103,7 @@ export function CustomerOrdersTable({ orders }: CustomerOrdersTableProps) {
                 <Link
                   to={order.to}
                   onClick={stopRowClick}
-                  className="inline-flex h-9 items-center justify-center whitespace-nowrap rounded-input border border-primary bg-white px-3.5 text-[13px] font-semibold text-primary transition-colors hover:bg-primary-light"
+                  className="inline-flex h-9 items-center justify-center whitespace-nowrap rounded-input border border-primary bg-white px-3.5 text-[0.8125rem] font-semibold text-primary transition-colors hover:bg-primary-light"
                 >
                   View order
                 </Link>

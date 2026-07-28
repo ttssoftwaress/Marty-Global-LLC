@@ -6,6 +6,7 @@ import { pathParam } from '../../../lib/params.js';
 import * as service from './orders.service.js';
 import {
   addActivitySchema,
+  documentLinkQuerySchema,
   listOrdersQuerySchema,
   updateOrderSchema,
 } from './orders.validation.js';
@@ -45,6 +46,29 @@ export async function getOrder(req: Request, res: Response, next: NextFunction) 
   try {
     const order = await service.getOrder(getAuth(req), pathParam(req, 'orderId'));
     res.json({ data: order });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getDocumentLink(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const parsed = documentLinkQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      throw AppError.validation('Invalid document request', parsed.error.issues);
+    }
+
+    const link = await service.getDocumentLink(
+      getAuth(req),
+      pathParam(req, 'orderId'),
+      pathParam(req, 'documentId'),
+      parsed.data,
+    );
+    res.json({ data: link });
   } catch (error) {
     next(error);
   }

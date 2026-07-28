@@ -1,6 +1,13 @@
 import { useRef, useState } from 'react';
 import { Check, CloudUpload, Download, FileText } from 'lucide-react';
 
+import {
+  acceptAttr,
+  describeTypes,
+  DOCUMENT_TYPES,
+  isAcceptedType,
+  MAX_BYTES as MAX,
+} from '@/constants/uploads';
 import { ApiError } from '@/services/api';
 import { uploadFiles } from '@/services/upload';
 import type { OrderDocument } from '../../types/orders';
@@ -20,8 +27,10 @@ import { SectionCard } from './SectionCard';
  * order; the bytes never round-trip through the API.
  */
 
-const ACCEPTED_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
-const MAX_BYTES = 10 * 1024 * 1024;
+// Mirrors the backend's `order-document` policy — see constants/uploads.ts.
+const TYPE_LABEL = describeTypes(DOCUMENT_TYPES);
+const MAX_BYTES = MAX.orderDocument;
+const MAX_MB = MAX_BYTES / (1024 * 1024);
 
 function DocStatusChip({ available }: { available: boolean }) {
   if (available) {
@@ -104,17 +113,17 @@ export function DocumentsCard({
    */
   const onFiles = async (candidates: File[]) => {
     const accepted = candidates.filter(
-      (file) => ACCEPTED_TYPES.includes(file.type) && file.size <= MAX_BYTES,
+      (file) => isAcceptedType(file, DOCUMENT_TYPES) && file.size <= MAX_BYTES,
     );
 
     if (accepted.length === 0) {
-      setError('Upload a PDF, JPG, or PNG under 10 MB.');
+      setError(`Upload a ${TYPE_LABEL} file under ${MAX_MB} MB.`);
       return;
     }
 
     setError(
       accepted.length < candidates.length
-        ? 'Some files were skipped — only PDF, JPG, or PNG under 10 MB are accepted.'
+        ? `Some files were skipped — only ${TYPE_LABEL} under ${MAX_MB} MB are accepted.`
         : null,
     );
     setProgress(0);
@@ -193,13 +202,15 @@ export function DocumentsCard({
       >
         <CloudUpload className="size-6 text-gray-400" strokeWidth={1.75} aria-hidden="true" />
         <p className="text-body font-medium text-text">Drag files here or browse</p>
-        <p className="text-small text-gray-400">PDF, JPG or PNG · max 10 MB</p>
+        <p className="text-small text-gray-400">
+          {TYPE_LABEL} · max {MAX_MB} MB
+        </p>
       </button>
 
       <input
         ref={inputRef}
         type="file"
-        accept={ACCEPTED_TYPES.join(',')}
+        accept={acceptAttr(DOCUMENT_TYPES)}
         multiple
         className="sr-only"
         aria-label="Upload documents for this order"

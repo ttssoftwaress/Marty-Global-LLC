@@ -52,7 +52,7 @@ function InvoiceIconButton({ payment }: { payment: PaymentRecord }) {
         aria-label="Invoice not ready yet"
         className={`${base} cursor-default opacity-40`}
       >
-        <Download className="size-[18px] shrink-0 lg:size-5" strokeWidth={1.75} aria-hidden="true" />
+        <Download className="size-[1.125rem] shrink-0 lg:size-5" strokeWidth={1.75} aria-hidden="true" />
       </button>
     );
   }
@@ -64,7 +64,7 @@ function InvoiceIconButton({ payment }: { payment: PaymentRecord }) {
       aria-label={label}
       className={`${base} hover:bg-gray-100`}
     >
-      <Download className="size-[18px] shrink-0 lg:size-5" strokeWidth={1.75} aria-hidden="true" />
+      <Download className="size-[1.125rem] shrink-0 lg:size-5" strokeWidth={1.75} aria-hidden="true" />
     </a>
   );
 }
@@ -95,11 +95,11 @@ function InvoiceTextLink({ payment }: { payment: PaymentRecord }) {
 function EmptyState() {
   return (
     <div className="flex flex-col items-center gap-3 px-6 py-14 text-center">
-      <span className="flex size-12 items-center justify-center rounded-[24px] bg-gray-100">
+      <span className="flex size-12 items-center justify-center rounded-[1.5rem] bg-gray-100">
         <Receipt className="size-6 text-gray-400" strokeWidth={1.75} aria-hidden="true" />
       </span>
       <p className="text-body-lg font-semibold text-text">No payments yet</p>
-      <p className="max-w-[360px] text-body text-gray-500">
+      <p className="max-w-[22.5rem] text-body text-gray-500">
         Your paid invoices will show up here. Try a different range or search.
       </p>
     </div>
@@ -213,7 +213,7 @@ export function PaymentHistory({
             <tr className="h-12 border-b border-gray-200 bg-[var(--table-header-bg)] text-left align-middle">
               <th
                 scope="col"
-                className="w-[100px] px-4 text-caption font-semibold uppercase tracking-[0.6px] text-gray-500 lg:w-[140px] lg:px-6"
+                className="w-[6.25rem] px-4 text-caption font-semibold uppercase tracking-[0.6px] text-gray-500 lg:w-[8.75rem] lg:px-6"
               >
                 Date
               </th>
@@ -225,25 +225,25 @@ export function PaymentHistory({
               </th>
               <th
                 scope="col"
-                className="w-[100px] text-caption font-semibold uppercase tracking-[0.6px] text-gray-500 lg:w-[140px]"
+                className="w-[6.25rem] text-caption font-semibold uppercase tracking-[0.6px] text-gray-500 lg:w-[8.75rem]"
               >
                 Amount
               </th>
               <th
                 scope="col"
-                className="hidden text-caption font-semibold uppercase tracking-[0.6px] text-gray-500 lg:table-cell lg:w-[220px]"
+                className="hidden text-caption font-semibold uppercase tracking-[0.6px] text-gray-500 lg:table-cell lg:w-[13.75rem]"
               >
                 Payment method
               </th>
               <th
                 scope="col"
-                className="w-[110px] text-caption font-semibold uppercase tracking-[0.6px] text-gray-500 lg:w-[160px]"
+                className="w-[6.875rem] text-caption font-semibold uppercase tracking-[0.6px] text-gray-500 lg:w-[10rem]"
               >
                 Status
               </th>
               <th
                 scope="col"
-                className="w-[80px] px-4 text-right text-caption font-semibold uppercase tracking-[0.6px] text-gray-500 lg:w-[110px] lg:px-6"
+                className="w-[5rem] px-4 text-right text-caption font-semibold uppercase tracking-[0.6px] text-gray-500 lg:w-[6.875rem] lg:px-6"
               >
                 Invoice
               </th>
@@ -257,17 +257,17 @@ export function PaymentHistory({
                   key={payment.id}
                   className="h-14 border-b border-gray-200 last:border-b-0"
                 >
-                  <td className="px-4 text-[13px] text-gray-600 lg:px-6 lg:text-body">
+                  <td className="px-4 text-[0.8125rem] text-gray-600 lg:px-6 lg:text-body">
                     {formatOrderDate(payment.paidAt)}
                   </td>
 
                   <td className="min-w-0 pr-4">
-                    <p className="truncate text-[13px] font-medium text-text lg:text-body">
+                    <p className="truncate text-[0.8125rem] font-medium text-text lg:text-body">
                       {payment.serviceName}
                     </p>
                   </td>
 
-                  <td className="text-[13px] font-semibold text-text lg:text-body">
+                  <td className="text-[0.8125rem] font-semibold text-text lg:text-body">
                     {formatMoney(payment.amount)}
                   </td>
 
@@ -306,7 +306,7 @@ export function PaymentHistory({
                 type="button"
                 onClick={onPrev}
                 disabled={!canPrev}
-                className="flex h-9 items-center justify-center rounded-input px-4 text-[13px] font-semibold transition-colors disabled:cursor-default enabled:bg-white enabled:text-primary enabled:hover:bg-primary-light disabled:bg-gray-200 disabled:text-gray-400"
+                className="flex h-9 items-center justify-center rounded-input px-4 text-[0.8125rem] font-semibold transition-colors disabled:cursor-default enabled:bg-white enabled:text-primary enabled:hover:bg-primary-light disabled:bg-gray-200 disabled:text-gray-400"
               >
                 Previous
               </button>
@@ -314,7 +314,7 @@ export function PaymentHistory({
                 type="button"
                 onClick={onNext}
                 disabled={!canNext}
-                className="flex h-9 items-center justify-center rounded-input border px-4 text-[13px] font-semibold transition-colors disabled:cursor-default enabled:border-primary enabled:bg-white enabled:text-primary enabled:hover:bg-primary-light disabled:border-gray-200 disabled:bg-gray-200 disabled:text-gray-400"
+                className="flex h-9 items-center justify-center rounded-input border px-4 text-[0.8125rem] font-semibold transition-colors disabled:cursor-default enabled:border-primary enabled:bg-white enabled:text-primary enabled:hover:bg-primary-light disabled:border-gray-200 disabled:bg-gray-200 disabled:text-gray-400"
               >
                 Next
               </button>

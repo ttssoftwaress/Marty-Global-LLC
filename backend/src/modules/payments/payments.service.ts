@@ -18,6 +18,7 @@ import {
   formatUsdtRaw,
 } from '../../lib/money.js';
 import { prisma } from '../../lib/prisma.js';
+import { AuditAction, record } from '../audit/audit.service.js';
 import { advanceOrderStatus } from '../orders/orders.service.js';
 import type { CreateIntentInput } from './payments.validation.js';
 
@@ -89,6 +90,7 @@ export type PaymentStatusView =
   | 'succeeded'
   | 'failed'
   | 'expired'
+  | 'cancelled'
   | 'underpaid'
   | 'overpaid';
 
@@ -98,6 +100,7 @@ const STATUS_VIEW: Record<PaymentStatus, PaymentStatusView> = {
   [PaymentStatus.PROCESSING]: 'confirming',
   [PaymentStatus.SUCCEEDED]: 'succeeded',
   [PaymentStatus.FAILED]: 'failed',
+  [PaymentStatus.CANCELLED]: 'cancelled',
   [PaymentStatus.UNDERPAID]: 'underpaid',
   [PaymentStatus.OVERPAID]: 'overpaid',
 };
@@ -182,6 +185,51 @@ const LIVE_STATUSES: PaymentStatus[] = [
   PaymentStatus.REQUIRES_ACTION,
   PaymentStatus.PROCESSING,
 ];
+
+// Pre-transfer: the window is open, the countdown is running, and nothing has
+// landed on-chain yet. The only shape a payment can be cancelled from.
+const OPEN_STATUSES: PaymentStatus[] = [
+  PaymentStatus.PENDING,
+  PaymentStatus.REQUIRES_ACTION,
+];
+
+/*
+ * The payment a quote's checkout should still be showing, if there is one.
+ *
+ * This is what makes the checkout screen survive a reload: the payment lives in
+ * the database, not in the tab, so re-opening the page picks the window back up
+ * mid-countdown instead of offering to mint a second one.
+ *
+ * PROCESSING is resumable regardless of `expiresAt` — a transfer has already
+ * matched it, and the window closing does not un-see money that is confirming.
+ * Only a pre-transfer payment lapses with its window.
+ */
+function resumableWhere(customerId: string, quoteId: string, now: Date) {
+  return {
+    quoteId,
+    customerId,
+    deletedAt: null,
+    OR: [
+      { status: PaymentStatus.PROCESSING },
+      {
+        status: { in: OPEN_STATUSES },
+        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+      },
+    ],
+  } satisfies Prisma.PaymentWhereInput;
+}
+
+async function findResumablePayment(
+  customerId: string,
+  quoteId: string,
+  now: Date,
+): Promise<PaymentRecord | null> {
+  return prisma.payment.findFirst({
+    where: resumableWhere(customerId, quoteId, now),
+    include: PAYMENT_INCLUDE,
+    orderBy: { createdAt: 'desc' },
+  });
+}
 
 // --- Creating an intent --------------------------------------------------
 
@@ -295,17 +343,7 @@ export async function createIntent(
    * amounts for one debt. Returning the existing one instead makes the checkout
    * page naturally resumable.
    */
-  const live = await prisma.payment.findFirst({
-    where: {
-      quoteId: quote.id,
-      customerId: auth.userId,
-      deletedAt: null,
-      status: { in: LIVE_STATUSES },
-      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
-    },
-    include: PAYMENT_INCLUDE,
-    orderBy: { createdAt: 'desc' },
-  });
+  const live = await findResumablePayment(auth.userId, quote.id, now);
 
   if (live) return toPaymentView(live, now);
 
@@ -400,7 +438,15 @@ export async function getPayment(
   return toPaymentView(payment);
 }
 
-// The checkout screen polls this while a transfer confirms.
+/*
+ * What the checkout screen loads on arrival.
+ *
+ * `activePayment` is the resume: a customer who reloads, or comes back on
+ * another tab, lands straight back on the open window with its countdown still
+ * running rather than on the method choice. It ships with the quote instead of
+ * behind its own endpoint so there is no flash of "choose how to pay" while a
+ * second request decides whether a payment is already in flight.
+ */
 export async function getQuoteForCheckout(
   req: Parameters<typeof getAuth>[0],
   quoteId: string,
@@ -412,6 +458,7 @@ export async function getQuoteForCheckout(
   validUntil: string;
   status: 'pending' | 'expired' | 'paid' | 'cancelled' | 'draft';
   lineItems: { id: string; label: string; amount: Money }[];
+  activePayment: PaymentView | null;
 }> {
   const auth = getAuth(req);
 
@@ -440,6 +487,8 @@ export async function getQuoteForCheckout(
         } as const
       )[quote.status];
 
+  const active = await findResumablePayment(auth.userId, quote.id, now);
+
   return {
     id: quote.id,
     reference: quote.reference,
@@ -452,7 +501,121 @@ export async function getQuoteForCheckout(
       label: line.label,
       amount: { amount: line.amount, currency: quote.currency },
     })),
+    activePayment: active ? toPaymentView(active, now) : null,
   };
+}
+
+// --- Cancelling ----------------------------------------------------------
+
+/*
+ * The customer closing their own payment window.
+ *
+ * The checkout screen holds the customer on the page while the countdown runs —
+ * a half-abandoned window is how a transfer arrives against an amount nobody is
+ * watching — so this is the deliberate way out, and the reason there is one at
+ * all. It frees the watched (address, amount) pair immediately, which is what
+ * lets the same quote be paid again straight away instead of after the window
+ * lapses.
+ *
+ * Two rules make it safe:
+ *
+ *  1. ONLY pre-transfer. Once `providerRef` is set, real money has landed on
+ *     this row and a later sweep still has to credit it. Cancelling then would
+ *     mean walking away from a payment we can see, so it is refused.
+ *  2. The write is conditional on that same shape, so a poller that matches a
+ *     transfer between the read and the write wins the race — the transfer is
+ *     real, the cancellation is only an intention.
+ *
+ * Retry-safe without an idempotency key (AGENTS.md, API Conventions): the guard
+ * is the current status, so a repeated call returns the same cancelled payment
+ * rather than doing anything a second time.
+ */
+export async function cancelPayment(
+  req: Parameters<typeof getAuth>[0],
+  paymentId: string,
+): Promise<PaymentView> {
+  const auth = getAuth(req);
+  const now = new Date();
+
+  const payment = await prisma.payment.findFirst({
+    where: { id: paymentId, deletedAt: null },
+    include: PAYMENT_INCLUDE,
+  });
+
+  if (!payment) throw AppError.notFound('Payment not found');
+
+  // Ownership boundary — same 404-not-403 reasoning as the reads above.
+  if (payment.customerId !== auth.userId) {
+    throw AppError.notFound('Payment not found');
+  }
+
+  if (payment.status === PaymentStatus.SUCCEEDED) {
+    throw AppError.businessRule('This payment has already completed.');
+  }
+
+  if (payment.providerRef !== null || payment.status === PaymentStatus.PROCESSING) {
+    throw AppError.businessRule(
+      "We've already seen your transfer on-chain, so this payment can't be cancelled — it will finish on its own.",
+    );
+  }
+
+  /*
+   * Already closed — cancelled earlier, expired, or settled at the wrong amount.
+   * There is nothing left to cancel and the customer is on their way out, so
+   * report the state rather than failing a request that asked for what is
+   * already true.
+   */
+  if (!OPEN_STATUSES.includes(payment.status)) {
+    return toPaymentView(payment, now);
+  }
+
+  const { count } = await prisma.payment.updateMany({
+    where: {
+      id: payment.id,
+      providerRef: null,
+      status: { in: OPEN_STATUSES },
+    },
+    data: {
+      status: PaymentStatus.CANCELLED,
+      failureReason: 'Cancelled by the customer before any transfer arrived',
+      // "When this payment stops watching" — which is now.
+      expiresAt: now,
+    },
+  });
+
+  if (count === 0) {
+    // Rule 2: a transfer matched between the read and the write. Money wins.
+    throw AppError.businessRule(
+      "A transfer arrived against this payment just now, so it can't be cancelled — it will finish on its own.",
+    );
+  }
+
+  // Never awaited into the caller's path in a way that could fail it — `record`
+  // swallows its own errors (audit.service, rule 1).
+  await record({
+    actor: auth,
+    action: AuditAction.PAYMENT_CANCELLED,
+    entityType: 'payment',
+    entityId: payment.id,
+    // Ids and minor units only — never a name or an address (AGENTS.md, PII).
+    metadata: {
+      quoteId: payment.quoteId,
+      amount: payment.amount,
+      currency: payment.currency,
+    },
+  });
+
+  logger.info(
+    { paymentId: payment.id, quoteId: payment.quoteId },
+    'USDT payment cancelled by customer',
+  );
+
+  const cancelled = await prisma.payment.findUniqueOrThrow({
+    where: { id: payment.id },
+    include: PAYMENT_INCLUDE,
+  });
+
+  return toPaymentView(cancelled, now);
 }
 
 // --- Settlement (called by the poller, never by a request handler) --------

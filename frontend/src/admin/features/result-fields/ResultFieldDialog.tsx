@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Loader2, X } from 'lucide-react';
 
 import { ApiError } from '@/services/api';
+import { useOverlay } from '../../../hooks/useOverlay';
 import {
   createResultPayloadFromDraft,
   draftFromResultField,
@@ -59,14 +60,8 @@ export function ResultFieldDialog({ field, onClose }: ResultFieldDialogProps) {
   const update = useUpdateResultField();
   const pending = create.isPending || update.isPending;
 
-  useEffect(() => {
-    panelRef.current?.focus();
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [onClose]);
+  // Mounted only while open, so the overlay is always open for its whole life.
+  useOverlay({ open: true, onClose, panelRef });
 
   const set = <K extends keyof ResultFieldDraft>(
     key: K,
@@ -120,7 +115,7 @@ export function ResultFieldDialog({ field, onClose }: ResultFieldDialogProps) {
         aria-modal="true"
         aria-labelledby="result-field-dialog-title"
         tabIndex={-1}
-        className="relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-modal bg-white shadow-slide-over outline-none md:max-w-[560px] md:rounded-modal"
+        className="relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-modal bg-white shadow-slide-over outline-none md:max-w-[35rem] md:rounded-modal"
       >
         <header className="flex shrink-0 items-start justify-between gap-4 border-b border-gray-200 p-5">
           <div className="flex flex-col gap-1">

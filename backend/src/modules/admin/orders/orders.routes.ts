@@ -20,6 +20,16 @@ router.use(requirePermission('orders'));
 router.get('/summary', apiRateLimit, controller.getSummary);
 router.get('/', apiRateLimit, controller.listOrders);
 router.get('/:orderId', apiRateLimit, controller.getOrder);
+/*
+ * A short-TTL link to one document on the order — the View and Download controls
+ * on the Documents card. A GET because it reads; the service audits it anyway,
+ * since what it hands back is access to the customer's own paperwork.
+ */
+router.get(
+  '/:orderId/documents/:documentId',
+  apiRateLimit,
+  controller.getDocumentLink,
+);
 router.patch('/:orderId', sensitiveRateLimit, controller.updateOrder);
 // Replying to a customer is a write that leaves the building (it queues them an
 // email), so it takes the same limiter as the status change beside it.

@@ -59,7 +59,7 @@ export function OrderCustomerCard({ customer }: { customer: AdminOrderCustomer }
           to={customer.messageThreadTo}
           className="btn btn-secondary h-11 w-full rounded-input text-body"
         >
-          <MessageSquare className="mr-2 size-[18px] shrink-0" strokeWidth={1.75} aria-hidden="true" />
+          <MessageSquare className="mr-2 size-[1.125rem] shrink-0" strokeWidth={1.75} aria-hidden="true" />
           Message customer
         </Link>
       ) : (
@@ -68,7 +68,7 @@ export function OrderCustomerCard({ customer }: { customer: AdminOrderCustomer }
           disabled
           className="btn btn-secondary h-11 w-full cursor-not-allowed rounded-input text-body opacity-60"
         >
-          <MessageSquare className="mr-2 size-[18px] shrink-0" strokeWidth={1.75} aria-hidden="true" />
+          <MessageSquare className="mr-2 size-[1.125rem] shrink-0" strokeWidth={1.75} aria-hidden="true" />
           No conversation yet
         </button>
       )}

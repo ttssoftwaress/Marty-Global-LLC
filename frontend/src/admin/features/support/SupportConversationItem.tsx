@@ -3,10 +3,17 @@ import { Link } from 'react-router-dom';
 import { formatActivityTime } from '../../lib/format';
 import type { SupportConversationSummary } from '../../types/support';
 import { SupportAgentAvatar } from './SupportAgentAvatar';
+import { SupportStatusPill } from './SupportStatusPill';
 
 /*
  * One conversation in the list — name + time, the subject, the last message's
- * opening, and the assignment line.
+ * opening, and a meta row carrying the assignment and the status pill.
+ *
+ * The status pill is an addition to the design, which drew the state only in the
+ * thread header: a queue is read by scanning it, and "which of these is still
+ * waiting on us" was a question the list could not answer without opening every
+ * row. Logged as a deviation; it reuses the header control's own tints so one
+ * state never reads as two different things.
  *
  * The links draw the same four parts in two frames, so one tree covers both:
  *   - mobile: a standalone white card on the page tint, 16px radius, its own
@@ -43,6 +50,7 @@ export function SupportConversationItem({
     preview,
     lastMessageAt,
     unread,
+    status,
     assignee,
   } = conversation;
 
@@ -65,7 +73,7 @@ export function SupportConversationItem({
             />
           ) : null}
           <p
-            className={`truncate text-body md:text-[13px] lg:text-body ${
+            className={`truncate text-body md:text-[0.8125rem] lg:text-body ${
               unread ? 'font-semibold text-text' : 'font-medium text-text'
             }`}
           >
@@ -75,7 +83,7 @@ export function SupportConversationItem({
               routing — but there is no account behind it, so an agent should not
               tell them to check their portal. */}
           {isGuest ? (
-            <span className="shrink-0 rounded-pill bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
+            <span className="shrink-0 rounded-pill bg-gray-100 px-1.5 py-0.5 text-[0.625rem] font-medium text-gray-600">
               Visitor
             </span>
           ) : null}
@@ -90,7 +98,7 @@ export function SupportConversationItem({
         </time>
       </div>
 
-      <p className="w-full truncate text-[13px] font-medium text-gray-700 md:text-small md:font-semibold lg:text-small lg:text-gray-600">
+      <p className="w-full truncate text-[0.8125rem] font-medium text-gray-700 md:text-small md:font-semibold lg:text-small lg:text-gray-600">
         {subject}
       </p>
 
@@ -98,26 +106,35 @@ export function SupportConversationItem({
        * The preview line is the one part the tablet link drops, to fit more rows
        * in a shorter pane. Desktop and mobile both keep it.
        */}
-      <p className="w-full truncate text-[13px] font-normal text-text-secondary md:hidden lg:block lg:text-small lg:text-gray-500">
+      <p className="w-full truncate text-[0.8125rem] font-normal text-text-secondary md:hidden lg:block lg:text-small lg:text-gray-500">
         {preview}
       </p>
 
-      {assignee ? (
-        <div className="flex w-full items-center gap-1.5">
-          <SupportAgentAvatar
-            id={assignee.id}
-            initials={assignee.initials}
-            className="size-4 text-[8px] md:size-3.5 md:text-[7px] lg:size-4 lg:text-[8px]"
-          />
-          <p className="truncate text-small font-normal text-text-secondary md:text-caption md:text-gray-500 lg:font-medium">
-            Assigned to {assignee.shortName}
+      {/*
+       * The meta row: who owns the thread on the left, what state it is in on the
+       * right. The pill goes here rather than beside the name, so the row that
+       * identifies the customer stays the row that identifies the customer.
+       */}
+      <div className="flex w-full items-center justify-between gap-2">
+        {assignee ? (
+          <div className="flex min-w-0 items-center gap-1.5">
+            <SupportAgentAvatar
+              id={assignee.id}
+              initials={assignee.initials}
+              className="size-4 text-[0.5rem] md:size-3.5 md:text-[0.4375rem] lg:size-4 lg:text-[0.5rem]"
+            />
+            <p className="truncate text-small font-normal text-text-secondary md:text-caption md:text-gray-500 lg:font-medium">
+              Assigned to {assignee.shortName}
+            </p>
+          </div>
+        ) : (
+          <p className="min-w-0 truncate text-small font-semibold text-warning md:text-caption md:text-[#b45309]">
+            Unassigned
           </p>
-        </div>
-      ) : (
-        <p className="w-full text-small font-semibold text-warning md:text-caption md:text-[#b45309]">
-          Unassigned
-        </p>
-      )}
+        )}
+
+        <SupportStatusPill status={status} />
+      </div>
     </Link>
   );
 }

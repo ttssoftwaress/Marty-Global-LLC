@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 
 import { AdminLayout } from '../components/AdminLayout';
 import {
@@ -41,13 +41,37 @@ export function AdminReportsAnalyticsPage() {
   const { user, onLogout } = useAdminShell();
 
   const [period, setPeriod] = useState<ReportPeriod>('30d');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
 
   /*
-   * A custom range would carry its two dates here once the picker lands; the
-   * queries already send them. Memoized so the object identity does not change
-   * on every render and re-key all six queries.
+   * The window the six queries actually ask for. It moves to `custom` only once
+   * both dates are picked and ordered — the backend rejects a half-filled
+   * custom range — so until then the page keeps showing the last resolved
+   * window. Held as state (not derived) so the object identity is stable and a
+   * keystroke in one date input cannot re-key the queries.
    */
-  const range = useMemo<ReportRange>(() => ({ period }), [period]);
+  const [range, setRange] = useState<ReportRange>({ period: '30d' });
+
+  const commitCustom = (from: string, to: string) => {
+    if (from && to && from <= to) setRange({ period: 'custom', from, to });
+  };
+
+  const onPeriodChange = (next: ReportPeriod) => {
+    setPeriod(next);
+    if (next === 'custom') commitCustom(customFrom, customTo);
+    else setRange({ period: next });
+  };
+
+  const onCustomFromChange = (value: string) => {
+    setCustomFrom(value);
+    commitCustom(value, customTo);
+  };
+
+  const onCustomToChange = (value: string) => {
+    setCustomTo(value);
+    commitCustom(customFrom, value);
+  };
 
   const summary = useAdminReportsSummary(range);
   const revenue = useAdminReportsRevenue(range);
@@ -67,10 +91,14 @@ export function AdminReportsAnalyticsPage() {
   return (
     <AdminLayout user={user} onLogout={onLogout}>
       <div className="w-full p-4 md:p-6 lg:p-content">
-        <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 lg:gap-6">
+        <div className="mx-auto flex w-full max-w-[80rem] flex-col gap-6 lg:gap-6">
           <ReportsHeader
             period={period}
-            onPeriodChange={setPeriod}
+            onPeriodChange={onPeriodChange}
+            customFrom={customFrom}
+            customTo={customTo}
+            onCustomFromChange={onCustomFromChange}
+            onCustomToChange={onCustomToChange}
             onExport={onExport}
           />
 
@@ -82,7 +110,7 @@ export function AdminReportsAnalyticsPage() {
               {Array.from({ length: 4 }, (_, index) => (
                 <div
                   key={index}
-                  className="h-[132px] animate-pulse rounded-card bg-gray-200"
+                  className="h-[8.25rem] animate-pulse rounded-card bg-gray-200"
                 />
               ))}
             </div>

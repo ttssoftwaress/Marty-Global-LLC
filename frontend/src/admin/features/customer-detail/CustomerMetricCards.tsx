@@ -53,13 +53,13 @@ export function CustomerMetricCards({ metrics }: CustomerMetricCardsProps) {
                 {metric.label}
               </span>
               <Icon
-                className="size-4 shrink-0 text-gray-400 md:size-[18px]"
+                className="size-4 shrink-0 text-gray-400 md:size-[1.125rem]"
                 strokeWidth={1.75}
                 aria-hidden="true"
               />
             </div>
 
-            <p className="text-[20px] font-semibold leading-7 text-text md:text-[28px] md:leading-9 lg:text-[24px] lg:leading-8">
+            <p className="text-[1.25rem] font-semibold leading-7 text-text md:text-[1.75rem] md:leading-9 lg:text-[1.5rem] lg:leading-8">
               {metricText(metric)}
             </p>
           </div>

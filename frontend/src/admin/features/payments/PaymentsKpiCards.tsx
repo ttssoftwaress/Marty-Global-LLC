@@ -60,7 +60,7 @@ function KpiCard({
        * beneath — matching the mobile link, where it sits on its own row.
        */}
       <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-        <p className="text-[22px] font-semibold leading-8 text-text md:text-[26px] md:leading-9 lg:text-[28px] lg:leading-10">
+        <p className="text-[1.375rem] font-semibold leading-8 text-text md:text-[1.625rem] md:leading-9 lg:text-[1.75rem] lg:leading-10">
           {kpi.value}
         </p>
 

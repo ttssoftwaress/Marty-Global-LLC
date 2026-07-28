@@ -39,12 +39,12 @@ export function ServiceCard({ service, selected, onToggle }: ServiceCardProps) {
       <div className="flex flex-col gap-3 p-5 md:gap-3 lg:gap-4 lg:p-card lg:pb-4">
         <div className="flex items-center justify-between">
           <span
-            className={`flex size-10 shrink-0 items-center justify-center rounded-input md:size-9 md:rounded-[8px] lg:size-11 ${
+            className={`flex size-10 shrink-0 items-center justify-center rounded-input md:size-9 md:rounded-[0.5rem] lg:size-11 ${
               selected ? 'bg-white' : 'bg-primary-light'
             }`}
           >
             <Icon
-              className="size-5 text-primary md:size-[18px] lg:size-5"
+              className="size-5 text-primary md:size-[1.125rem] lg:size-5"
               strokeWidth={1.75}
               aria-hidden="true"
             />
@@ -68,7 +68,7 @@ export function ServiceCard({ service, selected, onToggle }: ServiceCardProps) {
           <h3 className="text-body-lg font-semibold text-text lg:text-h6">
             {service.name}
           </h3>
-          <p className="text-small leading-[1.4] text-text-secondary md:text-[12px] lg:text-[13px]">
+          <p className="text-small leading-[1.4] text-text-secondary md:text-[0.75rem] lg:text-[0.8125rem]">
             {service.description}
           </p>
         </div>
@@ -81,7 +81,7 @@ export function ServiceCard({ service, selected, onToggle }: ServiceCardProps) {
                 strokeWidth={1.75}
                 aria-hidden="true"
               />
-              <span className="min-w-0 flex-1 text-small text-gray-700 md:text-[12px] lg:text-[13px]">
+              <span className="min-w-0 flex-1 text-small text-gray-700 md:text-[0.75rem] lg:text-[0.8125rem]">
                 {feature}
               </span>
             </li>
@@ -90,7 +90,7 @@ export function ServiceCard({ service, selected, onToggle }: ServiceCardProps) {
       </div>
 
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 border-t border-gray-200 px-5 py-3 md:py-2.5 lg:px-card lg:py-3.5">
-        <span className="text-caption font-medium uppercase text-gray-400 lg:text-[11px]">
+        <span className="text-caption font-medium uppercase text-gray-400 lg:text-[0.6875rem]">
           {service.footer.label}
         </span>
         {service.footer.chips && service.footer.chips.length > 0 && (
@@ -98,7 +98,7 @@ export function ServiceCard({ service, selected, onToggle }: ServiceCardProps) {
             {service.footer.chips.map((chip) => (
               <span
                 key={chip}
-                className="rounded-[4px] bg-gray-100 px-2 py-0.5 text-[11px] text-gray-600"
+                className="rounded-[0.25rem] bg-gray-100 px-2 py-0.5 text-[0.6875rem] text-gray-600"
               >
                 {chip}
               </span>

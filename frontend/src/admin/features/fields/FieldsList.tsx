@@ -1,5 +1,6 @@
 import { Archive, FileText, List, Pencil, Type, AlignLeft } from 'lucide-react';
 
+import { RowActions } from '../../components/RowActions';
 import { formatFieldDate, formatUsage } from '../../lib/fields';
 import type { FieldDefinition } from '../../types/fields';
 import { fieldTypeLabel } from '../../types/fields';
@@ -43,17 +44,30 @@ function ArchivedChip() {
   );
 }
 
+/*
+ * Delete is per row and absent rather than disabled: `canDelete` comes from the
+ * API and is false as soon as anything references the key, because a field a
+ * service asks — or that an order holds an answer for — is archived instead. A
+ * greyed-out button would invite a click that can only ever be refused.
+ */
 type FieldsListProps = {
   fields: FieldDefinition[];
   onEdit: (field: FieldDefinition) => void;
+  onDelete: (field: FieldDefinition) => void;
+  deletingId: string | null;
 };
 
-export function FieldsList({ fields, onEdit }: FieldsListProps) {
+export function FieldsList({
+  fields,
+  onEdit,
+  onDelete,
+  deletingId,
+}: FieldsListProps) {
   return (
     <>
       {/* Table — md and up */}
       <div className="hidden overflow-x-auto rounded-card border border-gray-200 bg-white shadow-sm-elevation md:block">
-        <table className="w-full min-w-[720px] border-collapse">
+        <table className="w-full min-w-[45rem] border-collapse">
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50">
               <Th>Field</Th>
@@ -106,14 +120,19 @@ export function FieldsList({ fields, onEdit }: FieldsListProps) {
                 </td>
 
                 <td className="px-4 py-3">
-                  <button
-                    type="button"
-                    onClick={() => onEdit(field)}
-                    className="flex items-center gap-1.5 rounded-control px-3 py-1.5 text-body font-medium text-primary transition-colors hover:bg-primary-light focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                  >
-                    <Pencil className="size-4" strokeWidth={1.75} aria-hidden="true" />
-                    Edit
-                  </button>
+                  {field.canDelete ? (
+                    <RowActions
+                      name={field.label}
+                      isDeleting={deletingId === field.id}
+                      onDelete={() => onDelete(field)}
+                    >
+                      <EditButton field={field} onEdit={onEdit} />
+                    </RowActions>
+                  ) : (
+                    <div className="flex items-center justify-end">
+                      <EditButton field={field} onEdit={onEdit} />
+                    </div>
+                  )}
                 </td>
               </tr>
             ))}
@@ -141,14 +160,17 @@ export function FieldsList({ fields, onEdit }: FieldsListProps) {
                 </code>
               </div>
 
-              <button
-                type="button"
-                onClick={() => onEdit(field)}
-                aria-label={`Edit ${field.label}`}
-                className="flex size-9 shrink-0 items-center justify-center rounded-control text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-              >
-                <Pencil className="size-4" strokeWidth={1.75} aria-hidden="true" />
-              </button>
+              {field.canDelete ? (
+                <RowActions
+                  name={field.label}
+                  isDeleting={deletingId === field.id}
+                  onDelete={() => onDelete(field)}
+                >
+                  <CompactEditButton field={field} onEdit={onEdit} />
+                </RowActions>
+              ) : (
+                <CompactEditButton field={field} onEdit={onEdit} />
+              )}
             </div>
 
             <div className="flex flex-wrap items-center gap-2 border-t border-gray-200 pt-3">
@@ -161,6 +183,37 @@ export function FieldsList({ fields, onEdit }: FieldsListProps) {
         ))}
       </ul>
     </>
+  );
+}
+
+type EditButtonProps = {
+  field: FieldDefinition;
+  onEdit: (field: FieldDefinition) => void;
+};
+
+function EditButton({ field, onEdit }: EditButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={() => onEdit(field)}
+      className="flex shrink-0 items-center gap-1.5 rounded-control px-3 py-1.5 text-body font-medium text-primary transition-colors hover:bg-primary-light focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+    >
+      <Pencil className="size-4" strokeWidth={1.75} aria-hidden="true" />
+      Edit
+    </button>
+  );
+}
+
+function CompactEditButton({ field, onEdit }: EditButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={() => onEdit(field)}
+      aria-label={`Edit ${field.label}`}
+      className="flex size-9 shrink-0 items-center justify-center rounded-control text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+    >
+      <Pencil className="size-4" strokeWidth={1.75} aria-hidden="true" />
+    </button>
   );
 }
 

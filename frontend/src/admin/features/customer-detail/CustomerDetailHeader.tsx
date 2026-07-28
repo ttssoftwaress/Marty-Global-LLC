@@ -55,7 +55,7 @@ function CountryChip({
 }) {
   return (
     <span
-      className={`flex shrink-0 items-center gap-1 rounded-[6px] bg-gray-100 px-2 py-1 ${className ?? ''}`}
+      className={`flex shrink-0 items-center gap-1 rounded-[0.375rem] bg-gray-100 px-2 py-1 ${className ?? ''}`}
     >
       {country.flag ? (
         <span aria-hidden="true" className="text-small leading-none">
@@ -75,12 +75,12 @@ export function CustomerDetailHeader({ customer }: CustomerDetailHeaderProps) {
   const messageButton = (className: string) =>
     customer.messageThreadTo ? (
       <Link to={customer.messageThreadTo} className={className}>
-        <MessageSquare className="size-[18px] shrink-0" strokeWidth={1.75} aria-hidden="true" />
+        <MessageSquare className="size-[1.125rem] shrink-0" strokeWidth={1.75} aria-hidden="true" />
         {MESSAGE_LABEL}
       </Link>
     ) : (
       <button type="button" disabled className={`${className} cursor-not-allowed opacity-60`}>
-        <MessageSquare className="size-[18px] shrink-0" strokeWidth={1.75} aria-hidden="true" />
+        <MessageSquare className="size-[1.125rem] shrink-0" strokeWidth={1.75} aria-hidden="true" />
         {MESSAGE_LABEL}
       </button>
     );
@@ -93,12 +93,12 @@ export function CustomerDetailHeader({ customer }: CustomerDetailHeaderProps) {
           <CustomerAvatar
             id={customer.id}
             initials={customer.initials}
-            className="size-14 text-[18px] font-semibold leading-6"
+            className="size-14 text-[1.125rem] font-semibold leading-6"
           />
 
           <div className="flex min-w-0 flex-1 flex-col gap-1">
             <div className="flex min-w-0 items-center gap-2">
-              <h1 className="truncate text-[20px] font-semibold leading-7 text-text">
+              <h1 className="truncate text-[1.25rem] font-semibold leading-7 text-text">
                 {customer.name}
               </h1>
               <CountryChip country={customer.country} className="px-1.5 py-0.5" />
@@ -125,12 +125,12 @@ export function CustomerDetailHeader({ customer }: CustomerDetailHeaderProps) {
             <CustomerAvatar
               id={customer.id}
               initials={customer.initials}
-              className="size-16 text-[22px] font-semibold leading-7 lg:size-14 lg:text-[20px]"
+              className="size-16 text-[1.375rem] font-semibold leading-7 lg:size-14 lg:text-[1.25rem]"
             />
 
             <div className="flex min-w-0 flex-col gap-1.5">
               <div className="flex min-w-0 flex-wrap items-center gap-3 lg:gap-2.5">
-                <h1 className="truncate text-[24px] font-semibold leading-8 text-text lg:text-[32px] lg:leading-10">
+                <h1 className="truncate text-[1.5rem] font-semibold leading-8 text-text lg:text-[2rem] lg:leading-10">
                   {customer.name}
                 </h1>
                 <CountryChip country={customer.country} />

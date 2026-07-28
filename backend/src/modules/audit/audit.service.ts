@@ -26,20 +26,40 @@ export const AuditAction = {
   ORDER_STATUS_CHANGED: 'order.status_changed',
   ORDER_ASSIGNED: 'order.assigned',
   ORDER_ACTIVITY_ADDED: 'order.activity_added',
+  /*
+   * The one READ in this table, and deliberately so. Everything else here is a
+   * state change; this is a staff member opening a file the customer uploaded —
+   * a passport, a proof of address, a tax form. Who looked at a customer's
+   * identity documents and when is precisely the question an audit trail exists
+   * to answer, and nothing about the document row records it. The metadata
+   * carries ids and which way it was served, never the filename (which is the
+   * customer's own words and routinely names them).
+   */
+  ORDER_DOCUMENT_ACCESSED: 'order.document_accessed',
   QUOTE_SENT: 'billing.quote_sent',
   QUOTE_CANCELLED: 'billing.quote_cancelled',
   SERVICE_CREATED: 'catalog.service_created',
   SERVICE_UPDATED: 'catalog.service_updated',
+  /*
+   * Removing a service from the catalog. Only ever reaches this for a service
+   * nothing was ordered or delivered under — anything else is deactivated — and
+   * even then it is `deletedAt`, not a row disappearing.
+   */
+  SERVICE_DELETED: 'catalog.service_deleted',
   // The field registry. Registering or re-shaping a question changes what every
   // service asking it collects, so each write is audited like any other catalog
   // change (AGENTS.md).
   FIELD_CREATED: 'catalog.field_created',
   FIELD_UPDATED: 'catalog.field_updated',
+  // Removing a registered question outright. Only ever succeeds for one nothing
+  // has ever referenced — a field an order holds an answer for is archived.
+  FIELD_DELETED: 'catalog.field_deleted',
   // The result registry and the per-service delivery schema — the mirror of the
   // two above. Reshaping what a service RETURNS changes every record delivered
   // under it, so each write is audited like any other catalog change.
   RESULT_FIELD_CREATED: 'catalog.result_field_created',
   RESULT_FIELD_UPDATED: 'catalog.result_field_updated',
+  RESULT_FIELD_DELETED: 'catalog.result_field_deleted',
   RESULT_SCHEMA_UPDATED: 'catalog.result_schema_updated',
   REQUEST_TYPE_CREATED: 'catalog.request_type_created',
   REQUEST_TYPE_UPDATED: 'catalog.request_type_updated',
@@ -52,6 +72,14 @@ export const AuditAction = {
   RESULT_DELIVERED: 'delivery.result_delivered',
   RESULT_UPDATED: 'delivery.result_updated',
   RESULT_STATUS_CHANGED: 'delivery.result_status_changed',
+  /*
+   * The second READ in this table, and there for the same reason as
+   * ORDER_DOCUMENT_ACCESSED above: a delivered record's file is a certificate or
+   * a registration document belonging to the customer, and staff opening one is
+   * an access nothing else records. Metadata carries the field key and ids —
+   * never the document's name or any value on the record.
+   */
+  RESULT_FILE_ACCESSED: 'delivery.result_file_accessed',
   ORDER_ITEM_STATUS_CHANGED: 'delivery.order_item_status_changed',
   SERVICE_REQUEST_STATUS_CHANGED: 'delivery.request_status_changed',
   SERVICE_REQUEST_ASSIGNED: 'delivery.request_assigned',
@@ -60,6 +88,10 @@ export const AuditAction = {
   // (AGENTS.md, Backend) — the metadata carries ids, a status, and minor units,
   // never a name or an address book entry.
   PAYMENT_INTENT_CREATED: 'payment.intent_created',
+  // The customer closing their own payment window from the checkout screen. The
+  // one payment state change with a customer as the actor, which is precisely why
+  // it needs a trail — it frees the watched amount for reuse.
+  PAYMENT_CANCELLED: 'payment.cancelled',
   PAYMENT_CREDITED: 'payment.credited',
   PAYMENT_MISMATCHED: 'payment.mismatched',
   PAYMENT_EXPIRED: 'payment.expired',

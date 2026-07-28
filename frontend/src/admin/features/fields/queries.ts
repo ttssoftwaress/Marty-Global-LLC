@@ -99,8 +99,9 @@ export function useCreateField() {
  *
  * Also the archive/restore action: retiring a field is `archived: true`, which
  * removes it from the picker while leaving every form and answer that already
- * references it intact. There is no delete (AGENTS.md — ask before any hard
- * delete); a field a historical order holds an answer for must stay resolvable.
+ * references it intact. It is what the backend points at when a delete is
+ * refused — a field a historical order holds an answer for must stay resolvable
+ * (AGENTS.md — ask before any hard delete).
  *
  * A catalog service may render a changed label, so the catalog caches are
  * invalidated too.
@@ -119,6 +120,30 @@ export function useUpdateField() {
       apiFetch<ApiSuccess<FieldDefinition>>(`/admin/fields/${fieldId}`, {
         method: 'PATCH',
         body: JSON.stringify(payload),
+      }).then((res) => res.data),
+    onSuccess: () => {
+      invalidateFields(queryClient);
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'catalog'] });
+    },
+  });
+}
+
+/*
+ * DELETE /v1/admin/fields/:id — remove a registered question outright.
+ *
+ * Only ever succeeds for a field nothing has ever referenced: no service form,
+ * no request form, no stored answer. That is what makes a question registered by
+ * mistake removable rather than archived forever, and the backend owns the check
+ * — the row hides the button when `canDelete` is false, and the endpoint still
+ * refuses the call if a stored answer turns up behind a key no form uses.
+ */
+export function useDeleteField() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (fieldId: string) =>
+      apiFetch<ApiSuccess<{ id: string }>>(`/admin/fields/${fieldId}`, {
+        method: 'DELETE',
       }).then((res) => res.data),
     onSuccess: () => {
       invalidateFields(queryClient);

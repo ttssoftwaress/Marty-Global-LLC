@@ -5,10 +5,10 @@ import type { MailOpsRecentUpload } from '../../types/mailroom';
 /*
  * "Recently uploaded" — the feed of scans filed most recently.
  *
- * The same card at all three widths: rows of avatar, customer + sender, and a
- * right-aligned relative timestamp, divided by hairlines with no rule under the
- * last row. Only the scale steps down on mobile (32px avatar, 12px row padding),
- * matching its link.
+ * The same card at all three widths: rows of avatar, customer over room +
+ * sender, and a right-aligned relative timestamp, divided by hairlines with no
+ * rule under the last row. Only the scale steps down on mobile (2rem avatar,
+ * 12px row padding), matching its link.
  *
  * On desktop this card is the right rail beside the form; on tablet and mobile
  * it drops to a full-width card under it. That placement is the page's call —
@@ -77,11 +77,18 @@ export function MailOpsRecentUploads({
                 className="size-8 text-small lg:size-9"
               />
 
+              {/*
+               * The room sits on the secondary line beside the sender: a
+               * customer may hold several, so "who" alone does not say which
+               * inbox the scan landed in.
+               */}
               <div className="flex min-w-0 flex-1 flex-col gap-0.5 lg:gap-1">
                 <p className="truncate text-body font-semibold text-text">
                   {upload.customer.name}
                 </p>
-                <p className="truncate text-small text-gray-400">{upload.sender}</p>
+                <p className="truncate text-small text-gray-400">
+                  {upload.room.name} · {upload.sender}
+                </p>
               </div>
 
               <time

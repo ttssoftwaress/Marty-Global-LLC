@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/node';
 import { Worker, type Job } from 'bullmq';
 
 import { createRedisConnection } from '../config/redis.js';
@@ -18,6 +19,29 @@ import {
 // its own Redis connection — a blocking read would otherwise starve producers.
 
 const workers: Worker[] = [];
+
+/*
+ * Report a job failure to Sentry.
+ *
+ * Nothing from `job.data` is attached — a notification job carries the
+ * recipient's email address and a support job its conversation. Ids and the
+ * attempt counter are enough to find the row (AGENTS.md, Security & PII).
+ */
+function captureJobFailure(
+  queue: QueueName,
+  job: Job | undefined,
+  error: Error,
+) {
+  Sentry.withScope((scope) => {
+    scope.setTag('queue', queue);
+    scope.setContext('job', {
+      id: job?.id,
+      name: job?.name,
+      attempt: job?.attemptsMade,
+    });
+    Sentry.captureException(error);
+  });
+}
 
 export function registerWorkers() {
   const notifications = new Worker<SendEmailJob>(
@@ -48,6 +72,10 @@ export function registerWorkers() {
         },
         'Notification job failed',
       );
+
+      // Only once retries are spent: an attempt that BullMQ will retry is not
+      // yet an incident, and reporting each one would triple the noise.
+      if (exhausted) captureJobFailure(QueueName.NOTIFICATIONS, job, error);
 
       // This handler is not awaited by BullMQ, so a rejected markFailed would
       // surface as an unhandled rejection and take the worker process down —
@@ -85,6 +113,11 @@ export function registerWorkers() {
       { err: error, jobId: job?.id, attempt: job?.attemptsMade },
       'USDT poll failed',
     );
+
+    // Reported on every failure, unlike the queues above: a sweep that keeps
+    // failing means paid customers are not being credited, and the poll has no
+    // retry budget to exhaust — the next tick simply replaces it.
+    captureJobFailure(QueueName.PAYMENTS, job, error);
   });
 
   workers.push(payments);
@@ -106,6 +139,8 @@ export function registerWorkers() {
       { err: error, jobId: job?.id, name: job?.name, attempt: job?.attemptsMade },
       'Support job failed',
     );
+
+    captureJobFailure(QueueName.SUPPORT, job, error);
   });
 
   workers.push(support);

@@ -45,17 +45,17 @@ import { useAdminShell } from '../hooks/useAdminShell';
 function OrderDetailSkeleton() {
   return (
     <div className="flex w-full flex-col gap-5 md:gap-6" aria-hidden="true">
-      <div className="h-16 w-full max-w-[420px] animate-pulse rounded-card bg-gray-200" />
+      <div className="h-16 w-full max-w-[26.25rem] animate-pulse rounded-card bg-gray-200" />
 
       <div className="flex flex-col gap-5 lg:flex-row lg:gap-6">
         <div className="flex flex-1 flex-col gap-5 md:gap-6">
-          <div className="h-[280px] w-full animate-pulse rounded-card bg-gray-200" />
-          <div className="h-[180px] w-full animate-pulse rounded-card bg-gray-200" />
+          <div className="h-[17.5rem] w-full animate-pulse rounded-card bg-gray-200" />
+          <div className="h-[11.25rem] w-full animate-pulse rounded-card bg-gray-200" />
         </div>
 
-        <div className="flex w-full flex-col gap-5 md:gap-6 lg:w-[380px] lg:shrink-0">
-          <div className="h-[240px] w-full animate-pulse rounded-card bg-gray-200" />
-          <div className="h-[220px] w-full animate-pulse rounded-card bg-gray-200" />
+        <div className="flex w-full flex-col gap-5 md:gap-6 lg:w-[23.75rem] lg:shrink-0">
+          <div className="h-[15rem] w-full animate-pulse rounded-card bg-gray-200" />
+          <div className="h-[13.75rem] w-full animate-pulse rounded-card bg-gray-200" />
         </div>
       </div>
     </div>
@@ -66,7 +66,7 @@ function NotFoundState() {
   return (
     <div className="flex w-full flex-col items-center gap-3 rounded-card border border-gray-200 bg-white px-6 py-16 text-center shadow-sm-elevation">
       <p className="text-h6 text-text">Order not found</p>
-      <p className="max-w-[420px] text-body text-gray-500">
+      <p className="max-w-[26.25rem] text-body text-gray-500">
         This order may have been removed, or the link is no longer valid.
       </p>
       <Link to="/admin/orders" className="btn btn-secondary mt-1 rounded-input text-body">
@@ -85,7 +85,7 @@ export function AdminOrderDetailPage() {
   return (
     <AdminLayout user={user} onLogout={onLogout}>
       <div className="w-full p-4 md:p-6 lg:p-content">
-        <div className="mx-auto flex w-full max-w-[1400px] flex-col gap-5 md:gap-6">
+        <div className="mx-auto flex w-full max-w-[87.5rem] flex-col gap-5 md:gap-6">
           <OrderDetailBreadcrumbs reference={order.data?.reference ?? ''} />
 
           {order.isPending ? (
@@ -117,7 +117,10 @@ export function AdminOrderDetailPage() {
                     />
                   </div>
                   <div className="order-6">
-                    <OrderDocumentsCard documents={order.data.documents} />
+                    <OrderDocumentsCard
+                      orderId={order.data.id}
+                      documents={order.data.documents}
+                    />
                   </div>
                   <div className="order-7">
                     <OrderActivityCard activity={order.data.activity} />
@@ -136,7 +139,7 @@ export function AdminOrderDetailPage() {
                 </div>
 
                 {/* Rail — what a reviewer does, and who they are doing it for. */}
-                <div className="contents lg:flex lg:w-[380px] lg:shrink-0 lg:flex-col lg:gap-6">
+                <div className="contents lg:flex lg:w-[23.75rem] lg:shrink-0 lg:flex-col lg:gap-6">
                   <div className="order-1">
                     <OrderActionsCard order={order.data} />
                   </div>

@@ -57,7 +57,7 @@ export function AdminTopBarMobile({
           <img
             src={logoColor}
             alt="Marty Global LLC"
-            className="h-8 w-[91px] object-contain"
+            className="h-8 w-[5.6875rem] object-contain"
           />
         </Link>
       </div>

@@ -34,7 +34,7 @@ export function PeriodFilter({ value, onChange }: PeriodFilterProps) {
         return (
           <label
             key={period.value}
-            className={`flex flex-1 cursor-pointer items-center justify-center rounded-pill px-4 py-1.5 text-[12px] leading-5 transition-colors md:flex-none md:py-2 md:text-[14px] ${
+            className={`flex flex-1 cursor-pointer items-center justify-center rounded-pill px-4 py-1.5 text-[0.75rem] leading-5 transition-colors md:flex-none md:py-2 md:text-[0.875rem] ${
               active
                 ? 'bg-primary font-semibold text-white'
                 : 'font-medium text-gray-600 hover:text-text md:text-gray-500'

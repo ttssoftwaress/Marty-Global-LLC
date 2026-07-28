@@ -41,7 +41,7 @@ export function MailRoomInboxKpiCards({ stats }: { stats: MailRoomInboxStats }) 
           }`}
         >
           <div className="flex items-center justify-between gap-2">
-            <p className="truncate text-[12px] font-medium tracking-[0.2px] text-gray-500 md:uppercase md:tracking-[0.4px]">
+            <p className="truncate text-[0.75rem] font-medium tracking-[0.2px] text-gray-500 md:uppercase md:tracking-[0.4px]">
               {card.label}
             </p>
             <card.icon
@@ -50,7 +50,7 @@ export function MailRoomInboxKpiCards({ stats }: { stats: MailRoomInboxStats }) 
               aria-hidden="true"
             />
           </div>
-          <p className="flex items-center gap-2 text-h4 font-semibold text-text md:text-[28px] md:leading-[36px] lg:text-h3">
+          <p className="flex items-center gap-2 text-h4 font-semibold text-text md:text-[1.75rem] md:leading-[2.25rem] lg:text-h3">
             {card.value}
             {card.attention ? (
               <span

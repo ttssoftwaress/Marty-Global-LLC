@@ -29,7 +29,7 @@ function KpiCard({ kpi, isLastOdd }: { kpi: MailOpsKpi; isLastOdd: boolean }) {
       <p className="text-caption font-semibold uppercase tracking-[0.4px] text-text-secondary">
         {kpi.label}
       </p>
-      <p className="text-[32px] font-semibold leading-10 text-text">{kpi.value}</p>
+      <p className="text-[2rem] font-semibold leading-10 text-text">{kpi.value}</p>
     </div>
   );
 }

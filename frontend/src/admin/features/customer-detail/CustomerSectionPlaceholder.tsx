@@ -13,12 +13,12 @@ import { Construction } from 'lucide-react';
 export function CustomerSectionPlaceholder({ title }: { title: string }) {
   return (
     <div className="flex w-full flex-col items-center gap-3 rounded-card border border-gray-200 bg-white px-6 py-16 text-center shadow-sm-elevation md:rounded-table">
-      <span className="flex size-12 items-center justify-center rounded-[24px] bg-primary-light">
+      <span className="flex size-12 items-center justify-center rounded-[1.5rem] bg-primary-light">
         <Construction className="size-6 text-primary" strokeWidth={1.75} aria-hidden="true" />
       </span>
 
       <p className="text-body-lg font-semibold text-text">{title} — coming soon</p>
-      <p className="max-w-[420px] text-body text-gray-500">
+      <p className="max-w-[26.25rem] text-body text-gray-500">
         This section of the customer record is being built.
       </p>
     </div>

@@ -6,7 +6,7 @@ import type { ReactNode } from 'react';
  * Gray-200 hairline, 16px radius, small elevation.
  *
  * The design draws the same card four times over, changing only its padding
- * across the three links (20px mobile, 24px tablet and desktop), so it exists
+ * across the three links (1.25rem mobile, 24px tablet and desktop), so it exists
  * once here rather than as a repeated class string in five files.
  */
 

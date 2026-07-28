@@ -1,13 +1,34 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Loader2, Send, Upload, X } from 'lucide-react';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Download,
+  Eye,
+  FileText,
+  Loader2,
+  Send,
+  Upload,
+  X,
+} from 'lucide-react';
 
+import {
+  acceptAttr,
+  describeTypes,
+  DOCUMENT_TYPES,
+  isAcceptedType,
+  MAX_BYTES,
+} from '@/constants/uploads';
 import { ApiError } from '@/services/api';
 import { uploadFile, type UploadedFile } from '@/services/upload';
+import { formatFileSize } from '../../lib/format';
+import { openPresignedFile, type FileDisposition } from '../../lib/open-file';
 import type {
   AdminResult,
   ResultField,
+  ResultValue,
   ResultValueInput,
 } from '../../types/delivery';
+import { useResultFileLink } from './queries';
 
 /*
  * The result form — what staff fill in to deliver a service.
@@ -67,11 +88,113 @@ function seedValues(result: AdminResult): Record<string, string> {
 // only there, and this control is only ever rendered for that case.
 type ResultFileField = Extract<ResultField, { type: 'file' }>;
 
+// Which types a browser tab will actually render; anything else downloads on
+// "View" regardless, so the control is not offered for it. A null type is a row
+// stored before we captured one — offered, since the upload policy has only ever
+// accepted PDFs and images.
+function isPreviewable(contentType: string | null): boolean {
+  return (
+    contentType === null ||
+    contentType === 'application/pdf' ||
+    contentType.startsWith('image/')
+  );
+}
+
+/*
+ * The document already on the record — what the form previously had no way of
+ * showing.
+ *
+ * Upload and Replace were the only controls here, so an operator amending a
+ * delivery, or checking a colleague's, could not read the file they were about to
+ * overwrite. Neither button holds a URL: a presigned link is minted per click and
+ * the backend audits every one (AGENTS.md, Security & PII).
+ *
+ * Hidden the moment a replacement is staged in this session — at that point the
+ * stored file is on its way out, and offering it beside the new one reads as a
+ * choice rather than as history.
+ */
+function StoredDocument({
+  file,
+  fieldKey,
+  resultId,
+}: {
+  file: NonNullable<ResultValue['file']>;
+  fieldKey: string;
+  resultId: string;
+}) {
+  const link = useResultFileLink(resultId);
+
+  const open = (disposition: FileDisposition) => {
+    link.mutate(
+      { fieldKey, disposition },
+      { onSuccess: ({ url }) => openPresignedFile(url, disposition, file.name) },
+    );
+  };
+
+  const action =
+    'flex size-8 shrink-0 items-center justify-center rounded-input border border-gray-200 bg-white text-text transition-colors hover:border-gray-300 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60';
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center gap-2.5 rounded-input border border-gray-200 bg-gray-50 px-3 py-2">
+        <FileText
+          className="size-4 shrink-0 text-primary"
+          strokeWidth={1.75}
+          aria-hidden="true"
+        />
+        <span className="min-w-0 flex-1 truncate text-small text-gray-700">
+          {file.name}
+          {file.sizeBytes === null ? null : (
+            <span className="text-gray-400">
+              <span aria-hidden="true"> · </span>
+              {formatFileSize(file.sizeBytes)}
+            </span>
+          )}
+        </span>
+
+        {isPreviewable(file.contentType) ? (
+          <button
+            type="button"
+            disabled={link.isPending}
+            onClick={() => open('inline')}
+            className={action}
+            aria-label={`View ${file.name}`}
+            title="View"
+          >
+            <Eye className="size-4" strokeWidth={1.75} aria-hidden="true" />
+          </button>
+        ) : null}
+
+        <button
+          type="button"
+          disabled={link.isPending}
+          onClick={() => open('attachment')}
+          className={action}
+          aria-label={`Download ${file.name}`}
+          title="Download"
+        >
+          <Download className="size-4" strokeWidth={1.75} aria-hidden="true" />
+        </button>
+      </div>
+
+      {link.isError ? (
+        <p role="alert" className="text-small text-error">
+          {link.error instanceof ApiError
+            ? link.error.message
+            : 'That document could not be opened. Please try again.'}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function ResultFileControl({
   field,
   value,
   onChange,
   upload,
+  stored,
+  resultId,
   invalid,
   base,
 }: {
@@ -83,6 +206,10 @@ function ResultFileControl({
     onUploaded: (file: UploadedFile) => void;
     onClear: () => void;
   };
+  // The document currently on the record, if any — distinct from `upload.attached`,
+  // which is one staged in this editing session and not yet saved.
+  stored: ResultValue['file'];
+  resultId: string;
   invalid: boolean;
   base: string;
 }) {
@@ -90,14 +217,24 @@ function ResultFileControl({
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const accept = field.accept?.join(',');
-  const maxBytes = (field.maxSizeMb ?? 20) * 1024 * 1024;
+  // Defaults come from the backend's `result-file` policy when the service's
+  // result schema left them unset (constants/uploads.ts).
+  const accepted: readonly string[] = field.accept?.length
+    ? field.accept
+    : DOCUMENT_TYPES;
+  const maxMb = field.maxSizeMb ?? MAX_BYTES.resultFile / (1024 * 1024);
+  const maxBytes = maxMb * 1024 * 1024;
 
   const onPick = async (file: File | undefined) => {
     if (!file) return;
 
+    if (!isAcceptedType(file, accepted)) {
+      setError(`Upload a ${describeTypes(accepted)} file.`);
+      return;
+    }
+
     if (file.size > maxBytes) {
-      setError(`That file is larger than ${field.maxSizeMb ?? 20} MB.`);
+      setError(`That file is larger than ${maxMb} MB.`);
       return;
     }
 
@@ -135,6 +272,10 @@ function ResultFileControl({
         placeholder="Document name"
         className={`${base} h-11`}
       />
+
+      {stored && !upload.attached ? (
+        <StoredDocument file={stored} fieldKey={field.name} resultId={resultId} />
+      ) : null}
 
       <div className="flex items-center gap-2">
         <button
@@ -181,7 +322,7 @@ function ResultFileControl({
       <input
         ref={inputRef}
         type="file"
-        {...(accept ? { accept } : {})}
+        {...(accepted.length > 0 ? { accept: acceptAttr(accepted) } : {})}
         className="sr-only"
         aria-label={`Upload ${field.label}`}
         onChange={(event) => {
@@ -204,6 +345,8 @@ function FieldControl({
   value,
   onChange,
   upload,
+  stored,
+  resultId,
   invalid,
 }: {
   field: ResultField;
@@ -214,6 +357,8 @@ function FieldControl({
     onUploaded: (file: UploadedFile) => void;
     onClear: () => void;
   };
+  stored: ResultValue['file'];
+  resultId: string;
   invalid: boolean;
 }) {
   const base = `w-full rounded-input border bg-white px-3 text-body text-text placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/20 ${
@@ -321,6 +466,8 @@ function FieldControl({
           value={value}
           onChange={onChange}
           upload={upload}
+          stored={stored}
+          resultId={resultId}
           invalid={invalid}
           base={base}
         />
@@ -498,6 +645,8 @@ export function ResultForm({
                   <FieldControl
                     field={field}
                     value={values[field.name] ?? ''}
+                    stored={result.values[field.name]?.file}
+                    resultId={result.id}
                     onChange={(value) =>
                       setValues((current) => ({ ...current, [field.name]: value }))
                     }

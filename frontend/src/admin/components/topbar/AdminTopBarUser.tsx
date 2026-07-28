@@ -51,7 +51,7 @@ export function AdminTopBarUserMenu({
 }: AdminTopBarUserMenuProps) {
   const chevron = (
     <ChevronDown
-      className={compact ? 'size-[14px] text-gray-600' : 'size-4 text-gray-600'}
+      className={compact ? 'size-[0.875rem] text-gray-600' : 'size-4 text-gray-600'}
       strokeWidth={1.75}
       aria-hidden="true"
     />

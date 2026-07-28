@@ -35,7 +35,7 @@ function FieldList({ fields }: { fields: AdminOrderItem['fields'] }) {
           key={field.label}
           className="flex flex-col gap-0.5 md:flex-row md:items-baseline md:gap-4"
         >
-          <dt className="text-small font-semibold uppercase tracking-[0.4px] text-gray-500 md:w-[200px] md:shrink-0 md:normal-case md:tracking-normal md:text-body md:font-medium">
+          <dt className="text-small font-semibold uppercase tracking-[0.4px] text-gray-500 md:w-[12.5rem] md:shrink-0 md:normal-case md:tracking-normal md:text-body md:font-medium">
             {field.label}
           </dt>
           <dd className="min-w-0 break-words text-body text-text">{field.value}</dd>

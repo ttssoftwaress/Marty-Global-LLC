@@ -80,6 +80,28 @@ const envSchema = z.object({
     .max(3600)
     .default(300),
 
+  /*
+   * --- Sentry (error monitoring) -----------------------------------------
+   *
+   * Optional, like SES and R2 above: without a DSN the SDK is never
+   * initialised and every capture becomes a no-op, so local dev and the test
+   * suite run with no Sentry account and no network calls.
+   *
+   * The DSN is not a secret in the way a key is — it only permits writing
+   * events — but it stays server-side here regardless; the browser gets its own
+   * DSN through VITE_SENTRY_DSN in the frontend's .env.
+   */
+  SENTRY_DSN: optionalString.pipe(z.url().optional()),
+  // Tags every event so a staging error is never mistaken for production. The
+  // default follows NODE_ENV, which is right for all three of ours.
+  SENTRY_ENVIRONMENT: optionalString,
+  /*
+   * Share of transactions sampled for performance tracing, 0–1. Off by default:
+   * tracing is a paid quota and this API's throughput would burn it on health
+   * checks. Raise deliberately (0.1 is a common production starting point).
+   */
+  SENTRY_TRACES_SAMPLE_RATE: z.coerce.number().min(0).max(1).default(0),
+
   // --- Live chat (Socket.io) ---------------------------------------------
   /*
    * How long a customer's unanswered message waits before we email them.

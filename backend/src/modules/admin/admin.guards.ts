@@ -92,16 +92,26 @@ export function requirePermission(area: PermissionKey) {
  * `hasPermission` passes an admin unconditionally, so an admin is unscoped
  * everywhere without a second rule — the same shortcut the guard takes.
  *
- * Orders carry one extra clause: `orders.assign` implies seeing every order.
- * Distributing work across the team is impossible when the unassigned filings
- * are invisible, so the grant that hands out work also widens the queue. It is
- * folded in here rather than at the call site so no future caller can forget it.
+ * Two areas carry an extra clause: `orders.assign` implies seeing every order,
+ * and `support.assign` every chat. Distributing work across the team is
+ * impossible when the work is invisible, so the grant that hands it out also
+ * widens the queue. Folded in here rather than at each call site so no future
+ * caller can forget it.
  */
+const ASSIGN_GRANT = {
+  orders: 'orders.assign',
+  support: 'support.assign',
+} as const satisfies Partial<Record<ScopedArea, PermissionKey>>;
+
 export async function canSeeAll(
   actor: AuthContext,
   area: ScopedArea,
 ): Promise<boolean> {
   if (await hasPermission(actor, scopeKeyFor(area))) return true;
 
-  return area === 'orders' && (await hasPermission(actor, 'orders.assign'));
+  const assignGrant = area in ASSIGN_GRANT
+    ? ASSIGN_GRANT[area as keyof typeof ASSIGN_GRANT]
+    : undefined;
+
+  return assignGrant !== undefined && (await hasPermission(actor, assignGrant));
 }

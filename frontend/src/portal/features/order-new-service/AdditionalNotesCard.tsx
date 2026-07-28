@@ -27,7 +27,7 @@ export function AdditionalNotesCard({ value, onChange }: AdditionalNotesCardProp
         onChange={(event) => onChange(event.target.value)}
         rows={4}
         placeholder="Any specific requirements, timeline expectations, or questions…"
-        className="input-field h-[120px] resize-y py-3 leading-[1.5]"
+        className="input-field h-[7.5rem] resize-y py-3 leading-[1.5]"
       />
     </section>
   );

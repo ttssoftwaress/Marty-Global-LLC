@@ -1,3 +1,4 @@
+import { RowActions } from '../../components/RowActions';
 import { formatCatalogDate, formatTierCount } from '../../lib/catalog';
 import type { CatalogServiceRow } from '../../types/catalog';
 import { RegionChipList } from './RegionChip';
@@ -24,18 +25,27 @@ import { RegionChipList } from './RegionChip';
 type CatalogTableProps = {
   rows: CatalogServiceRow[];
   onManage: (row: CatalogServiceRow) => void;
+  onDelete: (row: CatalogServiceRow) => void;
+  deletingId: string | null;
 };
 
-export function CatalogTable({ rows, onManage }: CatalogTableProps) {
+export function CatalogTable({
+  rows,
+  onManage,
+  onDelete,
+  deletingId,
+}: CatalogTableProps) {
   return (
     <table className="w-full table-fixed border-collapse">
       <thead>
         <tr className="border-b border-gray-200 bg-[var(--table-header-bg)]">
           <Th className="w-auto">Service name</Th>
-          <Th className="w-[240px] lg:w-[380px]">Regions supported</Th>
-          <Th className="w-[160px]">Pricing tiers</Th>
-          <Th className="hidden w-[140px] lg:table-cell">Last updated</Th>
-          <Th className="w-[100px] text-right">Action</Th>
+          <Th className="w-[12.5rem] lg:w-[21.25rem]">Regions supported</Th>
+          <Th className="w-[9.375rem]">Pricing tiers</Th>
+          <Th className="hidden w-[8.75rem] lg:table-cell">Last updated</Th>
+          {/* Wider than the design's 100px: the column now carries Delete beside
+              Manage, and Delete's inline confirmation needs the room. */}
+          <Th className="w-[9.375rem] text-right">Actions</Th>
         </tr>
       </thead>
 
@@ -43,7 +53,7 @@ export function CatalogTable({ rows, onManage }: CatalogTableProps) {
         {rows.map((row) => (
           <tr
             key={row.id}
-            className="h-20 border-b border-gray-200 last:border-b-0 lg:h-[72px]"
+            className="h-20 border-b border-gray-200 last:border-b-0 lg:h-[4.5rem]"
           >
             <td className="px-6">
               <div className="flex min-w-0 items-center gap-2">
@@ -86,21 +96,48 @@ export function CatalogTable({ rows, onManage }: CatalogTableProps) {
             </td>
 
             <td className="px-6">
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => onManage(row)}
-                  className="flex h-10 items-center rounded-control border border-primary bg-white px-4 text-body font-semibold text-primary transition-colors hover:bg-primary-light focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              {/*
+               * Delete is absent rather than disabled once a customer has
+               * ordered the service — `canDelete` comes from the API, and the
+               * action for those is to turn the service off on its own screen.
+               */}
+              {row.canDelete ? (
+                <RowActions
+                  name={row.name}
+                  isDeleting={deletingId === row.id}
+                  onDelete={() => onDelete(row)}
                 >
-                  Manage
-                  <span className="sr-only"> {row.name}</span>
-                </button>
-              </div>
+                  <ManageButton row={row} onManage={onManage} />
+                </RowActions>
+              ) : (
+                <div className="flex justify-end">
+                  <ManageButton row={row} onManage={onManage} />
+                </div>
+              )}
             </td>
           </tr>
         ))}
       </tbody>
     </table>
+  );
+}
+
+function ManageButton({
+  row,
+  onManage,
+}: {
+  row: CatalogServiceRow;
+  onManage: (row: CatalogServiceRow) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onManage(row)}
+      className="flex h-10 shrink-0 items-center rounded-control border border-primary bg-white px-4 text-body font-semibold text-primary transition-colors hover:bg-primary-light focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+    >
+      Manage
+      <span className="sr-only"> {row.name}</span>
+    </button>
   );
 }
 

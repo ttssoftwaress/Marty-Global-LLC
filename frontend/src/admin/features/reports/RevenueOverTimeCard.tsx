@@ -54,7 +54,7 @@ export function RevenueOverTimeCard({
       description="Monthly accumulated revenue"
       legend={[{ label: 'Revenue ($)', color: 'var(--color-primary)' }]}
       isLoading={isLoading}
-      skeletonClassName="h-[200px] md:h-[240px] lg:h-[280px]"
+      skeletonClassName="h-[12.5rem] md:h-[15rem] lg:h-[17.5rem]"
     >
       {series && series.points.length > 0 ? (
         <RevenuePlot series={series} />
@@ -67,7 +67,7 @@ export function RevenueOverTimeCard({
 
 function EmptyPlot() {
   return (
-    <div className="flex h-[180px] w-full items-center justify-center rounded-input bg-gray-50 md:h-[220px] lg:h-[260px]">
+    <div className="flex h-[11.25rem] w-full items-center justify-center rounded-input bg-gray-50 md:h-[13.75rem] lg:h-[16.25rem]">
       <p className="text-small text-gray-500">
         No revenue recorded for this period yet
       </p>
@@ -136,13 +136,13 @@ function RevenuePlot({ series }: { series: ReportSeries }) {
        */}
       <div className="flex w-full gap-3 md:gap-4">
         <div
-          className="flex h-[180px] shrink-0 flex-col justify-between text-right md:h-[220px] lg:h-[260px]"
+          className="flex h-[11.25rem] shrink-0 flex-col justify-between text-right md:h-[13.75rem] lg:h-[16.25rem]"
           aria-hidden="true"
         >
           {ticks.map((tick, index) => (
             <span
               key={index}
-              className="text-[10px] font-medium leading-none text-gray-400 md:text-small md:leading-none"
+              className="text-[0.625rem] font-medium leading-none text-gray-400 md:text-small md:leading-none"
             >
               {tick}
             </span>
@@ -153,7 +153,7 @@ function RevenuePlot({ series }: { series: ReportSeries }) {
           <svg
             viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
             preserveAspectRatio="none"
-            className="h-[180px] w-full md:h-[220px] lg:h-[260px]"
+            className="h-[11.25rem] w-full md:h-[13.75rem] lg:h-[16.25rem]"
             role="img"
             aria-label={`Revenue over time — ${plotted.length} periods, peaking at ${formatSeriesValue(
               ceiling,
@@ -247,13 +247,13 @@ function RevenuePlot({ series }: { series: ReportSeries }) {
               className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full rounded-input bg-text px-2.5 py-1.5 shadow-md-elevation"
               style={{
                 left: `${(active.x / VIEW_W) * 100}%`,
-                top: `calc(${(active.y / VIEW_H) * 100}% - 10px)`,
+                top: `calc(${(active.y / VIEW_H) * 100}% - 0.625rem)`,
               }}
             >
               <p className="whitespace-nowrap text-caption font-semibold leading-4 text-white">
                 {formatSeriesValue(active.value, series)}
               </p>
-              <p className="whitespace-nowrap text-[10px] leading-3 text-gray-300">
+              <p className="whitespace-nowrap text-[0.625rem] leading-3 text-gray-300">
                 {active.label}
               </p>
             </div>
@@ -269,7 +269,7 @@ function RevenuePlot({ series }: { series: ReportSeries }) {
        */}
       <div className="mt-3 flex w-full gap-3 md:gap-4">
         <div
-          className="invisible shrink-0 text-right text-[10px] font-medium md:text-small"
+          className="invisible shrink-0 text-right text-[0.625rem] font-medium md:text-small"
           aria-hidden="true"
         >
           {ticks[0]}
@@ -278,7 +278,7 @@ function RevenuePlot({ series }: { series: ReportSeries }) {
           {plotted.map((point, index) => (
             <span
               key={index}
-              className={`text-[10px] font-medium leading-none text-gray-400 md:text-small md:leading-none ${
+              className={`text-[0.625rem] font-medium leading-none text-gray-400 md:text-small md:leading-none ${
                 shouldPrintAxisLabel(index, plotted.length) ? '' : 'invisible'
               }`}
             >

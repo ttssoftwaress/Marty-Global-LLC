@@ -35,7 +35,7 @@ export function OrderRowAction({ order, fullWidth }: OrderRowActionProps) {
   return (
     <Link
       to={`/app/orders/${order.id}`}
-      className={`btn h-10 whitespace-nowrap rounded-input px-4 text-[13px] ${
+      className={`btn h-10 whitespace-nowrap rounded-input px-4 text-[0.8125rem] ${
         needsAttention ? 'btn-primary' : 'btn-secondary'
       } ${width}`}
     >

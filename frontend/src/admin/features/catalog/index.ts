@@ -13,6 +13,7 @@ export {
   // delivered record.
   RequestTypesCard,
   ResultSchemaCard,
+  ServiceAvailabilityCard,
   ServiceDescriptionCard,
   ServiceDetailFooter,
   ServiceDetailHeader,
@@ -26,6 +27,7 @@ export {
   useAdminCatalogService,
   useAdminCatalogServices,
   useCreateCatalogService,
+  useDeleteCatalogService,
   useUpdateCatalogService,
   useUpdateCatalogServiceDetail,
   useUpdateRequestTypes,

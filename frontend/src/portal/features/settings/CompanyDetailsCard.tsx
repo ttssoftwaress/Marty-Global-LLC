@@ -141,7 +141,7 @@ export function CompanyDetailsCard({
           <button
             type="button"
             onClick={onCancel}
-            className="inline-flex h-10 items-center px-4 text-[14px] font-medium text-gray-500 transition-colors hover:text-gray-700"
+            className="inline-flex h-10 items-center px-4 text-[0.875rem] font-medium text-gray-500 transition-colors hover:text-gray-700"
           >
             Cancel
           </button>
@@ -160,7 +160,7 @@ function FieldLabel({
   children: ReactNode;
 }) {
   return (
-    <label htmlFor={htmlFor} className="text-[14px] font-medium text-gray-700">
+    <label htmlFor={htmlFor} className="text-[0.875rem] font-medium text-gray-700">
       {children}
     </label>
   );

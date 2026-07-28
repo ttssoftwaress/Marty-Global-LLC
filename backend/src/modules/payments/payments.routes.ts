@@ -31,6 +31,20 @@ router.post(
   controller.createIntent,
 );
 
+/*
+ * Close an open payment window on purpose — the checkout's "Cancel transfer".
+ *
+ * `sensitiveRateLimit` for the same reason as the intent: it moves a payment's
+ * state and frees the amount it was watching. No `requireIdempotencyKey`, unlike
+ * the intent — cancelling is guarded by the payment's own status rather than by
+ * a key, so a retry lands on an already-cancelled row and returns it unchanged.
+ *
+ * Mounted before `/:paymentId` would ever be considered for it; Express matches
+ * on the full path, but keeping the specific route above the parameterised read
+ * keeps the file's reading order honest.
+ */
+router.post('/:paymentId/cancel', sensitiveRateLimit, controller.cancelPayment);
+
 // The checkout screen reads the quote it is collecting for, then polls the
 // payment while the transfer confirms — both plain authenticated reads.
 router.get('/quotes/:quoteId', apiRateLimit, controller.getCheckoutQuote);

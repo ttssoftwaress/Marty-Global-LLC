@@ -70,6 +70,13 @@ export type FieldDefinition = {
   sortOrder: number;
   updatedAt: string;
   usageCount: number;
+  /*
+   * Whether Delete is available on this row at all. The backend turns it off the
+   * moment a service form or a request form references the key, and refuses the
+   * call outright if a stored answer turns up — a field customers have already
+   * answered is archived, never deleted.
+   */
+  canDelete: boolean;
 };
 
 export type FieldDefinitionPage = {

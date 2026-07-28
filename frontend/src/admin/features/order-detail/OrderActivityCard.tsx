@@ -57,16 +57,16 @@ function ActivityItem({ entry }: { entry: AdminOrderActivityEntry }) {
           <p className="truncate text-body font-semibold text-text">{entry.authorName}</p>
 
           {entry.internal ? (
-            <span className="flex items-center gap-1 rounded bg-[#fef3c7] px-1.5 py-0.5 text-[10px] font-semibold uppercase leading-none text-[#b45309]">
+            <span className="flex items-center gap-1 rounded bg-[#fef3c7] px-1.5 py-0.5 text-[0.625rem] font-semibold uppercase leading-none text-[#b45309]">
               <Lock className="size-2.5" strokeWidth={2.5} aria-hidden="true" />
               Internal note
             </span>
           ) : isCustomer ? (
-            <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase leading-none text-gray-500">
+            <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[0.625rem] font-semibold uppercase leading-none text-gray-500">
               Customer
             </span>
           ) : (
-            <span className="rounded bg-primary-light px-1.5 py-0.5 text-[10px] font-semibold uppercase leading-none text-primary">
+            <span className="rounded bg-primary-light px-1.5 py-0.5 text-[0.625rem] font-semibold uppercase leading-none text-primary">
               Team
             </span>
           )}

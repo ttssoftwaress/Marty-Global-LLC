@@ -31,7 +31,7 @@ export function ServiceDescriptionCard({
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? 'service-description-error' : undefined}
         placeholder="Describe what this service covers, which entities it supports, and what the customer receives."
-        className={`min-h-[100px] w-full resize-y rounded-input border bg-white p-3 text-body leading-[1.5] text-text transition-colors placeholder:text-gray-400 focus-visible:outline-2 focus-visible:outline-offset-[-1px] focus-visible:outline-primary md:h-24 md:p-4 ${
+        className={`min-h-[6.25rem] w-full resize-y rounded-input border bg-white p-3 text-body leading-[1.5] text-text transition-colors placeholder:text-gray-400 focus-visible:outline-2 focus-visible:outline-offset-[-1px] focus-visible:outline-primary md:h-24 md:p-4 ${
           error ? 'border-error' : 'border-gray-300'
         }`}
       />

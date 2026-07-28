@@ -117,14 +117,14 @@ export function RequestActionsCard({
             onClick={() => onSelect(requestType)}
             className="flex items-start gap-3 rounded-input border border-gray-200 bg-white p-4 text-left transition-colors hover:border-primary hover:bg-primary-light disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-gray-200 disabled:hover:bg-white"
           >
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-primary-light">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-[0.625rem] bg-primary-light">
               {/*
                * The catalog names an icon intent; this app owns the glyph
                * (Design.md — icons are pulled from the library, never exported).
                * Every request type shares one until the catalog's intents grow a
                * map of their own.
                */}
-              <Plus className="size-[18px] text-primary" strokeWidth={2} aria-hidden="true" />
+              <Plus className="size-[1.125rem] text-primary" strokeWidth={2} aria-hidden="true" />
             </span>
 
             <span className="flex min-w-0 flex-col gap-0.5">

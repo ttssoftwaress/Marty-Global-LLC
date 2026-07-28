@@ -68,7 +68,7 @@ export function RevenueChartCard({
 
       {isLoading || !series ? (
         <div
-          className="h-[150px] w-full animate-pulse rounded-input bg-gray-100 md:h-[200px] lg:h-[240px]"
+          className="h-[9.375rem] w-full animate-pulse rounded-input bg-gray-100 md:h-[12.5rem] lg:h-[15rem]"
           aria-hidden="true"
         />
       ) : (

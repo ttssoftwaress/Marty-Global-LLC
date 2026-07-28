@@ -14,7 +14,7 @@ import { ScanLine } from 'lucide-react';
  */
 
 export function ScanThumbnail({ ready }: { ready: boolean }) {
-  const box = 'h-12 w-9 shrink-0 rounded-[4px] border border-gray-200 lg:h-[52px] lg:w-10';
+  const box = 'h-12 w-9 shrink-0 rounded-[0.25rem] border border-gray-200 lg:h-[3.25rem] lg:w-10';
 
   if (!ready) {
     return (
@@ -24,7 +24,7 @@ export function ScanThumbnail({ ready }: { ready: boolean }) {
         className={`${box} flex flex-col items-center justify-center gap-1 bg-gray-100`}
       >
         <ScanLine className="size-3.5 text-gray-400" strokeWidth={1.75} aria-hidden="true" />
-        <span className="text-[8px] font-medium leading-none text-gray-400">Scanning</span>
+        <span className="text-[0.5rem] font-medium leading-none text-gray-400">Scanning</span>
       </div>
     );
   }

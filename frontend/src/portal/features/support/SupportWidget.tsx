@@ -74,7 +74,7 @@ export function SupportWidget() {
       {open ? (
         <section
           aria-label="Support chat"
-          className="fixed bottom-24 right-4 z-40 flex h-[min(560px,calc(100dvh-8rem))] w-[min(380px,calc(100vw-2rem))] flex-col overflow-hidden rounded-card border border-gray-200 bg-white shadow-lg-elevation md:right-6"
+          className="fixed bottom-24 right-4 z-40 flex h-[min(35rem,calc(100dvh-8rem))] w-[min(23.75rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-card border border-gray-200 bg-white shadow-lg-elevation md:right-6"
         >
           <header className="flex shrink-0 items-start justify-between gap-3 border-b border-gray-200 p-4">
             <div className="flex min-w-0 flex-col gap-0.5">

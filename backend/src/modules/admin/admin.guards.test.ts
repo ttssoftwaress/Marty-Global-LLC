@@ -23,10 +23,11 @@ const DEACTIVATED = 'guard_test_deactivated';
 const NO_PROFILE = 'guard_test_no_profile';
 
 // Data-scope fixtures: the same area, held with and without its `.all`
-// companion, plus the `orders.assign` special case.
+// companion, plus the two `*.assign` special cases.
 const SCOPED = 'guard_test_scoped';
 const UNSCOPED = 'guard_test_unscoped';
 const ASSIGNER = 'guard_test_assigner';
+const CHAT_ASSIGNER = 'guard_test_chat_assigner';
 
 const IDS = [
   ADMIN,
@@ -37,6 +38,7 @@ const IDS = [
   SCOPED,
   UNSCOPED,
   ASSIGNER,
+  CHAT_ASSIGNER,
 ];
 
 function actor(userId: string, role: Role): AuthContext {
@@ -118,6 +120,12 @@ beforeAll(async () => {
     status: StaffStatus.ACTIVE,
     permissions: ['orders', 'orders.assign', 'payments'],
   });
+  // The same rule on the helpdesk: moving a chat between agents is impossible
+  // when a colleague's chats are invisible, so `support.assign` widens the inbox.
+  await makeStaff(CHAT_ASSIGNER, Role.STAFF, {
+    status: StaffStatus.ACTIVE,
+    permissions: ['support', 'support.assign', 'orders'],
+  });
 });
 
 afterAll(async () => {
@@ -194,6 +202,23 @@ describe('canSeeAll', () => {
   it('does not let the orders.assign exception leak into another area', async () => {
     // Same member, same request: assigning orders says nothing about payments.
     expect(await canSeeAll(actor(ASSIGNER, Role.STAFF), 'payments')).toBe(false);
+  });
+
+  it('treats support.assign as seeing the whole support inbox', async () => {
+    expect(await canSeeAll(actor(CHAT_ASSIGNER, Role.STAFF), 'support')).toBe(true);
+  });
+
+  it('does not let the support.assign exception leak into another area', async () => {
+    expect(await canSeeAll(actor(CHAT_ASSIGNER, Role.STAFF), 'orders')).toBe(false);
+  });
+
+  /*
+   * The inverse of the two above, and the one that matters most now that chats
+   * are routed automatically: holding the support area alone means seeing your
+   * own chats and nobody else's.
+   */
+  it('scopes an ordinary support agent to their own chats', async () => {
+    expect(await canSeeAll(actor(DENIED, Role.STAFF), 'support')).toBe(false);
   });
 
   it('revokes the scope of a deactivated member who still holds it', async () => {

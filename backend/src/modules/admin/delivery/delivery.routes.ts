@@ -48,6 +48,21 @@ recordsRouter.patch(
   controller.updateResultStatus,
 );
 
+/*
+ * A short-TTL link to a document already on the record — the View and Download
+ * controls beside a `file` field on the result form.
+ *
+ * Hung off the RECORD rather than off the order item, so both entry points into
+ * that form (the order screen and the follow-up queue, which resolves through the
+ * same order-item path) reach it with the id they already hold. The service
+ * applies the same `orders` scope either way, and audits every call.
+ */
+recordsRouter.get(
+  '/:resultId/files/:fieldKey',
+  apiRateLimit,
+  controller.getResultFileLink,
+);
+
 export const adminRecordsRouter = recordsRouter;
 
 // --- The follow-up queue --------------------------------------------------

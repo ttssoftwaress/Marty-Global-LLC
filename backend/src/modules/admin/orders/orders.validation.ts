@@ -80,3 +80,17 @@ export const addActivitySchema = z.object({
   visibility: activityVisibility,
 });
 export type AddActivityInput = z.infer<typeof addActivitySchema>;
+
+/*
+ * Opening one of the order's documents.
+ *
+ * `disposition` is the difference between the two controls on the card: `inline`
+ * previews the file in a new tab, `attachment` saves it. It is signed into the
+ * presigned URL, so the choice has to be made when the link is minted rather
+ * than by the browser afterwards — which is why it is a request parameter at all
+ * and not a frontend concern.
+ */
+export const documentLinkQuerySchema = z.object({
+  disposition: z.enum(['inline', 'attachment']).default('inline'),
+});
+export type DocumentLinkQuery = z.infer<typeof documentLinkQuerySchema>;

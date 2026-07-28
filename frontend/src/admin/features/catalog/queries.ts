@@ -173,6 +173,32 @@ export function useUpdateCatalogService() {
 }
 
 /*
+ * DELETE /v1/admin/catalog/services/:id — remove a service from the catalog.
+ *
+ * Only ever succeeds for a service nothing points at; the backend refuses it for
+ * one that has been ordered or delivered and says to turn it off instead, which
+ * is why the row hides the button rather than disabling it (`canDelete`).
+ *
+ * Even a successful call is a soft delete — the row keeps its configuration and
+ * simply leaves every catalog read (AGENTS.md — ask before any hard delete).
+ */
+export function useDeleteCatalogService() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (serviceId: string) =>
+      apiFetch<ApiSuccess<{ id: string }>>(
+        `/admin/catalog/services/${serviceId}`,
+        { method: 'DELETE' },
+      ).then((res) => res.data),
+    onSuccess: (_data, serviceId) => {
+      queryClient.removeQueries({ queryKey: adminCatalogServiceKey(serviceId) });
+      void queryClient.invalidateQueries({ queryKey: adminCatalogServicesKey() });
+    },
+  });
+}
+
+/*
  * PUT /v1/admin/catalog/services/:id/result-schema — what this service DELIVERS.
  *
  * Its own endpoint rather than another branch of the service PATCH, because it

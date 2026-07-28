@@ -33,7 +33,7 @@ export function SettingsMobileMenu({ onSelect }: SettingsMobileMenuProps) {
                 <span className="flex size-9 shrink-0 items-center justify-center rounded-input bg-primary-light">
                   <Icon className="size-5 text-primary" strokeWidth={1.75} aria-hidden="true" />
                 </span>
-                <span className="text-[14px] font-medium text-text">{label}</span>
+                <span className="text-[0.875rem] font-medium text-text">{label}</span>
               </span>
               <ChevronRight
                 className="size-4 shrink-0 text-gray-400"

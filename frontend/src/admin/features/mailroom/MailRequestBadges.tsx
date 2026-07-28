@@ -25,7 +25,7 @@ type BadgeProps = {
 function Badge({ label, className, icon: Icon }: BadgeProps) {
   return (
     <span
-      className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-pill px-2 py-1 text-[11px] font-semibold lg:gap-1.5 lg:px-3 lg:py-1.5 lg:text-small ${className}`}
+      className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-pill px-2 py-1 text-[0.6875rem] font-semibold lg:gap-1.5 lg:px-3 lg:py-1.5 lg:text-small ${className}`}
     >
       <Icon
         className="size-2.5 shrink-0 lg:size-3"

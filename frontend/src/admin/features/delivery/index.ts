@@ -7,6 +7,7 @@ export {
   useAdminRequestResult,
   useAdminRequests,
   useOrderItemResult,
+  useResultFileLink,
   useSaveAdminRequestResult,
   useSaveOrderItemResult,
   useUpdateAdminRequest,

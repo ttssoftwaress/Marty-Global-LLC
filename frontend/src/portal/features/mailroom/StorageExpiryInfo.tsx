@@ -19,7 +19,7 @@ export function StorageExpiryInfo() {
 
       <span
         role="tooltip"
-        className="pointer-events-none absolute left-1/2 top-full z-30 mt-2 w-[240px] -translate-x-1/2 rounded-[12px] border border-gray-200 bg-white p-3 opacity-0 shadow-md-elevation transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
+        className="pointer-events-none absolute left-1/2 top-full z-30 mt-2 w-[15rem] -translate-x-1/2 rounded-[0.75rem] border border-gray-200 bg-white p-3 opacity-0 shadow-md-elevation transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
       >
         <span className="block text-caption font-semibold uppercase tracking-[0.4px] text-primary">
           Storage expiry

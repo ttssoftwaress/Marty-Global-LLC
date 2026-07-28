@@ -32,10 +32,10 @@ export function CatalogHeader({ onAddService }: CatalogHeaderProps) {
 
       <div className="flex w-full flex-col items-start gap-4 md:flex-row md:items-center md:justify-between md:gap-6">
         <div className="flex min-w-0 flex-col gap-1">
-          <h1 className="text-[28px] font-semibold leading-9 text-text lg:text-[32px] lg:leading-10">
+          <h1 className="text-[1.75rem] font-semibold leading-9 text-text lg:text-[2rem] lg:leading-10">
             Service catalog &amp; pricing
           </h1>
-          <p className="text-[13px] leading-5 text-gray-500 md:text-body">
+          <p className="text-[0.8125rem] leading-5 text-gray-500 md:text-body">
             Manage what each service includes, where it&rsquo;s offered, and how
             it&rsquo;s priced.
           </p>

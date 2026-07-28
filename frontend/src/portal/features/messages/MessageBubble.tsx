@@ -25,13 +25,13 @@ function AgentAvatar({ message }: { message: Message }) {
       <img
         src={message.senderAvatarUrl}
         alt=""
-        className="size-5 shrink-0 rounded-[10px] object-cover"
+        className="size-5 shrink-0 rounded-[0.625rem] object-cover"
       />
     );
   }
   return (
     <span
-      className="flex size-5 shrink-0 items-center justify-center rounded-[10px] bg-primary-light text-[10px] font-semibold text-primary"
+      className="flex size-5 shrink-0 items-center justify-center rounded-[0.625rem] bg-primary-light text-[0.625rem] font-semibold text-primary"
       aria-hidden="true"
     >
       {initialOf(message.senderName)}
@@ -87,17 +87,17 @@ export function MessageBubble({ message, firstOfRun }: MessageBubbleProps) {
       ) : null}
 
       <div
-        className={`flex max-w-[280px] flex-col gap-2 rounded-2xl p-3 transition-opacity md:max-w-[300px] md:px-3.5 md:py-2.5 lg:max-w-[480px] lg:px-4 lg:py-3 ${
+        className={`flex max-w-[17.5rem] flex-col gap-2 rounded-2xl p-3 transition-opacity md:max-w-[18.75rem] md:px-3.5 md:py-2.5 lg:max-w-[30rem] lg:px-4 lg:py-3 ${
           isAgent
-            ? `bg-gray-100 ${firstOfRun ? 'rounded-tl-[4px]' : ''}`
-            : `bg-primary-light ${firstOfRun ? 'rounded-tr-[4px]' : ''}`
+            ? `bg-gray-100 ${firstOfRun ? 'rounded-tl-[0.25rem]' : ''}`
+            : `bg-primary-light ${firstOfRun ? 'rounded-tr-[0.25rem]' : ''}`
         } ${
           // In flight: dimmed rather than replaced by a spinner, so the message
           // reads as sent-and-settling instead of as an error state.
           message.pending ? 'opacity-60' : ''
         }`}
       >
-        <p className="whitespace-pre-wrap break-words text-[14px] leading-5 text-text md:text-[13px] md:leading-[18px] lg:text-[14px] lg:leading-5">
+        <p className="whitespace-pre-wrap break-words text-[0.875rem] leading-5 text-text md:text-[0.8125rem] md:leading-[1.125rem] lg:text-[0.875rem] lg:leading-5">
           {message.body}
         </p>
 

@@ -33,6 +33,7 @@ export {
   chatRateLimit,
   publicRateLimit,
   sensitiveRateLimit,
+  uploadRateLimit,
 } from './rate-limit.js';
 
 export { betterAuthRateLimit } from './auth-rate-limit.js';

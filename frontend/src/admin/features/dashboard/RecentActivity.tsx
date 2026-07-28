@@ -54,12 +54,12 @@ function ActivityRow({ item }: { item: DashboardActivity }) {
       </span>
 
       <span className="flex min-w-0 flex-1 flex-col gap-0.5 md:flex-row md:items-center md:gap-4">
-        <span className="min-w-0 flex-1 text-[13px] leading-[1.3] text-text md:text-[14px] md:leading-5">
+        <span className="min-w-0 flex-1 text-[0.8125rem] leading-[1.3] text-text md:text-[0.875rem] md:leading-5">
           {item.message}
         </span>
 
         {/* One timestamp element per row — the wording is what changes by width. */}
-        <span className="shrink-0 text-[11px] leading-4 text-gray-400 md:text-[12px]">
+        <span className="shrink-0 text-[0.6875rem] leading-4 text-gray-400 md:text-[0.75rem]">
           <span className="lg:hidden">{formatActivityTimeShort(item.occurredAt)}</span>
           <span className="hidden lg:inline">{formatActivityTime(item.occurredAt)}</span>
         </span>
@@ -88,17 +88,17 @@ function ActivityRow({ item }: { item: DashboardActivity }) {
 export function RecentActivity({ activity }: { activity: DashboardActivity[] }) {
   return (
     <section className="flex w-full min-w-0 flex-col gap-2.5 md:gap-0">
-      <h2 className="text-[14px] font-semibold leading-5 text-gray-700 md:hidden">
+      <h2 className="text-[0.875rem] font-semibold leading-5 text-gray-700 md:hidden">
         Recent activity
       </h2>
 
       <div className="flex w-full min-w-0 flex-col gap-2 rounded-card border border-gray-200 bg-white p-2 shadow-sm-elevation md:gap-4 md:p-card">
-        <h2 className="hidden text-[18px] font-semibold leading-6 text-text md:block">
+        <h2 className="hidden text-[1.125rem] font-semibold leading-6 text-text md:block">
           Recent activity
         </h2>
 
         {activity.length === 0 ? (
-          <p className="p-3 text-[14px] leading-5 text-gray-500 md:p-0">
+          <p className="p-3 text-[0.875rem] leading-5 text-gray-500 md:p-0">
             No activity in this period yet.
           </p>
         ) : (
@@ -112,7 +112,7 @@ export function RecentActivity({ activity }: { activity: DashboardActivity[] }) 
             <div className="flex w-full justify-center py-3 md:pt-2">
               <Link
                 to="/admin/reports"
-                className="text-[14px] font-semibold leading-5 text-primary transition-colors hover:text-primary-hover md:font-medium"
+                className="text-[0.875rem] font-semibold leading-5 text-primary transition-colors hover:text-primary-hover md:font-medium"
               >
                 View all activity
               </Link>

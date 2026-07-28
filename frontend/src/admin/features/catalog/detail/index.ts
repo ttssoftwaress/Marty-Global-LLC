@@ -5,6 +5,7 @@ export { RequestFormStepsCard } from './RequestFormStepsCard';
 export { RequestTypesCard } from './RequestTypesCard';
 export { ResultFieldPicker } from './ResultFieldPicker';
 export { ResultSchemaCard } from './ResultSchemaCard';
+export { ServiceAvailabilityCard } from './ServiceAvailabilityCard';
 export { ServiceDescriptionCard } from './ServiceDescriptionCard';
 export { ServiceDetailFooter } from './ServiceDetailFooter';
 export { ServiceDetailHeader } from './ServiceDetailHeader';

@@ -2,10 +2,13 @@ import { useRef, useState } from 'react';
 import { FileText, UploadCloud, X } from 'lucide-react';
 
 import {
-  SCAN_ACCEPTED_TYPES,
-  SCAN_MAX_BYTES,
-  type MailScanAttachment,
-} from '../../types/mailroom';
+  acceptAttr,
+  describeTypes,
+  DOCUMENT_TYPES,
+  isAcceptedType,
+  MAX_BYTES,
+} from '@/constants/uploads';
+import { type MailScanAttachment } from '../../types/mailroom';
 
 /*
  * The scan drop zone — drag-and-drop or click-to-browse for the scanned mail.
@@ -28,7 +31,12 @@ import {
  * operable by keyboard, with the file input hidden behind it.
  */
 
-const ACCEPT = SCAN_ACCEPTED_TYPES.join(',');
+// Mirrors the backend's `mail-scan` policy. The ceiling is deliberately higher
+// than the other surfaces: a scanned envelope can be a long multi-page PDF.
+const ACCEPT = acceptAttr(DOCUMENT_TYPES);
+const TYPE_LABEL = describeTypes(DOCUMENT_TYPES);
+const SCAN_MAX_BYTES = MAX_BYTES.mailScan;
+const SCAN_MAX_MB = SCAN_MAX_BYTES / (1024 * 1024);
 
 function formatSize(bytes: number) {
   const mb = bytes / (1024 * 1024);
@@ -68,7 +76,7 @@ export function MailScanDropZone({
     let tooLarge = false;
 
     for (const candidate of candidates) {
-      if (!SCAN_ACCEPTED_TYPES.includes(candidate.type)) {
+      if (!isAcceptedType(candidate, DOCUMENT_TYPES)) {
         wrongType = true;
         continue;
       }
@@ -81,11 +89,11 @@ export function MailScanDropZone({
 
     setError(
       wrongType && tooLarge
-        ? 'Some files were skipped — only PDF, JPG, or PNG under 10 MB are accepted.'
+        ? `Some files were skipped — only ${TYPE_LABEL} under ${SCAN_MAX_MB} MB are accepted.`
         : wrongType
-          ? 'Some files were skipped. Upload a PDF, JPG, or PNG.'
+          ? `Some files were skipped. Upload a ${TYPE_LABEL} file.`
           : tooLarge
-            ? 'Some files were skipped — each scan must be under 10 MB.'
+            ? `Some files were skipped — each scan must be under ${SCAN_MAX_MB} MB.`
             : null,
     );
 
@@ -145,7 +153,7 @@ export function MailScanDropZone({
           accept(Array.from(event.dataTransfer.files));
         }}
         className={`flex w-full flex-col items-center justify-center gap-2 rounded-input border border-dashed p-5 text-center transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-60 ${
-          files.length > 0 ? 'h-[92px]' : 'h-[120px] lg:h-[140px] lg:p-card'
+          files.length > 0 ? 'h-[5.75rem]' : 'h-[7.5rem] lg:h-[8.75rem] lg:p-card'
         } ${
           isDragging
             ? 'border-primary bg-primary-light'
@@ -163,7 +171,7 @@ export function MailScanDropZone({
             : 'Drag & drop or click to upload scan'}
         </span>
         <span className="text-small text-gray-400">
-          PDF, JPG or PNG · max 10 MB each
+          {TYPE_LABEL} · max {SCAN_MAX_MB} MB each
         </span>
       </button>
 

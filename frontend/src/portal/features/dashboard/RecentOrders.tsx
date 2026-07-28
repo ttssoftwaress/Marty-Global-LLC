@@ -103,16 +103,16 @@ export function RecentOrders({ orders }: RecentOrdersProps) {
                 <th scope="col" className="h-12 px-5 font-medium">
                   Service / order name
                 </th>
-                <th scope="col" className="h-12 w-[120px] px-0 font-medium">
+                <th scope="col" className="h-12 w-[7.5rem] px-0 font-medium">
                   Order ID
                 </th>
                 <th
                   scope="col"
-                  className="hidden h-12 w-[120px] px-0 font-medium lg:table-cell"
+                  className="hidden h-12 w-[7.5rem] px-0 font-medium lg:table-cell"
                 >
                   Submitted
                 </th>
-                <th scope="col" className="h-12 w-[140px] px-0 font-medium">
+                <th scope="col" className="h-12 w-[8.75rem] px-0 font-medium">
                   Status
                 </th>
               </tr>
@@ -122,7 +122,7 @@ export function RecentOrders({ orders }: RecentOrdersProps) {
               {orders.map((order) => (
                 <tr
                   key={order.id}
-                  className="h-[60px] border-b border-gray-200 last:border-b-0 lg:h-table-row"
+                  className="h-[3.75rem] border-b border-gray-200 last:border-b-0 lg:h-table-row"
                 >
                   <td className="min-w-0 px-5">
                     <Link

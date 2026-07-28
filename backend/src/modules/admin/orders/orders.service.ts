@@ -18,6 +18,7 @@ import { cursorArgs, takePage, totalPages } from '../../../lib/pagination.js';
 import { staffRoleLabel } from '../../../lib/permissions.js';
 import { prisma } from '../../../lib/prisma.js';
 import { Role } from '../../../lib/roles.js';
+import { presignObject } from '../../../lib/storage.js';
 import { AuditAction, record } from '../../audit/audit.service.js';
 import { syncAssignee } from '../../conversations/conversations.service.js';
 import { queueEmail } from '../../notifications/notifications.service.js';
@@ -46,6 +47,7 @@ import {
 } from '../admin.views.js';
 import type {
   AddActivityInput,
+  DocumentLinkQuery,
   ListOrdersQuery,
   UpdateOrderInput,
 } from './orders.validation.js';
@@ -336,8 +338,20 @@ export type AdminOrderDocument = {
   status: string;
   statusLabel: string;
   source: 'team' | 'customer';
+  // What the card decides between "preview it" and "save it" with. Null on a row
+  // filed before the type was captured — the screen still offers both, it just
+  // cannot promise the tab will render it.
+  contentType: string | null;
   sizeBytes: number | null;
   createdAt: string;
+  /*
+   * Whether there is a file to open at all. A PENDING row is a placeholder for a
+   * document we owe the customer and a REJECTED one has been set aside, so
+   * neither has an object behind it. The backend decides this rather than the
+   * screen inferring it from the status, because the endpoint refuses the same
+   * two cases and the disabled control has to agree with it.
+   */
+  downloadable: boolean;
 };
 
 export type AdminOrderStatusOption = {
@@ -532,6 +546,27 @@ const detailInclude = {
 
 type OrderDetailRecord = Prisma.OrderGetPayload<{ include: typeof detailInclude }>;
 
+function toDocument(
+  document: OrderDetailRecord['documents'][number],
+): AdminOrderDocument {
+  return {
+    id: document.id,
+    name: document.name,
+    status: DOCUMENT_STATUS_VIEW[document.status].value,
+    statusLabel: DOCUMENT_STATUS_VIEW[document.status].label,
+    source: document.source === OrderDocumentSource.CUSTOMER ? 'customer' : 'team',
+    contentType: document.contentType,
+    sizeBytes: document.sizeBytes,
+    createdAt: iso(document.createdAt),
+    // Both conditions, not just the status: a row can be marked AVAILABLE by hand
+    // with nothing uploaded behind it, and an enabled button that 422s is worse
+    // than a disabled one that explains itself.
+    downloadable:
+      document.status === OrderDocumentStatus.AVAILABLE &&
+      Boolean(document.objectKey),
+  };
+}
+
 function toActivityEntry(
   entry: OrderDetailRecord['activity'][number],
 ): AdminOrderActivityEntry {
@@ -648,15 +683,7 @@ export async function getOrder(
       resultId: item.result?.id ?? null,
       resultStatus: item.result ? RESULT_STATUS_VIEW[item.result.status] : null,
     })),
-    documents: order.documents.map((document) => ({
-      id: document.id,
-      name: document.name,
-      status: DOCUMENT_STATUS_VIEW[document.status].value,
-      statusLabel: DOCUMENT_STATUS_VIEW[document.status].label,
-      source: document.source === OrderDocumentSource.CUSTOMER ? 'customer' : 'team',
-      sizeBytes: document.sizeBytes,
-      createdAt: iso(document.createdAt),
-    })),
+    documents: order.documents.map(toDocument),
     activity: order.activity.map(toActivityEntry),
     statusOptions: statusOptions(
       order.status,
@@ -665,6 +692,82 @@ export async function getOrder(
     ),
     assigneeOptions: assignees,
     canAssign,
+  };
+}
+
+// --- Documents -----------------------------------------------------------
+/*
+ * A short-TTL link to one of the order's documents — what the Documents card's
+ * View and Download controls open.
+ *
+ * The mirror of the customer's own `orders.getDocumentLink`, with the ownership
+ * check swapped for the queue's scope: a reviewer reaches a document because they
+ * hold the order it hangs off, exactly as they reach everything else on the
+ * screen. Minted per click and never stored (AGENTS.md, Security & PII) — a
+ * presigned URL is a bearer token for a customer's identity paperwork, so it must
+ * not sit in a cached response or survive in a shared screenshot.
+ */
+export async function getDocumentLink(
+  actor: AuthContext,
+  orderId: string,
+  documentId: string,
+  query: DocumentLinkQuery,
+): Promise<{ id: string; name: string; url: string; contentType: string | null }> {
+  // Same scope as the read: an order this member does not hold is an order whose
+  // paperwork is not theirs either, and 404 rather than 403 so the refusal does
+  // not confirm the id.
+  const order = await prisma.order.findFirst({
+    where: { id: orderId, ...ACTIVE_ORDERS, ...(await visibleScope(actor)) },
+    select: { id: true, reference: true },
+  });
+
+  if (!order) throw AppError.notFound('Order not found');
+
+  const document = await prisma.orderDocument.findFirst({
+    where: { id: documentId, orderId: order.id, deletedAt: null },
+  });
+
+  if (!document) throw AppError.notFound('Document not found');
+
+  // A PENDING row is a placeholder for a document we owe the customer and a
+  // REJECTED one has been set aside; neither has an object to sign.
+  if (document.status !== OrderDocumentStatus.AVAILABLE || !document.objectKey) {
+    throw AppError.businessRule('That document has no file behind it yet');
+  }
+
+  const url = await presignObject(document.objectKey, {
+    disposition: query.disposition,
+    fileName: document.name,
+  });
+
+  if (!url) {
+    throw AppError.businessRule('That document cannot be opened right now');
+  }
+
+  /*
+   * Audited as a read, which is the exception in this codebase and the point of
+   * the endpoint: these are the customer's identity documents, and who opened one
+   * is not recoverable from anywhere else. The filename stays out of the metadata
+   * — it is the customer's own words and routinely names them.
+   */
+  void record({
+    actor,
+    action: AuditAction.ORDER_DOCUMENT_ACCESSED,
+    entityType: 'OrderDocument',
+    entityId: document.id,
+    metadata: {
+      orderId: order.id,
+      reference: order.reference,
+      source: document.source,
+      disposition: query.disposition,
+    },
+  });
+
+  return {
+    id: document.id,
+    name: document.name,
+    url,
+    contentType: document.contentType,
   };
 }
 

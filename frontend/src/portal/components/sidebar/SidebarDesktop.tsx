@@ -39,7 +39,7 @@ export function SidebarDesktop({ user, onLogout, className }: SidebarDesktopProp
           <img
             src={logoWhite}
             alt="Marty Global LLC"
-            className="h-[41px] w-[116px] object-contain"
+            className="h-[2.5625rem] w-[7.25rem] object-contain"
           />
         </Link>
 
@@ -57,7 +57,7 @@ export function SidebarDesktop({ user, onLogout, className }: SidebarDesktopProp
                     aria-current={active ? 'page' : undefined}
                     className={
                       active
-                        ? 'flex w-full items-center gap-3 rounded-input bg-white px-4 py-3 text-body font-semibold text-primary'
+                        ? 'flex w-full items-center gap-3 rounded-input bg-white px-4 py-3 text-body font-semibold text-primary [&>svg]:text-accent'
                         : 'flex w-full items-center gap-3 rounded-input px-4 py-3 text-body font-medium text-white/80 transition-colors hover:bg-white/10 hover:text-white'
                     }
                   >
@@ -90,7 +90,7 @@ export function SidebarDesktop({ user, onLogout, className }: SidebarDesktopProp
                         aria-current={active ? 'page' : undefined}
                         className={
                           active
-                            ? 'flex w-full items-center gap-3 rounded-input bg-white px-4 py-3 text-body font-semibold text-primary'
+                            ? 'flex w-full items-center gap-3 rounded-input bg-white px-4 py-3 text-body font-semibold text-primary [&>svg]:text-accent'
                             : 'flex w-full items-center gap-3 rounded-input px-4 py-3 text-body font-medium text-white/80 transition-colors hover:bg-white/10 hover:text-white'
                         }
                       >

@@ -29,7 +29,7 @@ export function CatalogEmptyState({ onAddService }: CatalogEmptyStateProps) {
         <h3 className="text-body-lg font-semibold text-text">
           No services yet
         </h3>
-        <p className="max-w-[420px] text-body text-gray-500">
+        <p className="max-w-[26.25rem] text-body text-gray-500">
           Add a service to define what it includes, where it&rsquo;s offered, and
           how it&rsquo;s priced. Customers can order it as soon as it&rsquo;s
           active.

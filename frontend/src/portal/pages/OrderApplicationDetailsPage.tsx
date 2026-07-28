@@ -70,7 +70,7 @@ type OrderApplicationDetailsPageProps = {
 function ApplicationSkeleton() {
   return (
     <div className="flex w-full flex-col gap-6" aria-hidden="true">
-      <div className="h-14 w-full max-w-[420px] animate-pulse rounded-input bg-gray-200" />
+      <div className="h-14 w-full max-w-[26.25rem] animate-pulse rounded-input bg-gray-200" />
       <div className="h-12 w-full animate-pulse rounded-input bg-gray-200" />
       {Array.from({ length: 2 }).map((_, index) => (
         <div key={index} className="h-64 w-full animate-pulse rounded-card bg-gray-200" />
@@ -95,13 +95,13 @@ function CatalogError({
       role="alert"
       className="flex w-full flex-col items-center gap-3 rounded-card border border-gray-200 bg-white px-6 py-14 text-center shadow-sm-elevation"
     >
-      <span className="flex size-12 items-center justify-center rounded-[24px] bg-[var(--color-status-missing-bg)]">
+      <span className="flex size-12 items-center justify-center rounded-[1.5rem] bg-[var(--color-status-missing-bg)]">
         <AlertTriangle className="size-6 text-error" strokeWidth={1.75} aria-hidden="true" />
       </span>
       <p className="text-body-lg font-semibold text-text">
         We couldn&apos;t load the application form
       </p>
-      <p className="max-w-[360px] text-body text-gray-500">
+      <p className="max-w-[22.5rem] text-body text-gray-500">
         Something went wrong fetching the services you selected. Please try
         again.
       </p>
@@ -354,7 +354,7 @@ export function OrderApplicationDetailsPage({
   return (
     <PortalLayout user={user} onLogout={onLogout}>
       <div className="w-full p-4 md:p-6 lg:p-content">
-        <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-5 md:gap-6 lg:gap-8">
+        <div className="mx-auto flex w-full max-w-[75rem] flex-col gap-5 md:gap-6 lg:gap-8">
           {showSkeleton ? (
             <ApplicationSkeleton />
           ) : showCatalogError ? (
@@ -370,8 +370,8 @@ export function OrderApplicationDetailsPage({
               </p>
 
               <header className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <div className="flex flex-col gap-1 lg:max-w-[640px]">
-                  <h1 className="text-h4 font-semibold text-text md:text-[28px] md:leading-[36px] lg:text-h3">
+                <div className="flex flex-col gap-1 lg:max-w-[40rem]">
+                  <h1 className="text-h4 font-semibold text-text md:text-[1.75rem] md:leading-[2.25rem] lg:text-h3">
                     {currentStep ? currentStep.title : 'Review & submit'}
                   </h1>
                   <p className="text-body text-text-secondary">

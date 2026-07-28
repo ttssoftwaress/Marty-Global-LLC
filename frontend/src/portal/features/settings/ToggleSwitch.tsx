@@ -7,8 +7,9 @@
  * tablet/desktop. One element renders both — the track/knob sizes swap at `md`
  * — so there is a single switch in the tree per cell.
  *
- * On = brand navy fill (the design's navy pill); off = Gray-300 track. The knob
- * is white in both states and slides on translate.
+ * On = brand accent fill (the design drew navy; magenta is part of the
+ * accent-visibility pass — logged as a deviation); off = Gray-300 track. The
+ * knob is white in both states and slides on translate.
  */
 
 type ToggleSwitchProps = {
@@ -34,15 +35,15 @@ export function ToggleSwitch({
       aria-label={label}
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-5 w-[38px] shrink-0 items-center rounded-pill transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 md:h-6 md:w-11 ${
-        checked ? 'bg-primary' : 'bg-gray-300'
+      className={`relative inline-flex h-5 w-[2.375rem] shrink-0 items-center rounded-pill transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 md:h-6 md:w-11 ${
+        checked ? 'bg-accent' : 'bg-gray-300'
       } ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
     >
       <span
         aria-hidden="true"
         className={`pointer-events-none inline-block size-4 rounded-full bg-white shadow-sm-elevation transition-transform md:size-5 ${
           checked
-            ? 'translate-x-[20px] md:translate-x-[22px]'
+            ? 'translate-x-[1.25rem] md:translate-x-[1.375rem]'
             : 'translate-x-0.5'
         }`}
       />

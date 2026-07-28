@@ -22,7 +22,7 @@ const VISIBLE_ENTRIES = 6;
 
 function TeamMonogram() {
   return (
-    <span className="flex size-6 shrink-0 items-center justify-center rounded-[12px] bg-primary text-caption font-bold text-white">
+    <span className="flex size-6 shrink-0 items-center justify-center rounded-[0.75rem] bg-primary text-caption font-bold text-white">
       M
     </span>
   );
@@ -39,7 +39,7 @@ function ActivityItem({ entry }: { entry: OrderActivityEntry }) {
         <img
           src={entry.avatarUrl}
           alt=""
-          className="size-6 shrink-0 rounded-[12px] object-cover"
+          className="size-6 shrink-0 rounded-[0.75rem] object-cover"
         />
       )}
 
@@ -50,7 +50,7 @@ function ActivityItem({ entry }: { entry: OrderActivityEntry }) {
               {entry.authorName}
             </p>
             {isTeam && (
-              <span className="rounded bg-primary-light px-1.5 py-0.5 text-[10px] font-semibold leading-none text-primary">
+              <span className="rounded bg-primary-light px-1.5 py-0.5 text-[0.625rem] font-semibold leading-none text-primary">
                 TEAM
               </span>
             )}

@@ -50,28 +50,28 @@ export function UnmatchedTransferTable({
 }: UnmatchedTransferTableProps) {
   return (
     <div className="hidden w-full overflow-x-auto md:block">
-      <table className="w-full min-w-[720px] table-fixed border-collapse text-left lg:min-w-[980px]">
+      <table className="w-full min-w-[45rem] table-fixed border-collapse text-left lg:min-w-[61.25rem]">
         <thead>
           <tr className="h-12 border-b border-gray-200 bg-[var(--table-header-bg)]">
             <th
               scope="col"
-              className={`${HEAD_CELL} w-[168px] pl-4 pr-3 lg:w-[200px] lg:pl-6 lg:pr-4`}
+              className={`${HEAD_CELL} w-[10.5rem] pl-4 pr-3 lg:w-[12.5rem] lg:pl-6 lg:pr-4`}
             >
               Transaction
             </th>
-            <th scope="col" className={`${HEAD_CELL} w-[120px] pr-3 lg:w-[140px] lg:pr-4`}>
+            <th scope="col" className={`${HEAD_CELL} w-[7.5rem] pr-3 lg:w-[8.75rem] lg:pr-4`}>
               Amount
             </th>
-            <th scope="col" className={`${HEAD_CELL} hidden w-[180px] pr-4 lg:table-cell`}>
+            <th scope="col" className={`${HEAD_CELL} hidden w-[11.25rem] pr-4 lg:table-cell`}>
               From
             </th>
-            <th scope="col" className={`${HEAD_CELL} w-[150px] pr-3 lg:w-[170px] lg:pr-4`}>
+            <th scope="col" className={`${HEAD_CELL} w-[9.375rem] pr-3 lg:w-[10.625rem] lg:pr-4`}>
               Seen
             </th>
             <th scope="col" className={`${HEAD_CELL} pr-3 lg:pr-4`}>
               Status
             </th>
-            <th scope="col" className={`${HEAD_CELL} w-[120px] pr-4 text-right lg:pr-6`}>
+            <th scope="col" className={`${HEAD_CELL} w-[7.5rem] pr-4 text-right lg:pr-6`}>
               <span className="sr-only">Action</span>
             </th>
           </tr>

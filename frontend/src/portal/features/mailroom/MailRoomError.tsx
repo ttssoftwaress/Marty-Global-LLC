@@ -25,11 +25,11 @@ export function MailRoomError({
       role="alert"
       className="flex w-full flex-col items-center gap-3 rounded-card border border-gray-200 bg-white px-6 py-14 text-center shadow-sm-elevation"
     >
-      <span className="flex size-12 items-center justify-center rounded-[24px] bg-[var(--color-status-missing-bg)]">
+      <span className="flex size-12 items-center justify-center rounded-[1.5rem] bg-[var(--color-status-missing-bg)]">
         <AlertTriangle className="size-6 text-error" strokeWidth={1.75} aria-hidden="true" />
       </span>
       <p className="text-body-lg font-semibold text-text">{title}</p>
-      <p className="max-w-[360px] text-body text-gray-500">{body}</p>
+      <p className="max-w-[22.5rem] text-body text-gray-500">{body}</p>
       <button
         type="button"
         onClick={onRetry}

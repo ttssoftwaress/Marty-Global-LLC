@@ -1,6 +1,7 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { ChevronDown, FileText, TriangleAlert, XCircle } from 'lucide-react';
 
+import { useOverlay } from '../../../hooks/useOverlay';
 import { formatOrderDate } from '../../lib/format';
 import type {
   MailRequestDetail,
@@ -75,8 +76,9 @@ export function MailRequestSlideOver({
   isResolving,
   errorMessage,
 }: MailRequestSlideOverProps) {
-  const sheetRef = useRef<HTMLElement>(null);
-  const panelRef = useRef<HTMLElement>(null);
+  // The wrapper holding both shells — the overlay's focus scope, so the trap
+  // spans whichever of the two the breakpoint has rendered.
+  const overlayRef = useRef<HTMLDivElement>(null);
   const fieldId = useId();
 
   const isShredding = request.type === 'shredding';
@@ -87,31 +89,31 @@ export function MailRequestSlideOver({
   const [notes, setNotes] = useState('');
 
   /*
-   * Move focus into whichever shell is on screen — both are mounted, so
-   * focusing the hidden one would strand the keyboard — and lock background
-   * scroll for the overlay's lifetime.
+   * Both shells stay mounted because their entrance animations differ (the
+   * sheet rises, the panel slides in from the right) and `content()` renders a
+   * different variant into each — collapsing them into one element would cost
+   * both. The overlay behaviour instead runs against the wrapper: `useOverlay`
+   * filters to what is actually rendered, so the trap and the initial focus
+   * land in whichever shell the breakpoint is showing and skip the hidden one.
+   * That replaces the old `matchMedia` guess, which picked a shell at effect
+   * time and left focus in the wrong one if the viewport crossed `md` while the
+   * request was open.
+   *
+   * This panel holds a form, so the trap matters more here than elsewhere:
+   * without it Tab walked out of the tracking-number field into the queue
+   * behind the scrim.
    */
-  useEffect(() => {
-    const isPanel = window.matchMedia('(min-width: 768px)').matches;
-    (isPanel ? panelRef : sheetRef).current?.focus();
-
-    const { overflow } = document.body.style;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = overflow;
-    };
-  }, []);
-
-  // Esc closes — the header hints it.
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [onClose]);
+  useOverlay({ open: true, onClose, panelRef: overlayRef });
 
   const requestedOn = formatOrderDate(request.requestedAt);
+
+  /*
+   * Carriers are admin-managed reference data and are never seeded, so an
+   * install that has not configured any leaves a forwarding request with an
+   * empty picker and no way to satisfy the footer. Called out in the panel
+   * rather than left as a permanently disabled button with no explanation.
+   */
+  const hasNoCarriers = !isShredding && request.carriers.length === 0;
 
   /*
    * A forwarding request is only settled once we can tell the customer where
@@ -159,10 +161,19 @@ export function MailRequestSlideOver({
         {/* Header — who and what, with the Esc-hinted close */}
         <header className="flex w-full shrink-0 items-center justify-between gap-4 border-b border-gray-200 p-5">
           <div className="flex min-w-0 flex-1 flex-col gap-1">
+            {/*
+             * The room joins the identity line: settling a request means acting
+             * on post that arrived at one specific address, and a customer may
+             * hold several.
+             */}
             <p className="truncate text-h6 text-text">
               {request.customer.name}
             </p>
             <p className="truncate text-small text-gray-500">
+              {request.room.name}
+              <span className="px-1 text-gray-300" aria-hidden="true">
+                •
+              </span>
               {request.mailItem}
               <span className="px-1 text-gray-300" aria-hidden="true">
                 •
@@ -194,7 +205,7 @@ export function MailRequestSlideOver({
         <div className="flex min-h-0 w-full flex-1 flex-col gap-6 overflow-y-auto p-5">
           {/* The scan behind the request */}
           <div className="flex w-full items-center gap-4 rounded-input bg-gray-50 p-4">
-            <div className="flex h-16 w-12 shrink-0 items-center justify-center rounded-[4px] border border-gray-300 bg-gray-200">
+            <div className="flex h-16 w-12 shrink-0 items-center justify-center rounded-[0.25rem] border border-gray-300 bg-gray-200">
               <FileText
                 className="size-6 text-gray-500"
                 strokeWidth={1.75}
@@ -203,7 +214,7 @@ export function MailRequestSlideOver({
             </div>
 
             <div className="flex min-w-0 flex-1 flex-col gap-2">
-              <p className="truncate text-[13px] font-medium text-text">
+              <p className="truncate text-[0.8125rem] font-medium text-text">
                 {request.document.fileName}
               </p>
 
@@ -245,7 +256,7 @@ export function MailRequestSlideOver({
             {/* Only forwarding ships anywhere, so only forwarding shows this. */}
             {!isShredding && request.shippingAddress ? (
               <DetailRow label="Shipping address" align="start">
-                <p className="max-w-[260px] text-right text-body text-text">
+                <p className="max-w-[16.25rem] text-right text-body text-text">
                   {request.shippingAddress}
                 </p>
               </DetailRow>
@@ -259,7 +270,7 @@ export function MailRequestSlideOver({
                 strokeWidth={1.75}
                 aria-hidden="true"
               />
-              <p className="min-w-0 flex-1 text-[13px] leading-[18px] text-[#7f1d1d]">
+              <p className="min-w-0 flex-1 text-[0.8125rem] leading-[1.125rem] text-[#7f1d1d]">
                 This mail item will be marked as securely destroyed. This action
                 is irreversible.
               </p>
@@ -327,6 +338,13 @@ export function MailRequestSlideOver({
                         aria-hidden="true"
                       />
                     </div>
+
+                    {hasNoCarriers ? (
+                      <p className="text-small text-gray-500">
+                        No mail carriers are configured yet. Add one under
+                        Settings before forwarding this request.
+                      </p>
+                    ) : null}
                   </div>
                 </>
               ) : null}
@@ -348,7 +366,7 @@ export function MailRequestSlideOver({
                       ? 'Reason for destruction or reference notes'
                       : 'Add internal notes about this shipment'
                   }
-                  className="input-field h-[100px] resize-none px-3 py-3"
+                  className="input-field h-[6.25rem] resize-none px-3 py-3"
                 />
               </div>
 
@@ -399,7 +417,7 @@ export function MailRequestSlideOver({
    * the portal's notifications panel makes.
    */
   return (
-    <div className="fixed inset-0 z-50">
+    <div ref={overlayRef} tabIndex={-1} className="fixed inset-0 z-50 outline-none">
       <div
         className="absolute inset-0 bg-gray-900/50 transition-opacity duration-300 starting:opacity-0 motion-reduce:transition-none"
         onClick={onClose}
@@ -408,7 +426,6 @@ export function MailRequestSlideOver({
 
       {/* Mobile — a sheet rising from the bottom, capped short of the top */}
       <section
-        ref={sheetRef}
         role="dialog"
         aria-modal="true"
         aria-label={label}
@@ -420,12 +437,11 @@ export function MailRequestSlideOver({
 
       {/* Tablet & desktop — the design's panel entering from the right */}
       <section
-        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label={label}
         tabIndex={-1}
-        className="absolute inset-y-0 right-0 hidden w-[480px] translate-x-0 flex-col overflow-clip rounded-l-modal bg-white shadow-slide-over outline-none transition-transform duration-300 ease-out starting:translate-x-full motion-reduce:transition-none md:flex lg:w-[520px]"
+        className="absolute inset-y-0 right-0 hidden w-[30rem] translate-x-0 flex-col overflow-clip rounded-l-modal bg-white shadow-slide-over outline-none transition-transform duration-300 ease-out starting:translate-x-full motion-reduce:transition-none md:flex lg:w-[32.5rem]"
       >
         {content('panel')}
       </section>

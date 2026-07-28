@@ -77,7 +77,7 @@ export function CustomerRegionFilter({
         aria-controls={listId}
         aria-haspopup="listbox"
         onClick={() => setOpen((isOpen) => !isOpen)}
-        className={`flex h-12 w-full items-center justify-between gap-2 rounded-input border bg-white px-4 text-body transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary md:h-[38px] md:px-3 md:text-[13px] lg:h-10 lg:px-4 lg:text-body ${
+        className={`flex h-12 w-full items-center justify-between gap-2 rounded-input border bg-white px-4 text-body transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary md:h-[2.375rem] md:px-3 md:text-[0.8125rem] lg:h-10 lg:px-4 lg:text-body ${
           open || isFiltered
             ? 'border-primary font-medium text-primary'
             : 'border-gray-300 text-text hover:bg-gray-50 md:border-gray-200 lg:border-gray-300'
@@ -100,7 +100,7 @@ export function CustomerRegionFilter({
           id={listId}
           role="listbox"
           aria-label="Region"
-          className="absolute left-0 top-full z-30 mt-2 max-h-[280px] w-full min-w-[200px] overflow-y-auto rounded-card border border-gray-200 bg-white p-1.5 shadow-lg-elevation"
+          className="absolute left-0 top-full z-30 mt-2 max-h-[17.5rem] w-full min-w-[12.5rem] overflow-y-auto rounded-card border border-gray-200 bg-white p-1.5 shadow-lg-elevation"
         >
           {options.map((option) => {
             const isSelected = option.value === value;

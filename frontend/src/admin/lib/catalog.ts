@@ -363,6 +363,7 @@ export function detailDraftFromService(
       description: step.description ?? '',
       fields: step.fields.map(fieldDraftFromRef),
     })),
+    active: service.active,
   };
 }
 
@@ -479,6 +480,7 @@ export function detailPayloadFromDraft(
     })),
     formSteps: steps,
     detailFields: steps.flatMap((step) => step.fields),
+    active: draft.active,
   };
 }
 

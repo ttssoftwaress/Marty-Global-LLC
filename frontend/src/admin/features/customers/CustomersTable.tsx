@@ -37,7 +37,7 @@ const HEAD_CELL =
 export function CustomersTable({ customers }: CustomersTableProps) {
   return (
     <div className="hidden w-full overflow-x-auto md:block">
-      <table className="w-full min-w-[640px] table-fixed border-collapse text-left lg:min-w-[900px] lg:table-auto">
+      <table className="w-full min-w-[40rem] table-fixed border-collapse text-left lg:min-w-[56.25rem] lg:table-auto">
         <thead>
           <tr className="h-11 border-b border-gray-200 bg-[var(--table-header-bg)] lg:h-12">
             <th scope="col" className={`${HEAD_CELL} pl-4 pr-3 lg:pl-6 lg:pr-4`}>
@@ -45,16 +45,16 @@ export function CustomersTable({ customers }: CustomersTableProps) {
             </th>
             <th
               scope="col"
-              className={`${HEAD_CELL} hidden w-[240px] pr-4 lg:table-cell`}
+              className={`${HEAD_CELL} hidden w-[15rem] pr-4 lg:table-cell`}
             >
               Email
             </th>
-            <th scope="col" className={`${HEAD_CELL} w-[100px] pr-3 lg:pr-4`}>
+            <th scope="col" className={`${HEAD_CELL} w-[6.25rem] pr-3 lg:pr-4`}>
               Region
             </th>
             <th
               scope="col"
-              className={`${HEAD_CELL} w-[100px] pr-3 text-right lg:w-[120px] lg:pr-4`}
+              className={`${HEAD_CELL} w-[6.25rem] pr-3 text-right lg:w-[7.5rem] lg:pr-4`}
             >
               <span className="inline-block w-full text-right">
                 {/* Desktop spells the two figure columns out; tablet abbreviates. */}
@@ -64,7 +64,7 @@ export function CustomersTable({ customers }: CustomersTableProps) {
             </th>
             <th
               scope="col"
-              className={`${HEAD_CELL} w-[120px] pr-3 text-right lg:pr-4`}
+              className={`${HEAD_CELL} w-[7.5rem] pr-3 text-right lg:pr-4`}
             >
               <span className="inline-block w-full text-right">
                 <span className="lg:hidden">Spent</span>
@@ -73,13 +73,13 @@ export function CustomersTable({ customers }: CustomersTableProps) {
             </th>
             <th
               scope="col"
-              className={`${HEAD_CELL} hidden w-[140px] pr-4 lg:table-cell`}
+              className={`${HEAD_CELL} hidden w-[8.75rem] pr-4 lg:table-cell`}
             >
               Last activity
             </th>
             <th
               scope="col"
-              className={`${HEAD_CELL} w-[100px] pr-4 text-right lg:w-[130px] lg:min-w-[130px] lg:pr-6`}
+              className={`${HEAD_CELL} w-[6.25rem] pr-4 text-right lg:w-[8.125rem] lg:min-w-[8.125rem] lg:pr-6`}
             >
               <span className="inline-block w-full text-right">Action</span>
             </th>
@@ -149,7 +149,7 @@ export function CustomersTable({ customers }: CustomersTableProps) {
                 <Link
                   to={customer.to}
                   aria-label={`View ${customer.name}'s profile`}
-                  className="inline-flex size-[34px] items-center justify-center rounded-[8px] border border-primary bg-white text-primary transition-colors hover:bg-primary-light lg:hidden"
+                  className="inline-flex size-[2.125rem] items-center justify-center rounded-[0.5rem] border border-primary bg-white text-primary transition-colors hover:bg-primary-light lg:hidden"
                 >
                   <User className="size-4" strokeWidth={1.75} aria-hidden="true" />
                 </Link>
@@ -157,7 +157,7 @@ export function CustomersTable({ customers }: CustomersTableProps) {
                 {/* Desktop's labelled button. */}
                 <Link
                   to={customer.to}
-                  className="hidden h-9 items-center justify-center whitespace-nowrap rounded-input border border-primary bg-white px-4 text-[13px] font-semibold text-primary transition-colors hover:bg-primary-light lg:inline-flex"
+                  className="hidden h-9 items-center justify-center whitespace-nowrap rounded-input border border-primary bg-white px-4 text-[0.8125rem] font-semibold text-primary transition-colors hover:bg-primary-light lg:inline-flex"
                 >
                   View profile
                 </Link>

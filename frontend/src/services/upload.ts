@@ -1,4 +1,5 @@
 import { apiFetch, ApiError } from './api';
+import { contentTypeOf } from '@/constants/uploads';
 import type { ApiSuccess } from '@/types/api';
 
 /*
@@ -43,14 +44,8 @@ export type UploadedFile = {
   sizeBytes: number;
 };
 
-// Browsers leave `File.type` empty for types they don't recognise. R2 needs a
-// concrete content type to sign against, so fall back to the generic one rather
-// than sending an empty header the signature could not match.
-const FALLBACK_CONTENT_TYPE = 'application/octet-stream';
-
-function contentTypeOf(file: File): string {
-  return file.type || FALLBACK_CONTENT_TYPE;
-}
+// R2 signs against a concrete content type, and `File.type` is not always one —
+// `constants/uploads.ts` explains what it does about that.
 
 /*
  * Upload one file and resolve to what the attach request needs.

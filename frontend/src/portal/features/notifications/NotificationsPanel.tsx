@@ -1,5 +1,6 @@
-import { useEffect, useRef } from 'react';
+import { useRef } from 'react';
 
+import { useOverlay } from '../../../hooks/useOverlay';
 import type { Notification } from '../../types/notifications';
 import { NotificationPanelContent } from './NotificationPanelContent';
 
@@ -11,11 +12,15 @@ import { NotificationPanelContent } from './NotificationPanelContent';
  *   - mobile: a bottom sheet rising from the bottom edge with a drag handle,
  *     rounded top corners, and its own scroll
  *
- * Both sit over a scrim that dismisses on click, close on Esc, move focus into
- * the panel, lock background scroll while open, and animate in respecting
- * reduced motion — the same overlay posture as the mail-item viewer. The two
- * render as siblings and swap at `md` rather than one panel reflowing, since a
- * corner dropdown and a full-width sheet share no positioning.
+ * It sits over a scrim that dismisses on click and animates in respecting
+ * reduced motion — the same overlay posture as the mail-item viewer.
+ *
+ * Deliberately one element that changes shape at `md` rather than a `md:hidden`
+ * pair: two mounted nodes both claiming `aria-modal="true"` is ambiguous to a
+ * screen reader, and it forced the focus logic to guess at effect time (via
+ * `matchMedia`) which of the two was the visible one. `useOverlay` now owns
+ * Escape, the Tab trap, focus into the panel, focus back to the bell on close,
+ * and the scroll lock.
  *
  * Data (the feed, unread state, mark-read) is owned by the caller and wires to
  * the `notifications` module once it lands (AGENTS.md, two-apps sync rule); this
@@ -46,47 +51,11 @@ export function NotificationsPanel({
   onSelect,
   onMarkAllRead,
 }: NotificationsPanelProps) {
-  const dropdownRef = useRef<HTMLElement>(null);
-  const sheetRef = useRef<HTMLElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
 
-  // Esc closes from anywhere while the overlay is open.
-  useEffect(() => {
-    if (!open) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [open, onClose]);
-
-  // Move focus into whichever panel is on screen and lock background scroll for
-  // the overlay's lifetime.
-  useEffect(() => {
-    if (!open) return;
-    const isDesktop = window.matchMedia('(min-width: 768px)').matches;
-    (isDesktop ? dropdownRef : sheetRef).current?.focus();
-
-    const { overflow } = document.body.style;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = overflow;
-    };
-  }, [open]);
+  useOverlay({ open, onClose, panelRef });
 
   if (!open) return null;
-
-  const content = (variant: 'dropdown' | 'sheet') => (
-    <NotificationPanelContent
-      notifications={notifications}
-      isLoading={isLoading}
-      variant={variant}
-      settingsHref={SETTINGS_HREF}
-      viewAllHref={VIEW_ALL_HREF}
-      onSelect={onSelect}
-      onMarkAllRead={onMarkAllRead}
-      onDismiss={onClose}
-    />
-  );
 
   return (
     <div className="fixed inset-0 z-50">
@@ -96,34 +65,38 @@ export function NotificationsPanel({
         aria-hidden="true"
       />
 
-      {/* Tablet & desktop — dropdown anchored under the bell, top right */}
+      {/*
+       * Mobile is the base — a bottom sheet rising from the bottom edge. From
+       * `md` up the same element becomes the dropdown anchored under the bell at
+       * the top right. The two chromes share no positioning, so every
+       * axis (inset, size, radius, shadow, and the entrance transition) is
+       * restated at the breakpoint.
+       */}
       <section
-        ref={dropdownRef}
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label="Notifications"
         tabIndex={-1}
-        className="absolute right-6 top-navbar hidden max-h-[calc(100dvh-var(--spacing-navbar)-24px)] w-[400px] translate-y-0 flex-col overflow-clip rounded-card border border-gray-200 bg-white opacity-100 shadow-md-elevation outline-none transition-[opacity,transform] duration-200 ease-out starting:-translate-y-2 starting:opacity-0 motion-reduce:transition-none md:flex lg:right-8 lg:w-[380px] lg:shadow-lg-elevation"
+        className="absolute inset-x-0 bottom-0 flex max-h-[85dvh] translate-y-0 flex-col rounded-t-modal bg-white outline-none shadow-[0px_-0.25rem_0.9375rem_rgba(0,0,0,0.1)] transition-transform duration-300 ease-out starting:translate-y-full motion-reduce:transition-none md:inset-x-auto md:bottom-auto md:right-6 md:top-navbar md:max-h-[calc(100dvh-var(--spacing-navbar)-1.5rem)] md:w-[25rem] md:overflow-clip md:rounded-card md:border md:border-gray-200 md:opacity-100 md:shadow-md-elevation md:transition-[opacity,transform] md:duration-200 md:starting:-translate-y-2 md:starting:opacity-0 lg:right-8 lg:w-[23.75rem] lg:shadow-lg-elevation"
       >
-        {content('dropdown')}
-      </section>
-
-      {/* Mobile — bottom sheet rising from the bottom edge */}
-      <section
-        ref={sheetRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Notifications"
-        tabIndex={-1}
-        className="absolute inset-x-0 bottom-0 flex max-h-[85dvh] translate-y-0 flex-col rounded-t-modal bg-white outline-none shadow-[0px_-4px_15px_rgba(0,0,0,0.1)] transition-transform duration-300 ease-out starting:translate-y-full motion-reduce:transition-none md:hidden"
-      >
-        <div className="flex shrink-0 flex-col items-center py-2">
+        {/* The sheet's drag handle — the dropdown has no such affordance. */}
+        <div className="flex shrink-0 flex-col items-center py-2 md:hidden">
           <span
             className="h-1 w-8 rounded-pill bg-gray-300"
             aria-hidden="true"
           />
         </div>
-        {content('sheet')}
+        <NotificationPanelContent
+          notifications={notifications}
+          isLoading={isLoading}
+          variant="sheet"
+          settingsHref={SETTINGS_HREF}
+          viewAllHref={VIEW_ALL_HREF}
+          onSelect={onSelect}
+          onMarkAllRead={onMarkAllRead}
+          onDismiss={onClose}
+        />
       </section>
     </div>
   );

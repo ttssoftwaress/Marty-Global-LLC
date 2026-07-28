@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Loader2, X } from 'lucide-react';
 
+import { useOverlay } from '@/hooks/useOverlay';
 import { ApiError } from '@/services/api';
 import type { ConversationCategory } from '../../types/messages';
 import { useCreateConversation } from './queries';
@@ -9,8 +10,7 @@ import { useCreateConversation } from './queries';
  * Starting a new support conversation.
  *
  * A subject, what it is about, and the first message — nothing about who answers
- * it, because that is the helpdesk's decision (the thread lands unassigned and
- * is claimed from the queue).
+ * it, because the backend routes the thread to an agent as it is created.
  *
  * A dialog rather than a route: opening a conversation is a small aside from the
  * list, and sending it drops the customer straight into the new thread, so a
@@ -42,6 +42,7 @@ export function NewConversationDialog({
   const [body, setBody] = useState('');
   const [error, setError] = useState<string | null>(null);
 
+  const panelRef = useRef<HTMLDivElement>(null);
   const subjectRef = useRef<HTMLInputElement>(null);
   const create = useCreateConversation();
 
@@ -53,19 +54,12 @@ export function NewConversationDialog({
     setCategory('support');
     setBody('');
     setError(null);
-    subjectRef.current?.focus();
   }, [open]);
 
-  useEffect(() => {
-    if (!open) return;
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [open, onClose]);
+  // Escape, the Tab trap, focus in and back out, and the scroll lock. Focus
+  // opens on the subject line — the field the design points at — rather than
+  // the close button that comes first in the DOM.
+  useOverlay({ open, onClose, panelRef, initialFocusRef: subjectRef });
 
   if (!open) return null;
 
@@ -92,16 +86,18 @@ export function NewConversationDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 md:items-center md:p-6">
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="new-conversation-title"
-        className="flex max-h-full w-full max-w-[520px] flex-col gap-5 overflow-y-auto rounded-t-card bg-white p-5 md:rounded-card md:p-6"
+        tabIndex={-1}
+        className="flex max-h-full w-full max-w-[32.5rem] flex-col gap-5 overflow-y-auto rounded-t-card bg-white p-5 outline-none md:rounded-card md:p-6"
       >
         <div className="flex items-start justify-between gap-4">
           <div className="flex flex-col gap-1">
             <h2
               id="new-conversation-title"
-              className="text-[20px] font-semibold leading-7 text-text"
+              className="text-[1.25rem] font-semibold leading-7 text-text"
             >
               New message
             </h2>

@@ -91,7 +91,7 @@ export function SupportedRegionsCard({
                     disabled={!enabled}
                     aria-label={`Typical processing time for ${region.label}`}
                     placeholder="Typical processing: 5–7 business days"
-                    className="w-full max-w-[320px] rounded border border-transparent bg-transparent py-0.5 text-small text-gray-500 transition-colors placeholder:text-gray-400 hover:border-gray-300 focus:border-gray-300 focus-visible:outline-2 focus-visible:outline-offset-[-1px] focus-visible:outline-primary disabled:cursor-not-allowed disabled:text-gray-400 disabled:hover:border-transparent"
+                    className="w-full max-w-[20rem] rounded border border-transparent bg-transparent py-0.5 text-small text-gray-500 transition-colors placeholder:text-gray-400 hover:border-gray-300 focus:border-gray-300 focus-visible:outline-2 focus-visible:outline-offset-[-1px] focus-visible:outline-primary disabled:cursor-not-allowed disabled:text-gray-400 disabled:hover:border-transparent"
                   />
                 </div>
 

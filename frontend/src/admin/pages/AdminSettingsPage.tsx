@@ -46,13 +46,13 @@ export function AdminSettingsPage() {
   return (
     <AdminLayout user={user} onLogout={onLogout}>
       <div className="w-full p-4 md:p-6 lg:p-content">
-        <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-5 md:gap-6">
+        <div className="mx-auto flex w-full max-w-[75rem] flex-col gap-5 md:gap-6">
           <header className="flex flex-col gap-4">
             <div className="flex flex-col gap-1">
               <h1 className="text-h4 font-semibold text-text lg:text-h3">
                 Admin settings
               </h1>
-              <p className="text-body text-text-secondary lg:max-w-[720px]">
+              <p className="text-body text-text-secondary lg:max-w-[45rem]">
                 The lists every other section picks from. Change one here and it
                 changes everywhere it is shown — no deploy, no database script.
               </p>
@@ -72,7 +72,7 @@ export function AdminSettingsPage() {
                     role="tab"
                     aria-selected={active}
                     onClick={() => setTab(option.value)}
-                    className={`whitespace-nowrap rounded-[8px] px-4 py-2 text-[13px] font-semibold transition-colors ${
+                    className={`whitespace-nowrap rounded-[0.5rem] px-4 py-2 text-[0.8125rem] font-semibold transition-colors ${
                       active
                         ? 'bg-white text-text shadow-sm-elevation'
                         : 'text-gray-500 hover:text-text'

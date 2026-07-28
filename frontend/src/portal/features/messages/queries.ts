@@ -107,9 +107,9 @@ export type CreateConversationPayload = {
 /*
  * POST /v1/support/conversations — open a new support thread.
  *
- * Nothing about routing is sent: the thread lands unassigned and the helpdesk
- * decides who takes it. Kept on REST rather than the socket because it is a
- * once-per-thread action with a form behind it, not a chat event.
+ * Nothing about routing is sent: the backend picks the agent as it creates the
+ * thread, balanced across the team. Kept on REST rather than the socket because
+ * it is a once-per-thread action with a form behind it, not a chat event.
  */
 export function useCreateConversation() {
   const queryClient = useQueryClient();

@@ -34,7 +34,7 @@ export function ChartCard({
   description,
   legend,
   isLoading = false,
-  skeletonClassName = 'h-[220px]',
+  skeletonClassName = 'h-[13.75rem]',
   children,
 }: ChartCardProps) {
   return (
@@ -44,7 +44,7 @@ export function ChartCard({
           <h2 className="text-body-lg font-semibold leading-[1.4] text-[var(--color-gray-900)]">
             {title}
           </h2>
-          <p className="text-[13px] font-medium leading-5 text-[var(--color-text-secondary)]">
+          <p className="text-[0.8125rem] font-medium leading-5 text-[var(--color-text-secondary)]">
             {description}
           </p>
         </div>
@@ -58,7 +58,7 @@ export function ChartCard({
                   style={{ backgroundColor: item.color }}
                   aria-hidden="true"
                 />
-                <span className="text-[13px] font-medium leading-5 text-[var(--color-text-secondary)]">
+                <span className="text-[0.8125rem] font-medium leading-5 text-[var(--color-text-secondary)]">
                   {item.label}
                 </span>
               </li>

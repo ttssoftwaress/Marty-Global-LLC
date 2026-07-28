@@ -57,7 +57,7 @@ function BillingHeader() {
       <h1 className="text-h4 font-bold text-text md:text-h3 md:font-semibold">
         Billing &amp; payments
       </h1>
-      <p className="text-[13px] text-text-secondary md:text-body md:text-gray-500">
+      <p className="text-[0.8125rem] text-text-secondary md:text-body md:text-gray-500">
         View your quotes, make payments, and access your invoice history.
       </p>
     </header>
@@ -122,7 +122,7 @@ export function BillingPage() {
   return (
     <PortalLayout user={user} onLogout={onLogout}>
       <div className="w-full p-4 md:p-6 lg:p-content">
-        <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-6 md:gap-7 lg:gap-8">
+        <div className="mx-auto flex w-full max-w-[75rem] flex-col gap-6 md:gap-7 lg:gap-8">
           <BillingHeader />
 
           {showSkeleton ? (

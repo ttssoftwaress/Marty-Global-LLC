@@ -43,7 +43,7 @@ export function MailRequestFilters({ value, onChange }: MailRequestFiltersProps)
             role="tab"
             aria-selected={isActive}
             onClick={() => onChange(filter.value)}
-            className={`flex shrink-0 items-center justify-center whitespace-nowrap rounded-pill px-3 py-1.5 text-small transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary lg:px-4 lg:py-2 lg:text-[13px] ${
+            className={`flex shrink-0 items-center justify-center whitespace-nowrap rounded-pill px-3 py-1.5 text-small transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary lg:px-4 lg:py-2 lg:text-[0.8125rem] ${
               isActive
                 ? 'bg-primary font-semibold text-white'
                 : 'bg-[#f1f5f9] font-medium text-text-secondary hover:bg-gray-200'

@@ -56,7 +56,7 @@ function ThreadSkeleton() {
         >
           <div
             className="w-[60%] animate-pulse rounded-2xl bg-gray-200"
-            style={{ height: 48 + (height % 40) }}
+            style={{ height: `${(48 + (height % 40)) / 16}rem` }}
           />
         </div>
       ))}

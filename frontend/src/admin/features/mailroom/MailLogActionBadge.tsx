@@ -27,7 +27,7 @@ export function MailLogActionBadge({ action, label }: MailLogActionBadgeProps) {
 
   return (
     <span
-      className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-pill px-2.5 py-1 text-[11px] font-semibold lg:text-small ${className}`}
+      className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-pill px-2.5 py-1 text-[0.6875rem] font-semibold lg:text-small ${className}`}
     >
       <Icon className="size-3 shrink-0" strokeWidth={2} aria-hidden="true" />
       {label}

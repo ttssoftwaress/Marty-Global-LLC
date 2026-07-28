@@ -108,7 +108,7 @@ export function PricingTierEditor({
             </Field>
 
             <div className="flex gap-2">
-              <div className="w-[110px] shrink-0">
+              <div className="w-[6.875rem] shrink-0">
                 <Field label="Currency" htmlFor={`tier-${tier.key}-currency`}>
                   <SelectInput
                     id={`tier-${tier.key}-currency`}

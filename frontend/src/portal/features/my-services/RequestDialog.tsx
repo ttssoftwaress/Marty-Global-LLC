@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Loader2, X } from 'lucide-react';
 
+import { useOverlay } from '@/hooks/useOverlay';
 import { ApiError } from '@/services/api';
 import type { RequestFormField, RequestType } from '../../types/my-services';
 import { useCreateServiceRequest } from './queries';
@@ -100,18 +101,10 @@ export function RequestDialog({ resultId, requestType, onClose }: RequestDialogP
 
   const createRequest = useCreateServiceRequest(resultId);
 
-  // Escape closes, and focus moves into the panel on open — the same handling
-  // the mail-item slide-over uses.
-  useEffect(() => {
-    panelRef.current?.focus();
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [onClose]);
+  // Escape, the Tab trap, focus in and back out, and the scroll lock — the same
+  // handling every other overlay uses. Mounted only while open, so `open` is
+  // constant here.
+  useOverlay({ open: true, onClose, panelRef });
 
   const missing = requestType.fields
     .filter((field) => field.required && !answers[field.name]?.trim())
@@ -153,7 +146,7 @@ export function RequestDialog({ resultId, requestType, onClose }: RequestDialogP
         aria-modal="true"
         aria-labelledby="request-dialog-title"
         tabIndex={-1}
-        className="relative flex max-h-[90vh] w-full flex-col overflow-hidden rounded-t-modal bg-white shadow-slide-over outline-none transition-transform duration-300 ease-out starting:translate-y-8 motion-reduce:transition-none md:max-w-[520px] md:rounded-modal"
+        className="relative flex max-h-[90vh] w-full flex-col overflow-hidden rounded-t-modal bg-white shadow-slide-over outline-none transition-transform duration-300 ease-out starting:translate-y-8 motion-reduce:transition-none md:max-w-[32.5rem] md:rounded-modal"
       >
         <header className="flex shrink-0 items-start justify-between gap-4 border-b border-gray-200 p-5">
           <div className="flex min-w-0 flex-col gap-1">

@@ -28,7 +28,7 @@ const CARD =
 const LABEL =
   'text-caption font-medium uppercase tracking-[0.6px] text-gray-500';
 
-const VALUE = 'text-[32px] font-semibold leading-10 text-text lg:text-[36px] lg:leading-[44px]';
+const VALUE = 'text-[2rem] font-semibold leading-10 text-text lg:text-[2.25rem] lg:leading-[2.75rem]';
 
 export function TeamKpiCards({ summary }: TeamKpiCardsProps) {
   const cards = [

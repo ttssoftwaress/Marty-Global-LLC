@@ -31,6 +31,9 @@ export type PaymentStatusView =
   | 'succeeded'
   | 'failed'
   | 'expired'
+  // The customer closed the window themselves before sending anything. Distinct
+  // from `failed`: nothing went wrong and the quote is still open to pay.
+  | 'cancelled'
   | 'underpaid'
   | 'overpaid';
 
@@ -82,4 +85,11 @@ export type CheckoutQuote = {
   validUntil: string; // ISO-8601 UTC
   status: CheckoutQuoteStatus;
   lineItems: { id: string; label: string; amount: Money }[];
+  /*
+   * The payment window still open on this quote, if there is one. This is what
+   * makes checkout survive a reload: the open window lives in the database, not
+   * in the tab, so re-opening the page resumes it mid-countdown instead of
+   * offering to start a second one.
+   */
+  activePayment: Payment | null;
 };

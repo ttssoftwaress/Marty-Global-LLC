@@ -52,7 +52,7 @@ export function CustomerDetailTabs({ value, onChange }: CustomerDetailTabsProps)
             aria-selected={isActive}
             aria-controls={customerTabPanelId(tab.value)}
             onClick={() => onChange(tab.value)}
-            className={`flex shrink-0 items-center justify-center whitespace-nowrap rounded-pill px-4 py-2 text-[13px] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary md:px-5 md:py-2.5 md:text-[14px] ${
+            className={`flex shrink-0 items-center justify-center whitespace-nowrap rounded-pill px-4 py-2 text-[0.8125rem] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary md:px-5 md:py-2.5 md:text-[0.875rem] ${
               isActive
                 ? 'bg-primary text-white'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200 md:text-text-secondary lg:text-gray-500'

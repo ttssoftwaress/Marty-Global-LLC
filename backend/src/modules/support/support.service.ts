@@ -11,7 +11,13 @@ import type { AuthContext } from '../../guards/auth-context.js';
 import { assertFound } from '../../guards/ownership.js';
 import { prisma } from '../../lib/prisma.js';
 import { presignObject } from '../../lib/storage.js';
+import { emitConversationChanged } from '../../sockets/broadcast.js';
 import { assertKeyForPurpose } from '../uploads/uploads.service.js';
+import {
+  ensureAssigned,
+  pickAssignee,
+  recordAutoAssignment,
+} from './support.assignment.js';
 import { notifyNewSupportMessage } from './support.notifications.js';
 import type {
   CreateConversationInput,
@@ -324,7 +330,7 @@ export async function sendMessage(
   // thread from here would sidestep the assignee lock.
   const conversation = await prisma.conversation.findFirst({
     where: { id: conversationId, kind: ConversationKind.SUPPORT, deletedAt: null },
-    select: { id: true, customerId: true, status: true },
+    select: { id: true, customerId: true, status: true, assigneeId: true },
   });
 
   const found = assertFound(conversation, auth, (c) => c.customerId ?? '');
@@ -405,6 +411,22 @@ export async function sendMessage(
    */
   if (isOwner) {
     await notifyNewSupportMessage({ conversationId: found.id, messageId: message.id });
+
+    /*
+     * The routing safety net. A thread with no owner is a thread no agent can
+     * see, so a customer writing into one — because it predates automatic
+     * routing, or because its agent's account was removed — gets it routed now
+     * rather than waiting for a supervisor to notice
+     * (support.assignment.ts).
+     */
+    const assigneeId = found.assigneeId ?? (await ensureAssigned(found.id));
+
+    /*
+     * The agent's list row has changed — its preview, its time, its unread dot —
+     * so the inbox is told here rather than in the socket handler, which would
+     * only cover one of the two transports a message can arrive on.
+     */
+    emitConversationChanged({ conversationId: found.id, assigneeId });
   }
 
   return {
@@ -436,9 +458,10 @@ export async function sendMessage(
  * Open a new support thread.
  *
  * The subject and category come from the customer; everything that decides who
- * answers it does not. It lands unassigned, which is what puts it in the admin
- * inbox's claimable pool (admin/support.service.ts) rather than in front of one
- * particular agent.
+ * answers it does not. The thread is routed to an agent as it is created
+ * (support.assignment.ts) — balanced across the team, preferring whoever is
+ * online — because an agent's inbox is the threads assigned to them, so a chat
+ * nobody owns is a chat nobody sees.
  */
 export async function createConversation(
   auth: AuthContext,
@@ -455,6 +478,11 @@ export async function createConversation(
     assertKeyForPurpose(auth, 'support-attachment', attachment.objectKey);
   }
 
+  // Chosen before the transaction: it is several reads across the staff table,
+  // and holding a transaction open for them would put the whole team's load
+  // figures inside the lock every new chat takes out.
+  const { assigneeId, assignedAt } = await pickAssignee();
+
   const conversation = await prisma.$transaction(async (tx) => {
     const created = await tx.conversation.create({
       data: {
@@ -463,6 +491,8 @@ export async function createConversation(
         category: VIEW_TO_CATEGORY[input.category],
         kind: ConversationKind.SUPPORT,
         status: ConversationStatus.OPEN,
+        assigneeId,
+        assignedAt,
         lastMessageAt: sentAt,
         preview: input.body.slice(0, 160),
         customerReadAt: sentAt,
@@ -493,7 +523,16 @@ export async function createConversation(
     return created;
   });
 
+  if (assigneeId) await recordAutoAssignment(conversation.id, assigneeId);
+
   await notifyNewSupportMessage({ conversationId: conversation.id });
+
+  /*
+   * Persist, then emit (AGENTS.md, Live Chat). This is what puts the chat in
+   * front of its agent without a page reload — the request that created it is an
+   * ordinary POST with no socket in hand, so the broadcast helper carries it.
+   */
+  emitConversationChanged({ conversationId: conversation.id, assigneeId });
 
   return {
     id: conversation.id,

@@ -1,7 +1,11 @@
 import { format, isToday, isYesterday, parseISO } from 'date-fns';
-import { Check, CheckCheck } from 'lucide-react';
+import { Check, CheckCheck, Download } from 'lucide-react';
 
-import type { SupportMessage } from '../../types/support';
+import { formatFileSize } from '../../lib/format';
+import type {
+  SupportMessage,
+  SupportMessageAttachment,
+} from '../../types/support';
 import { SupportAgentAvatar } from './SupportAgentAvatar';
 
 /*
@@ -36,22 +40,70 @@ function formatMessageTime(iso: string) {
   return format(date, 'MMM d, h:mm a');
 }
 
+/*
+ * A file the customer sent with the message.
+ *
+ * The chip is the link — a presigned URL is a short-TTL bearer token minted by
+ * the read that returned this message, so it is followed rather than stored, and
+ * a chip with no `href` renders as a plain name instead of a dead link (the
+ * bucket may simply not be configured in this environment).
+ *
+ * Not in the Figma context, which never shows an attachment — added because the
+ * customer can attach files to a support message and the agent answering had no
+ * way to open them. Logged as a deviation.
+ */
+function AttachmentChip({ attachment }: { attachment: SupportMessageAttachment }) {
+  const content = (
+    <>
+      <Download className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+      <span className="min-w-0 truncate font-medium">{attachment.name}</span>
+      <span className="shrink-0 text-gray-400">{formatFileSize(attachment.size)}</span>
+    </>
+  );
+
+  const className =
+    'flex max-w-full items-center gap-2 rounded-input border border-gray-200 bg-white px-3 py-2 text-small text-gray-700';
+
+  return attachment.href ? (
+    <a
+      href={attachment.href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={`${className} transition-colors hover:border-gray-300 hover:bg-gray-50`}
+    >
+      {content}
+    </a>
+  ) : (
+    <span className={className}>{content}</span>
+  );
+}
+
 type SupportMessageRowProps = {
   message: SupportMessage;
 };
 
 export function SupportMessageRow({ message }: SupportMessageRowProps) {
-  const { kind, mine, authorName, authorInitials, body, sentAt, id, seen, pending } =
-    message;
+  const {
+    kind,
+    mine,
+    authorName,
+    authorInitials,
+    body,
+    sentAt,
+    id,
+    seen,
+    pending,
+    attachments,
+  } = message;
 
   if (kind === 'internal_note') {
     return (
       <div className="flex w-full shrink-0 flex-col gap-1.5 rounded-input border border-[rgba(245,158,11,0.3)] bg-[#fef3c7] p-3.5 md:gap-1 md:p-2.5 lg:gap-1.5 lg:p-3.5">
-        <p className="text-[10px] font-bold uppercase leading-normal text-[#b45309] md:font-medium lg:font-bold">
+        <p className="text-[0.625rem] font-bold uppercase leading-normal text-[#b45309] md:font-medium lg:font-bold">
           Internal note ·{' '}
           <time dateTime={sentAt}>{formatMessageTime(sentAt)}</time>
         </p>
-        <p className="whitespace-pre-wrap text-[13px] leading-[1.5] text-text md:text-small md:leading-[1.4] lg:text-[13px] lg:leading-[1.5]">
+        <p className="whitespace-pre-wrap text-[0.8125rem] leading-[1.5] text-text md:text-small md:leading-[1.4] lg:text-[0.8125rem] lg:leading-[1.5]">
           {body}
         </p>
       </div>
@@ -70,12 +122,12 @@ export function SupportMessageRow({ message }: SupportMessageRowProps) {
         <SupportAgentAvatar
           id={id}
           initials={authorInitials}
-          className="size-7 text-[10px] md:size-6 md:text-[9px] lg:size-7 lg:text-[10px]"
+          className="size-7 text-[0.625rem] md:size-6 md:text-[0.5625rem] lg:size-7 lg:text-[0.625rem]"
         />
       ) : null}
 
       <div
-        className={`flex min-w-0 max-w-[280px] flex-1 flex-col gap-1 md:max-w-[80%] lg:max-w-[580px] ${
+        className={`flex min-w-0 max-w-[17.5rem] flex-1 flex-col gap-1 md:max-w-[80%] lg:max-w-[36.25rem] ${
           mine ? 'items-end' : 'items-start'
         }`}
       >
@@ -87,16 +139,26 @@ export function SupportMessageRow({ message }: SupportMessageRowProps) {
         </p>
 
         <div
-          className={`w-full rounded-card p-3.5 transition-opacity md:p-2.5 lg:p-3.5 ${
+          className={`flex w-full flex-col gap-2 rounded-card p-3.5 transition-opacity md:p-2.5 lg:p-3.5 ${
             mine ? 'bg-primary-light' : 'bg-gray-100'
           } ${pending ? 'opacity-60' : ''}`}
         >
-          <p className="whitespace-pre-wrap break-words text-body leading-[1.5] text-text md:text-[13px] md:leading-[1.4] lg:text-body lg:leading-[1.5]">
-            {body}
-          </p>
+          {body ? (
+            <p className="whitespace-pre-wrap break-words text-body leading-[1.5] text-text md:text-[0.8125rem] md:leading-[1.4] lg:text-body lg:leading-[1.5]">
+              {body}
+            </p>
+          ) : null}
+
+          {attachments?.length ? (
+            <div className="flex flex-col gap-1.5">
+              {attachments.map((attachment) => (
+                <AttachmentChip key={attachment.id} attachment={attachment} />
+              ))}
+            </div>
+          ) : null}
         </div>
 
-        <span className="flex items-center gap-1 text-caption font-normal text-gray-400 md:text-[10px] lg:text-caption">
+        <span className="flex items-center gap-1 text-caption font-normal text-gray-400 md:text-[0.625rem] lg:text-caption">
           <time dateTime={sentAt}>{formatMessageTime(sentAt)}</time>
           {/* The read receipt sits on staff replies only — one tick delivered,
               two ticks read by the customer. */}
@@ -120,7 +182,7 @@ export function SupportMessageRow({ message }: SupportMessageRowProps) {
         <SupportAgentAvatar
           id={id}
           initials={authorInitials}
-          className="size-7 text-[10px] md:size-6 md:text-[9px] lg:size-7 lg:text-[10px]"
+          className="size-7 text-[0.625rem] md:size-6 md:text-[0.5625rem] lg:size-7 lg:text-[0.625rem]"
         />
       ) : null}
     </div>

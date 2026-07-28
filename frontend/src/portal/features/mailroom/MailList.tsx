@@ -58,10 +58,17 @@ function RowAction({
   roomId: string;
   fullWidth?: boolean;
 }) {
-  const width = fullWidth ? 'w-full' : 'w-full lg:w-auto lg:min-w-[80px]';
-  const base = `inline-flex items-center justify-center rounded-[8px] px-4 py-2 text-[13px] font-semibold transition-colors lg:rounded-[10px] ${width}`;
+  const width = fullWidth ? 'w-full' : 'w-full lg:w-auto lg:min-w-[5rem]';
+  const base = `inline-flex items-center justify-center rounded-[0.5rem] px-4 py-2 text-[0.8125rem] font-semibold transition-colors lg:rounded-[0.625rem] ${width}`;
 
-  if (item.status === 'action_requested') {
+  /*
+   * "Respond" is only for an item WE need something on. Once the customer has
+   * submitted a forwarding/shredding request the item is still
+   * `action_requested`, but the ball is in our court — there is nothing to
+   * respond to, and the backend would reject a second request as a conflict. So
+   * an item with an open request keeps the plain "View" action.
+   */
+  if (item.status === 'action_requested' && !item.hasOpenRequest) {
     return (
       <Link
         to={itemHref(roomId, item.id)}
@@ -100,11 +107,11 @@ function ExpiresValue({ iso }: { iso: string }) {
 function EmptyState() {
   return (
     <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
-      <span className="flex size-12 items-center justify-center rounded-[24px] bg-gray-100">
+      <span className="flex size-12 items-center justify-center rounded-[1.5rem] bg-gray-100">
         <Inbox className="size-6 text-gray-400" strokeWidth={1.75} aria-hidden="true" />
       </span>
       <p className="text-body-lg font-semibold text-text">No mail here yet</p>
-      <p className="max-w-[360px] text-body text-gray-500">
+      <p className="max-w-[22.5rem] text-body text-gray-500">
         Nothing matches this view. Try another status, clear your search, or
         check back once new mail is scanned.
       </p>
@@ -213,7 +220,7 @@ export function MailList({
               >
                 <div className="flex gap-3">
                   <div
-                    className="h-[52px] w-10 shrink-0 rounded-lg bg-gray-200"
+                    className="h-[3.25rem] w-10 shrink-0 rounded-lg bg-gray-200"
                     aria-hidden="true"
                   />
                   <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -239,7 +246,9 @@ export function MailList({
                   </div>
                 </div>
 
-                {item.status === 'action_requested' && item.responseDueAt ? (
+                {item.status === 'action_requested' &&
+                item.responseDueAt &&
+                !item.hasOpenRequest ? (
                   <div className="flex items-center gap-1.5 rounded-lg bg-[var(--color-status-review-bg)] p-2">
                     <AlertTriangle className={`size-3.5 shrink-0 ${AMBER}`} strokeWidth={2} aria-hidden="true" />
                     <span className={`text-caption font-medium ${AMBER}`}>
@@ -261,37 +270,37 @@ export function MailList({
         <table className="w-full table-fixed border-collapse">
           <thead>
             <tr className="h-12 border-b border-gray-200 bg-[var(--table-header-bg)] text-left align-middle">
-              <th scope="col" className="w-[44px] pl-4 lg:pl-6">
+              <th scope="col" className="w-[2.75rem] pl-4 lg:pl-6">
                 <input
                   type="checkbox"
                   checked={allSelected}
                   onChange={toggleAll}
                   aria-label="Select all mail on this page"
                   disabled={windowIds.length === 0}
-                  className="size-[18px] cursor-pointer rounded-[4px] accent-primary"
+                  className="size-[1.125rem] cursor-pointer rounded-[0.25rem] accent-primary"
                 />
               </th>
-              <th scope="col" className={`w-[52px] lg:w-[80px] ${HEADER_CLASS}`}>
+              <th scope="col" className={`w-[3.25rem] lg:w-[5rem] ${HEADER_CLASS}`}>
                 Preview
               </th>
               <th scope="col" className={HEADER_CLASS}>
                 Sender
               </th>
-              <th scope="col" className={`hidden w-[140px] lg:table-cell ${HEADER_CLASS}`}>
+              <th scope="col" className={`hidden w-[8.75rem] lg:table-cell ${HEADER_CLASS}`}>
                 Received
               </th>
-              <th scope="col" className="w-[124px] lg:w-[180px]">
+              <th scope="col" className="w-[7.75rem] lg:w-[11.25rem]">
                 <span className={`inline-flex items-center gap-1 ${HEADER_CLASS}`}>
                   Storage expires
                   <StorageExpiryInfo />
                 </span>
               </th>
-              <th scope="col" className={`w-[124px] lg:w-[160px] ${HEADER_CLASS}`}>
+              <th scope="col" className={`w-[7.75rem] lg:w-[10rem] ${HEADER_CLASS}`}>
                 Status
               </th>
               <th
                 scope="col"
-                className={`w-[80px] pr-4 text-right lg:w-[120px] lg:pr-6 ${HEADER_CLASS}`}
+                className={`w-[5rem] pr-4 text-right lg:w-[7.5rem] lg:pr-6 ${HEADER_CLASS}`}
               >
                 Action
               </th>
@@ -305,7 +314,7 @@ export function MailList({
                 return (
                   <tr
                     key={item.id}
-                    className={`h-16 border-b border-gray-200 last:border-b-0 lg:h-[72px] ${
+                    className={`h-16 border-b border-gray-200 last:border-b-0 lg:h-[4.5rem] ${
                       isSelected ? 'bg-primary-light' : 'bg-white'
                     }`}
                   >
@@ -315,7 +324,7 @@ export function MailList({
                         checked={isSelected}
                         onChange={() => toggle(item.id)}
                         aria-label={`Select mail from ${item.sender}`}
-                        className="size-[18px] cursor-pointer rounded-[4px] accent-primary"
+                        className="size-[1.125rem] cursor-pointer rounded-[0.25rem] accent-primary"
                       />
                     </td>
 

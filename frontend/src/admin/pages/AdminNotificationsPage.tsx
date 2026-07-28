@@ -51,7 +51,7 @@ function NotificationsHeader({
 
       {/* Title row — the mobile gear + desktop actions share this row */}
       <div className="flex items-center justify-between gap-4">
-        <h1 className="text-[24px] font-semibold leading-8 text-text lg:text-[32px] lg:leading-10">
+        <h1 className="text-[1.5rem] font-semibold leading-8 text-text lg:text-[2rem] lg:leading-10">
           Notifications
         </h1>
 
@@ -59,7 +59,7 @@ function NotificationsHeader({
         <div className="hidden items-center gap-4 md:flex">
           <Link
             to={SETTINGS_HREF}
-            className="inline-flex h-10 items-center gap-2 rounded-input border border-primary bg-white px-4 text-[14px] font-medium text-primary transition-colors hover:bg-primary-light"
+            className="inline-flex h-10 items-center gap-2 rounded-input border border-primary bg-white px-4 text-[0.875rem] font-medium text-primary transition-colors hover:bg-primary-light"
           >
             <Settings className="size-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
             Notification settings
@@ -68,7 +68,7 @@ function NotificationsHeader({
             type="button"
             onClick={onMarkAllRead}
             disabled={!hasUnread}
-            className="text-[14px] font-medium text-primary transition-colors hover:text-primary-hover disabled:text-gray-400 disabled:hover:text-gray-400 focus-visible:outline-none focus-visible:underline"
+            className="text-[0.875rem] font-medium text-primary transition-colors hover:text-primary-hover disabled:text-gray-400 disabled:hover:text-gray-400 focus-visible:outline-none focus-visible:underline"
           >
             Mark all as read
           </button>
@@ -89,7 +89,7 @@ function NotificationsHeader({
         type="button"
         onClick={onMarkAllRead}
         disabled={!hasUnread}
-        className="self-start text-[12px] font-medium text-primary transition-colors hover:text-primary-hover disabled:text-gray-400 md:hidden"
+        className="self-start text-[0.75rem] font-medium text-primary transition-colors hover:text-primary-hover disabled:text-gray-400 md:hidden"
       >
         Mark all as read
       </button>
@@ -126,7 +126,7 @@ export function AdminNotificationsPage() {
   return (
     <AdminLayout user={user} onLogout={onLogout}>
       <div className="w-full p-4 md:p-6 lg:p-content">
-        <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-6">
+        <div className="mx-auto flex w-full max-w-[75rem] flex-col gap-6">
           <NotificationsHeader
             hasUnread={unreadCount > 0}
             onMarkAllRead={() => markAllRead.mutate()}
@@ -151,7 +151,7 @@ export function AdminNotificationsPage() {
                 type="button"
                 onClick={() => void feed.fetchNextPage()}
                 disabled={feed.isFetchingNextPage}
-                className="inline-flex h-12 items-center justify-center rounded-input border border-primary bg-white px-6 text-[15px] font-medium text-primary transition-colors hover:bg-primary-light disabled:opacity-60 max-md:h-10 max-md:w-full max-md:text-[14px] max-md:font-semibold"
+                className="inline-flex h-12 items-center justify-center rounded-input border border-primary bg-white px-6 text-[0.9375rem] font-medium text-primary transition-colors hover:bg-primary-light disabled:opacity-60 max-md:h-10 max-md:w-full max-md:text-[0.875rem] max-md:font-semibold"
               >
                 {feed.isFetchingNextPage ? 'Loading…' : 'Load older notifications'}
               </button>

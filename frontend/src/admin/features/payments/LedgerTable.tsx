@@ -45,42 +45,42 @@ const HEAD_CELL =
 export function LedgerTable({ rows, onAction }: LedgerTableProps) {
   return (
     <div className="hidden w-full overflow-x-auto md:block">
-      <table className="w-full table-fixed border-collapse text-left lg:min-w-[1040px]">
+      <table className="w-full table-fixed border-collapse text-left lg:min-w-[65rem]">
         <thead>
           <tr className="h-12 border-b border-gray-200 bg-[var(--table-header-bg)]">
-            <th scope="col" className={`${HEAD_CELL} w-[108px] pl-4 pr-2 lg:w-[116px] lg:pl-6 lg:pr-4`}>
+            <th scope="col" className={`${HEAD_CELL} w-[6.75rem] pl-4 pr-2 lg:w-[7.25rem] lg:pl-6 lg:pr-4`}>
               Order ID
             </th>
             <th
               scope="col"
-              className={`${HEAD_CELL} hidden w-[160px] pr-4 lg:table-cell`}
+              className={`${HEAD_CELL} hidden w-[10rem] pr-4 lg:table-cell`}
             >
               Customer
             </th>
             <th scope="col" className={`${HEAD_CELL} pr-2 lg:pr-4`}>
               Service
             </th>
-            <th scope="col" className={`${HEAD_CELL} w-[88px] pr-2 lg:w-[112px] lg:pr-4`}>
+            <th scope="col" className={`${HEAD_CELL} w-[5.5rem] pr-2 lg:w-[7rem] lg:pr-4`}>
               Amount
             </th>
             <th
               scope="col"
-              className={`${HEAD_CELL} hidden w-[120px] pr-4 lg:table-cell`}
+              className={`${HEAD_CELL} hidden w-[7.5rem] pr-4 lg:table-cell`}
             >
               Date issued
             </th>
-            <th scope="col" className={`${HEAD_CELL} w-[152px] pr-2 lg:w-[160px] lg:pr-4`}>
+            <th scope="col" className={`${HEAD_CELL} w-[9.5rem] pr-2 lg:w-[10rem] lg:pr-4`}>
               Status
             </th>
             <th
               scope="col"
-              className={`${HEAD_CELL} hidden w-[176px] pr-4 lg:table-cell`}
+              className={`${HEAD_CELL} hidden w-[11rem] pr-4 lg:table-cell`}
             >
               Payment method
             </th>
             <th
               scope="col"
-              className={`${HEAD_CELL} w-[140px] pr-4 text-right lg:w-[136px] lg:pr-6`}
+              className={`${HEAD_CELL} w-[8.75rem] pr-4 text-right lg:w-[8.5rem] lg:pr-6`}
             >
               Action
             </th>

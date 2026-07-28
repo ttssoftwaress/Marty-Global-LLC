@@ -16,7 +16,7 @@ export function TypingIndicator({ name, className = '' }: TypingIndicatorProps) 
   return (
     <div className={`flex flex-col items-start gap-1 ${className}`}>
       <div
-        className="flex items-center gap-1 rounded-2xl rounded-tl-[4px] bg-gray-100 px-4 py-3"
+        className="flex items-center gap-1 rounded-2xl rounded-tl-[0.25rem] bg-gray-100 px-4 py-3"
         // Announced politely rather than as an alert: it updates often and must
         // never interrupt a screen reader mid-message.
         role="status"

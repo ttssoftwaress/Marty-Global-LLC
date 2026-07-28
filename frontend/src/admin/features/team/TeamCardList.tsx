@@ -47,7 +47,7 @@ export function TeamCardList({
               <TeamMemberAvatar
                 id={member.id}
                 initials={member.initials}
-                className="size-10 text-[14px] leading-5"
+                className="size-10 text-[0.875rem] leading-5"
               />
 
               <span className="min-w-0 flex-1 truncate text-body font-semibold text-text">

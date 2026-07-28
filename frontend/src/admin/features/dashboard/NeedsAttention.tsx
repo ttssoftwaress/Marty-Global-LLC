@@ -32,17 +32,17 @@ function AttentionRow({ item }: { item: AttentionItem }) {
   return (
     <li className="flex items-start gap-3 border-b border-gray-200 py-4 last:border-b-0 md:items-center md:gap-4">
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <p className="text-[14px] font-semibold leading-5 text-text">
+        <p className="text-[0.875rem] font-semibold leading-5 text-text">
           {item.title}
         </p>
-        <p className="text-[12px] leading-4 text-gray-500 md:text-[13px] lg:text-[12px]">
+        <p className="text-[0.75rem] leading-4 text-gray-500 md:text-[0.8125rem] lg:text-[0.75rem]">
           {item.detail}
         </p>
       </div>
 
       <Link
         to={item.to}
-        className={`flex shrink-0 items-center justify-center rounded-control px-3.5 py-2 text-[12px] font-semibold leading-5 transition-colors md:px-4 md:text-[14px] ${ACTION_STYLE[item.emphasis]}`}
+        className={`flex shrink-0 items-center justify-center rounded-control px-3.5 py-2 text-[0.75rem] font-semibold leading-5 transition-colors md:px-4 md:text-[0.875rem] ${ACTION_STYLE[item.emphasis]}`}
       >
         {item.actionLabel}
       </Link>
@@ -58,15 +58,15 @@ type NeedsAttentionProps = {
 export function NeedsAttention({ total, items }: NeedsAttentionProps) {
   const badge =
     total > 0 ? (
-      <span className="flex shrink-0 items-center rounded-pill bg-[var(--color-status-missing-bg)] px-2 py-0.5 text-[12px] font-semibold leading-4 text-error">
+      <span className="flex shrink-0 items-center rounded-pill bg-[var(--color-status-missing-bg)] px-2 py-0.5 text-[0.75rem] font-semibold leading-4 text-error">
         {formatCount(total)}
       </span>
     ) : null;
 
   return (
-    <section className="flex w-full flex-col gap-2.5 md:gap-0 lg:w-[348px] lg:shrink-0">
+    <section className="flex w-full flex-col gap-2.5 md:gap-0 lg:w-[21.75rem] lg:shrink-0">
       <div className="flex items-center gap-3 md:hidden">
-        <h2 className="text-[14px] font-semibold leading-5 text-gray-700">
+        <h2 className="text-[0.875rem] font-semibold leading-5 text-gray-700">
           Needs attention
         </h2>
         {badge}
@@ -74,14 +74,14 @@ export function NeedsAttention({ total, items }: NeedsAttentionProps) {
 
       <div className="flex w-full flex-col gap-0 rounded-card border border-gray-200 bg-white px-4 pb-1 shadow-sm-elevation md:gap-4 md:p-card">
         <div className="hidden items-center gap-3 md:flex">
-          <h2 className="text-[18px] font-semibold leading-6 text-text">
+          <h2 className="text-[1.125rem] font-semibold leading-6 text-text">
             Needs attention
           </h2>
           {badge}
         </div>
 
         {items.length === 0 ? (
-          <p className="py-4 text-[14px] leading-5 text-gray-500 md:py-0">
+          <p className="py-4 text-[0.875rem] leading-5 text-gray-500 md:py-0">
             Nothing needs attention — the queue is clear.
           </p>
         ) : (

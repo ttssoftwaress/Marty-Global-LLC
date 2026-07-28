@@ -40,7 +40,7 @@ export function ConversionFunnelCard({
       title="Conversion funnel"
       description="Stage drop-offs from discovery to final checkout"
       isLoading={isLoading}
-      skeletonClassName="h-[220px]"
+      skeletonClassName="h-[13.75rem]"
     >
       {stages && stages.length > 0 ? (
         <ol className="flex w-full flex-col gap-4">
@@ -49,7 +49,7 @@ export function ConversionFunnelCard({
           ))}
         </ol>
       ) : (
-        <div className="flex h-[180px] w-full items-center justify-center rounded-input bg-gray-50">
+        <div className="flex h-[11.25rem] w-full items-center justify-center rounded-input bg-gray-50">
           <p className="text-small text-gray-500">
             No funnel activity recorded for this period yet
           </p>
@@ -72,7 +72,7 @@ function FunnelRow({ stage, index }: { stage: FunnelStage; index: number }) {
        * from `md` they become the outer columns of a three-column row.
        */}
       <div className="flex items-center justify-between gap-3 md:contents">
-        <p className="text-body font-semibold leading-6 text-[var(--color-gray-900)] md:w-[160px] md:shrink-0 md:order-1">
+        <p className="text-body font-semibold leading-6 text-[var(--color-gray-900)] md:w-[10rem] md:shrink-0 md:order-1">
           {stage.label}
         </p>
         <p className="shrink-0 whitespace-nowrap text-body font-bold leading-6 text-[var(--color-text-secondary)] md:order-3 md:w-12 md:text-right">
@@ -80,14 +80,14 @@ function FunnelRow({ stage, index }: { stage: FunnelStage; index: number }) {
         </p>
       </div>
 
-      <div className="relative h-6 w-full min-w-0 overflow-hidden rounded-[6px] bg-[var(--table-header-bg)] md:order-2 md:flex-1">
+      <div className="relative h-6 w-full min-w-0 overflow-hidden rounded-[0.375rem] bg-[var(--table-header-bg)] md:order-2 md:flex-1">
         <div
-          className="h-full rounded-[6px] bg-primary transition-[width] duration-300"
+          className="h-full rounded-[0.375rem] bg-primary transition-[width] duration-300"
           style={{ width: `${ratio * 100}%`, opacity: fillOpacity }}
         />
 
         <span
-          className={`absolute top-1/2 -translate-y-1/2 whitespace-nowrap text-[13px] font-semibold leading-[1.3] ${
+          className={`absolute top-1/2 -translate-y-1/2 whitespace-nowrap text-[0.8125rem] font-semibold leading-[1.3] ${
             labelInside ? 'left-3 text-white' : 'text-[var(--color-gray-900)]'
           }`}
           style={labelInside ? undefined : { left: `calc(${ratio * 100}% + 8px)` }}

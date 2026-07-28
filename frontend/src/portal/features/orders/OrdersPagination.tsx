@@ -45,7 +45,7 @@ export function OrdersPagination({
           type="button"
           onClick={onLoadMore}
           disabled={!hasMore}
-          className="flex items-center justify-center rounded-input border border-gray-300 bg-white px-6 py-2.5 text-[13px] font-medium text-gray-500 transition-colors hover:bg-gray-100 disabled:opacity-50 disabled:hover:bg-white"
+          className="flex items-center justify-center rounded-input border border-gray-300 bg-white px-6 py-2.5 text-[0.8125rem] font-medium text-gray-500 transition-colors hover:bg-gray-100 disabled:opacity-50 disabled:hover:bg-white"
         >
           Load more
         </button>
@@ -67,7 +67,7 @@ export function OrdersPagination({
             type="button"
             onClick={onPrev}
             disabled={!canPrev}
-            className="flex h-9 items-center justify-center rounded-lg px-4 text-[13px] font-semibold transition-colors disabled:cursor-default enabled:bg-white enabled:text-primary enabled:hover:bg-primary-light disabled:bg-gray-200 disabled:text-gray-400"
+            className="flex h-9 items-center justify-center rounded-lg px-4 text-[0.8125rem] font-semibold transition-colors disabled:cursor-default enabled:bg-white enabled:text-primary enabled:hover:bg-primary-light disabled:bg-gray-200 disabled:text-gray-400"
           >
             Previous
           </button>
@@ -75,7 +75,7 @@ export function OrdersPagination({
             type="button"
             onClick={onNext}
             disabled={!canNext}
-            className="flex h-9 items-center justify-center rounded-lg px-4 text-[13px] font-semibold transition-colors disabled:cursor-default enabled:bg-white enabled:text-primary enabled:hover:bg-primary-light disabled:bg-gray-200 disabled:text-gray-400"
+            className="flex h-9 items-center justify-center rounded-lg px-4 text-[0.8125rem] font-semibold transition-colors disabled:cursor-default enabled:bg-white enabled:text-primary enabled:hover:bg-primary-light disabled:bg-gray-200 disabled:text-gray-400"
           >
             Next
           </button>

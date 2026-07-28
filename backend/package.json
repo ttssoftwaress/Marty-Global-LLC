@@ -19,7 +19,8 @@
     "prisma:studio": "node --env-file-if-exists=.env ./node_modules/prisma/build/index.js studio",
     "db:seed": "tsx --env-file-if-exists=.env prisma/seed.ts",
     "db:reset": "tsx --env-file-if-exists=.env prisma/reset.ts",
-    "admin:setup": "tsx --env-file-if-exists=.env src/modules/auth/admin-bootstrap.cli.ts"
+    "admin:setup": "tsx --env-file-if-exists=.env src/modules/auth/admin-bootstrap.cli.ts",
+    "storage:cors": "tsx --env-file-if-exists=.env src/lib/storage-cors.cli.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -41,6 +42,7 @@
     "helmet": "^8.3.0",
     "ioredis": "^5.11.1",
     "pino": "^10.3.1",
+    "rate-limit-redis": "^6.0.0",
     "socket.io": "^4.8.3",
     "twilio": "^6.0.2",
     "zod": "^4.4.3"

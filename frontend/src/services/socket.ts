@@ -56,10 +56,26 @@ export type SocketPresence = {
 
 export type SocketAvailability = { agentsAvailable: number };
 
+/*
+ * A conversation appeared, moved between agents, or changed state.
+ *
+ * Ids only, by design: the receiver re-reads the inbox through the API, which
+ * applies the same scope the socket does — so this event can never be a way
+ * around it, and no message body or customer name ever rides on a broadcast
+ * (AGENTS.md, PII). It reaches the assigned agent, whoever it was just taken
+ * from, and the supervisors — nobody else is told the thread exists.
+ */
+export type SocketConversationChanged = {
+  conversationId: string;
+  assigneeId: string | null;
+};
+
+// The signed-in user's own counters. The staff-side `unassigned` figure this
+// once carried is gone: the inbox counts now ride on the list response, which is
+// the only thing that can scope them to the reader (backend/sockets/events.ts).
 export type SocketUnread = {
   messages?: number;
   notifications?: number;
-  unassigned?: number;
 };
 
 export type SocketError = { error: { code: string; message: string } };

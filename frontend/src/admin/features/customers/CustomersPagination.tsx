@@ -101,11 +101,11 @@ export function CustomersPagination({
   const canNext = page < totalPages;
 
   const stepButton =
-    'flex h-10 items-center justify-center rounded-input border border-gray-200 bg-white px-3.5 text-[13px] font-medium transition-colors lg:px-4 lg:text-body';
+    'flex h-10 items-center justify-center rounded-input border border-gray-200 bg-white px-3.5 text-[0.8125rem] font-medium transition-colors lg:px-4 lg:text-body';
 
   return (
     <div className="hidden w-full items-center justify-between gap-4 md:flex">
-      <p className="text-[13px] text-gray-500 lg:text-body">
+      <p className="text-[0.8125rem] text-gray-500 lg:text-body">
         Showing {formatCount(rangeStart)}-{formatCount(rangeEnd)} of{' '}
         {formatCount(totalResults)} customers
       </p>
@@ -126,7 +126,7 @@ export function CustomersPagination({
               <span
                 key={`gap-${index}`}
                 aria-hidden="true"
-                className="px-1 text-[13px] text-gray-400 lg:text-body"
+                className="px-1 text-[0.8125rem] text-gray-400 lg:text-body"
               >
                 …
               </span>
@@ -136,7 +136,7 @@ export function CustomersPagination({
                 type="button"
                 onClick={() => onPageChange(entry)}
                 aria-current={entry === page ? 'page' : undefined}
-                className={`flex h-10 min-w-10 items-center justify-center rounded-input px-3 text-[13px] transition-colors lg:px-3.5 lg:text-body ${
+                className={`flex h-10 min-w-10 items-center justify-center rounded-input px-3 text-[0.8125rem] transition-colors lg:px-3.5 lg:text-body ${
                   entry === page
                     ? 'bg-primary font-semibold text-white'
                     : 'border border-gray-200 bg-white font-medium text-text hover:bg-gray-50'

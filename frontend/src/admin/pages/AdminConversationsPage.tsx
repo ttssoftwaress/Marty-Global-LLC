@@ -44,11 +44,11 @@ function ConversationRow({ row }: { row: StaffConversationRow }) {
             <p className="truncate text-body font-semibold text-text">
               {row.customerName}
             </p>
-            <span className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase leading-none text-gray-500">
+            <span className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[0.625rem] font-semibold uppercase leading-none text-gray-500">
               {row.orderReference}
             </span>
             {row.awaitingReply ? (
-              <span className="shrink-0 rounded bg-[#fef3c7] px-1.5 py-0.5 text-[10px] font-semibold uppercase leading-none text-[#b45309]">
+              <span className="shrink-0 rounded bg-[#fef3c7] px-1.5 py-0.5 text-[0.625rem] font-semibold uppercase leading-none text-[#b45309]">
                 Awaiting reply
               </span>
             ) : null}
@@ -75,7 +75,7 @@ function EmptyState() {
         />
       </span>
       <p className="text-body font-medium text-text">No conversations yet</p>
-      <p className="max-w-[380px] text-small text-gray-500">
+      <p className="max-w-[23.75rem] text-small text-gray-500">
         When a customer messages you about an order assigned to you, the thread
         appears here.
       </p>
@@ -89,7 +89,7 @@ function ListSkeleton() {
       {[0, 1, 2].map((key) => (
         <div
           key={key}
-          className="h-[76px] w-full animate-pulse rounded-input bg-gray-200"
+          className="h-[4.75rem] w-full animate-pulse rounded-input bg-gray-200"
         />
       ))}
     </div>
@@ -106,7 +106,7 @@ export function AdminConversationsPage() {
   return (
     <AdminLayout user={user} onLogout={onLogout}>
       <div className="w-full p-4 md:p-6 lg:p-content">
-        <div className="mx-auto flex w-full max-w-[1000px] flex-col gap-5 md:gap-6">
+        <div className="mx-auto flex w-full max-w-[62.5rem] flex-col gap-5 md:gap-6">
           <header className="flex flex-col gap-2">
             <div className="flex flex-wrap items-center gap-3">
               <h1 className="text-h4 font-semibold text-text">My conversations</h1>

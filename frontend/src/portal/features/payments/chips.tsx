@@ -1,4 +1,11 @@
-import { AlertTriangle, Check, Clock, Loader2, TrendingUp } from 'lucide-react';
+import {
+  AlertTriangle,
+  Check,
+  Clock,
+  Loader2,
+  TrendingUp,
+  XCircle,
+} from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 import type { PaymentStatusView } from '../../types/payments';
@@ -31,6 +38,9 @@ const CONFIG: Record<
   succeeded: { label: 'Paid', icon: Check, className: 'status-approved' },
   failed: { label: 'Failed', icon: AlertTriangle, className: 'status-missing' },
   expired: { label: 'Expired', icon: AlertTriangle, className: 'status-draft' },
+  // Neutral, not red: the customer closed the window on purpose and nothing
+  // went wrong — the quote is simply still there to pay.
+  cancelled: { label: 'Cancelled', icon: XCircle, className: 'status-draft' },
   underpaid: {
     label: 'Underpaid',
     icon: AlertTriangle,

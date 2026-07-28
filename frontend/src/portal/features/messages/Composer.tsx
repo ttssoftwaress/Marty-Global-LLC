@@ -1,6 +1,13 @@
 import { useRef, useState } from 'react';
 import { File as FileIcon, Paperclip, Send, X } from 'lucide-react';
 
+import {
+  acceptAttr,
+  describeTypes,
+  DOCUMENT_TYPES,
+  isAcceptedType,
+  MAX_BYTES,
+} from '@/constants/uploads';
 import { formatFileSize } from '../../lib/format';
 
 /*
@@ -17,21 +24,37 @@ import { formatFileSize } from '../../lib/format';
  * decide how often the server hears about it.
  */
 
-const ACCEPT = '.pdf,.jpg,.jpeg,.png';
+const ACCEPT = acceptAttr(DOCUMENT_TYPES);
+const TYPE_LABEL = describeTypes(DOCUMENT_TYPES);
+const MAX_ATTACHMENT_BYTES = MAX_BYTES.supportAttachment;
+const MAX_MB = MAX_ATTACHMENT_BYTES / (1024 * 1024);
 
 type StagedFile = { id: number; file: File };
 
 type ComposerProps = {
-  onSend: (payload: { text: string; files: File[] }) => void;
+  /*
+   * May be async. The draft is cleared only once it RESOLVES — an attachment
+   * upload can fail, and clearing first left the customer with no message, no
+   * files, and nothing on screen to explain where they went.
+   */
+  onSend: (payload: { text: string; files: File[] }) => void | Promise<void>;
   onTyping?: (typing: boolean) => void;
   // Set while an attachment is still uploading, so a second send cannot race the
   // first. The field stays readable; only the controls go quiet.
   busy?: boolean;
+  // A failed send, surfaced by the page that owns delivery.
+  error?: string | null;
 };
 
-export function Composer({ onSend, onTyping, busy = false }: ComposerProps) {
+export function Composer({
+  onSend,
+  onTyping,
+  busy = false,
+  error = null,
+}: ComposerProps) {
   const [text, setText] = useState('');
   const [files, setFiles] = useState<StagedFile[]>([]);
+  const [rejected, setRejected] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const nextId = useRef(0);
 
@@ -39,21 +62,59 @@ export function Composer({ onSend, onTyping, busy = false }: ComposerProps) {
 
   const addFiles = (list: FileList | null) => {
     if (!list?.length) return;
-    setFiles((prev) => [
-      ...prev,
-      ...Array.from(list).map((file) => ({ id: nextId.current++, file })),
-    ]);
+
+    // Checked here so an oversized or unsupported attachment is caught while it
+    // is still on the customer's machine; the backend re-checks at presign time
+    // and remains the boundary (AGENTS.md).
+    const kept: File[] = [];
+    const skipped: string[] = [];
+
+    for (const file of Array.from(list)) {
+      if (isAcceptedType(file, DOCUMENT_TYPES) && file.size <= MAX_ATTACHMENT_BYTES) {
+        kept.push(file);
+      } else {
+        skipped.push(file.name);
+      }
+    }
+
+    if (kept.length > 0) {
+      setFiles((prev) => [
+        ...prev,
+        ...kept.map((file) => ({ id: nextId.current++, file })),
+      ]);
+    }
+
+    setRejected(
+      skipped.length > 0
+        ? `Skipped ${skipped.length} file${skipped.length > 1 ? 's' : ''} — use ${TYPE_LABEL} up to ${MAX_MB} MB.`
+        : null,
+    );
   };
 
-  const removeFile = (id: number) =>
+  const removeFile = (id: number) => {
     setFiles((prev) => prev.filter((entry) => entry.id !== id));
+    setRejected(null);
+  };
 
   const send = () => {
     if (!canSend) return;
-    onSend({ text: text.trim(), files: files.map((entry) => entry.file) });
-    setText('');
-    setFiles([]);
+
+    const payload = { text: text.trim(), files: files.map((entry) => entry.file) };
+    setRejected(null);
     onTyping?.(false);
+
+    /*
+     * Cleared on resolve only. A rejected send keeps the draft and every staged
+     * file exactly as they were, so retrying is one more click rather than
+     * retyping the message and re-attaching everything — the page surfaces the
+     * reason through `error`.
+     */
+    void Promise.resolve(onSend(payload))
+      .then(() => {
+        setText('');
+        setFiles([]);
+      })
+      .catch(() => undefined);
   };
 
   const onType = (value: string) => {
@@ -73,7 +134,7 @@ export function Composer({ onSend, onTyping, busy = false }: ComposerProps) {
               className="flex items-center gap-2 rounded-pill bg-gray-100 py-1.5 pl-3 pr-2 text-small"
             >
               <FileIcon className="size-4 shrink-0 text-gray-500" strokeWidth={1.75} aria-hidden="true" />
-              <span className="max-w-[180px] truncate font-medium text-gray-700">
+              <span className="max-w-[11.25rem] truncate font-medium text-gray-700">
                 {entry.file.name}
               </span>
               <span className="shrink-0 text-gray-400">{formatFileSize(entry.file.size)}</span>
@@ -96,9 +157,9 @@ export function Composer({ onSend, onTyping, busy = false }: ComposerProps) {
             type="button"
             onClick={() => fileInputRef.current?.click()}
             aria-label="Attach a file"
-            className="flex size-[18px] shrink-0 items-center justify-center text-gray-400 hover:text-primary"
+            className="flex size-[1.125rem] shrink-0 items-center justify-center text-gray-400 hover:text-primary"
           >
-            <Paperclip className="size-[18px]" strokeWidth={1.75} aria-hidden="true" />
+            <Paperclip className="size-[1.125rem]" strokeWidth={1.75} aria-hidden="true" />
           </button>
           <input
             type="text"
@@ -144,7 +205,15 @@ export function Composer({ onSend, onTyping, busy = false }: ComposerProps) {
         </button>
       </div>
 
-      <p className="text-caption text-gray-400">PDF, JPG or PNG · max 10 MB</p>
+      {error || rejected ? (
+        <p role="alert" className="text-caption text-error">
+          {error ?? rejected}
+        </p>
+      ) : (
+        <p className="text-caption text-gray-400">
+          {TYPE_LABEL} · max {MAX_MB} MB
+        </p>
+      )}
     </div>
   );
 }

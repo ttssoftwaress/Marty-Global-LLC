@@ -70,7 +70,7 @@ function FeedEmptyState() {
         <BellOff className="size-6 text-gray-400" strokeWidth={1.75} aria-hidden="true" />
       </span>
       <p className="text-body-lg font-semibold text-text">You&apos;re all caught up</p>
-      <p className="max-w-[320px] text-body text-gray-500">
+      <p className="max-w-[20rem] text-body text-gray-500">
         New orders, payments, mail requests, and support replies will appear here.
       </p>
     </div>

@@ -34,8 +34,8 @@ function MailRoomHeader() {
         <span className="text-gray-500">Virtual mail rooms</span>
       </p>
 
-      {/* Title + subtitle are one group in the design (6px apart), set apart
-       * from the breadcrumb above (12px on tablet/desktop, 4px flat on mobile). */}
+      {/* Title + subtitle are one group in the design (0.375rem apart), set apart
+       * from the breadcrumb above (0.75rem on tablet/desktop, 4px flat on mobile). */}
       <div className="flex flex-col gap-1 md:gap-1.5">
         <h1 className="text-h4 font-semibold text-text md:text-h3">Virtual mail rooms</h1>
         <p className="text-body text-text-secondary">
@@ -70,7 +70,7 @@ export function MailRoomPage() {
   return (
     <PortalLayout user={user} onLogout={onLogout}>
       <div className="w-full p-4 md:p-6 lg:p-content">
-        <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-6 lg:gap-8">
+        <div className="mx-auto flex w-full max-w-[75rem] flex-col gap-6 lg:gap-8">
           <MailRoomHeader />
 
           {overview.isLoading ? (

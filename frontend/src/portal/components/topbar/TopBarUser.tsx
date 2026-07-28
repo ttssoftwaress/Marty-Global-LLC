@@ -29,7 +29,7 @@ export function TopBarAvatar({ user }: { user: TopBarUser }) {
       <img
         src={user.avatarUrl}
         alt=""
-        className="size-8 shrink-0 rounded-[16px] object-cover"
+        className="size-8 shrink-0 rounded-[1rem] object-cover"
       />
     );
   }
@@ -37,7 +37,7 @@ export function TopBarAvatar({ user }: { user: TopBarUser }) {
   return (
     <span
       aria-hidden="true"
-      className="flex size-8 shrink-0 items-center justify-center rounded-[16px] bg-primary-light text-caption font-semibold text-primary"
+      className="flex size-8 shrink-0 items-center justify-center rounded-[1rem] bg-primary-light text-caption font-semibold text-primary"
     >
       {initials(user.name)}
     </span>

@@ -10,8 +10,9 @@ import type { ApiSuccess } from '@/types/api';
 import type {
   MailLogFilters,
   MailLogPage,
-  MailOpsCustomer,
   MailOpsRecentUpload,
+  MailOpsRoom,
+  MailOpsRoomName,
   MailOpsSummary,
   MailRequestDetail,
   MailRequestFilter,
@@ -27,8 +28,8 @@ import type {
  * contract the screen expects so the module drops in without touching the UI:
  *   - the summary, backing the three KPI figures and the tab counts in one call
  *     so they cannot disagree with each other
- *   - customer search, server-resolved like every other list in the admin area,
- *     so the picker never filters a client-side copy of the customer table
+ *   - mail room search, server-resolved like every other list in the admin area,
+ *     so the picker never filters a client-side copy of the room table
  *   - the recently-uploaded feed, cursor-paginated like every other list
  *   - the upload itself, which invalidates the feed and the summary so a filed
  *     scan appears without the screen re-deriving anything locally
@@ -48,25 +49,51 @@ export function useAdminMailOpsSummary() {
   });
 }
 
-export const adminMailOpsCustomerSearchKey = (search: string) =>
-  ['admin', 'mailroom', 'customer-search', search] as const;
+export const adminMailOpsRoomNameSearchKey = (search: string) =>
+  ['admin', 'mailroom', 'room-names', search] as const;
 
 /*
- * GET /v1/admin/mailroom/customers?search= — the picker's options.
+ * GET /v1/admin/mailroom/rooms/names?search= — step one of the room picker.
+ *
+ * Rooms rather than customers: a customer may hold several mail rooms and an
+ * envelope arrives at exactly one of them, so the room is what the operator
+ * picks. Names come back deduplicated with a count, because a name is not unique
+ * and the operator needs to know a second choice is coming.
  *
  * Only runs once the operator has typed something: an unfiltered fetch of every
- * customer is the query this screen must never make.
+ * mail room is the query this screen must never make.
  */
-export function useAdminMailOpsCustomerSearch(search: string) {
+export function useAdminMailOpsRoomNameSearch(search: string) {
   const query = search.trim();
 
   return useQuery({
-    queryKey: adminMailOpsCustomerSearchKey(query),
+    queryKey: adminMailOpsRoomNameSearchKey(query),
     queryFn: () =>
-      apiFetch<ApiSuccess<{ customers: MailOpsCustomer[] }>>(
-        `/admin/mailroom/customers?search=${encodeURIComponent(query)}`,
-      ).then((res) => res.data.customers),
+      apiFetch<ApiSuccess<{ names: MailOpsRoomName[] }>>(
+        `/admin/mailroom/rooms/names?search=${encodeURIComponent(query)}`,
+      ).then((res) => res.data.names),
     enabled: query.length > 1,
+  });
+}
+
+export const adminMailOpsRoomsByNameKey = (name: string) =>
+  ['admin', 'mailroom', 'rooms', name] as const;
+
+/*
+ * GET /v1/admin/mailroom/rooms?name= — step two: the addresses under the name
+ * chosen in step one, each with the customer it belongs to.
+ *
+ * `enabled` gates the call on a chosen name, so the hook can sit unconditionally
+ * in the screen while the operator is still searching.
+ */
+export function useAdminMailOpsRoomsByName(name: string | null) {
+  return useQuery({
+    queryKey: adminMailOpsRoomsByNameKey(name ?? ''),
+    queryFn: () =>
+      apiFetch<ApiSuccess<{ rooms: MailOpsRoom[] }>>(
+        `/admin/mailroom/rooms?name=${encodeURIComponent(name ?? '')}`,
+      ).then((res) => res.data.rooms),
+    enabled: name !== null,
   });
 }
 

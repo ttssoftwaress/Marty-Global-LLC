@@ -47,7 +47,7 @@ export function ServiceDetailFooter({
       </div>
 
       {/* Mobile — sticky bar over the content. */}
-      <div className="fixed inset-x-0 bottom-0 z-20 flex h-[72px] items-center justify-between gap-4 border-t border-gray-200 bg-white px-4 shadow-footer-raised md:hidden">
+      <div className="fixed inset-x-0 bottom-0 z-20 flex h-[4.5rem] items-center justify-between gap-4 border-t border-gray-200 bg-white px-4 shadow-footer-raised md:hidden">
         <Link
           to={cancelTo}
           className="text-body font-medium text-gray-500 transition-colors hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
@@ -59,7 +59,7 @@ export function ServiceDetailFooter({
           type="button"
           onClick={onSave}
           disabled={!canSave || isSaving}
-          className="flex h-input w-[240px] max-w-[60%] items-center justify-center rounded-control bg-primary px-6 text-button text-white transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
+          className="flex h-input w-[15rem] max-w-[60%] items-center justify-center rounded-control bg-primary px-6 text-button text-white transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
         >
           {isSaving ? 'Saving…' : 'Save changes'}
         </button>

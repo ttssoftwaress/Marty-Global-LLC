@@ -36,7 +36,7 @@ export function ConversationListItem({
       aria-current={active ? 'true' : undefined}
       className={`flex w-full gap-3 p-4 text-left transition-colors rounded-card border border-gray-200 bg-white md:rounded-none md:border-transparent md:border-b-gray-200 md:last:border-b-transparent ${
         active
-          ? 'md:bg-primary-light md:shadow-[inset_3px_0_0_var(--color-primary)]'
+          ? 'md:bg-primary-light md:shadow-[inset_0.1875rem_0_0_var(--color-primary)]'
           : 'hover:bg-gray-50'
       }`}
     >
@@ -51,7 +51,7 @@ export function ConversationListItem({
       <span className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="flex items-center justify-between gap-2">
           <span
-            className={`min-w-0 truncate text-[14px] leading-5 text-text md:text-[13px] lg:text-[14px] ${
+            className={`min-w-0 truncate text-[0.875rem] leading-5 text-text md:text-[0.8125rem] lg:text-[0.875rem] ${
               emphasized ? 'font-semibold' : 'font-medium'
             }`}
           >

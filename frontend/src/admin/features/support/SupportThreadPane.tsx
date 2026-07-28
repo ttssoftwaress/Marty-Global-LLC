@@ -83,7 +83,7 @@ function ThreadSkeleton() {
           className={`flex w-full items-start gap-3 ${index % 2 ? 'justify-end' : ''}`}
         >
           {index % 2 ? null : <div className="size-7 shrink-0 animate-pulse rounded-full bg-gray-200" />}
-          <div className="flex w-full max-w-[420px] flex-col gap-1">
+          <div className="flex w-full max-w-[26.25rem] flex-col gap-1">
             <div className="h-3 w-24 animate-pulse rounded bg-gray-200" />
             <div className="h-16 w-full animate-pulse rounded-card bg-gray-200" />
           </div>
@@ -188,6 +188,7 @@ export function SupportThreadPane({
           <SupportAssigneeMenu
             assignee={thread.assignee}
             agents={thread.assignableAgents}
+            canAssign={thread.canAssign}
             onChange={onAssign}
           />
           <SupportStatusMenu
@@ -216,6 +217,7 @@ export function SupportThreadPane({
             <SupportAssigneeMenu
               assignee={thread.assignee}
               agents={thread.assignableAgents}
+              canAssign={thread.canAssign}
               onChange={onAssign}
             />
             <SupportStatusMenu
@@ -228,7 +230,7 @@ export function SupportThreadPane({
               aria-label="Conversation options"
               className="hidden size-8 shrink-0 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-text lg:flex"
             >
-              <MoreVertical className="size-[18px]" strokeWidth={2} aria-hidden="true" />
+              <MoreVertical className="size-[1.125rem]" strokeWidth={2} aria-hidden="true" />
             </button>
           </div>
         ) : null}

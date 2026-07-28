@@ -8,6 +8,7 @@ import {
   RequestFormStepsCard,
   RequestTypesCard,
   ResultSchemaCard,
+  ServiceAvailabilityCard,
   ServiceDescriptionCard,
   ServiceDetailFooter,
   ServiceDetailHeader,
@@ -129,7 +130,7 @@ export function AdminServiceCatalogDetailPage() {
     return (
       <AdminLayout user={user} onLogout={onLogout}>
         <div className="w-full p-4 md:p-6 lg:p-content">
-          <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-4">
+          <div className="mx-auto flex w-full max-w-[80rem] flex-col gap-4">
             <ServiceDetailHeader
               title="Service not found"
               backTo={CATALOG_ROUTE}
@@ -151,8 +152,8 @@ export function AdminServiceCatalogDetailPage() {
     <AdminLayout user={user} onLogout={onLogout}>
       {/* The mobile sticky footer overlays the page, so the bottom padding keeps
           the last card clear of it; `md` and up have no bar to clear. */}
-      <div className="w-full p-4 pb-[88px] md:p-6 md:pb-6 lg:p-content">
-        <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6">
+      <div className="w-full p-4 pb-[5.5rem] md:p-6 md:pb-6 lg:p-content">
+        <div className="mx-auto flex w-full max-w-[80rem] flex-col gap-6">
           {isLoading ? (
             <DetailSkeleton />
           ) : (
@@ -163,6 +164,12 @@ export function AdminServiceCatalogDetailPage() {
                 canSave={isDirty}
                 isSaving={updateService.isPending}
                 onSave={onSave}
+              />
+
+              <ServiceAvailabilityCard
+                active={draft.active}
+                serviceName={loadedService?.name ?? ''}
+                onChange={(active) => patch({ active })}
               />
 
               <ServiceDescriptionCard
@@ -265,7 +272,7 @@ export function AdminServiceCatalogDetailPage() {
 function DetailSkeleton() {
   return (
     <div className="flex w-full flex-col gap-6" aria-hidden="true">
-      <div className="h-10 w-full max-w-[480px] animate-pulse rounded-input bg-gray-200" />
+      <div className="h-10 w-full max-w-[30rem] animate-pulse rounded-input bg-gray-200" />
       {[160, 280, 300, 320, 280].map((height, index) => (
         <div
           key={index}

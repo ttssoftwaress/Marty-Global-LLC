@@ -45,7 +45,7 @@ export function CustomerCardList({ customers }: CustomerCardListProps) {
               {customer.region.flag ? (
                 <span
                   aria-hidden="true"
-                  className="shrink-0 text-[15px] leading-none"
+                  className="shrink-0 text-[0.9375rem] leading-none"
                 >
                   {customer.region.flag}
                 </span>

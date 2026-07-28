@@ -116,5 +116,17 @@ export function userRoom(userId: string): string {
 }
 
 // Every connected staff member, for team-wide signals like the availability
-// count and newly-created threads landing in the queue.
+// count.
 export const STAFF_ROOM = 'staff';
+
+/*
+ * The supervisors: staff who read the whole support queue rather than their own
+ * assigned threads (`support.all` or `support.assign`).
+ *
+ * A separate room from STAFF_ROOM because "a chat arrived" is not a team-wide
+ * signal any more — an agent is told about the threads that are theirs, and
+ * telling everyone would leak the existence of a colleague's conversation to
+ * someone the list endpoint would never show it to. Joined at connect time after
+ * the same permission check the REST inbox applies.
+ */
+export const SUPPORT_ALL_ROOM = 'support:all';

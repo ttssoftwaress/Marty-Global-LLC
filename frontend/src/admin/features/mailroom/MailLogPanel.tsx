@@ -42,7 +42,7 @@ function TableSkeleton() {
   return (
     <div className="flex w-full flex-col gap-4" aria-hidden="true">
       <div className="h-10 w-full animate-pulse rounded-input bg-gray-200 md:h-10" />
-      <div className="h-[440px] w-full animate-pulse rounded-card bg-gray-200" />
+      <div className="h-[27.5rem] w-full animate-pulse rounded-card bg-gray-200" />
     </div>
   );
 }

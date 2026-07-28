@@ -2,8 +2,8 @@ import { MailScanDropZone } from './MailScanDropZone';
 import type { MailScanAttachment } from '../../types/mailroom';
 
 /*
- * "New mail scan details" — the form that files a scan into the selected
- * customer's inbox.
+ * "New mail scan details" — the form that files a scan into the selected mail
+ * room's inbox.
  *
  * The field order is the same at every width, so one tree covers all three
  * links. What changes is the first row: desktop sets Sender name and Date
@@ -142,7 +142,7 @@ export function MailScanDetailsForm({
           disabled={!canSubmit || isSubmitting}
           className="btn btn-primary disabled:cursor-default disabled:bg-gray-300 disabled:hover:bg-gray-300"
         >
-          {isSubmitting ? 'Adding…' : 'Add to customer inbox'}
+          {isSubmitting ? 'Adding…' : 'Add to mail room inbox'}
         </button>
       </div>
     </form>

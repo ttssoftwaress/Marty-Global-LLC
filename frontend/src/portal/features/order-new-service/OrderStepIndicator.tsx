@@ -6,8 +6,10 @@ import { Check } from 'lucide-react';
  * the design calls for:
  *   - md+ (tablet, desktop): numbered badges joined by a connector line. A step
  *     already passed shows a navy badge with a check and a muted label; the
- *     current step shows a navy badge with its number and a dark label; later
- *     steps are hollow gray.
+ *     current step shows an accent badge with its number and a dark label
+ *     (the design drew it navy — magenta marks "you are here" as part of the
+ *     accent-visibility pass, logged as a deviation); later steps are hollow
+ *     gray.
  *   - mobile: a "Step N of M — <label>" caption over a filled progress bar.
  *
  * The step list is a prop rather than a constant, because how many steps an
@@ -49,10 +51,12 @@ export function OrderStepIndicator({
               {index > 0 && <span className="h-px w-10 bg-gray-300" aria-hidden="true" />}
               <div className="flex items-center gap-2">
                 <span
-                  className={`flex size-6 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold ${
-                    filled
-                      ? 'bg-primary text-white'
-                      : 'border-[1.5px] border-gray-300 text-gray-400'
+                  className={`flex size-6 shrink-0 items-center justify-center rounded-full text-[0.75rem] font-semibold ${
+                    isCurrent
+                      ? 'bg-accent text-white'
+                      : filled
+                        ? 'bg-primary text-white'
+                        : 'border-[1.5px] border-gray-300 text-gray-400'
                   }`}
                 >
                   {isDone ? (
@@ -83,7 +87,7 @@ export function OrderStepIndicator({
         </p>
         <div className="h-1 w-full overflow-hidden rounded-pill bg-gray-200">
           <div
-            className="h-full rounded-pill bg-primary transition-[width]"
+            className="h-full rounded-pill bg-accent transition-[width]"
             style={{ width: `${(currentStep / STEPS.length) * 100}%` }}
           />
         </div>

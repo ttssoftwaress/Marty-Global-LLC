@@ -50,9 +50,9 @@ export type MailOpsSummary = {
 };
 
 /*
- * A customer the scan can be filed against. `initials` comes from the API
- * rather than being sliced off the name here, so names a naive split would
- * mangle still render correctly.
+ * The customer a room belongs to. `initials` comes from the API rather than
+ * being sliced off the name here, so names a naive split would mangle still
+ * render correctly.
  */
 export type MailOpsCustomer = {
   id: string;
@@ -62,13 +62,49 @@ export type MailOpsCustomer = {
 };
 
 /*
- * One row of the "Recently uploaded" feed: who it was filed to, what the sender
- * was, and when it landed. `uploadedAt` is ISO-8601 UTC and is converted to the
- * viewer's zone only at render (AGENTS.md, Dates).
+ * The room picker's two steps.
+ *
+ * The target is the room rather than the customer, because a customer may hold
+ * several (a Delaware address and a Wyoming one) and an envelope arrives at
+ * exactly one of them. And the pick takes two steps because a room name is not
+ * unique — "Main Office" belongs to as many customers as chose it — so the
+ * operator names the room, then picks among the addresses carrying that name.
+ */
+
+// Step one: a room name, and how many active rooms answer to it. The count tells
+// the operator whether the next step is a real choice.
+export type MailOpsRoomName = {
+  name: string;
+  rooms: number;
+};
+
+// Step two: one addressable room. The customer travels with it — an address
+// alone does not say whose mail room it is.
+export type MailOpsRoom = {
+  id: string;
+  name: string;
+  address: string;
+  customer: MailOpsCustomer;
+};
+
+/*
+ * Which room a listed piece of mail belongs to — just enough to label the row
+ * with the address the post arrived at, not the full room record.
+ */
+export type MailOpsRoomRef = {
+  id: string;
+  name: string;
+};
+
+/*
+ * One row of the "Recently uploaded" feed: who it was filed to, which of their
+ * rooms it landed in, what the sender was, and when. `uploadedAt` is ISO-8601
+ * UTC and is converted to the viewer's zone only at render (AGENTS.md, Dates).
  */
 export type MailOpsRecentUpload = {
   id: string;
   customer: MailOpsCustomer;
+  room: MailOpsRoomRef;
   sender: string;
   uploadedAt: string; // ISO-8601 UTC
 };
@@ -91,6 +127,9 @@ export type MailScanFile = {
 /*
  * The upload form's payload.
  *
+ * `roomId` — not a customer id: the scan is filed into the specific room the
+ * envelope arrived at, and the backend resolves the customer from it.
+ *
  * `files` is ordered — position becomes the page number — because an envelope is
  * rarely one file: an operator scans several sheets, or attaches a multi-page
  * PDF among them.
@@ -100,7 +139,7 @@ export type MailScanFile = {
  * zoneless timestamp (AGENTS.md, Dates).
  */
 export type MailScanDraft = {
-  customerId: string;
+  roomId: string;
   sender: string;
   receivedOn: string; // yyyy-MM-dd
   files: MailScanFile[];
@@ -159,6 +198,9 @@ export const MAIL_REQUEST_FILTERS: {
 export type MailRequestRow = {
   id: string;
   customer: MailOpsCustomer;
+  // Which of the customer's rooms the item arrived at — an operator working the
+  // queue needs the address, not only whose post it is.
+  room: MailOpsRoomRef;
   mailItem: string;
   type: MailRequestType;
   typeLabel: string;
@@ -306,6 +348,7 @@ export type MailLogFilters = {
 export type MailLogRow = {
   id: string;
   customer: MailOpsCustomer;
+  room: MailOpsRoomRef;
   mailItem: string;
   action: MailLogAction;
   actionLabel: string;
@@ -326,10 +369,6 @@ export type MailLogPage = {
   totalPages: number;
 };
 
-export const SCAN_ACCEPTED_TYPES = [
-  'application/pdf',
-  'image/jpeg',
-  'image/png',
-];
-
-export const SCAN_MAX_BYTES = 10 * 1024 * 1024; // 10 MB — matches the drop-zone copy
+// The accepted types and size ceiling for a scan live in constants/uploads.ts,
+// mirrored from the backend's `mail-scan` policy — the copies that used to sit
+// here had drifted to a 10 MB cap the endpoint does not impose.

@@ -10,6 +10,7 @@ export { SupportInboxHeader } from './SupportInboxHeader';
 export { SupportMessageRow } from './SupportMessageRow';
 export { SupportSearch } from './SupportSearch';
 export { SupportStatusMenu } from './SupportStatusMenu';
+export { SupportStatusPill } from './SupportStatusPill';
 export { SupportThreadPane } from './SupportThreadPane';
 export {
   adminSupportConversationsKey,
@@ -20,4 +21,8 @@ export {
   useSendAdminSupportMessage,
   useUpdateAdminConversation,
 } from './queries';
-export { useAdminSupportSocket, useAgentAvailability } from './useAdminSupportSocket';
+export {
+  useAdminSupportInboxSocket,
+  useAdminSupportSocket,
+  useAgentAvailability,
+} from './useAdminSupportSocket';

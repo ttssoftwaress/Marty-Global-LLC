@@ -66,7 +66,7 @@ export function RolePermissionsCard({
           </select>
 
           <ChevronDown
-            className="pointer-events-none absolute right-4 top-1/2 size-[18px] -translate-y-1/2 text-gray-500"
+            className="pointer-events-none absolute right-4 top-1/2 size-[1.125rem] -translate-y-1/2 text-gray-500"
             strokeWidth={1.75}
             aria-hidden="true"
           />

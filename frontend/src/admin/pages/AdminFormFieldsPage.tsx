@@ -7,6 +7,7 @@ import { FieldsList } from '../features/fields/FieldsList';
 import {
   useAdminFields,
   useCreateField,
+  useDeleteField,
   useUpdateField,
 } from '../features/fields/queries';
 import { ResultFieldsPanel } from '../features/result-fields/ResultFieldsPanel';
@@ -67,6 +68,10 @@ export function AdminFormFieldsPage() {
 
   const createField = useCreateField();
   const updateField = useUpdateField();
+  const deleteField = useDeleteField();
+
+  // Which row is mid-delete, so only that row's button says "Deleting…".
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const rows = useMemo<FieldDefinition[]>(
     () => fields.data?.pages.flatMap((page) => page.fields) ?? [],
@@ -88,6 +93,25 @@ export function AdminFormFieldsPage() {
   };
 
   const close = () => setEditing(null);
+
+  /*
+   * Delete only reaches here for a row the API marked `canDelete`, and the
+   * endpoint re-checks it — including the stored answers the list's cheap check
+   * cannot see. A refusal names the reason and points at archiving instead, so
+   * it is surfaced rather than swallowed.
+   */
+  const onDelete = (field: FieldDefinition) => {
+    if (deleteField.isPending) return;
+    deleteField.reset();
+    setDeletingId(field.id);
+    deleteField.mutate(field.id, { onSettled: () => setDeletingId(null) });
+  };
+
+  const deleteError = deleteField.isError
+    ? deleteField.error instanceof ApiError
+      ? deleteField.error.message
+      : 'Something went wrong deleting this field. Please try again.'
+    : null;
 
   const editingField = editing === 'new' ? null : editing;
   const isSaving = createField.isPending || updateField.isPending;
@@ -120,7 +144,7 @@ export function AdminFormFieldsPage() {
   return (
     <AdminLayout user={user} onLogout={onLogout}>
       <div className="w-full p-4 md:p-6 lg:p-content">
-        <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-5 md:gap-6">
+        <div className="mx-auto flex w-full max-w-[75rem] flex-col gap-5 md:gap-6">
           <header className="flex flex-col gap-4">
             <h1 className="text-h4 font-semibold text-text lg:text-h3">
               Form fields
@@ -145,7 +169,7 @@ export function AdminFormFieldsPage() {
                     role="tab"
                     aria-selected={active}
                     onClick={() => setTab(option.value)}
-                    className={`whitespace-nowrap rounded-[8px] px-4 py-2 text-[13px] font-semibold transition-colors ${
+                    className={`whitespace-nowrap rounded-[0.5rem] px-4 py-2 text-[0.8125rem] font-semibold transition-colors ${
                       active
                         ? 'bg-white text-text shadow-sm-elevation'
                         : 'text-gray-500 hover:text-text'
@@ -163,7 +187,7 @@ export function AdminFormFieldsPage() {
           ) : (
             <>
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <p className="text-body text-text-secondary lg:max-w-[640px]">
+            <p className="text-body text-text-secondary lg:max-w-[40rem]">
               The questions service forms are built from. Register a field once
               here, then add it to any service — a field shared by two services
               is asked once when a customer orders both.
@@ -203,7 +227,7 @@ export function AdminFormFieldsPage() {
               value={type}
               onChange={(event) => setType(event.target.value)}
               aria-label="Filter by answer type"
-              className="h-input cursor-pointer rounded-input border border-gray-300 bg-white px-3 text-body text-text focus-visible:outline-2 focus-visible:outline-offset-[-1px] focus-visible:outline-primary md:w-[180px]"
+              className="h-input cursor-pointer rounded-input border border-gray-300 bg-white px-3 text-body text-text focus-visible:outline-2 focus-visible:outline-offset-[-1px] focus-visible:outline-primary md:w-[11.25rem]"
             >
               <option value="">All types</option>
               {FIELD_TYPE_OPTIONS.map((option) => (
@@ -238,7 +262,7 @@ export function AdminFormFieldsPage() {
               <p className="text-body-lg font-medium text-text">
                 {search || type ? 'No fields match' : 'No fields registered yet'}
               </p>
-              <p className="max-w-[420px] text-body text-text-secondary">
+              <p className="max-w-[26.25rem] text-body text-text-secondary">
                 {search || type
                   ? 'Try a different search or clear the type filter.'
                   : 'Register the questions your services ask — a company name, a passport upload — then build each service form by picking from them.'}
@@ -260,7 +284,21 @@ export function AdminFormFieldsPage() {
                 {total} field{total === 1 ? '' : 's'}
               </p>
 
-              <FieldsList fields={rows} onEdit={openEdit} />
+              {deleteError ? (
+                <p
+                  role="alert"
+                  className="rounded-input border border-error/30 bg-error/5 px-4 py-3 text-small text-error"
+                >
+                  {deleteError}
+                </p>
+              ) : null}
+
+              <FieldsList
+                fields={rows}
+                onEdit={openEdit}
+                onDelete={onDelete}
+                deletingId={deletingId}
+              />
 
               {fields.hasNextPage && (
                 <button

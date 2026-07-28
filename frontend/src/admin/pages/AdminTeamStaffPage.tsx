@@ -77,7 +77,7 @@ function TeamSkeleton() {
         {Array.from({ length: 5 }, (_, index) => (
           <div
             key={index}
-            className="h-[164px] animate-pulse rounded-card bg-gray-200"
+            className="h-[10.25rem] animate-pulse rounded-card bg-gray-200"
           />
         ))}
       </div>
@@ -286,7 +286,7 @@ export function AdminTeamStaffPage() {
   return (
     <AdminLayout user={user} onLogout={onLogout}>
       <div className="w-full p-4 pb-8 md:p-6 lg:p-content">
-        <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-4 md:gap-6 lg:gap-8">
+        <div className="mx-auto flex w-full max-w-[80rem] flex-col gap-4 md:gap-6 lg:gap-8">
           <TeamHeader onAddStaff={onAddStaff} />
 
           {summary.data ? <TeamKpiCards summary={summary.data} /> : null}
@@ -312,7 +312,7 @@ export function AdminTeamStaffPage() {
              */
             <div className="flex w-full flex-col gap-4 lg:flex-row lg:items-center lg:justify-between lg:gap-4">
               <div className="flex w-full flex-col gap-4 lg:w-auto lg:flex-row lg:items-center lg:gap-4">
-                <div className="w-full lg:w-[320px] lg:shrink-0">
+                <div className="w-full lg:w-[20rem] lg:shrink-0">
                   <TeamSearch value={search} onChange={setSearch} />
                 </div>
 
@@ -321,7 +321,7 @@ export function AdminTeamStaffPage() {
                     options={summary.data.roles}
                     value={role}
                     onChange={setRole}
-                    className="w-full max-w-[200px] shrink-0 md:w-[160px] lg:w-[180px] lg:max-w-none"
+                    className="w-full max-w-[12.5rem] shrink-0 md:w-[10rem] lg:w-[11.25rem] lg:max-w-none"
                   />
 
                   {/* Tablet keeps the pills beside the dropdown; desktop moves

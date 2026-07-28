@@ -65,6 +65,26 @@ export function formatCount(value: number) {
 }
 
 /*
+ * File sizes arrive as bytes. Binary units, because that is what the operating
+ * system reports beside the same file — an agent checking a document against
+ * what the customer says they sent should see the same number.
+ */
+export function formatFileSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+
+  const units = ['KB', 'MB', 'GB'];
+  let value = bytes / 1024;
+  let unit = 0;
+
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+
+  return `${value.toFixed(value >= 10 || unit === 0 ? 0 : 1)} ${units[unit]}`;
+}
+
+/*
  * The activity feed's timestamp — the spelled-out "time since" the desktop
  * design shows down the list: "2 min ago", "1 hr ago", "4 hrs ago", falling
  * back to an absolute date once past a week.

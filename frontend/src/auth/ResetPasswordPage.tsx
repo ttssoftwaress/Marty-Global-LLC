@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 
 import logoColor from '@/assets/Marty-Logo-Color.PNG';
 import { authClient } from '@/auth/client';
+import { useCompactScale } from '@/hooks/useCompactScale';
 import { LeftPanel, SecureTrust } from './components/auth-brand';
 import { ArrowLeftIcon } from './components/icons';
 
@@ -19,6 +20,8 @@ const RESET_REDIRECT_PATH = '/reset-password/new';
  * renders across all breakpoints; only the surrounding chrome changes.
  */
 export function ResetPasswordPage() {
+  useCompactScale();
+
   return (
     <div className="flex min-h-screen w-full flex-col items-stretch bg-white lg:flex-row">
       <LeftPanel
@@ -40,7 +43,7 @@ function MobileHeader() {
       <img
         src={logoColor}
         alt="Marty Global LLC"
-        className="h-[60px] w-[180px] object-contain"
+        className="h-[3.75rem] w-[11.25rem] object-contain"
       />
     </div>
   );
@@ -48,7 +51,7 @@ function MobileHeader() {
 
 function RightPanel() {
   return (
-    <div className="flex flex-1 flex-col bg-white lg:items-center lg:justify-center lg:px-24 lg:py-24 xl:w-[792px] xl:flex-none xl:shrink-0">
+    <div className="flex flex-1 flex-col bg-white lg:items-center lg:justify-center lg:px-24 lg:py-24 xl:w-[49.5rem] xl:flex-none xl:shrink-0">
       <MobileHeader />
 
       {/*
@@ -60,23 +63,23 @@ function RightPanel() {
           <img
             src={logoColor}
             alt="Marty Global LLC"
-            className="mb-[52px] hidden h-20 w-[200px] object-contain md:block lg:hidden"
+            className="mb-[3.25rem] hidden h-20 w-[12.5rem] object-contain md:block lg:hidden"
           />
 
-          <div className="flex w-full max-w-[480px] flex-col gap-7 md:gap-8 lg:w-[480px] lg:max-w-none">
+          <div className="flex w-full max-w-[30rem] flex-col gap-7 md:gap-8 lg:w-[30rem] lg:max-w-none">
             <RequestResetForm />
           </div>
         </div>
 
         <SecureTrust
           className="mt-10 md:mt-0 lg:hidden"
-          textClassName="text-[13px] leading-none text-text-secondary md:text-small"
+          textClassName="text-[0.8125rem] leading-none text-text-secondary md:text-small"
         />
       </div>
 
       <SecureTrust
         className="hidden lg:flex"
-        textClassName="text-[13px] leading-none text-text-secondary md:text-small"
+        textClassName="text-[0.8125rem] leading-none text-text-secondary md:text-small"
       />
     </div>
   );
@@ -129,10 +132,10 @@ function RequestResetForm() {
   return (
     <form className="flex w-full flex-col gap-8" onSubmit={handleSubmit}>
       <div className="flex flex-col gap-2 text-center lg:text-left">
-        <h2 className="text-[28px] font-semibold leading-none text-text">
+        <h2 className="text-[1.75rem] font-semibold leading-none text-text">
           Reset Your Password
         </h2>
-        <p className="text-body leading-[22px] text-text-secondary">
+        <p className="text-body leading-[1.375rem] text-text-secondary">
           Enter your email and we&apos;ll send you a link to reset your password.
         </p>
       </div>
@@ -154,7 +157,7 @@ function RequestResetForm() {
           className="input-field"
         />
         {error && (
-          <p role="alert" className="text-[13px] leading-[1.3] text-error">
+          <p role="alert" className="text-[0.8125rem] leading-[1.3] text-error">
             {error}
           </p>
         )}

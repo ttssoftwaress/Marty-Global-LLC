@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { Check, ChevronDown, Search, SlidersHorizontal, X } from 'lucide-react';
 
+import { useOverlay } from '../../../hooks/useOverlay';
 import type {
   MailRoomTab,
   MailStatusFilter,
@@ -99,7 +100,7 @@ function StatusSelect({
         value={status}
         onChange={(event) => onStatusChange(event.target.value as MailStatusFilter)}
         aria-label="Filter by status"
-        className="h-10 w-[160px] cursor-pointer appearance-none rounded-input border border-gray-300 bg-white pl-3.5 pr-9 text-body text-gray-700 outline-none focus:border-primary focus:shadow-[0_0_0_1px_var(--ring-focus)]"
+        className="h-10 w-[10rem] cursor-pointer appearance-none rounded-input border border-gray-300 bg-white pl-3.5 pr-9 text-body text-gray-700 outline-none focus:border-primary focus:shadow-[0_0_0_1px_var(--ring-focus)]"
       >
         {STATUS_OPTIONS.map((option) => (
           <option key={option.value} value={option.value}>
@@ -151,18 +152,27 @@ function StatusPills({
 }
 
 function FilterSheet({
+  id,
   tab,
   onTabChange,
   status,
   onStatusChange,
   onClose,
 }: {
+  id: string;
   tab: MailRoomTab;
   onTabChange: (tab: MailRoomTab) => void;
   status: MailStatusFilter;
   onStatusChange: (status: MailStatusFilter) => void;
   onClose: () => void;
 }) {
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // It claims `aria-modal`, so it takes the full modal posture: Escape closes,
+  // Tab stays inside, focus lands in the panel and returns to the filter button
+  // on close, and the page behind stops scrolling.
+  useOverlay({ open: true, onClose, panelRef });
+
   return (
     <>
       {/* Tap-away backdrop */}
@@ -173,9 +183,13 @@ function FilterSheet({
         className="fixed inset-0 z-30 cursor-default"
       />
       <div
+        ref={panelRef}
+        id={id}
         role="dialog"
+        aria-modal="true"
         aria-label="Filters"
-        className="absolute right-0 top-full z-40 mt-2 w-[240px] rounded-card border border-gray-200 bg-white p-3 shadow-lg-elevation"
+        tabIndex={-1}
+        className="absolute right-0 top-full z-40 mt-2 w-[15rem] rounded-card border border-gray-200 bg-white p-3 shadow-lg-elevation outline-none"
       >
         <div className="flex items-center justify-between pb-1">
           <p className="text-caption font-semibold uppercase tracking-[0.4px] text-gray-500">
@@ -258,6 +272,7 @@ export function InboxControls({
   onSearchChange,
 }: InboxControlsProps) {
   const [sheetOpen, setSheetOpen] = useState(false);
+  const sheetId = useId();
 
   // A status not surfaced as a pill (e.g. Action requested) is only reachable
   // via the sheet — flag the filter button so it doesn't look inert.
@@ -278,7 +293,7 @@ export function InboxControls({
           <SearchField
             value={search}
             onChange={onSearchChange}
-            className="flex-1 lg:w-[240px] lg:flex-none"
+            className="flex-1 lg:w-[15rem] lg:flex-none"
           />
           <StatusSelect status={status} onStatusChange={onStatusChange} />
         </div>
@@ -294,11 +309,13 @@ export function InboxControls({
             onClick={() => setSheetOpen((open) => !open)}
             aria-label="Filters and views"
             aria-expanded={sheetOpen}
+            aria-controls={sheetId}
+            aria-haspopup="dialog"
             className={`relative flex size-11 shrink-0 items-center justify-center rounded-input border bg-white transition-colors ${
               sheetOpen ? 'border-primary text-primary' : 'border-gray-300 text-gray-500 hover:bg-gray-100'
             }`}
           >
-            <SlidersHorizontal className="size-[18px] shrink-0" strokeWidth={1.75} aria-hidden="true" />
+            <SlidersHorizontal className="size-[1.125rem] shrink-0" strokeWidth={1.75} aria-hidden="true" />
             {hiddenFilterActive ? (
               <span className="absolute right-2.5 top-2.5 size-1.5 rounded-full bg-accent" aria-hidden="true" />
             ) : null}
@@ -307,6 +324,7 @@ export function InboxControls({
 
         {sheetOpen ? (
           <FilterSheet
+            id={sheetId}
             tab={tab}
             onTabChange={handleTabChange}
             status={status}

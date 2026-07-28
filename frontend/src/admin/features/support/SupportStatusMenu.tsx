@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Check, ChevronDown } from 'lucide-react';
 
 import type { SupportStatus } from '../../types/support';
@@ -14,8 +14,10 @@ import type { SupportStatus } from '../../types/support';
  * mobile introduces is kept everywhere as a second, non-colour cue.
  *
  * The design draws only the closed capsule; the menu is a state it did not
- * cover. It closes on outside click and on Escape, and the current status is
- * marked so the open menu says which one is live.
+ * cover. It closes on outside click and on Escape — which returns focus to the
+ * capsule rather than stranding it on the removed list — and the current status
+ * is marked so the open menu says which one is live. A non-modal popover, so it
+ * deliberately leaves page scroll and Tab alone.
  */
 
 const STATUS_STYLES: Record<SupportStatus, { pill: string; dot: string }> = {
@@ -43,6 +45,8 @@ export function SupportStatusMenu({
 }: SupportStatusMenuProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const listId = useId();
 
   useEffect(() => {
     if (!open) return;
@@ -51,7 +55,9 @@ export function SupportStatusMenu({
       if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
+      if (event.key !== 'Escape') return;
+      setOpen(false);
+      triggerRef.current?.focus();
     };
 
     document.addEventListener('pointerdown', onPointerDown);
@@ -67,12 +73,14 @@ export function SupportStatusMenu({
   return (
     <div ref={rootRef} className="relative shrink-0">
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((value) => !value)}
         aria-haspopup="listbox"
         aria-expanded={open}
+        aria-controls={listId}
         aria-label={`Conversation status: ${label}. Change status`}
-        className={`flex h-10 items-center gap-1.5 rounded-pill px-3 text-[13px] font-semibold transition-opacity hover:opacity-85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary md:h-auto md:rounded-md md:px-2 md:py-1 md:text-caption lg:h-10 lg:rounded-input lg:px-3 lg:text-[13px] ${styles.pill}`}
+        className={`flex h-10 items-center gap-1.5 rounded-pill px-3 text-[0.8125rem] font-semibold transition-opacity hover:opacity-85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary md:h-auto md:rounded-md md:px-2 md:py-1 md:text-caption lg:h-10 lg:rounded-input lg:px-3 lg:text-[0.8125rem] ${styles.pill}`}
       >
         <span
           aria-hidden="true"
@@ -88,6 +96,7 @@ export function SupportStatusMenu({
 
       {open ? (
         <ul
+          id={listId}
           role="listbox"
           aria-label="Conversation status"
           className="absolute right-0 top-[calc(100%+6px)] z-20 w-40 overflow-hidden rounded-input border border-gray-200 bg-white py-1 shadow-md-elevation"

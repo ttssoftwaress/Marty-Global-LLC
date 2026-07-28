@@ -124,7 +124,7 @@ export function ResultFieldPicker({
           </Link>
         </div>
       ) : (
-        <div className="flex max-h-[320px] flex-col gap-4 overflow-y-auto">
+        <div className="flex max-h-[20rem] flex-col gap-4 overflow-y-auto">
           {groups.map((group) => (
             <div key={group.category} className="flex flex-col gap-1.5">
               <p className="text-caption font-medium uppercase tracking-[0.4px] text-gray-500">

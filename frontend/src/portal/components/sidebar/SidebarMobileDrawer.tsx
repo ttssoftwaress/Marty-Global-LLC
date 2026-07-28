@@ -3,6 +3,7 @@ import { HelpCircle, LogOut, X } from 'lucide-react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 
 import logoWhite from '@/assets/Marty-Logo-White.png';
+import { useOverlay } from '@/hooks/useOverlay';
 import { SidebarUserBlock, type SidebarUser } from './SidebarUserBlock';
 import {
   PORTAL_NAV_ITEMS,
@@ -43,51 +44,12 @@ export function SidebarMobileDrawer({
 
   const panelRef = useRef<HTMLElement>(null);
 
+  // Escape, the Tab trap, focus in and back out, and the scroll lock. Focus
+  // opens on the close button rather than the logo link that leads the panel.
+  useOverlay({ open, onClose, panelRef, initialFocusRef: closeButtonRef });
+
   useEffect(() => {
     if (!open) return;
-
-    // Restore focus to whatever opened the drawer (the top bar's menu button)
-    // once it closes, rather than dropping focus back to the document.
-    const previouslyFocused = document.activeElement as HTMLElement | null;
-    closeButtonRef.current?.focus();
-
-    /*
-     * `aria-modal` is a promise to assistive tech, not a behaviour: without this
-     * Tab walks straight out of the drawer into the top bar and page behind the
-     * scrim, which are visually obscured but still focusable.
-     */
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose();
-        return;
-      }
-
-      if (event.key !== 'Tab') return;
-
-      const panel = panelRef.current;
-      if (!panel) return;
-
-      const focusable = panel.querySelectorAll<HTMLElement>(
-        'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      );
-      if (focusable.length === 0) return;
-
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (!first || !last) return;
-
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    document.addEventListener('keydown', onKeyDown);
-
-    const { overflow } = document.body.style;
-    document.body.style.overflow = 'hidden';
 
     /*
      * Crossing into `md` hides the drawer with `md:hidden` but leaves `open`
@@ -101,10 +63,7 @@ export function SidebarMobileDrawer({
     desktop.addEventListener('change', onBreakpointChange);
 
     return () => {
-      document.removeEventListener('keydown', onKeyDown);
       desktop.removeEventListener('change', onBreakpointChange);
-      document.body.style.overflow = overflow;
-      previouslyFocused?.focus();
     };
   }, [open, onClose]);
 
@@ -123,7 +82,8 @@ export function SidebarMobileDrawer({
         role="dialog"
         aria-modal="true"
         aria-label="Portal navigation"
-        className="absolute inset-y-0 left-0 flex w-[280px] max-w-[85vw] flex-col justify-between overflow-y-auto bg-primary px-5 pb-8 pt-6"
+        tabIndex={-1}
+        className="absolute inset-y-0 left-0 flex w-[17.5rem] max-w-[85vw] flex-col justify-between overflow-y-auto bg-primary px-5 pb-8 pt-6 outline-none"
       >
         <div className="flex w-full flex-col gap-7">
           <div className="flex w-full items-center justify-between">
@@ -136,7 +96,7 @@ export function SidebarMobileDrawer({
               <img
                 src={logoWhite}
                 alt="Marty Global LLC"
-                className="h-[46px] w-[148px] object-contain"
+                className="h-[2.875rem] w-[9.25rem] object-contain"
               />
             </Link>
 
@@ -145,7 +105,7 @@ export function SidebarMobileDrawer({
               type="button"
               onClick={onClose}
               aria-label="Close navigation"
-              className="flex size-[26px] shrink-0 items-center justify-center rounded-pill bg-white/10 text-white transition-colors hover:bg-white/20"
+              className="flex size-[1.625rem] shrink-0 items-center justify-center rounded-pill bg-white/10 text-white transition-colors hover:bg-white/20"
             >
               <X className="size-3.5" strokeWidth={1.75} aria-hidden="true" />
             </button>
@@ -166,7 +126,7 @@ export function SidebarMobileDrawer({
                       aria-current={active ? 'page' : undefined}
                       className={
                         active
-                          ? 'flex w-full items-center gap-3 rounded-input bg-white px-4 py-3 text-body font-semibold text-primary'
+                          ? 'flex w-full items-center gap-3 rounded-input bg-white px-4 py-3 text-body font-semibold text-primary [&>svg]:text-accent'
                           : 'flex w-full items-center gap-3 rounded-input px-4 py-3 text-body font-medium text-white/80 transition-colors hover:bg-white/10 hover:text-white'
                       }
                     >
@@ -198,7 +158,7 @@ export function SidebarMobileDrawer({
                       aria-current={active ? 'page' : undefined}
                       className={
                         active
-                          ? 'flex w-full items-center gap-3 rounded-input bg-white px-4 py-3 text-body font-semibold text-primary'
+                          ? 'flex w-full items-center gap-3 rounded-input bg-white px-4 py-3 text-body font-semibold text-primary [&>svg]:text-accent'
                           : 'flex w-full items-center gap-3 rounded-input px-4 py-3 text-body font-medium text-white/80 transition-colors hover:bg-white/10 hover:text-white'
                       }
                     >

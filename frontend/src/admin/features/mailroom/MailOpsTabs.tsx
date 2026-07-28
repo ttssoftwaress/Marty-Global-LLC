@@ -52,7 +52,7 @@ export function MailOpsTabs({ value, onChange, tabs }: MailOpsTabsProps) {
             aria-controls={`mail-ops-panel-${tab.value}`}
             id={`mail-ops-tab-${tab.value}`}
             onClick={() => onChange(tab.value)}
-            className={`flex h-10 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-pill px-4 text-[13px] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary lg:px-5 lg:text-body ${
+            className={`flex h-10 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-pill px-4 text-[0.8125rem] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary lg:px-5 lg:text-body ${
               isActive
                 ? 'bg-primary text-white'
                 : 'bg-gray-200 font-medium text-text-secondary hover:bg-gray-300'

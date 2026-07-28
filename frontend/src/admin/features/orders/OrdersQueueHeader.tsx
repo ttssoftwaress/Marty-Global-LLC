@@ -53,7 +53,7 @@ export function OrdersQueueHeader({
 
       <div className="flex w-full flex-col gap-3 lg:flex-row lg:items-start lg:justify-between lg:gap-6">
         <div className="flex min-w-0 flex-col gap-1.5">
-          <h1 className="text-[24px] font-bold leading-8 text-gray-900 md:text-h3 md:font-semibold lg:text-[32px] lg:leading-10">
+          <h1 className="text-[1.5rem] font-bold leading-8 text-gray-900 md:text-h3 md:font-semibold lg:text-[2rem] lg:leading-10">
             Orders queue
           </h1>
           <p className="hidden text-body text-gray-500 md:block">
@@ -64,14 +64,14 @@ export function OrdersQueueHeader({
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-2 lg:gap-3">
-          <span className="rounded-pill bg-gray-200 px-3 py-1.5 text-small font-medium text-gray-600 md:rounded-[6px] md:bg-gray-100 md:text-[13px]">
+          <span className="rounded-pill bg-gray-200 px-3 py-1.5 text-small font-medium text-gray-600 md:rounded-[0.375rem] md:bg-gray-100 md:text-[0.8125rem]">
             {assigned
               ? `${formatCount(totalOrders)} assigned to you`
               : `${formatCount(totalOrders)} total orders`}
           </span>
 
           {awaitingReview > 0 ? (
-            <span className="status-review rounded-pill px-3 py-1.5 text-small font-medium md:rounded-[6px] md:text-[13px]">
+            <span className="status-review rounded-pill px-3 py-1.5 text-small font-medium md:rounded-[0.375rem] md:text-[0.8125rem]">
               {formatCount(awaitingReview)} awaiting review
             </span>
           ) : null}
