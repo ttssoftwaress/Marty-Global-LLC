@@ -27,8 +27,7 @@ export function PortalPlaceholderPage({ title }: { title: string }) {
 
             <p className="text-body-lg font-semibold text-text">Coming soon</p>
             <p className="max-w-[420px] text-body text-gray-500">
-              This section is being built. Everything else in your portal is
-              ready to use.
+              This section is being built. Please check back soon.
             </p>
 
             <Link

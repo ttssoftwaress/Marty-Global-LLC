@@ -48,7 +48,7 @@ export type ReportRange = {
  * A KPI's movement against the preceding comparable window. The backend decides
  * the direction as well as the figure, so the UI never infers "up is good" — a
  * falling conversion rate is a `down` trend the design prints in the error hue,
- * while a falling refund rate would be `down` and still healthy.
+ * while a falling time-to-completion would be `down` and still healthy.
  */
 export type TrendDirection = 'up' | 'down' | 'flat';
 

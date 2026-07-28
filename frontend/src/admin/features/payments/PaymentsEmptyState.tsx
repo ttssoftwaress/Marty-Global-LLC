@@ -2,7 +2,7 @@ import { Receipt } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 /*
- * The "nothing to show" panel for the ledger and the refunds log.
+ * The "nothing to show" panel for the ledger and the transfer queue.
  *
  * The design covers neither case, so this fills a state it left out (Design.md
  * — fill in states the design did not cover). It distinguishes an empty filter

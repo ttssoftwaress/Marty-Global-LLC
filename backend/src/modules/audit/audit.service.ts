@@ -13,7 +13,7 @@ import { prisma } from '../../lib/prisma.js';
  * Two rules shape this file:
  *
  * 1. An audit write must never fail the operation it is describing. A trail is
- *    evidence, not a precondition — losing the row is bad, refusing the refund
+ *    evidence, not a precondition — losing the row is bad, refusing the payment
  *    the row describes is worse. So `record` swallows and logs its own failure,
  *    and callers do not await it inside their transaction.
  *
@@ -55,7 +55,6 @@ export const AuditAction = {
   ORDER_ITEM_STATUS_CHANGED: 'delivery.order_item_status_changed',
   SERVICE_REQUEST_STATUS_CHANGED: 'delivery.request_status_changed',
   SERVICE_REQUEST_ASSIGNED: 'delivery.request_assigned',
-  PAYMENT_REFUNDED: 'payment.refunded',
   PAYMENT_REMINDER_SENT: 'payment.reminder_sent',
   // USDT (TRC-20) collection. Every state change on a payment is audited
   // (AGENTS.md, Backend) — the metadata carries ids, a status, and minor units,
@@ -64,6 +63,11 @@ export const AuditAction = {
   PAYMENT_CREDITED: 'payment.credited',
   PAYMENT_MISMATCHED: 'payment.mismatched',
   PAYMENT_EXPIRED: 'payment.expired',
+  // Closing out a transfer that arrived matching no payment. The only write in
+  // the reconciliation queue, and the reason the queue can be trusted: what a
+  // stray transfer turned out to be is a human's judgement, so it carries who
+  // made it.
+  UNMATCHED_TRANSFER_RESOLVED: 'payment.unmatched_transfer_resolved',
   // Opening a customer's mail room — written when delivering the virtual-mail
   // service provisions one.
   MAIL_ROOM_PROVISIONED: 'mailroom.room_provisioned',
@@ -71,6 +75,20 @@ export const AuditAction = {
   MAIL_REQUEST_CREATED: 'mailroom.request_created',
   MAIL_REQUEST_PROCESSED: 'mailroom.request_processed',
   MAIL_REQUEST_RESOLVED: 'mailroom.request_resolved',
+  /*
+   * Business settings — the reference data every other section picks from.
+   * Retiring a location closes a jurisdiction to new orders and removes it from
+   * every filter in the admin, so it is a state change with the same reach as a
+   * catalog edit and carries the same trail.
+   */
+  LOCATION_CREATED: 'settings.location_created',
+  LOCATION_UPDATED: 'settings.location_updated',
+  LOCATION_DELETED: 'settings.location_deleted',
+  LOCATIONS_REORDERED: 'settings.locations_reordered',
+  CARRIER_CREATED: 'settings.carrier_created',
+  CARRIER_UPDATED: 'settings.carrier_updated',
+  CARRIER_DELETED: 'settings.carrier_deleted',
+  CARRIERS_REORDERED: 'settings.carriers_reordered',
   STAFF_CREATED: 'team.member_created',
   STAFF_UPDATED: 'team.member_updated',
   STAFF_DELETED: 'team.member_deleted',

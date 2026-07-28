@@ -49,6 +49,28 @@ export function AdminTopBarUserMenu({
   onOpenUserMenu,
   compact = false,
 }: AdminTopBarUserMenuProps) {
+  const chevron = (
+    <ChevronDown
+      className={compact ? 'size-[14px] text-gray-600' : 'size-4 text-gray-600'}
+      strokeWidth={1.75}
+      aria-hidden="true"
+    />
+  );
+
+  // No menu wired up yet — render the identity as plain content rather than an
+  // enabled `aria-haspopup="menu"` button that opens nothing.
+  if (!onOpenUserMenu) {
+    return (
+      <div
+        className={`flex shrink-0 items-center ${compact ? 'gap-1.5' : 'gap-2'}`}
+      >
+        <AdminTopBarAvatar user={user} />
+        <span className="sr-only">{user.name}</span>
+        {chevron}
+      </div>
+    );
+  }
+
   return (
     <button
       type="button"
@@ -60,11 +82,7 @@ export function AdminTopBarUserMenu({
       }`}
     >
       <AdminTopBarAvatar user={user} />
-      <ChevronDown
-        className={compact ? 'size-[14px] text-gray-600' : 'size-4 text-gray-600'}
-        strokeWidth={1.75}
-        aria-hidden="true"
-      />
+      {chevron}
     </button>
   );
 }

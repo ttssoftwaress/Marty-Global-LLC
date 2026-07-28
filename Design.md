@@ -16,7 +16,9 @@ AGENTS.md's two-apps sync rule.
 - Tailwind utilities with `cn()` and CVA variants; design tokens live in the
   Tailwind config — no hardcoded hex. shadcn is the base; never hand-roll what
   it provides.
-- Card entry is always Stripe Elements — never a hand-rolled card input.
+- Card payments are deferred (AGENTS.md, Payments) — the checkout renders a
+  disabled "coming soon" option. Never hand-roll a card input; when the card
+  path lands, entry is a provider-hosted element.
 
 ---
 

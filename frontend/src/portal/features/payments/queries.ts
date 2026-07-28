@@ -44,7 +44,6 @@ const TERMINAL_STATUSES: Payment['status'][] = [
   'succeeded',
   'failed',
   'expired',
-  'refunded',
   'underpaid',
   'overpaid',
 ];

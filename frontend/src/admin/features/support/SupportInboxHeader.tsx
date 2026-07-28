@@ -20,11 +20,15 @@ import { formatCount } from '../../lib/format';
 type SupportInboxHeaderProps = {
   totalOpen: number | undefined;
   totalUnassigned: number | undefined;
+  // The agent's Online/Away switch. Lives beside the queue counts because this
+  // is the screen where being available means something.
+  availability?: React.ReactNode;
 };
 
 export function SupportInboxHeader({
   totalOpen,
   totalUnassigned,
+  availability,
 }: SupportInboxHeaderProps) {
   const pill =
     typeof totalOpen === 'number' && typeof totalUnassigned === 'number' ? (
@@ -69,7 +73,10 @@ export function SupportInboxHeader({
           </p>
         </div>
 
-        <div className="shrink-0 md:hidden lg:block">{pill}</div>
+        <div className="flex shrink-0 items-center gap-3">
+          {availability}
+          <div className="shrink-0 md:hidden lg:block">{pill}</div>
+        </div>
       </div>
 
       {/* Tablet — the pill on its own line under the description. */}

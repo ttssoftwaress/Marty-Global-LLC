@@ -3,7 +3,10 @@ import { z } from 'zod';
 // The wire contract for queued notifications. Producers hand the service one of
 // these; it renders and persists before anything is enqueued.
 
-export const emailTemplate = z.enum(['generic']);
+// The ledger's label for what an email was, not a choice of renderer — every one
+// of these is rendered by GenericEmail. It exists so the Notification table can
+// answer "how many offline handoffs did we send" without parsing subject lines.
+export const emailTemplate = z.enum(['generic', 'support-offline-handoff']);
 
 export type EmailTemplate = z.infer<typeof emailTemplate>;
 

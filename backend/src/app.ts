@@ -22,8 +22,8 @@ export function createApp() {
   app.use(cors({ origin: env.FRONTEND_ORIGIN, credentials: true }));
 
   // Better Auth reads the raw request body, so its handler is mounted before
-  // express.json() — same rule as the Stripe webhook (AGENTS.md). It owns the
-  // whole /api/auth/* subtree (sign-up, sign-in, session, etc.).
+  // express.json(). It owns the whole /api/auth/* subtree (sign-up, sign-in,
+  // session, etc.).
   // The limiter is tiered per auth route (credentials vs. mail dispatch vs.
   // session reads) — see guards/auth-rate-limit.ts. It runs before the handler
   // and dispatches on the path only, never the body, so the raw-body

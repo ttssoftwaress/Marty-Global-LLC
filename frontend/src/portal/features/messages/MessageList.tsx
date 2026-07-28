@@ -4,6 +4,7 @@ import { isSameDay, parseISO } from 'date-fns';
 import { formatDayLabel } from '../../lib/format';
 import type { Message } from '../../types/messages';
 import { MessageBubble } from './MessageBubble';
+import { TypingIndicator } from './TypingIndicator';
 
 /*
  * The scrolling message area of a thread. Messages arrive oldest-first; they are
@@ -66,17 +67,22 @@ function ThreadSkeleton() {
 type MessageListProps = {
   messages: Message[];
   isLoading: boolean;
+  // The other party is composing. Rendered inside the scroller so the indicator
+  // sits exactly where their message will appear.
+  typing?: boolean;
 };
 
-export function MessageList({ messages, isLoading }: MessageListProps) {
+export function MessageList({ messages, isLoading, typing = false }: MessageListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const days = useMemo(() => groupByDay(messages), [messages]);
 
-  // Pin to the newest message on load and whenever the count changes.
+  // Pin to the newest message on load, whenever the count changes, and when the
+  // typing row appears — it adds height, and a thread that stops following the
+  // conversation the moment someone starts replying is the wrong way round.
   useEffect(() => {
     const node = scrollRef.current;
     if (node) node.scrollTop = node.scrollHeight;
-  }, [messages.length]);
+  }, [messages.length, typing]);
 
   return (
     <div
@@ -85,7 +91,7 @@ export function MessageList({ messages, isLoading }: MessageListProps) {
     >
       {isLoading ? (
         <ThreadSkeleton />
-      ) : messages.length === 0 ? (
+      ) : messages.length === 0 && !typing ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-1 text-center">
           <p className="text-body font-medium text-gray-500">No messages yet</p>
           <p className="text-small text-gray-400">
@@ -93,20 +99,23 @@ export function MessageList({ messages, isLoading }: MessageListProps) {
           </p>
         </div>
       ) : (
-        days.map((day) => (
-          <div key={day.key} className="flex flex-col gap-4">
-            <DateDivider label={day.label} />
-            {day.messages.map((message, index) => (
-              <MessageBubble
-                key={message.id}
-                message={message}
-                firstOfRun={
-                  index === 0 || day.messages[index - 1]?.author !== message.author
-                }
-              />
-            ))}
-          </div>
-        ))
+        <>
+          {days.map((day) => (
+            <div key={day.key} className="flex flex-col gap-4">
+              <DateDivider label={day.label} />
+              {day.messages.map((message, index) => (
+                <MessageBubble
+                  key={message.id}
+                  message={message}
+                  firstOfRun={
+                    index === 0 || day.messages[index - 1]?.author !== message.author
+                  }
+                />
+              ))}
+            </div>
+          ))}
+          {typing ? <TypingIndicator /> : null}
+        </>
       )}
     </div>
   );

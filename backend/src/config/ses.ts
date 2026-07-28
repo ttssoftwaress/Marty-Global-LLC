@@ -17,8 +17,14 @@ const hasCredentials = Boolean(
   env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY,
 );
 
+// config/env.ts already rejects this combination on boot; keeping the check here
+// means a production process can never reach `sendEmail` with a null client and
+// silently swallow every notification.
 if (isProduction && !hasCredentials) {
-  logger.error('SES credentials missing — outbound email will not be sent');
+  logger.error('SES credentials missing — refusing to start');
+  throw new Error(
+    'SES credentials missing in production — refusing to start with outbound email disabled',
+  );
 }
 
 const client = hasCredentials

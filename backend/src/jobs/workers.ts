@@ -6,6 +6,7 @@ import { logger } from '../lib/logger.js';
 import { markFailed } from '../modules/notifications/notifications.service.js';
 import { notificationsProcessor } from './processors/notifications.processor.js';
 import { paymentsProcessor } from './processors/payments.processor.js';
+import { supportProcessor } from './processors/support.processor.js';
 import {
   closeQueues,
   QueueName,
@@ -48,8 +49,18 @@ export function registerWorkers() {
         'Notification job failed',
       );
 
+      // This handler is not awaited by BullMQ, so a rejected markFailed would
+      // surface as an unhandled rejection and take the worker process down —
+      // precisely when persistence is already struggling.
       if (exhausted) {
-        void markFailed(job.data.notificationId, error.message);
+        markFailed(job.data.notificationId, error.message).catch(
+          (err: unknown) => {
+            logger.error(
+              { err, notificationId: job.data.notificationId },
+              'Failed to persist FAILED status for exhausted notification job',
+            );
+          },
+        );
       }
     },
   );
@@ -78,6 +89,27 @@ export function registerWorkers() {
 
   workers.push(payments);
 
+  /*
+   * Live chat's background work: the offline email handoff and the anonymous
+   * chat purge. Both are cheap and infrequent, so a small concurrency is ample —
+   * and the handoff is keyed per conversation, so parallelism buys nothing.
+   */
+  const support = new Worker(QueueName.SUPPORT, supportProcessor, {
+    connection: createRedisConnection('marty-worker-support'),
+    concurrency: 3,
+  });
+
+  support.on('failed', (job: Job | undefined, error: Error) => {
+    // No conversation id in the log line beyond the job's own data — and never a
+    // message body (AGENTS.md, PII).
+    logger.error(
+      { err: error, jobId: job?.id, name: job?.name, attempt: job?.attemptsMade },
+      'Support job failed',
+    );
+  });
+
+  workers.push(support);
+
   // Idempotent: BullMQ keys the scheduler by id, so re-running on every boot
   // updates the same schedule rather than stacking another.
   void scheduleUsdtPoll(tronConfig.pollIntervalSeconds).catch((err: unknown) => {
@@ -85,7 +117,7 @@ export function registerWorkers() {
   });
 
   logger.info(
-    { queues: [QueueName.NOTIFICATIONS, QueueName.PAYMENTS] },
+    { queues: [QueueName.NOTIFICATIONS, QueueName.PAYMENTS, QueueName.SUPPORT] },
     'Job workers registered',
   );
 

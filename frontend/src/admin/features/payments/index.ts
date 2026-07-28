@@ -7,13 +7,15 @@ export { PaymentStatusChip } from './PaymentStatusChip';
 export { PaymentsEmptyState } from './PaymentsEmptyState';
 export { PaymentsHeader } from './PaymentsHeader';
 export { PaymentsKpiCards } from './PaymentsKpiCards';
-export { RefundLogCardList } from './RefundLogCardList';
-export { RefundLogTable } from './RefundLogTable';
+export { ResolveTransferDialog } from './ResolveTransferDialog';
 export { RevenueChart } from './RevenueChart';
 export { RevenueChartCard } from './RevenueChartCard';
+export { UnmatchedTransferCardList } from './UnmatchedTransferCardList';
+export { UnmatchedTransferTable } from './UnmatchedTransferTable';
 export {
   useAdminBillingLedger,
   useAdminPaymentsSummary,
-  useAdminRefundLog,
   useAdminRevenueSeries,
+  useAdminUnmatchedTransfers,
+  useResolveUnmatchedTransfer,
 } from './queries';

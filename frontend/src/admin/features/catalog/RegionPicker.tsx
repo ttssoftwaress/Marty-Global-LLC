@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { Check } from 'lucide-react';
 
 import type { ServiceRegion } from '../../types/catalog';
@@ -61,17 +62,26 @@ export function RegionPicker({
     );
   }
 
+  /*
+   * No locations yet. On a fresh database this is the normal first state rather
+   * than a failure — nothing seeds the list, an admin adds them — so the copy
+   * points at the screen that fixes it instead of describing a fault.
+   */
   if (regions.length === 0) {
     return (
       <div className="flex flex-col gap-1.5">
-        <p className="text-body text-gray-500">No regions are configured yet.</p>
+        <p className="text-body text-gray-500">
+          No locations yet. Add the jurisdictions you operate in under{' '}
+          <Link
+            to="/admin/settings"
+            className="font-medium text-primary underline-offset-2 hover:underline"
+          >
+            Admin settings
+          </Link>
+          , then choose them here.
+        </p>
 
-        {error ? (
-          <p className="text-caption text-error">
-            {error} None could be loaded — reload the page, and if the list stays
-            empty the region reference data still needs seeding.
-          </p>
-        ) : null}
+        {error ? <p className="text-caption text-error">{error}</p> : null}
       </div>
     );
   }

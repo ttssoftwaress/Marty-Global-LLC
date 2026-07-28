@@ -1,6 +1,7 @@
 export { MailRoomKpiCards } from './MailRoomKpiCards';
 export { MailRoomCard } from './MailRoomCard';
 export { MailRoomSection } from './MailRoomSection';
+export { MailRoomError } from './MailRoomError';
 export { RoomStatusChip } from './RoomStatusChip';
 export {
   useMailRoomOverview,

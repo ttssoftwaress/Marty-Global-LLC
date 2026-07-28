@@ -146,10 +146,13 @@ async function createQuote(
 let keyCounter = 0;
 const nextKey = () => `idem-key-${Date.now()}-${(keyCounter += 1)}`;
 
+const SENDER_ADDRESS = 'TTestSenderAddress222222222222222222';
+
 // A transfer as the poller would hand it over, deep enough to credit.
 function transfer(
   overrides: Partial<{
     transactionHash: string;
+    fromAddress: string;
     toAddress: string;
     amountRaw: bigint;
     blockTimestampMs: number;
@@ -158,6 +161,7 @@ function transfer(
 ) {
   return {
     transactionHash: overrides.transactionHash ?? `0xtest${(keyCounter += 1)}`,
+    fromAddress: overrides.fromAddress ?? SENDER_ADDRESS,
     toAddress: overrides.toAddress ?? DEPOSIT_ADDRESS,
     amountRaw: overrides.amountRaw ?? EXPECTED_RAW,
     contractAddress: 'TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf',
@@ -166,7 +170,19 @@ function transfer(
   };
 }
 
+// A live USDT intent against a quote — the payment a transfer is meant to match.
+async function intentFor(quoteId: string) {
+  return createIntent(
+    reqAs(auth(CUSTOMER_ID)),
+    { quoteId, method: 'usdt_trc20' },
+    nextKey(),
+  );
+}
+
 async function cleanup() {
+  await prisma.unmatchedTransfer.deleteMany({
+    where: { toAddress: { in: [DEPOSIT_ADDRESS, 'TSomeoneElsesAddress99999999999999'] } },
+  });
   await prisma.payment.deleteMany({ where: { customerId: { in: USER_IDS } } });
   await prisma.quote.deleteMany({ where: { customerId: { in: USER_IDS } } });
   await prisma.feedNotification.deleteMany({ where: { userId: { in: USER_IDS } } });
@@ -371,14 +387,6 @@ describe('createIntent', () => {
 // --- Settlement ----------------------------------------------------------
 
 describe('settleTransfer', () => {
-  async function intentFor(quoteId: string) {
-    return createIntent(
-      reqAs(auth(CUSTOMER_ID)),
-      { quoteId, method: 'usdt_trc20' },
-      nextKey(),
-    );
-  }
-
   it('credits an exact, confirmed transfer and marks the quote paid', async () => {
     const quote = await createQuote();
     const intent = await intentFor(quote.id);
@@ -653,6 +661,137 @@ describe('settleTransfer', () => {
     expect(
       (await prisma.payment.findUniqueOrThrow({ where: { id: a.id } })).status,
     ).toBe(PaymentStatus.PENDING);
+  });
+});
+
+// --- Unattributable money ------------------------------------------------
+
+/*
+ * The counterpart to "runs twice, credits once": runs a hundred times, warns
+ * once.
+ *
+ * The poller re-reads a five-minute overlap window on every sweep, so a stray
+ * transfer is handed to `settleTransfer` again and again for as long as it sits
+ * unresolved. A matched transfer goes quiet on the second pass because its hash
+ * is claimed on the payment row; these tests are the same guarantee for a
+ * transfer that matched nothing.
+ */
+describe('unmatched transfers', () => {
+  it('records an unattributable transfer instead of only logging it', async () => {
+    const event = transfer({ amountRaw: 1_000n });
+
+    const outcome = await settleTransfer(event);
+
+    expect(outcome.result).toBe('unmatched');
+
+    const row = await prisma.unmatchedTransfer.findUniqueOrThrow({
+      where: { transactionHash: event.transactionHash },
+    });
+
+    // The raw integer, exact — never rounded through a float.
+    expect(row.amountRaw.toFixed(0)).toBe('1000');
+    expect(row.decimals).toBe(6);
+    expect(row.fromAddress).toBe(SENDER_ADDRESS);
+    expect(row.toAddress).toBe(DEPOSIT_ADDRESS);
+    expect(row.sightings).toBe(1);
+    expect(row.resolvedAt).toBeNull();
+  });
+
+  it('reports only the FIRST sighting, so a re-read sweep stays quiet', async () => {
+    // The bug this table exists to fix: the same transfer warned on every poll
+    // interval, forever, because nothing recorded that we had already seen it.
+    const event = transfer({ amountRaw: 1_000n });
+
+    const first = await settleTransfer(event);
+    const second = await settleTransfer(event);
+    const third = await settleTransfer(event);
+
+    expect(first).toMatchObject({ result: 'unmatched', firstSighting: true });
+    expect(second).toMatchObject({ result: 'unmatched', firstSighting: false });
+    expect(third).toMatchObject({ result: 'unmatched', firstSighting: false });
+
+    // All three resolve to the one row — the tx hash is unique.
+    expect(second).toMatchObject({ transferId: (first as { transferId: string }).transferId });
+
+    const row = await prisma.unmatchedTransfer.findUniqueOrThrow({
+      where: { transactionHash: event.transactionHash },
+    });
+    expect(row.sightings).toBe(3);
+  });
+
+  it('advances lastSeenAt while leaving the original sighting alone', async () => {
+    const event = transfer({ amountRaw: 1_000n });
+
+    const firstSweep = new Date('2026-07-27T18:00:00.000Z');
+    const laterSweep = new Date('2026-07-28T18:00:00.000Z');
+
+    await settleTransfer(event, firstSweep);
+    await settleTransfer(event, laterSweep);
+
+    const row = await prisma.unmatchedTransfer.findUniqueOrThrow({
+      where: { transactionHash: event.transactionHash },
+    });
+
+    // "First seen yesterday, still here now" is exactly what a reconciler needs.
+    expect(row.firstSeenAt.toISOString()).toBe(firstSweep.toISOString());
+    expect(row.lastSeenAt.toISOString()).toBe(laterSweep.toISOString());
+  });
+
+  it('records once under concurrent sweeps of the same transfer', async () => {
+    // Two workers on the same overlap window. The unique hash is the guard, so
+    // exactly one of them reports a first sighting.
+    const event = transfer({ amountRaw: 1_000n });
+
+    const outcomes = await Promise.all([
+      settleTransfer(event),
+      settleTransfer(event),
+      settleTransfer(event),
+    ]);
+
+    const firsts = outcomes.filter(
+      (outcome) => outcome.result === 'unmatched' && outcome.firstSighting,
+    );
+    expect(firsts).toHaveLength(1);
+
+    expect(
+      await prisma.unmatchedTransfer.count({
+        where: { transactionHash: event.transactionHash },
+      }),
+    ).toBe(1);
+  });
+
+  it('never records a transfer that matched a payment', async () => {
+    // The recording is for money we cannot attribute. A credited transfer is
+    // attributed, so it must not also appear in the reconciliation queue.
+    const quote = await createQuote();
+    const intent = await intentFor(quote.id);
+
+    const event = transfer({ amountRaw: BigInt(intent.usdt!.amountRaw) });
+    await settleTransfer(event);
+    await settleTransfer(event);
+
+    expect(
+      await prisma.unmatchedTransfer.count({
+        where: { transactionHash: event.transactionHash },
+      }),
+    ).toBe(0);
+  });
+
+  it('does not record an under- or overpayment either', async () => {
+    // An amount mismatch IS attributed — to a payment, with its own explicit
+    // status. It belongs on that payment, not in the stray-money queue.
+    const quote = await createQuote();
+    const intent = await intentFor(quote.id);
+
+    const event = transfer({ amountRaw: BigInt(intent.usdt!.amountRaw) - 1n });
+    const outcome = await settleTransfer(event);
+
+    expect(outcome.result).toBe('underpaid');
+    expect(
+      await prisma.unmatchedTransfer.count({
+        where: { transactionHash: event.transactionHash },
+      }),
+    ).toBe(0);
   });
 });
 

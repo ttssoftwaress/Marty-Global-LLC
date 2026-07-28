@@ -38,7 +38,7 @@ import { DashedAddButton, DetailCard } from './DetailCard';
  * step, because answers land in one flat map per service.
  *
  * No registered field collects money or card data, by design (AGENTS.md) — the
- * backend resolves amounts and Stripe holds the card.
+ * backend resolves amounts and we never collect card data anywhere.
  */
 
 type RequestFormStepsCardProps = {

@@ -1,8 +1,10 @@
 import type { PaymentsKpi, PaymentsKpiTone } from '../../types/payments';
 
 /*
- * The four headline figures. Desktop lays them 4-up, tablet and mobile fall back
- * to a 2×2 grid, matching their links.
+ * The headline figures. Desktop lays them out one per column, tablet and mobile
+ * fall back to a two-column grid, matching their links. The column count follows
+ * the number of cards the backend sends rather than a fixed four, so a KPI added
+ * or dropped server-side never leaves a hole in the row.
  *
  * Every figure is resolved by the backend — `value` arrives as the string to
  * print, so no money arithmetic happens here (AGENTS.md, Money rules). The badge
@@ -11,8 +13,16 @@ import type { PaymentsKpi, PaymentsKpiTone } from '../../types/payments';
  * about the third card.
  *
  * A card with no badge simply leaves the value row's right side empty, which is
- * what three of the four design cards do.
+ * what most of the design's cards do.
  */
+
+// Static class strings — Tailwind cannot see a class assembled at runtime.
+const COLUMNS: Record<number, string> = {
+  1: 'lg:grid-cols-1',
+  2: 'lg:grid-cols-2',
+  3: 'lg:grid-cols-3',
+  4: 'lg:grid-cols-4',
+};
 
 const CAPTION_TONE: Record<PaymentsKpiTone, string> = {
   neutral: 'text-gray-500',
@@ -27,9 +37,19 @@ const BADGE_TONE: Record<PaymentsKpiTone, string> = {
     'bg-[var(--color-status-approved-bg)] text-[var(--color-status-approved-text)]',
 };
 
-function KpiCard({ kpi }: { kpi: PaymentsKpi }) {
+function KpiCard({
+  kpi,
+  fullWidthOnNarrow,
+}: {
+  kpi: PaymentsKpi;
+  fullWidthOnNarrow?: boolean;
+}) {
   return (
-    <div className="flex flex-col gap-1 rounded-card border border-gray-200 bg-white p-3.5 shadow-sm-elevation md:gap-2 md:p-5 lg:gap-3 lg:p-card">
+    <div
+      className={`flex flex-col gap-1 rounded-card border border-gray-200 bg-white p-3.5 shadow-sm-elevation md:gap-2 md:p-5 lg:gap-3 lg:p-card ${
+        fullWidthOnNarrow ? 'col-span-2 lg:col-span-1' : ''
+      }`}
+    >
       <p className="text-caption font-medium uppercase tracking-[0.6px] text-text-secondary">
         {kpi.label}
       </p>
@@ -70,9 +90,19 @@ export function PaymentsKpiCards({ kpis }: { kpis: PaymentsKpi[] }) {
   if (kpis.length === 0) return null;
 
   return (
-    <div className="grid w-full grid-cols-2 gap-2 md:gap-4 lg:grid-cols-4">
-      {kpis.map((kpi) => (
-        <KpiCard key={kpi.id} kpi={kpi} />
+    <div
+      className={`grid w-full grid-cols-2 gap-2 md:gap-4 ${
+        COLUMNS[kpis.length] ?? 'lg:grid-cols-4'
+      }`}
+    >
+      {kpis.map((kpi, index) => (
+        <KpiCard
+          key={kpi.id}
+          kpi={kpi}
+          // An odd trailing card would sit half-width beside empty space in the
+          // two-column grid, so it spans the row below `lg` instead.
+          fullWidthOnNarrow={kpis.length % 2 === 1 && index === kpis.length - 1}
+        />
       ))}
     </div>
   );

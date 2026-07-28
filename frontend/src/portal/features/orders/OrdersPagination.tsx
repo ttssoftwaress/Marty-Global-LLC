@@ -13,6 +13,11 @@ type OrdersPaginationProps = {
   page: number;
   totalPages: number;
   totalCount: number;
+  /*
+   * How many orders the mobile list is actually showing. Deriving it from
+   * `page * 10` was wrong the moment mobile stopped sharing the desktop window.
+   */
+  loadedCount: number;
   hasMore: boolean;
   onPrev?: () => void;
   onNext?: () => void;
@@ -23,6 +28,7 @@ export function OrdersPagination({
   page,
   totalPages,
   totalCount,
+  loadedCount,
   hasMore,
   onPrev,
   onNext,
@@ -45,7 +51,7 @@ export function OrdersPagination({
         </button>
         <p className="text-small text-gray-500">
           {hasMore
-            ? `Showing ${totalCount === 0 ? 0 : 1}–${Math.min(totalCount, page * 10)} of ${totalCount} orders`
+            ? `Showing ${totalCount === 0 ? 0 : 1}–${Math.min(totalCount, loadedCount)} of ${totalCount} orders`
             : `Showing all ${totalCount} orders`}
         </p>
       </div>

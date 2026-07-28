@@ -20,6 +20,11 @@ type MessageThreadProps = {
   isLoading: boolean;
   onBack: () => void;
   onSend: (payload: { text: string; files: File[] }) => void;
+  onTyping?: (typing: boolean) => void;
+  // An agent is composing a reply right now.
+  agentTyping?: boolean;
+  // Uploading an attachment — the composer holds its send until it finishes.
+  busy?: boolean;
   className?: string;
 };
 
@@ -29,6 +34,9 @@ export function MessageThread({
   isLoading,
   onBack,
   onSend,
+  onTyping,
+  agentTyping = false,
+  busy = false,
   className = '',
 }: MessageThreadProps) {
   const head = thread ?? summary;
@@ -43,8 +51,12 @@ export function MessageThread({
         orderId={head?.orderId}
         onBack={onBack}
       />
-      <MessageList messages={thread?.messages ?? []} isLoading={isLoading} />
-      <Composer onSend={onSend} />
+      <MessageList
+        messages={thread?.messages ?? []}
+        isLoading={isLoading}
+        typing={agentTyping}
+      />
+      <Composer onSend={onSend} onTyping={onTyping} busy={busy} />
     </section>
   );
 }

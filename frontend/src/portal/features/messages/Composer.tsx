@@ -10,9 +10,11 @@ import { formatFileSize } from '../../lib/format';
  * free for future multi-line.
  *
  * Draft text and staged files live here; `onSend` hands them to the page, which
- * owns delivery. Live persistence/transport lands with the support module over
- * `services/socket.ts` (AGENTS.md, Live Chat) — until then this stays a
- * self-contained, interactive composer.
+ * owns delivery over `services/socket.ts` (AGENTS.md, Live Chat).
+ *
+ * `onTyping` fires on each keystroke and on send. The throttling lives in the
+ * socket hook, not here — this component's job is to say what happened, not to
+ * decide how often the server hears about it.
  */
 
 const ACCEPT = '.pdf,.jpg,.jpeg,.png';
@@ -21,15 +23,19 @@ type StagedFile = { id: number; file: File };
 
 type ComposerProps = {
   onSend: (payload: { text: string; files: File[] }) => void;
+  onTyping?: (typing: boolean) => void;
+  // Set while an attachment is still uploading, so a second send cannot race the
+  // first. The field stays readable; only the controls go quiet.
+  busy?: boolean;
 };
 
-export function Composer({ onSend }: ComposerProps) {
+export function Composer({ onSend, onTyping, busy = false }: ComposerProps) {
   const [text, setText] = useState('');
   const [files, setFiles] = useState<StagedFile[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const nextId = useRef(0);
 
-  const canSend = text.trim().length > 0 || files.length > 0;
+  const canSend = (text.trim().length > 0 || files.length > 0) && !busy;
 
   const addFiles = (list: FileList | null) => {
     if (!list?.length) return;
@@ -47,6 +53,14 @@ export function Composer({ onSend }: ComposerProps) {
     onSend({ text: text.trim(), files: files.map((entry) => entry.file) });
     setText('');
     setFiles([]);
+    onTyping?.(false);
+  };
+
+  const onType = (value: string) => {
+    setText(value);
+    // An emptied field is not typing — otherwise clearing a draft leaves the
+    // other side watching dots that never resolve into anything.
+    onTyping?.(value.length > 0);
   };
 
   return (
@@ -89,7 +103,8 @@ export function Composer({ onSend }: ComposerProps) {
           <input
             type="text"
             value={text}
-            onChange={(event) => setText(event.target.value)}
+            onChange={(event) => onType(event.target.value)}
+            onBlur={() => onTyping?.(false)}
             onKeyDown={(event) => {
               if (event.key === 'Enter' && !event.shiftKey) {
                 event.preventDefault();

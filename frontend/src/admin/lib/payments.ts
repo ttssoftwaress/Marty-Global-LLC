@@ -3,19 +3,15 @@ import type { PaymentMethodSummary } from '../types/payments';
 /*
  * Render-time helpers for the quotes & payments screen.
  *
- * The method line is the one piece of card data we ever print, and it is only
- * ever the brand and last four — never a PAN (AGENTS.md, Payments). The backend
- * sends those two fields already separated; this only joins them for display.
+ * The method line prints the backend's own phrasing — the UI never derives a
+ * method from a status or assembles one from parts. Card payments are a later
+ * deployment, so no card data reaches this file to print.
  */
 
 export const EM_DASH = '—';
 
-/*
- * "Visa •••• 4242" for a card, the plain label for anything else ("ACH
- * transfer", "USDT (TRC-20)"), and an em dash when a row has not been paid yet.
- */
+// The method's label ("USDT (TRC-20)"), and an em dash when a row has not been
+// paid yet.
 export function formatPaymentMethod(method: PaymentMethodSummary | null) {
-  if (!method) return EM_DASH;
-  if (method.brand && method.last4) return `${method.brand} •••• ${method.last4}`;
-  return method.label;
+  return method?.label ?? EM_DASH;
 }

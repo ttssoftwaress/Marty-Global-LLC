@@ -3,12 +3,16 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { AdminLayout } from '../components/AdminLayout';
 import {
+  AgentAvailabilityToggle,
   SupportConversationList,
   SupportEmptyThread,
   SupportInboxHeader,
   SupportThreadPane,
   useAdminSupportConversations,
+  useAdminSupportSocket,
   useAdminSupportThread,
+  useAgentAvailability,
+  useUpdateAdminConversation,
 } from '../features/support';
 import { useAdminShell } from '../hooks/useAdminShell';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
@@ -39,17 +43,19 @@ import {
  *
  * Nothing here is hardcoded business data: the header counts, every
  * conversation, message, note, and the assignable staff all come from the
- * backend (endpoints land later, two-apps sync rule). The screen renders
- * skeletons until they arrive and empty states once they do with nothing to
- * show. Sending, assigning, and status changes are owned by the `support`
- * module over `services/socket.ts`; the controls are interactive in the
- * meantime.
+ * backend. The screen renders skeletons until they arrive and empty states once
+ * they do with nothing to show.
+ *
+ * Replies are delivered live over `services/socket.ts` (AGENTS.md, Live Chat) —
+ * drawn immediately and reconciled when the server confirms them, with REST as
+ * the fallback when the connection is down. Assignment and status are ordinary
+ * writes; they are not chat, so they go over REST alone.
  */
 
 const SEARCH_DEBOUNCE_MS = 300;
 
 export function AdminSupportInboxPage() {
-  const { user, onLogout } = useAdminShell();
+  const { user, userId, onLogout } = useAdminShell();
   const { conversationId } = useParams();
   const navigate = useNavigate();
 
@@ -64,6 +70,9 @@ export function AdminSupportInboxPage() {
 
   const conversationsQuery = useAdminSupportConversations(filter, debouncedSearch);
   const threadQuery = useAdminSupportThread(conversationId ?? '');
+  const chat = useAdminSupportSocket(conversationId ?? '', userId);
+  const updateConversation = useUpdateAdminConversation(conversationId ?? '');
+  const availability = useAgentAvailability();
 
   const conversations = useMemo<SupportConversationSummary[]>(
     () => conversationsQuery.data?.pages.flatMap((page) => page.conversations) ?? [],
@@ -98,13 +107,15 @@ export function AdminSupportInboxPage() {
   };
 
   /*
-   * Delivery, assignment, and status changes are owned by the `support` module
-   * (AGENTS.md, Live Chat) — every one of them persists through the service
-   * layer, so none is wired to a local mutation here.
+   * Every one of these persists through the service layer — the socket is
+   * transport, not a second implementation (AGENTS.md, Live Chat). A reply sent
+   * here and one sent over REST are the same row written by the same function.
    */
-  const onSend = (_mode: ComposerMode, _body: string) => {};
-  const onAssign = (_agentId: string | null) => {};
-  const onStatusChange = (_status: SupportStatus) => {};
+  const onSend = (mode: ComposerMode, body: string) => chat.send(mode, body);
+  const onAssign = (assigneeId: string | null) =>
+    updateConversation.mutate({ assigneeId });
+  const onStatusChange = (status: SupportStatus) =>
+    updateConversation.mutate({ status });
 
   return (
     <AdminLayout user={user} onLogout={onLogout}>
@@ -115,6 +126,13 @@ export function AdminSupportInboxPage() {
             <SupportInboxHeader
               totalOpen={firstPage?.totalOpen}
               totalUnassigned={firstPage?.totalUnassigned}
+              availability={
+                <AgentAvailabilityToggle
+                  available={availability.available}
+                  onChange={availability.setAvailable}
+                  connected={chat.connected}
+                />
+              }
             />
           </div>
 
@@ -144,8 +162,11 @@ export function AdminSupportInboxPage() {
                 isLoading={threadQuery.isPending}
                 onBack={backToList}
                 onSend={onSend}
+                onTyping={chat.notifyTyping}
                 onAssign={onAssign}
                 onStatusChange={onStatusChange}
+                customerOnline={chat.customerOnline}
+                customerTyping={chat.customerTyping}
               />
             ) : (
               <SupportEmptyThread className="hidden md:flex" />

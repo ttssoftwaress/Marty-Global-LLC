@@ -48,10 +48,7 @@ const CUSTOMER_SCOPE: Prisma.UserWhereInput = {
   OR: [{ role: Role.CUSTOMER }, { role: null }],
 };
 
-const COLLECTED: readonly PaymentStatus[] = [
-  PaymentStatus.SUCCEEDED,
-  PaymentStatus.PARTIALLY_REFUNDED,
-];
+const COLLECTED: readonly PaymentStatus[] = [PaymentStatus.SUCCEEDED];
 
 /*
  * Quotes under the reports area. admin.scope has no `reportQuoteScope` because
@@ -197,8 +194,8 @@ export type ReportsSummary = {
 /*
  * A movement as the design prints it. `direction` is which way the number went;
  * `tone` is whether that is good news — the two are separate because a falling
- * refund rate is `down` and healthy, while a falling conversion rate is `down`
- * and not. `higherIsBetter` is what tells them apart.
+ * time-to-completion is `down` and healthy, while a falling conversion rate is
+ * `down` and not. `higherIsBetter` is what tells them apart.
  */
 function movement(
   current: number,

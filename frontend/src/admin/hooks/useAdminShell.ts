@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { signOut, useSession } from '@/auth/client';
+import { closeSocket } from '@/services/socket';
 import type { AdminSidebarUser } from '@/admin/components/sidebar';
 
 /*
@@ -25,12 +26,34 @@ function roleLabel(role: unknown): string {
   return role.charAt(0).toUpperCase() + role.slice(1);
 }
 
-export function useAdminShell(): { user: AdminSidebarUser; onLogout: () => void } {
+export function useAdminShell(): {
+  user: AdminSidebarUser;
+  // The signed-in agent's id. The support thread needs it to decide which
+  // replies are the reader's own — the same message is this agent's on one desk
+  // and a colleague's on another, so it cannot come off the wire resolved.
+  userId: string | undefined;
+  onLogout: () => void;
+} {
   const { data: session } = useSession();
   const navigate = useNavigate();
 
+  // Same contract as the portal shell: Better Auth resolves with `{ error }`
+  // instead of throwing, so `onSuccess` is what tells us the session really
+  // ended. `finally` would send a still-signed-in admin to /login on a failure.
   const onLogout = useCallback(() => {
-    void signOut().finally(() => navigate(LOGIN_ROUTE, { replace: true }));
+    void signOut({
+      fetchOptions: {
+        onSuccess: () => {
+          // The socket authenticates from the session cookie, so a live one left
+          // open after sign-out would keep delivering this agent's messages to a
+          // browser that is back on the login screen.
+          closeSocket();
+          navigate(LOGIN_ROUTE, { replace: true });
+        },
+      },
+    }).catch(() => {
+      // Transport failure: stay put rather than stranding a live session.
+    });
   }, [navigate]);
 
   return {
@@ -38,6 +61,7 @@ export function useAdminShell(): { user: AdminSidebarUser; onLogout: () => void 
       name: session?.user.name ?? '',
       role: roleLabel(session?.user.role),
     },
+    userId: session?.user.id,
     onLogout,
   };
 }

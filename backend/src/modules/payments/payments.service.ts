@@ -71,7 +71,7 @@ export type PaymentView = {
   quoteId: string | null;
   reference: string | null;
   serviceName: string;
-  provider: 'usdt_trc20' | 'stripe';
+  provider: 'usdt_trc20';
   status: PaymentStatusView;
   amount: Money;
   /** The Tron tx hash once a transfer has matched. */
@@ -90,8 +90,7 @@ export type PaymentStatusView =
   | 'failed'
   | 'expired'
   | 'underpaid'
-  | 'overpaid'
-  | 'refunded';
+  | 'overpaid';
 
 const STATUS_VIEW: Record<PaymentStatus, PaymentStatusView> = {
   [PaymentStatus.PENDING]: 'awaiting_payment',
@@ -99,8 +98,6 @@ const STATUS_VIEW: Record<PaymentStatus, PaymentStatusView> = {
   [PaymentStatus.PROCESSING]: 'confirming',
   [PaymentStatus.SUCCEEDED]: 'succeeded',
   [PaymentStatus.FAILED]: 'failed',
-  [PaymentStatus.REFUNDED]: 'refunded',
-  [PaymentStatus.PARTIALLY_REFUNDED]: 'refunded',
   [PaymentStatus.UNDERPAID]: 'underpaid',
   [PaymentStatus.OVERPAID]: 'overpaid',
 };
@@ -140,7 +137,7 @@ export function toPaymentView(payment: PaymentRecord, now = new Date()): Payment
     quoteId: payment.quoteId,
     reference: payment.quote?.reference ?? null,
     serviceName: payment.quote?.serviceName ?? 'Payment',
-    provider: payment.provider === PaymentProvider.STRIPE ? 'stripe' : 'usdt_trc20',
+    provider: 'usdt_trc20',
     status: isExpired ? 'expired' : STATUS_VIEW[status],
     amount: { amount: payment.amount, currency: payment.currency },
     transactionHash: payment.providerRef,
@@ -462,6 +459,8 @@ export async function getQuoteForCheckout(
 
 export type SettlementInput = {
   transactionHash: string;
+  /** Sender. Recorded on an unmatched transfer — the only lead on stray money. */
+  fromAddress: string;
   toAddress: string;
   /** Raw integer the transfer carried. */
   amountRaw: bigint;
@@ -477,7 +476,14 @@ export type SettlementOutcome =
   | { result: 'underpaid'; paymentId: string }
   | { result: 'overpaid'; paymentId: string }
   | { result: 'duplicate'; paymentId: string }
-  | { result: 'unmatched' };
+  /*
+   * Unattributable money, now recorded rather than only logged. `firstSighting`
+   * is what lets the poller warn once instead of every sweep: the overlap window
+   * re-reads the same transfer indefinitely, and a matched transfer goes quiet
+   * because its hash is claimed on the payment row — this is the equivalent
+   * claim for a transfer that matched nothing.
+   */
+  | { result: 'unmatched'; transferId: string; firstSighting: boolean };
 
 /*
  * Apply one on-chain transfer.
@@ -497,6 +503,12 @@ export type SettlementOutcome =
  * Confirmations gate the credit but not the match: a shallow transfer is matched
  * and moved to PROCESSING so the customer sees "confirming", and a later sweep
  * credits it once it is deep enough.
+ *
+ * Split in two: `applyTransfer` below is the money path exactly as described,
+ * and the exported `settleTransfer` wraps it to record anything it could not
+ * attribute. The recording is deliberately OUTSIDE the settlement transaction —
+ * it touches no payment and no quote, and it must never be able to roll back a
+ * credit or hold a lock while it writes.
  */
 /*
  * Mark a quote paid and carry its order to PAID with it.
@@ -531,9 +543,16 @@ async function creditQuote(
   });
 }
 
-export async function settleTransfer(
-  input: SettlementInput,
-): Promise<SettlementOutcome> {
+/*
+ * What the money path alone can say. It knows a transfer matched nothing; it
+ * does not know whether we have seen that transfer before, which is the
+ * recording step's answer.
+ */
+type ApplyOutcome =
+  | Exclude<SettlementOutcome, { result: 'unmatched' }>
+  | { result: 'unmatched' };
+
+async function applyTransfer(input: SettlementInput): Promise<ApplyOutcome> {
   // Cheap pre-check outside the transaction — an already-processed hash is by
   // far the common case on every sweep after the first.
   const already = await prisma.payment.findUnique({
@@ -699,6 +718,91 @@ export async function settleTransfer(
     }
     throw error;
   }
+}
+
+/*
+ * Record a transfer we could not attribute, and say whether this is the first
+ * time we have seen it.
+ *
+ * An upsert on the unique tx hash, which is the whole mechanism: the first sweep
+ * inserts, every later sweep that re-reads the overlap window bumps `lastSeenAt`
+ * and the sighting count instead of producing another warning. That mirrors what
+ * a matched transfer already gets for free from the unique `providerRef`.
+ *
+ * `sightings` is incremented in the database rather than read-then-written, so
+ * two workers sweeping the same window cannot lose a count to a race.
+ *
+ * Resolving a row does NOT stop the counter — a resolved transfer the poller
+ * still sees is a fact worth keeping, and re-opening it would undo a human's
+ * decision on every sweep.
+ */
+async function recordUnmatchedTransfer(
+  input: SettlementInput,
+  now: Date,
+): Promise<{ transferId: string; firstSighting: boolean }> {
+  const existing = await prisma.unmatchedTransfer.findUnique({
+    where: { transactionHash: input.transactionHash },
+    select: { id: true },
+  });
+
+  if (existing) {
+    await prisma.unmatchedTransfer.update({
+      where: { id: existing.id },
+      data: { lastSeenAt: now, sightings: { increment: 1 } },
+    });
+    return { transferId: existing.id, firstSighting: false };
+  }
+
+  try {
+    const created = await prisma.unmatchedTransfer.create({
+      data: {
+        transactionHash: input.transactionHash,
+        contractAddress: input.contractAddress,
+        fromAddress: input.fromAddress,
+        toAddress: input.toAddress,
+        amountRaw: new Prisma.Decimal(input.amountRaw.toString()),
+        decimals: USDT_DECIMALS,
+        blockAt: new Date(input.blockTimestampMs),
+        firstSeenAt: now,
+        lastSeenAt: now,
+      },
+      select: { id: true },
+    });
+
+    return { transferId: created.id, firstSighting: true };
+  } catch (error) {
+    // A concurrent sweep inserted it between the read and the write. Same guard
+    // as the settlement path: the constraint decides, and the loser reports the
+    // sighting as a repeat rather than warning a second time.
+    if (isUniqueViolation(error)) {
+      const winner = await prisma.unmatchedTransfer.update({
+        where: { transactionHash: input.transactionHash },
+        data: { lastSeenAt: now, sightings: { increment: 1 } },
+        select: { id: true },
+      });
+      return { transferId: winner.id, firstSighting: false };
+    }
+    throw error;
+  }
+}
+
+/*
+ * Apply one on-chain transfer, and record it if it matched nothing.
+ *
+ * The poller's only entry point. Everything about crediting lives in
+ * `applyTransfer`; this adds the one thing that path cannot answer — whether an
+ * unattributable transfer is new — so the sweep can warn once about stray money
+ * instead of once every poll interval, forever.
+ */
+export async function settleTransfer(
+  input: SettlementInput,
+  now = new Date(),
+): Promise<SettlementOutcome> {
+  const outcome = await applyTransfer(input);
+
+  if (outcome.result !== 'unmatched') return outcome;
+
+  return { ...outcome, ...(await recordUnmatchedTransfer(input, now)) };
 }
 
 /*

@@ -1,4 +1,4 @@
-import { AlertCircle, CheckCircle2, Clock, RotateCcw } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 import type { PaymentStatus } from '../../types/payments';
@@ -8,15 +8,12 @@ import type { PaymentStatus } from '../../types/payments';
  * status reads identically in both.
  *
  * Colors are the design system's status tokens, matching the design's swatches:
- * paid uses the approved (green) pair, pending payment the review (amber) pair,
- * refunded the brand tint with secondary-navy text. `failed` and
- * `partially_refunded` are states the design never drew — the backend's status
- * enum has them, so they get the missing (red) and review pairs rather than
- * crashing on a missing key.
+ * paid uses the approved (green) pair and pending payment the review (amber)
+ * pair. `failed` is a state the design never drew — the backend's status enum
+ * has it, so it gets the missing (red) pair rather than crashing on a missing
+ * key.
  *
- * `Refunded` carries an icon here where the design leaves it bare, so every chip
- * in the column has the same silhouette and the status is not conveyed by hue
- * alone.
+ * Every chip carries an icon so the status is never conveyed by hue alone.
  *
  * The label is the backend's word for the status (`statusLabel` on the row); the
  * map below only decides the glyph and hue.
@@ -25,8 +22,6 @@ import type { PaymentStatus } from '../../types/payments';
 const CONFIG: Record<PaymentStatus, { icon: LucideIcon; className: string }> = {
   paid: { icon: CheckCircle2, className: 'status-approved' },
   pending_payment: { icon: Clock, className: 'status-review' },
-  refunded: { icon: RotateCcw, className: 'bg-primary-light text-secondary' },
-  partially_refunded: { icon: RotateCcw, className: 'status-review' },
   failed: { icon: AlertCircle, className: 'status-missing' },
 };
 

@@ -1,3 +1,5 @@
+import { randomBytes } from 'node:crypto';
+
 import {
   OrderActivityAuthor,
   OrderDocumentSource,
@@ -97,12 +99,27 @@ const STATUS_TIMELINE_INDEX: Record<OrderStatus, number> = {
 };
 
 // --- Reference generation ------------------------------------------------
-// A human-facing "ORD-#####". Distinct from the cuid id. Random rather than a
-// count (a count race could collide); the unique constraint is the real guard,
-// and we retry on the rare collision.
+/*
+ * A human-facing "ORD-<year>-<8 chars>". Distinct from the cuid id. Random
+ * rather than a count (a count race could collide); the unique constraint is
+ * the real guard, and we retry on the rare collision.
+ *
+ * The alphabet is Crockford base32 — no I/L/O/U, so a reference read aloud or
+ * copied off a printed invoice can't be transcribed into a different one. Eight
+ * characters is ~10^12 per year, which keeps the retry loop cold for the
+ * lifetime of the table; the previous five-digit space was only 90,000 values,
+ * where a few tens of thousands of orders would have made collisions the norm
+ * and then made order creation impossible.
+ */
+const REFERENCE_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+
 function makeReference(): string {
-  const n = 10_000 + Math.floor(Math.random() * 90_000);
-  return `ORD-${n}`;
+  const bytes = randomBytes(8);
+  let suffix = '';
+  for (const byte of bytes) {
+    suffix += REFERENCE_ALPHABET[byte % REFERENCE_ALPHABET.length];
+  }
+  return `ORD-${new Date().getUTCFullYear()}-${suffix}`;
 }
 
 // --- Answer validation ---------------------------------------------------

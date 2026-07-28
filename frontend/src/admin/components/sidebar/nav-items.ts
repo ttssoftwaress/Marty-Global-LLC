@@ -96,7 +96,15 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
    */
   { label: 'Form fields', to: '/admin/fields', icon: ListChecks, permission: 'catalog' },
   { label: 'Reports & analytics', to: '/admin/reports', icon: BarChart2, permission: 'reports' },
-  { label: 'Admin settings', to: '/admin/settings', icon: Settings },
+  /*
+   * The reference data every other section picks from — the locations services
+   * are offered in, and the carriers the mail room ships with.
+   *
+   * Its own area rather than `catalog`, because it sits upstream of the catalog:
+   * the orders queue filters by location and the mail room picks a carrier,
+   * neither of which involves a service's price or its form.
+   */
+  { label: 'Admin settings', to: '/admin/settings', icon: Settings, permission: 'settings' },
 ];
 
 /*

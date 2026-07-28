@@ -16,7 +16,7 @@ import * as controller from './quotes.controller.js';
  *
  * Sending is deliberately staff-level rather than admin-only: quoting is the
  * daily work of the operations managers this area exists for, it is fully
- * audited, and unlike a refund it moves no money — a quote is an offer.
+ * audited, and it moves no money — a quote is an offer.
  */
 
 const router = Router({ mergeParams: true });

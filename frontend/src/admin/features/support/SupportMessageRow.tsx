@@ -1,4 +1,5 @@
 import { format, isToday, isYesterday, parseISO } from 'date-fns';
+import { Check, CheckCheck } from 'lucide-react';
 
 import type { SupportMessage } from '../../types/support';
 import { SupportAgentAvatar } from './SupportAgentAvatar';
@@ -40,7 +41,8 @@ type SupportMessageRowProps = {
 };
 
 export function SupportMessageRow({ message }: SupportMessageRowProps) {
-  const { kind, mine, authorName, authorInitials, body, sentAt, id } = message;
+  const { kind, mine, authorName, authorInitials, body, sentAt, id, seen, pending } =
+    message;
 
   if (kind === 'internal_note') {
     return (
@@ -85,21 +87,33 @@ export function SupportMessageRow({ message }: SupportMessageRowProps) {
         </p>
 
         <div
-          className={`w-full rounded-card p-3.5 md:p-2.5 lg:p-3.5 ${
+          className={`w-full rounded-card p-3.5 transition-opacity md:p-2.5 lg:p-3.5 ${
             mine ? 'bg-primary-light' : 'bg-gray-100'
-          }`}
+          } ${pending ? 'opacity-60' : ''}`}
         >
           <p className="whitespace-pre-wrap break-words text-body leading-[1.5] text-text md:text-[13px] md:leading-[1.4] lg:text-body lg:leading-[1.5]">
             {body}
           </p>
         </div>
 
-        <time
-          dateTime={sentAt}
-          className="text-caption font-normal text-gray-400 md:text-[10px] lg:text-caption"
-        >
-          {formatMessageTime(sentAt)}
-        </time>
+        <span className="flex items-center gap-1 text-caption font-normal text-gray-400 md:text-[10px] lg:text-caption">
+          <time dateTime={sentAt}>{formatMessageTime(sentAt)}</time>
+          {/* The read receipt sits on staff replies only — one tick delivered,
+              two ticks read by the customer. */}
+          {isStaff && !pending ? (
+            seen ? (
+              <>
+                <CheckCheck className="size-3.5 text-primary" strokeWidth={2} aria-hidden="true" />
+                <span className="sr-only">Seen by the customer</span>
+              </>
+            ) : (
+              <>
+                <Check className="size-3.5" strokeWidth={2} aria-hidden="true" />
+                <span className="sr-only">Sent</span>
+              </>
+            )
+          ) : null}
+        </span>
       </div>
 
       {mine ? (

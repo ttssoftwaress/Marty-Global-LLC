@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 
 import { NotificationsPanel } from '../features/notifications';
+import { SupportWidget } from '../features/support';
 import type { Notification } from '../types/notifications';
 import { PortalSidebar, type SidebarUser } from './sidebar';
 import { PortalTopBar } from './topbar';
@@ -71,6 +72,10 @@ export function PortalLayout({
         onSelect={onSelectNotification}
         onMarkAllRead={onMarkAllNotificationsRead}
       />
+
+      {/* Live chat, on every portal screen. It hides itself on /app/messages,
+          where the conversation already fills the page. */}
+      <SupportWidget />
     </div>
   );
 }

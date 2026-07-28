@@ -2,12 +2,15 @@ import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
+import { uploadFiles } from '@/services/upload';
 import { PortalLayout } from '../components/PortalLayout';
 import {
   ConversationList,
   EmptyThread,
   MessageThread,
+  NewConversationDialog,
   useConversation,
+  useConversationSocket,
   useConversations,
 } from '../features/messages';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
@@ -25,11 +28,11 @@ import { usePortalShell } from '../hooks/usePortalShell';
  * and each pane scrolls on its own, keeping the search, header, and composer
  * pinned the way a messaging app should.
  *
- * Nothing is hardcoded: conversations and messages come from the backend
- * (endpoints land later, two-apps sync rule), so the screen renders skeletons
- * until they arrive and empty states once they do with nothing to show.
- * Delivery (send, real-time) lands with the support module over
- * `services/socket.ts`; the composer is interactive in the meantime.
+ * Nothing is hardcoded: conversations and messages come from the backend, so the
+ * screen renders skeletons until they arrive and empty states once they do with
+ * nothing to show. Delivery is realtime over `services/socket.ts` (AGENTS.md,
+ * Live Chat) — the customer's own message is drawn immediately and reconciled
+ * when the server confirms it, and an agent's reply arrives without a refetch.
  */
 
 function MessagesHeader({ onNewMessage }: { onNewMessage: () => void }) {
@@ -70,9 +73,12 @@ export function MessagesPage() {
 
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search, 300);
+  const [composing, setComposing] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   const conversationsQuery = useConversations(debouncedSearch);
   const threadQuery = useConversation(conversationId ?? '');
+  const chat = useConversationSocket(conversationId ?? '');
 
   const activeSummary = conversationId
     ? conversationsQuery.data?.find((item) => item.id === conversationId)
@@ -80,24 +86,41 @@ export function MessagesPage() {
 
   const backToList = () => navigate('/app/messages');
 
-  // Starting a new conversation and the thread options menu are affordances the
-  // design shows; their flows land with the support module.
-  const onNewMessage = () => {};
+  /*
+   * Files are uploaded to R2 before the message is sent, so what travels with it
+   * is a set of object keys rather than bytes (services/upload.ts). The composer
+   * is held while that happens — a second send racing the first would attach the
+   * files to whichever message won.
+   */
+  const onSend = async ({ text, files }: { text: string; files: File[] }) => {
+    if (!conversationId) return;
 
-  // Delivery is owned by the support module over `services/socket.ts`
-  // (AGENTS.md, Live Chat). The composer clears optimistically for now.
-  const onSend = () => {};
+    if (files.length === 0) {
+      chat.send({ body: text });
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const uploaded = await uploadFiles(files, 'support-attachment');
+      chat.send({ body: text, attachments: uploaded });
+    } finally {
+      setUploading(false);
+    }
+  };
 
   return (
     <PortalLayout user={user} onLogout={onLogout}>
       <div className="h-full w-full p-4 md:p-6 lg:p-content">
         <div className="relative mx-auto flex h-full w-full max-w-[1200px] flex-col gap-5">
-          <MessagesHeader onNewMessage={onNewMessage} />
+          <MessagesHeader onNewMessage={() => setComposing(true)} />
 
           <div className="flex min-h-0 flex-1 gap-4 md:gap-5 lg:gap-6">
             <ConversationList
               conversations={conversationsQuery.data}
               isLoading={conversationsQuery.isLoading}
+              isError={conversationsQuery.isError}
+              onRetry={() => void conversationsQuery.refetch()}
               search={search}
               onSearchChange={setSearch}
               activeId={conversationId}
@@ -112,9 +135,16 @@ export function MessagesPage() {
                 key={conversationId}
                 thread={threadQuery.data}
                 summary={activeSummary}
-                isLoading={!threadQuery.data}
+                // Loading is the query being in flight — not "no data". A stale
+                // deep link (deleted or unreachable thread) resolves with no
+                // data and must fall through to the thread's own empty state
+                // rather than sitting on a skeleton forever.
+                isLoading={threadQuery.isLoading}
                 onBack={backToList}
-                onSend={onSend}
+                onSend={(payload) => void onSend(payload)}
+                onTyping={chat.notifyTyping}
+                agentTyping={chat.agentTyping}
+                busy={uploading}
               />
             ) : (
               <EmptyThread className="hidden md:flex" />
@@ -124,7 +154,7 @@ export function MessagesPage() {
           {!conversationId ? (
             <button
               type="button"
-              onClick={onNewMessage}
+              onClick={() => setComposing(true)}
               aria-label="New message"
               className="absolute bottom-5 right-5 flex size-14 items-center justify-center rounded-full bg-accent text-white shadow-lg-elevation transition-colors hover:bg-accent-hover md:hidden"
             >
@@ -133,6 +163,17 @@ export function MessagesPage() {
           ) : null}
         </div>
       </div>
+
+      <NewConversationDialog
+        open={composing}
+        onClose={() => setComposing(false)}
+        onCreated={(id) => {
+          setComposing(false);
+          // Straight into the new thread — the customer just wrote the first
+          // message, so the list is not where they want to land.
+          navigate(`/app/messages/${id}`);
+        }}
+      />
     </PortalLayout>
   );
 }

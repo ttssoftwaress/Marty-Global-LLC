@@ -41,22 +41,70 @@ export function SidebarMobileDrawer({
   // across renders whether the drawer is open or not.
   const serviceItems = useServiceNavItems();
 
+  const panelRef = useRef<HTMLElement>(null);
+
   useEffect(() => {
     if (!open) return;
 
+    // Restore focus to whatever opened the drawer (the top bar's menu button)
+    // once it closes, rather than dropping focus back to the document.
+    const previouslyFocused = document.activeElement as HTMLElement | null;
     closeButtonRef.current?.focus();
 
+    /*
+     * `aria-modal` is a promise to assistive tech, not a behaviour: without this
+     * Tab walks straight out of the drawer into the top bar and page behind the
+     * scrim, which are visually obscured but still focusable.
+     */
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') {
+        onClose();
+        return;
+      }
+
+      if (event.key !== 'Tab') return;
+
+      const panel = panelRef.current;
+      if (!panel) return;
+
+      const focusable = panel.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusable.length === 0) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!first || !last) return;
+
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
     document.addEventListener('keydown', onKeyDown);
 
     const { overflow } = document.body.style;
     document.body.style.overflow = 'hidden';
 
+    /*
+     * Crossing into `md` hides the drawer with `md:hidden` but leaves `open`
+     * true, so without this the body stays locked and the tablet/desktop portal
+     * cannot scroll. Close on the transition instead.
+     */
+    const desktop = window.matchMedia('(min-width: 768px)');
+    const onBreakpointChange = (event: MediaQueryListEvent) => {
+      if (event.matches) onClose();
+    };
+    desktop.addEventListener('change', onBreakpointChange);
+
     return () => {
       document.removeEventListener('keydown', onKeyDown);
+      desktop.removeEventListener('change', onBreakpointChange);
       document.body.style.overflow = overflow;
+      previouslyFocused?.focus();
     };
   }, [open, onClose]);
 
@@ -71,6 +119,7 @@ export function SidebarMobileDrawer({
       />
 
       <aside
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label="Portal navigation"

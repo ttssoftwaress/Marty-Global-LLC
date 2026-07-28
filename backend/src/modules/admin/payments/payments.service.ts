@@ -7,6 +7,7 @@ import {
 
 import type { AuthContext } from '../../../guards/auth-context.js';
 import { AppError } from '../../../lib/app-error.js';
+import { formatUsdtRaw } from '../../../lib/money.js';
 import { cursorArgs, takePage, totalPages } from '../../../lib/pagination.js';
 import { prisma } from '../../../lib/prisma.js';
 import { AuditAction, record } from '../../audit/audit.service.js';
@@ -14,7 +15,6 @@ import { canSeeAll } from '../admin.guards.js';
 import {
   paymentScope,
   quoteScope,
-  refundScope,
   scopeLabel,
   type DataScope,
 } from '../admin.scope.js';
@@ -22,64 +22,53 @@ import {
   DEFAULT_CURRENCY,
   formatMoneyDisplay,
   iso,
+  isoOrNull,
   money,
   type Money,
   sumMinor,
 } from '../admin.views.js';
 import type {
   ListLedgerQuery,
-  ListRefundsQuery,
+  ListUnmatchedQuery,
   PaymentStatusFilter,
-  RefundInput,
+  ResolveUnmatchedInput,
   RevenuePeriod,
+  UnmatchedTransferFilter,
 } from './payments.validation.js';
 
 /*
  * Admin quotes & payments. `billing` owns what is owed and `payments` owns
- * collecting it (AGENTS.md); this module is the staff-side view over both, plus
- * the one write that reverses a collection.
+ * collecting it (AGENTS.md); this module is the staff-side view over both.
  *
  * MONEY: every figure is integer minor units + ISO 4217. Sums are integer
  * addition; the only place a value becomes text is `formatMoneyDisplay`, which
  * splits with integer division rather than dividing into a float. No
  * `parseFloat`, no `toFixed`, anywhere in this file (AGENTS.md, Money).
  *
- * PCI: a card is brand + last four and nothing else. There is no shape in this
- * module that could carry a PAN or CVC.
+ * Card payments are a later deployment, so every settlement here is USDT and no
+ * shape in this module carries card data of any kind.
  */
 
 // --- Ledger status -------------------------------------------------------
 /*
  * The ledger's status is a property of a quote *and* its payments, not of either
- * alone: an unpaid quote is `pending_payment`, a settled one is `paid` until a
- * reversal moves it on. `deriveStatus` and `statusWhere` below are two
- * expressions of one precedence order — a reversal outranks a settlement, which
- * outranks a failure — and must stay in step, or the tab counts would disagree
- * with the rows under them.
+ * alone: an unpaid quote is `pending_payment`, a settled one is `paid`.
+ * `deriveStatus` and `statusWhere` below are two expressions of one precedence
+ * order — a settlement outranks a failure — and must stay in step, or the tab
+ * counts would disagree with the rows under them.
  */
-export type LedgerStatus =
-  | 'paid'
-  | 'pending_payment'
-  | 'refunded'
-  | 'failed'
-  | 'partially_refunded';
+export type LedgerStatus = 'paid' | 'pending_payment' | 'failed';
 
 // Every state in which money actually reached us. `includes` is checked against
 // arbitrary PaymentStatus values, so the array is widened rather than inferred
-// as a tuple of the three literals.
-const SETTLED: readonly PaymentStatus[] = [
-  PaymentStatus.SUCCEEDED,
-  PaymentStatus.PARTIALLY_REFUNDED,
-  PaymentStatus.REFUNDED,
-];
+// as a tuple of the single literal.
+const SETTLED: readonly PaymentStatus[] = [PaymentStatus.SUCCEEDED];
 
 function deriveStatus(
   payments: readonly { status: PaymentStatus }[],
 ): LedgerStatus {
   const has = (status: PaymentStatus) => payments.some((p) => p.status === status);
 
-  if (has(PaymentStatus.REFUNDED)) return 'refunded';
-  if (has(PaymentStatus.PARTIALLY_REFUNDED)) return 'partially_refunded';
   if (has(PaymentStatus.SUCCEEDED)) return 'paid';
   if (has(PaymentStatus.FAILED)) return 'failed';
   return 'pending_payment';
@@ -87,27 +76,8 @@ function deriveStatus(
 
 function statusWhere(status: LedgerStatus): Prisma.QuoteWhereInput {
   switch (status) {
-    case 'refunded':
-      return { payments: { some: { status: PaymentStatus.REFUNDED, deletedAt: null } } };
-    case 'partially_refunded':
-      return {
-        payments: { some: { status: PaymentStatus.PARTIALLY_REFUNDED, deletedAt: null } },
-        AND: [{ payments: { none: { status: PaymentStatus.REFUNDED, deletedAt: null } } }],
-      };
     case 'paid':
-      return {
-        payments: { some: { status: PaymentStatus.SUCCEEDED, deletedAt: null } },
-        AND: [
-          {
-            payments: {
-              none: {
-                status: { in: [PaymentStatus.REFUNDED, PaymentStatus.PARTIALLY_REFUNDED] },
-                deletedAt: null,
-              },
-            },
-          },
-        ],
-      };
+      return { payments: { some: { status: PaymentStatus.SUCCEEDED, deletedAt: null } } };
     case 'failed':
       return {
         payments: { some: { status: PaymentStatus.FAILED, deletedAt: null } },
@@ -125,18 +95,14 @@ function statusWhere(status: LedgerStatus): Prisma.QuoteWhereInput {
 const STATUS_LABEL: Record<LedgerStatus, string> = {
   paid: 'Paid',
   pending_payment: 'Pending payment',
-  refunded: 'Refunded',
   failed: 'Failed',
-  partially_refunded: 'Partially refunded',
 };
 
 // The action a row offers. The backend decides it so the UI never infers an
 // action from a status.
 const STATUS_ACTION: Record<LedgerStatus, { kind: string; label: string }> = {
-  paid: { kind: 'refund', label: 'Issue refund' },
-  partially_refunded: { kind: 'refund', label: 'Issue refund' },
+  paid: { kind: 'view', label: 'View' },
   pending_payment: { kind: 'remind', label: 'Send reminder' },
-  refunded: { kind: 'view', label: 'View' },
   failed: { kind: 'view', label: 'View' },
 };
 
@@ -168,8 +134,6 @@ export type PaymentsSummary = {
 const LEDGER_STATUSES: readonly LedgerStatus[] = [
   'paid',
   'pending_payment',
-  'partially_refunded',
-  'refunded',
   'failed',
 ];
 
@@ -194,30 +158,24 @@ export async function getSummary(actor: AuthContext): Promise<PaymentsSummary> {
   const seesAll = await canSeeAll(actor, 'payments');
   const quoteWhere = await quoteScope(actor);
   const paymentWhere = await paymentScope(actor);
-  const refundWhere = await refundScope(actor);
 
   const ledgerScope: Prisma.QuoteWhereInput = { ...LEDGER_SCOPE, ...quoteWhere };
 
   const [
     collected,
-    refunded,
     outstanding,
     thisMonthCollected,
     lastMonthCollected,
     totalQuotes,
     counts,
   ] = await Promise.all([
-    // Gross collected: everything that settled, before reversals.
+    // Everything that settled.
     prisma.payment.aggregate({
       where: {
         ...paymentWhere,
         deletedAt: null,
-        status: { in: [PaymentStatus.SUCCEEDED, PaymentStatus.PARTIALLY_REFUNDED] },
+        status: PaymentStatus.SUCCEEDED,
       },
-      _sum: { amount: true },
-    }),
-    prisma.refund.aggregate({
-      where: { ...refundWhere, deletedAt: null },
       _sum: { amount: true },
     }),
     // What is still owed: issued quotes inside their validity window with
@@ -241,7 +199,7 @@ export async function getSummary(actor: AuthContext): Promise<PaymentsSummary> {
       where: {
         ...paymentWhere,
         deletedAt: null,
-        status: { in: [PaymentStatus.SUCCEEDED, PaymentStatus.PARTIALLY_REFUNDED] },
+        status: PaymentStatus.SUCCEEDED,
         paidAt: { gte: thisMonth },
       },
       _sum: { amount: true },
@@ -250,7 +208,7 @@ export async function getSummary(actor: AuthContext): Promise<PaymentsSummary> {
       where: {
         ...paymentWhere,
         deletedAt: null,
-        status: { in: [PaymentStatus.SUCCEEDED, PaymentStatus.PARTIALLY_REFUNDED] },
+        status: PaymentStatus.SUCCEEDED,
         paidAt: { gte: lastMonth, lt: thisMonth },
       },
       _sum: { amount: true },
@@ -263,13 +221,11 @@ export async function getSummary(actor: AuthContext): Promise<PaymentsSummary> {
     ),
   ]);
 
-  const grossCollected = collected._sum.amount ?? 0;
-  const totalRefunded = refunded._sum.amount ?? 0;
+  const totalCollected = collected._sum.amount ?? 0;
   const thisMonthTotal = thisMonthCollected._sum.amount ?? 0;
   const lastMonthTotal = lastMonthCollected._sum.amount ?? 0;
 
-  // Integer subtraction on minor units — net of reversals, never a float.
-  const netCollected = grossCollected - totalRefunded;
+  // Integer subtraction on minor units, never a float.
   const monthDelta = thisMonthTotal - lastMonthTotal;
 
   // Every caption says whose money it is counting when the figures are narrowed,
@@ -282,8 +238,8 @@ export async function getSummary(actor: AuthContext): Promise<PaymentsSummary> {
       {
         id: 'revenue-collected',
         label: 'Revenue collected',
-        value: formatMoneyDisplay(money(netCollected), { compact: true }),
-        caption: `Net of refunds, all time${suffix}`,
+        value: formatMoneyDisplay(money(totalCollected), { compact: true }),
+        caption: `All time${suffix}`,
         captionTone: 'neutral',
       },
       {
@@ -304,13 +260,6 @@ export async function getSummary(actor: AuthContext): Promise<PaymentsSummary> {
         value: `${outstanding.count} / ${formatMoneyDisplay(money(outstanding.total), { compact: true })}`,
         caption: `Invoices issued, awaiting payment${suffix}`,
         captionTone: outstanding.count > 0 ? 'warning' : 'neutral',
-      },
-      {
-        id: 'refunded',
-        label: 'Refunded',
-        value: formatMoneyDisplay(money(totalRefunded), { compact: true }),
-        caption: `Refunds & adjustments, all time${suffix}`,
-        captionTone: 'neutral',
       },
     ],
     tabs: [
@@ -334,7 +283,7 @@ export type BillingLedgerRow = {
   issuedAt: string;
   status: LedgerStatus;
   statusLabel: string;
-  method: { label: string; brand?: string; last4?: string } | null;
+  method: { label: string } | null;
   action: { kind: string; label: string };
   to: string;
 };
@@ -356,36 +305,24 @@ const ledgerInclude = {
     select: {
       status: true,
       provider: true,
-      cardBrand: true,
-      cardLast4: true,
     },
   },
 } satisfies Prisma.QuoteInclude;
 
 type LedgerQuote = Prisma.QuoteGetPayload<{ include: typeof ledgerInclude }>;
 
-/*
- * How the money arrived, as the row prints it. A card shows its brand and last
- * four — the only card details we hold (AGENTS.md, PCI). A USDT settlement has
- * no card fields and renders from its label alone, and an unpaid row has no
- * method at all, which the ledger prints as an em dash.
- */
+// How the money arrived, as the row prints it. One provider today; a row that
+// has not been paid yet has no method at all, which the ledger prints as an em
+// dash.
+const METHOD_LABEL: Record<PaymentProvider, string> = {
+  [PaymentProvider.USDT_TRC20]: 'USDT (TRC-20)',
+};
+
 function methodOf(quote: LedgerQuote): BillingLedgerRow['method'] {
   const settled = quote.payments.find((payment) => SETTLED.includes(payment.status));
   if (!settled) return null;
 
-  if (settled.provider === PaymentProvider.USDT_TRC20) {
-    return { label: 'USDT (TRC-20)' };
-  }
-
-  if (!settled.cardBrand) return { label: 'Card' };
-
-  const brand = settled.cardBrand.toLowerCase();
-  return {
-    label: brand.charAt(0).toUpperCase() + brand.slice(1),
-    brand,
-    ...(settled.cardLast4 ? { last4: settled.cardLast4 } : {}),
-  };
+  return { label: METHOD_LABEL[settled.provider] };
 }
 
 export async function listLedger(
@@ -438,63 +375,6 @@ export async function listLedger(
     page: query.cursor ? 0 : 1,
     totalPages: totalPages(totalResults, query.limit),
     totalResults,
-  };
-}
-
-// --- Refund log ----------------------------------------------------------
-export type RefundLogPage = {
-  rows: {
-    id: string;
-    reference: string;
-    customer: { id: string; name: string };
-    amount: Money;
-    reason: string;
-    processedAt: string;
-    processedBy: string;
-    to: string;
-  }[];
-  nextCursor: string | null;
-};
-
-export async function listRefunds(
-  actor: AuthContext,
-  query: ListRefundsQuery,
-): Promise<RefundLogPage> {
-  const rows = await prisma.refund.findMany({
-    where: { ...(await refundScope(actor)), deletedAt: null },
-    include: {
-      payment: {
-        include: {
-          customer: { select: { id: true, name: true } },
-          quote: { select: { reference: true, order: { select: { id: true, reference: true } } } },
-        },
-      },
-    },
-    orderBy: [{ processedAt: 'desc' }, { id: 'desc' }],
-    ...cursorArgs(query.cursor, query.limit),
-  });
-
-  const page = takePage(rows, query.limit);
-
-  return {
-    rows: page.rows.map((refund) => {
-      const order = refund.payment.quote?.order;
-
-      return {
-        id: refund.id,
-        reference: order?.reference ?? refund.payment.quote?.reference ?? refund.id,
-        customer: {
-          id: refund.payment.customer.id,
-          name: refund.payment.customer.name,
-        },
-        amount: money(refund.amount, refund.currency),
-        reason: refund.reason,
-        processedAt: iso(refund.processedAt),
-        processedBy: refund.processedByName,
-        to: order ? `/admin/orders/${order.id}` : '/admin/payments',
-      };
-    }),
-    nextCursor: page.nextCursor,
   };
 }
 
@@ -562,7 +442,7 @@ export async function getRevenue(
     where: {
       ...(await paymentScope(actor)),
       deletedAt: null,
-      status: { in: [PaymentStatus.SUCCEEDED, PaymentStatus.PARTIALLY_REFUNDED] },
+      status: PaymentStatus.SUCCEEDED,
       paidAt: { gte: from },
     },
     select: { amount: true, currency: true, paidAt: true },
@@ -597,76 +477,130 @@ export async function getRevenue(
   };
 }
 
-// --- Write ---------------------------------------------------------------
+// --- Unattributed transfers ----------------------------------------------
+
 /*
- * Record a refund against a settled payment.
+ * The reconciliation queue for USDT that arrived matching no payment.
  *
- * This is a ledger entry, not a call to Stripe: moving the money is a job's work
- * (AGENTS.md — charging, webhooks, and reconciliation run in processors, never
- * in request handlers). What happens here is the part that must be transactional
- * — bounding the amount against what was collected, writing the reversal, and
- * moving the payment's status in one step.
+ * AGENTS.md requires that money we cannot attribute is never silently dropped.
+ * The poller records each one as an `UnmatchedTransfer`; this is where a human
+ * sees it. Deliberately unscoped by customer, because the defining property of
+ * one of these rows is that it belongs to nobody we can name — there is no
+ * customer to scope it to, and hiding it from a reviewer would recreate exactly
+ * the blind spot the table exists to close.
+ *
+ * MONEY: the raw integer travels as a string and the display value is built by
+ * `formatUsdtRaw`, which never lets the amount pass through a float (AGENTS.md).
  */
-export async function refundPayment(
+export type UnmatchedTransferRow = {
+  id: string;
+  transactionHash: string;
+  /** Raw on-chain integer, as a decimal string. */
+  amountRaw: string;
+  /** The same amount as a display decimal, e.g. "1.5". */
+  amountDisplay: string;
+  decimals: number;
+  fromAddress: string;
+  toAddress: string;
+  contractAddress: string;
+  blockAt: string;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  sightings: number;
+  resolvedAt: string | null;
+  resolvedBy: string | null;
+  resolutionNote: string | null;
+};
+
+export type UnmatchedTransferPage = {
+  rows: UnmatchedTransferRow[];
+  nextCursor: string | null;
+  /** Open items across the whole queue, not just this page — the header count. */
+  openCount: number;
+};
+
+const UNMATCHED_STATUS_WHERE: Record<
+  UnmatchedTransferFilter,
+  Prisma.UnmatchedTransferWhereInput
+> = {
+  open: { resolvedAt: null },
+  resolved: { resolvedAt: { not: null } },
+  all: {},
+};
+
+export async function listUnmatchedTransfers(
+  _actor: AuthContext,
+  query: ListUnmatchedQuery,
+): Promise<UnmatchedTransferPage> {
+  const [rows, openCount] = await Promise.all([
+    prisma.unmatchedTransfer.findMany({
+      where: UNMATCHED_STATUS_WHERE[query.status],
+      // Newest transfer first. `blockAt` rather than `firstSeenAt`: a cold start
+      // can notice an old transfer today, and the queue should read in the order
+      // the money actually arrived.
+      orderBy: [{ blockAt: 'desc' }, { id: 'desc' }],
+      ...cursorArgs(query.cursor, query.limit),
+    }),
+    prisma.unmatchedTransfer.count({ where: { resolvedAt: null } }),
+  ]);
+
+  const page = takePage(rows, query.limit);
+
+  return {
+    rows: page.rows.map((transfer) => {
+      const raw = BigInt(transfer.amountRaw.toFixed(0));
+
+      return {
+        id: transfer.id,
+        transactionHash: transfer.transactionHash,
+        amountRaw: raw.toString(),
+        amountDisplay: formatUsdtRaw(raw, transfer.decimals),
+        decimals: transfer.decimals,
+        fromAddress: transfer.fromAddress,
+        toAddress: transfer.toAddress,
+        contractAddress: transfer.contractAddress,
+        blockAt: iso(transfer.blockAt),
+        firstSeenAt: iso(transfer.firstSeenAt),
+        lastSeenAt: iso(transfer.lastSeenAt),
+        sightings: transfer.sightings,
+        resolvedAt: isoOrNull(transfer.resolvedAt),
+        resolvedBy: transfer.resolvedByName,
+        resolutionNote: transfer.resolutionNote,
+      };
+    }),
+    nextCursor: page.nextCursor,
+    openCount,
+  };
+}
+
+/*
+ * Close out a stray transfer with a note on what it turned out to be.
+ *
+ * This moves no money — it is an annotation, which is why it takes no amount
+ * and no payment id. Real money owed is collected the one way it always is: the
+ * customer pays the quote and the poller credits the transfer it matches.
+ *
+ * Retry-safe by construction rather than by an Idempotency-Key: the update is
+ * conditional on the row still being open, so a double-click or a resent request
+ * updates zero rows the second time and the original resolution stands. That is
+ * the property AGENTS.md's idempotency rule is after, and a replay has no second
+ * side effect it could duplicate.
+ */
+export async function resolveUnmatchedTransfer(
   actor: AuthContext,
-  paymentId: string,
-  idempotencyKey: string,
-  input: RefundInput,
-): Promise<{ id: string; amount: Money; status: string }> {
-  /*
-   * Retry-safety, before anything else. A client that resends the same key —
-   * a flaky network, a double-click on "Issue refund" — must get the original
-   * reversal back, not a second one. The unique constraint on the column is the
-   * real guarantee; this lookup is what turns a would-be 409 into the same 201
-   * the first call returned.
-   */
-  const replay = await prisma.refund.findUnique({
-    where: { idempotencyKey },
-    include: { payment: { select: { status: true } } },
+  transferId: string,
+  input: ResolveUnmatchedInput,
+  now = new Date(),
+): Promise<UnmatchedTransferRow> {
+  const existing = await prisma.unmatchedTransfer.findUnique({
+    where: { id: transferId },
+    select: { id: true, resolvedAt: true },
   });
 
-  if (replay) {
-    return {
-      id: replay.id,
-      amount: money(replay.amount, replay.currency),
-      status:
-        replay.payment.status === PaymentStatus.REFUNDED
-          ? 'refunded'
-          : 'partially_refunded',
-    };
-  }
+  if (!existing) throw AppError.notFound('Transfer not found');
 
-  /*
-   * The scope is part of the lookup, not a check after it. A payment outside
-   * this actor's reach must be indistinguishable from one that does not exist —
-   * a 403 here would confirm the record is real, which is the id-probing hole
-   * the whole scope model exists to close.
-   *
-   * This route is `requireAdmin`-gated today, so in practice the clause is
-   * redundant. It is written anyway for the same reason the guards are: a write
-   * that reverses money must be correct on its own, not because of what happens
-   * to be mounted in front of it.
-   */
-  const payment = await prisma.payment.findFirst({
-    where: { ...(await paymentScope(actor)), id: paymentId, deletedAt: null },
-    include: { refunds: { where: { deletedAt: null }, select: { amount: true } } },
-  });
-
-  if (!payment) throw AppError.notFound('Payment not found');
-
-  if (!SETTLED.includes(payment.status)) {
-    throw AppError.businessRule('Only a settled payment can be refunded');
-  }
-
-  const alreadyRefunded = sumMinor(payment.refunds.map((refund) => refund.amount));
-  const remaining = payment.amount - alreadyRefunded;
-
-  // Integer comparison on minor units. Over-refunding is a business-rule error,
-  // never a silent clamp — the operator should see the real remaining figure.
-  if (input.amount > remaining) {
-    throw AppError.businessRule('Refund exceeds the amount still collected', {
-      remaining: { amount: remaining, currency: payment.currency },
-    });
+  if (existing.resolvedAt) {
+    throw AppError.conflict('This transfer has already been reconciled');
   }
 
   const actorName = await prisma.user.findUnique({
@@ -674,44 +608,59 @@ export async function refundPayment(
     select: { name: true },
   });
 
-  const nextStatus =
-    input.amount === remaining ? PaymentStatus.REFUNDED : PaymentStatus.PARTIALLY_REFUNDED;
+  const { count } = await prisma.unmatchedTransfer.updateMany({
+    where: { id: transferId, resolvedAt: null },
+    data: {
+      resolvedAt: now,
+      resolvedById: actor.userId,
+      resolvedByName: actorName?.name ?? 'Marty Global team',
+      resolutionNote: input.note,
+    },
+  });
 
-  const refund = await prisma.$transaction(async (tx) => {
-    const created = await tx.refund.create({
-      data: {
-        paymentId,
-        amount: input.amount,
-        currency: payment.currency,
-        reason: input.reason,
-        idempotencyKey,
-        processedById: actor.userId,
-        processedByName: actorName?.name ?? 'Marty Global team',
-      },
-    });
+  // Zero rows means another reviewer resolved it between the read and the write.
+  // Their resolution stands; this caller is told, rather than silently shown a
+  // note that is not the one on the record.
+  if (count === 0) {
+    throw AppError.conflict('This transfer has already been reconciled');
+  }
 
-    await tx.payment.update({ where: { id: paymentId }, data: { status: nextStatus } });
-
-    return created;
+  const resolved = await prisma.unmatchedTransfer.findUniqueOrThrow({
+    where: { id: transferId },
   });
 
   void record({
     actor,
-    action: AuditAction.PAYMENT_REFUNDED,
-    entityType: 'Payment',
-    entityId: paymentId,
-    // Amounts in minor units; no card data, no customer PII.
+    action: AuditAction.UNMATCHED_TRANSFER_RESOLVED,
+    entityType: 'UnmatchedTransfer',
+    entityId: resolved.id,
+    // Ids and the raw amount as a string. The sender address stays out of the
+    // trail the same way it stays out of the logs (AGENTS.md, Security & PII).
     metadata: {
-      refundId: refund.id,
-      amount: input.amount,
-      currency: payment.currency,
-      statusTo: nextStatus,
+      txHash: resolved.transactionHash,
+      amountRaw: resolved.amountRaw.toFixed(0),
+      decimals: resolved.decimals,
+      sightings: resolved.sightings,
     },
   });
 
+  const raw = BigInt(resolved.amountRaw.toFixed(0));
+
   return {
-    id: refund.id,
-    amount: money(refund.amount, refund.currency),
-    status: nextStatus === PaymentStatus.REFUNDED ? 'refunded' : 'partially_refunded',
+    id: resolved.id,
+    transactionHash: resolved.transactionHash,
+    amountRaw: raw.toString(),
+    amountDisplay: formatUsdtRaw(raw, resolved.decimals),
+    decimals: resolved.decimals,
+    fromAddress: resolved.fromAddress,
+    toAddress: resolved.toAddress,
+    contractAddress: resolved.contractAddress,
+    blockAt: iso(resolved.blockAt),
+    firstSeenAt: iso(resolved.firstSeenAt),
+    lastSeenAt: iso(resolved.lastSeenAt),
+    sightings: resolved.sightings,
+    resolvedAt: isoOrNull(resolved.resolvedAt),
+    resolvedBy: resolved.resolvedByName,
+    resolutionNote: resolved.resolutionNote,
   };
 }

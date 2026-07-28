@@ -78,7 +78,14 @@ export type PollResult = {
   confirming: number;
   mismatched: number;
   duplicates: number;
+  /** Unattributable transfers seen this sweep, new and already-recorded alike. */
   unmatched: number;
+  /**
+   * Of those, the ones we had never seen before. The overlap window re-reads a
+   * stray transfer on every sweep, so `unmatched` alone stays permanently above
+   * zero; this is the figure that means "new money we cannot attribute".
+   */
+  unmatchedNew: number;
   expired: number;
 };
 
@@ -90,6 +97,7 @@ export async function pollUsdtTransfers(now = new Date()): Promise<PollResult> {
     mismatched: 0,
     duplicates: 0,
     unmatched: 0,
+    unmatchedNew: 0,
     expired: 0,
   };
 
@@ -126,14 +134,18 @@ export async function pollUsdtTransfers(now = new Date()): Promise<PollResult> {
       continue;
     }
 
-    const outcome = await settleTransfer({
-      transactionHash: transfer.transactionId,
-      toAddress: transfer.to,
-      amountRaw: BigInt(transfer.value),
-      contractAddress: transfer.contractAddress,
-      blockTimestampMs: transfer.blockTimestamp,
-      confirmations,
-    });
+    const outcome = await settleTransfer(
+      {
+        transactionHash: transfer.transactionId,
+        fromAddress: transfer.from,
+        toAddress: transfer.to,
+        amountRaw: BigInt(transfer.value),
+        contractAddress: transfer.contractAddress,
+        blockTimestampMs: transfer.blockTimestamp,
+        confirmations,
+      },
+      now,
+    );
 
     switch (outcome.result) {
       case 'credited':
@@ -153,15 +165,30 @@ export async function pollUsdtTransfers(now = new Date()): Promise<PollResult> {
         break;
       case 'unmatched':
         result.unmatched += 1;
-        // Money arrived that we cannot attribute. Never silently dropped — this
-        // is the log a human reconciles from.
-        logger.warn(
-          {
-            txHash: transfer.transactionId,
-            amount: formatUsdtRaw(BigInt(transfer.value)),
-          },
-          'Unmatched USDT transfer received',
-        );
+
+        /*
+         * Money arrived that we cannot attribute — never silently dropped. It is
+         * now recorded as an `UnmatchedTransfer` and surfaced in the admin
+         * reconciliation queue, so the log is the alert rather than the ledger.
+         *
+         * Warn ONCE, on the sighting that created the row. The overlap window
+         * re-reads the same transfer on every sweep by design, so warning per
+         * sighting emitted an identical line every poll interval for as long as
+         * the transfer stayed unresolved — thousands a day, which buries the
+         * one sighting a human needs to act on. The row's `sightings` and
+         * `lastSeenAt` carry the fact that it is still there.
+         */
+        if (outcome.firstSighting) {
+          result.unmatchedNew += 1;
+          logger.warn(
+            {
+              transferId: outcome.transferId,
+              txHash: transfer.transactionId,
+              amount: formatUsdtRaw(BigInt(transfer.value)),
+            },
+            'Unmatched USDT transfer received — recorded for reconciliation',
+          );
+        }
         break;
     }
 

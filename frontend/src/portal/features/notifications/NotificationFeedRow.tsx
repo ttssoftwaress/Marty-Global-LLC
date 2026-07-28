@@ -45,7 +45,11 @@ export function NotificationFeedRow({
     <button
       type="button"
       onClick={(event) => {
+        // preventDefault alone only cancels the Link's navigation; the click
+        // still bubbles to the row and fires onSelect, marking the row read AND
+        // opening it. Stop it here so "Mark as read" only marks as read.
         event.preventDefault();
+        event.stopPropagation();
         onMarkRead(notification);
       }}
       className="whitespace-nowrap rounded-input px-1 text-[12px] font-medium text-gray-500 transition-colors hover:text-primary focus-visible:outline-none focus-visible:underline"

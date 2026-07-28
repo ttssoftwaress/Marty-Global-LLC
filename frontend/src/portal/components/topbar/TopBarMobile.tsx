@@ -59,15 +59,23 @@ export function TopBarMobile({
           compact
         />
 
-        <button
-          type="button"
-          onClick={onOpenUserMenu}
-          aria-haspopup="menu"
-          aria-label={`Account menu — ${user.name}`}
-          className="flex shrink-0 rounded-pill transition-opacity hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-        >
-          <TopBarAvatar user={user} />
-        </button>
+        {/* Inert until a user menu exists — see TopBarUserMenu. */}
+        {onOpenUserMenu ? (
+          <button
+            type="button"
+            onClick={onOpenUserMenu}
+            aria-haspopup="menu"
+            aria-label={`Account menu — ${user.name}`}
+            className="flex shrink-0 rounded-pill transition-opacity hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          >
+            <TopBarAvatar user={user} />
+          </button>
+        ) : (
+          <span className="flex shrink-0">
+            <TopBarAvatar user={user} />
+            <span className="sr-only">{user.name}</span>
+          </span>
+        )}
       </div>
     </header>
   );

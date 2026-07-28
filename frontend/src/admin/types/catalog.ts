@@ -108,8 +108,8 @@ export type ServiceFooter = {
  * by construction, so the order flow asks it once.
  *
  * No field type captures money or card data: amounts are resolved by the backend
- * and Stripe holds the card (AGENTS.md), so an admin-defined form never carries
- * either.
+ * and we never collect card data anywhere (AGENTS.md), so an admin-defined form
+ * never carries either.
  */
 export type ServiceFieldRef = {
   fieldKey: string;

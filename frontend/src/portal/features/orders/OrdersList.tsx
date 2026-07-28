@@ -34,6 +34,12 @@ import { OrderRowAction } from './OrderRowAction';
 
 type OrdersListProps = {
   orders: Order[];
+  /*
+   * Mobile appends rather than pages: "Load more" grows the visible set instead
+   * of stepping a window, so it needs its own list. Defaults to `orders` so a
+   * caller with one list for every breakpoint keeps working.
+   */
+  mobileOrders?: Order[];
   onToggleDateSort?: () => void;
 };
 
@@ -86,20 +92,25 @@ function DateSortHeader({ onToggle }: { onToggle?: () => void }) {
   );
 }
 
-export function OrdersList({ orders, onToggleDateSort }: OrdersListProps) {
+export function OrdersList({
+  orders,
+  mobileOrders,
+  onToggleDateSort,
+}: OrdersListProps) {
   const isEmpty = orders.length === 0;
+  const cardOrders = mobileOrders ?? orders;
   const openOrder = useOpenOrder();
 
   return (
     <>
       {/* Mobile — one card per order */}
       <ul className="flex w-full flex-col gap-3 md:hidden">
-        {isEmpty ? (
+        {cardOrders.length === 0 ? (
           <li className="rounded-card border border-gray-200 bg-white">
             <EmptyState />
           </li>
         ) : (
-          orders.map((order) => (
+          cardOrders.map((order) => (
             <li
               key={order.id}
               onClick={() => openOrder(order.id)}

@@ -423,9 +423,9 @@ export async function updateTeamMember(
 
   /*
    * Demoting the last active admin would leave nobody able to reach the
-   * admin-only endpoints — catalog writes, refunds, this very screen. Counted
-   * across both the auth role and an active profile, since either alone is not
-   * what actually grants access.
+   * admin-only endpoints — catalog writes, transfer reconciliation, this very
+   * screen. Counted across both the auth role and an active profile, since
+   * either alone is not what actually grants access.
    */
   const losingAdmin =
     findStaffRole(profile.roleKey)?.authRole === 'admin' &&
@@ -559,9 +559,9 @@ export async function deleteTeamMember(
 
 /*
  * Refuse a change that would remove the last account able to reach the
- * admin-only endpoints — catalog writes, refunds, and this screen itself.
- * Counted across both the auth role and an active profile, since either alone
- * is not what actually grants access.
+ * admin-only endpoints — catalog writes, transfer reconciliation, and this
+ * screen itself. Counted across both the auth role and an active profile, since
+ * either alone is not what actually grants access.
  */
 async function assertNotLastAdmin(excludingUserId: string): Promise<void> {
   const otherAdmins = await prisma.staffProfile.count({

@@ -10,8 +10,9 @@ import { OrderStatusChip } from '../dashboard/OrderStatusChip';
  * both panes are visible, so the back button drops away, the status sits inline,
  * and a "View order" link appears when the conversation is tied to an order.
  *
- * The options menu is a placeholder affordance — its actions land with the
- * support module.
+ * The options menu only renders once something can open it (`onOpenOptions`).
+ * Its actions land with the support module, and an enabled button that does
+ * nothing is a promise to keyboard and screen-reader users we can't yet keep.
  */
 
 type ThreadHeaderProps = {
@@ -19,9 +20,16 @@ type ThreadHeaderProps = {
   status?: OrderStatus;
   orderId?: string;
   onBack: () => void;
+  onOpenOptions?: () => void;
 };
 
-export function ThreadHeader({ subject, status, orderId, onBack }: ThreadHeaderProps) {
+export function ThreadHeader({
+  subject,
+  status,
+  orderId,
+  onBack,
+  onOpenOptions,
+}: ThreadHeaderProps) {
   return (
     <header className="flex shrink-0 items-center justify-between gap-3 border-b border-gray-200 px-4 py-3 md:px-5 md:py-4 lg:px-6">
       <div className="flex min-w-0 items-center gap-2 md:gap-3">
@@ -57,13 +65,17 @@ export function ThreadHeader({ subject, status, orderId, onBack }: ThreadHeaderP
           </Link>
         ) : null}
 
-        <button
-          type="button"
-          aria-label="Conversation options"
-          className="flex size-8 shrink-0 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-text"
-        >
-          <MoreVertical className="size-5" strokeWidth={1.75} aria-hidden="true" />
-        </button>
+        {onOpenOptions ? (
+          <button
+            type="button"
+            onClick={onOpenOptions}
+            aria-haspopup="menu"
+            aria-label="Conversation options"
+            className="flex size-8 shrink-0 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-text"
+          >
+            <MoreVertical className="size-5" strokeWidth={1.75} aria-hidden="true" />
+          </button>
+        ) : null}
       </div>
     </header>
   );

@@ -14,9 +14,10 @@
 
 import type { Money } from './dashboard';
 
-// Stripe is in the architecture but not built yet; the union is declared so the
-// screen's method switch is exhaustive when the card path lands.
-export type PaymentMethodKind = 'usdt_trc20' | 'stripe';
+// The methods a customer can actually pay with. Cards are a later deployment —
+// the checkout shows them as coming soon rather than offering a value the
+// backend would reject.
+export type PaymentMethodKind = 'usdt_trc20';
 
 /*
  * Where a payment is. `awaiting_payment` is pre-transfer, `confirming` means a
@@ -31,8 +32,7 @@ export type PaymentStatusView =
   | 'failed'
   | 'expired'
   | 'underpaid'
-  | 'overpaid'
-  | 'refunded';
+  | 'overpaid';
 
 // Everything the USDT screen needs to show a customer what to send and where.
 export type UsdtPaymentInstructions = {

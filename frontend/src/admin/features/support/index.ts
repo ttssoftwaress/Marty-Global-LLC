@@ -1,3 +1,4 @@
+export { AgentAvailabilityToggle } from './AgentAvailabilityToggle';
 export { SupportAgentAvatar } from './SupportAgentAvatar';
 export { SupportAssigneeMenu } from './SupportAssigneeMenu';
 export { SupportComposer } from './SupportComposer';
@@ -15,4 +16,8 @@ export {
   adminSupportThreadKey,
   useAdminSupportConversations,
   useAdminSupportThread,
+  useMarkAdminSupportRead,
+  useSendAdminSupportMessage,
+  useUpdateAdminConversation,
 } from './queries';
+export { useAdminSupportSocket, useAgentAvailability } from './useAdminSupportSocket';

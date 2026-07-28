@@ -6,8 +6,8 @@ import { pathParam } from '../../../lib/params.js';
 import * as service from './payments.service.js';
 import {
   listLedgerQuerySchema,
-  listRefundsQuerySchema,
-  refundSchema,
+  listUnmatchedQuerySchema,
+  resolveUnmatchedSchema,
   revenueQuerySchema,
 } from './payments.validation.js';
 
@@ -59,42 +59,43 @@ export async function listLedger(
   }
 }
 
-export async function listRefunds(
+export async function listUnmatched(
   req: Request,
   res: Response,
   next: NextFunction,
 ) {
   try {
-    const parsed = listRefundsQuerySchema.safeParse(req.query);
+    const parsed = listUnmatchedQuerySchema.safeParse(req.query);
     if (!parsed.success) {
-      throw AppError.validation('Invalid refunds query', parsed.error.issues);
+      throw AppError.validation('Invalid transfer query', parsed.error.issues);
     }
 
-    res.json({ data: await service.listRefunds(getAuth(req), parsed.data) });
+    res.json({
+      data: await service.listUnmatchedTransfers(getAuth(req), parsed.data),
+    });
   } catch (error) {
     next(error);
   }
 }
 
-export async function refundPayment(
+export async function resolveUnmatched(
   req: Request,
   res: Response,
   next: NextFunction,
 ) {
   try {
-    const parsed = refundSchema.safeParse(req.body);
+    const parsed = resolveUnmatchedSchema.safeParse(req.body);
     if (!parsed.success) {
-      throw AppError.validation('Invalid refund', parsed.error.issues);
+      throw AppError.validation('Invalid resolution', parsed.error.issues);
     }
 
-    // The guard has already validated the header and put it on the request.
-    const refund = await service.refundPayment(
-      getAuth(req),
-      pathParam(req, 'paymentId'),
-      req.idempotencyKey ?? '',
-      parsed.data,
-    );
-    res.status(201).json({ data: refund });
+    res.json({
+      data: await service.resolveUnmatchedTransfer(
+        getAuth(req),
+        pathParam(req, 'transferId'),
+        parsed.data,
+      ),
+    });
   } catch (error) {
     next(error);
   }

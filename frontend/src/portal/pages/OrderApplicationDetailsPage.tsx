@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { AlertTriangle } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { PortalLayout } from '../components/PortalLayout';
@@ -74,6 +75,52 @@ function ApplicationSkeleton() {
       {Array.from({ length: 2 }).map((_, index) => (
         <div key={index} className="h-64 w-full animate-pulse rounded-card bg-gray-200" />
       ))}
+    </div>
+  );
+}
+
+/*
+ * The catalog is this screen's whole reason to exist — without it there are no
+ * questions to ask. Offer both ways out: retry the fetch, or go back to Step 1.
+ */
+function CatalogError({
+  onRetry,
+  onBack,
+}: {
+  onRetry: () => void;
+  onBack: () => void;
+}) {
+  return (
+    <div
+      role="alert"
+      className="flex w-full flex-col items-center gap-3 rounded-card border border-gray-200 bg-white px-6 py-14 text-center shadow-sm-elevation"
+    >
+      <span className="flex size-12 items-center justify-center rounded-[24px] bg-[var(--color-status-missing-bg)]">
+        <AlertTriangle className="size-6 text-error" strokeWidth={1.75} aria-hidden="true" />
+      </span>
+      <p className="text-body-lg font-semibold text-text">
+        We couldn&apos;t load the application form
+      </p>
+      <p className="max-w-[360px] text-body text-gray-500">
+        Something went wrong fetching the services you selected. Please try
+        again.
+      </p>
+      <div className="mt-1 flex flex-wrap items-center justify-center gap-3">
+        <button
+          type="button"
+          onClick={onRetry}
+          className="btn btn-primary h-11 rounded-input px-5 text-body"
+        >
+          Try again
+        </button>
+        <button
+          type="button"
+          onClick={onBack}
+          className="btn btn-secondary h-11 rounded-input px-5 text-body"
+        >
+          Back to services
+        </button>
+      </div>
     </div>
   );
 }
@@ -285,12 +332,19 @@ export function OrderApplicationDetailsPage({
         : 'Something went wrong submitting your application. Please try again.'
       : null);
 
-  const showSkeleton = isLoading || !catalog;
+  const showSkeleton = isLoading;
+  /*
+   * A failed catalog fetch resolves with no data, so folding `!catalog` into the
+   * skeleton left the page on a skeleton forever: no error, no retry, and the
+   * Step 1 redirect below could never run either.
+   */
+  const showCatalogError = !isLoading && !catalog;
 
   // A direct visit with no selection (a refresh or deep link) has nothing to
   // fill in — send the customer back to Step 1 to choose. Only redirect once the
   // catalog has resolved, so a still-loading screen isn't mistaken for "empty".
-  const noSelection = !showSkeleton && selectedServices.length === 0;
+  const noSelection =
+    !showSkeleton && !showCatalogError && selectedServices.length === 0;
   useEffect(() => {
     if (noSelection) navigate(STEP_1_ROUTE, { replace: true });
   }, [noSelection, navigate]);
@@ -303,6 +357,11 @@ export function OrderApplicationDetailsPage({
         <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-5 md:gap-6 lg:gap-8">
           {showSkeleton ? (
             <ApplicationSkeleton />
+          ) : showCatalogError ? (
+            <CatalogError
+              onRetry={() => void catalogQuery.refetch()}
+              onBack={() => navigate(STEP_1_ROUTE, { replace: true })}
+            />
           ) : (
             <>
               {/* Breadcrumb — md+ only; mobile leads with the progress bar. */}

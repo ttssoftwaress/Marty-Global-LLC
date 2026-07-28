@@ -135,22 +135,52 @@ export function MailItemSlideOver({
   // Ready with no pages yet means the detail fetch is still in flight.
   const scanLoading = item.scanReady && pages === null;
 
-  // Focus the panel and lock background scroll for the overlay's lifetime.
+  // Focus the panel and lock background scroll for the overlay's lifetime, then
+  // hand focus back to whatever opened the item so closing doesn't strand the
+  // keyboard at the top of the document.
   useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null;
     panelRef.current?.focus();
     const { overflow } = document.body.style;
     document.body.style.overflow = 'hidden';
     return () => {
       document.body.style.overflow = overflow;
+      previouslyFocused?.focus();
     };
   }, []);
 
-  // Esc closes (the header hints it); arrow keys step through the list.
+  /*
+   * Esc closes (the header hints it); arrow keys step through the list. Tab is
+   * trapped inside the panel: this is a modal `role="dialog"`, but the list and
+   * top bar behind the scrim stay focusable, so without this Tab walks out of
+   * the dialog while the scrim still blocks the mouse.
+   */
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
       else if (event.key === 'ArrowLeft' && hasPrev) onPrev();
       else if (event.key === 'ArrowRight' && hasNext) onNext();
+      else if (event.key === 'Tab') {
+        const panel = panelRef.current;
+        if (!panel) return;
+
+        const focusable = panel.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        );
+        if (focusable.length === 0) return;
+
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (!first || !last) return;
+
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);

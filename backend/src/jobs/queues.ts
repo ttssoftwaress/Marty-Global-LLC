@@ -9,6 +9,7 @@ import { redis } from '../config/redis.js';
 export const QueueName = {
   NOTIFICATIONS: 'notifications',
   PAYMENTS: 'payments',
+  SUPPORT: 'support',
 } as const;
 
 export type QueueName = (typeof QueueName)[keyof typeof QueueName];
@@ -19,6 +20,12 @@ export const JobName = {
   // has confirmed, and expires what timed out. Repeatable — see
   // scheduleUsdtPoll below.
   POLL_USDT: 'poll-usdt',
+  // Runs a few minutes after a customer writes into a support thread and emails
+  // them only if nobody answered in the meantime (AGENTS.md, Live Chat: the
+  // offline handoff goes through jobs, never inline).
+  SUPPORT_OFFLINE_HANDOFF: 'support-offline-handoff',
+  // Deletes anonymous visitor chats past their retention window. Repeatable.
+  PURGE_GUEST_CHATS: 'purge-guest-chats',
 } as const;
 
 export type JobName = (typeof JobName)[keyof typeof JobName];
@@ -56,7 +63,28 @@ export const paymentsQueue = new Queue(QueueName.PAYMENTS, {
   },
 });
 
-export const queues = [notificationsQueue, paymentsQueue];
+/*
+ * Live-chat background work. Both of its jobs re-derive their decision from the
+ * database when they run rather than trusting what was true when they were
+ * enqueued, so a stale job is harmless — see the processor.
+ */
+export const supportQueue = new Queue(QueueName.SUPPORT, {
+  connection: redis,
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: { type: 'exponential', delay: 30_000 },
+    /*
+     * Removed the moment they finish, which is what makes the conversation-keyed
+     * job id below work as a debounce: BullMQ refuses a second job with an id it
+     * already holds, so a burst of messages collapses into one pending handoff,
+     * and the id frees up for the next burst as soon as this one has run.
+     */
+    removeOnComplete: true,
+    removeOnFail: true,
+  },
+});
+
+export const queues = [notificationsQueue, paymentsQueue, supportQueue];
 
 export type SendEmailJob = {
   notificationId: string;
@@ -86,6 +114,41 @@ export async function scheduleUsdtPoll(everySeconds: number) {
     'usdt-poll',
     { every: everySeconds * 1000 },
     { name: JobName.POLL_USDT, data: {} },
+  );
+}
+
+export type SupportHandoffJob = {
+  conversationId: string;
+};
+
+/*
+ * Arm the offline handoff for a thread the customer just wrote into.
+ *
+ * The job is delayed, and the "cancel" is that it re-reads the thread when it
+ * fires: if an agent replied in the meantime it does nothing. Cancelling the job
+ * on reply would be the racier design — the reply and the cancellation could
+ * cross — and this way there is one place that decides, at the moment it matters.
+ *
+ * Keyed by conversation so five messages in quick succession produce one email
+ * rather than five.
+ */
+export async function enqueueSupportHandoff(
+  payload: SupportHandoffJob,
+  delayMs: number,
+) {
+  return supportQueue.add(JobName.SUPPORT_OFFLINE_HANDOFF, payload, {
+    jobId: `handoff-${payload.conversationId}`,
+    delay: delayMs,
+  });
+}
+
+// Anonymous chats are deleted for good once they go quiet (agreed retention
+// rule). Daily is frequent enough for a 7-day window and keeps the sweep small.
+export async function scheduleGuestChatPurge(everySeconds: number) {
+  return supportQueue.upsertJobScheduler(
+    'guest-chat-purge',
+    { every: everySeconds * 1000 },
+    { name: JobName.PURGE_GUEST_CHATS, data: {} },
   );
 }
 

@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { signOut, useSession } from '@/auth/client';
+import { closeSocket } from '@/services/socket';
 import type { SidebarUser } from '@/portal/components/sidebar';
 
 /*
@@ -26,8 +27,28 @@ export function usePortalShell(): { user: SidebarUser; onLogout: () => void } {
   const { data: session } = useSession();
   const navigate = useNavigate();
 
+  /*
+   * Navigate only once the session is actually gone. `finally` also runs on
+   * rejection, which would drop a still-authenticated customer on /login with a
+   * live session and leave the rejected promise unhandled. Better Auth resolves
+   * with `{ error }` rather than throwing for a failed sign-out, so `onSuccess`
+   * — not the promise — is the signal that the session ended.
+   */
   const onLogout = useCallback(() => {
-    void signOut().finally(() => navigate(LOGIN_ROUTE, { replace: true }));
+    void signOut({
+      fetchOptions: {
+        onSuccess: () => {
+          // The socket authenticates from the session cookie, so one left open
+          // after sign-out would keep delivering this customer's messages to a
+          // browser that is back on the login screen.
+          closeSocket();
+          navigate(LOGIN_ROUTE, { replace: true });
+        },
+      },
+    }).catch(() => {
+      // Transport failure: stay on the page rather than stranding a live session
+      // behind the login screen.
+    });
   }, [navigate]);
 
   return {

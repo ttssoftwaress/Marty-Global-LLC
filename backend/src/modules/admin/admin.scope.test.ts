@@ -106,12 +106,6 @@ describe('a scoped staff member', () => {
     });
   });
 
-  it('reaches a refund through payment → quote → order', async () => {
-    expect(await scope.refundScope(me())).toEqual({
-      payment: { is: { quote: { is: { order: { is: { assigneeId: SCOPED } } } } } },
-    });
-  });
-
   /*
    * `some`, not a single value — a customer with orders across several staff is
    * a customer all of them deal with. The inner `deletedAt` matters: without it
@@ -164,7 +158,6 @@ describe('a member granted “All data”', () => {
     expect(await scope.orderScope(me())).toEqual({});
     expect(await scope.quoteScope(me())).toEqual({});
     expect(await scope.paymentScope(me())).toEqual({});
-    expect(await scope.refundScope(me())).toEqual({});
     expect(await scope.customerScope(me())).toEqual({});
     expect(await scope.mailItemScope(me())).toEqual({});
     expect(await scope.mailRequestScope(me())).toEqual({});

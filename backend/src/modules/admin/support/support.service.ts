@@ -12,6 +12,7 @@ import { toFirstName, toInitials, toShortName } from '../../../lib/initials.js';
 import { cursorArgs, takePage } from '../../../lib/pagination.js';
 import { prisma } from '../../../lib/prisma.js';
 import { AuditAction, record } from '../../audit/audit.service.js';
+import { isSeen } from '../../support/support.service.js';
 import { canSeeAll } from '../admin.guards.js';
 import { iso } from '../admin.views.js';
 import type {
@@ -90,6 +91,9 @@ export type SupportConversationsPage = {
     id: string;
     customerName: string;
     customerInitials: string;
+    // A website visitor rather than an account holder. The row badges it, and it
+    // is why no customer link is offered.
+    isGuest: boolean;
     subject: string;
     preview: string;
     lastMessageAt: string;
@@ -104,10 +108,38 @@ export type SupportConversationsPage = {
 
 const listInclude = {
   customer: { select: { id: true, name: true } },
+  // A thread opened from the marketing site has no account behind it. It is the
+  // same kind of help request, routed the same way, so it belongs in this queue —
+  // only the identity on it differs (modules/guest).
+  guest: { select: { id: true, name: true, email: true } },
   assignee: {
     select: { id: true, name: true, staffProfile: { select: { shortName: true } } },
   },
 } satisfies Prisma.ConversationInclude;
+
+export type ConversationParty = {
+  name: string;
+  // False for a website visitor, which is what the inbox badges and what tells
+  // the UI there is no customer record to link through to.
+  registered: boolean;
+};
+
+/*
+ * Who the team is talking to.
+ *
+ * Exactly one of the two is set (schema.prisma enforces it), but the fallback is
+ * not dead code: a purged guest leaves the conversation behind for a moment
+ * before the cascade completes, and an agent's inbox should not blow up on it.
+ */
+function partyOf(conversation: {
+  customer: { name: string } | null;
+  guest: { name: string } | null;
+}): ConversationParty {
+  if (conversation.customer) {
+    return { name: conversation.customer.name, registered: true };
+  }
+  return { name: conversation.guest?.name ?? 'Website visitor', registered: false };
+}
 
 /*
  * What this actor sees in the helpdesk queue.
@@ -215,19 +247,24 @@ export async function listConversations(
   }
 
   return {
-    conversations: page.rows.map((conversation) => ({
-      id: conversation.id,
-      customerName: conversation.customer.name,
-      customerInitials: toInitials(conversation.customer.name),
-      subject: conversation.subject,
-      preview: conversation.preview ?? '',
-      lastMessageAt: iso(conversation.lastMessageAt ?? conversation.createdAt),
-      unread: latestAuthor.get(conversation.id) === MessageAuthor.CUSTOMER,
-      status: STATUS_VIEW[conversation.status],
-      assignee: conversation.assignee
-        ? toAgent(conversation.assignee, conversation.assignee.staffProfile?.shortName)
-        : null,
-    })),
+    conversations: page.rows.map((conversation) => {
+      const party = partyOf(conversation);
+
+      return {
+        id: conversation.id,
+        customerName: party.name,
+        customerInitials: toInitials(party.name),
+        isGuest: !party.registered,
+        subject: conversation.subject,
+        preview: conversation.preview ?? '',
+        lastMessageAt: iso(conversation.lastMessageAt ?? conversation.createdAt),
+        unread: latestAuthor.get(conversation.id) === MessageAuthor.CUSTOMER,
+        status: STATUS_VIEW[conversation.status],
+        assignee: conversation.assignee
+          ? toAgent(conversation.assignee, conversation.assignee.staffProfile?.shortName)
+          : null,
+      };
+    }),
     nextCursor: page.nextCursor,
     totalOpen,
     totalUnassigned,
@@ -240,6 +277,10 @@ export type SupportThread = {
   customerName: string;
   customerInitials: string;
   customerFirstName: string;
+  // A website visitor with no account. The header shows the email they gave
+  // instead of a link to a customer record that does not exist.
+  isGuest: boolean;
+  guestEmail: string | null;
   subject: string;
   orderReference: string | null;
   orderTo: string | null;
@@ -258,6 +299,10 @@ export type SupportThread = {
     authorInitials: string;
     body: string;
     sentAt: string;
+    // Whether the customer has read this reply. Only set on staff replies — a
+    // tick under the customer's own message would be telling the agent about the
+    // agent's reading. Undefined on an internal note, which has no other side.
+    seen?: boolean;
   }[];
 };
 
@@ -312,12 +357,15 @@ export async function getThread(
   if (!conversation) throw AppError.notFound('Conversation not found');
 
   const agents = await assignableAgents();
+  const party = partyOf(conversation);
 
   return {
     id: conversation.id,
-    customerName: conversation.customer.name,
-    customerInitials: toInitials(conversation.customer.name),
-    customerFirstName: toFirstName(conversation.customer.name),
+    customerName: party.name,
+    customerInitials: toInitials(party.name),
+    customerFirstName: toFirstName(party.name),
+    isGuest: !party.registered,
+    guestEmail: conversation.guest?.email ?? null,
     subject: conversation.subject,
     orderReference: conversation.order?.reference ?? null,
     orderTo: conversation.order ? `/admin/orders/${conversation.order.id}` : null,
@@ -336,17 +384,46 @@ export async function getThread(
       mine: message.authorUserId === actor.userId,
       authorName:
         message.author === MessageAuthor.CUSTOMER
-          ? conversation.customer.name
+          ? party.name
           : (message.authorName ?? 'Marty Global team'),
       authorInitials: toInitials(
-        message.author === MessageAuthor.CUSTOMER
-          ? conversation.customer.name
-          : message.authorName,
+        message.author === MessageAuthor.CUSTOMER ? party.name : message.authorName,
       ),
       body: message.body,
       sentAt: iso(message.sentAt),
+      seen:
+        message.author === MessageAuthor.AGENT
+          ? isSeen(message.sentAt, conversation.customerReadAt)
+          : undefined,
     })),
   };
+}
+
+/*
+ * Mark the team's side of a thread read.
+ *
+ * Called when an agent opens the conversation and by the socket when one arrives
+ * while it is already on screen. `updateMany` with the same scope clause as the
+ * read above, so an agent who may not see the thread silently updates nothing
+ * rather than moving a marker on a conversation they cannot open.
+ */
+export async function markStaffRead(
+  actor: AuthContext,
+  conversationId: string,
+): Promise<{ conversationId: string; readAt: string }> {
+  const readAt = new Date();
+
+  await prisma.conversation.updateMany({
+    where: {
+      id: conversationId,
+      kind: ConversationKind.SUPPORT,
+      deletedAt: null,
+      ...(await supportScope(actor)),
+    },
+    data: { staffReadAt: readAt },
+  });
+
+  return { conversationId, readAt: readAt.toISOString() };
 }
 
 // --- Write ---------------------------------------------------------------
@@ -371,7 +448,7 @@ export async function sendMessage(
       deletedAt: null,
       ...(await supportScope(actor)),
     },
-    select: { id: true },
+    select: { id: true, guestId: true },
   });
 
   if (!conversation) throw AppError.notFound('Conversation not found');
@@ -405,8 +482,22 @@ export async function sendMessage(
           preview: input.body.slice(0, 160),
           // A reply moves the thread back to the customer.
           status: ConversationStatus.PENDING,
+          // Writing a reply means having read what it answers.
+          staffReadAt: sentAt,
         },
       });
+
+      /*
+       * A guest thread's retention window tracks the CONVERSATION, not the
+       * visitor's own activity — otherwise a thread the team is actively
+       * answering could be purged out from under them while the visitor sleeps.
+       */
+      if (conversation.guestId) {
+        await tx.guestVisitor.update({
+          where: { id: conversation.guestId },
+          data: { lastSeenAt: sentAt },
+        });
+      }
     }
 
     return created;
@@ -421,6 +512,8 @@ export async function sendMessage(
     authorInitials: toInitials(authorName),
     body: message.body,
     sentAt: iso(message.sentAt),
+    // Nobody has read a message that was written a moment ago.
+    seen: isNote ? undefined : false,
   };
 }
 

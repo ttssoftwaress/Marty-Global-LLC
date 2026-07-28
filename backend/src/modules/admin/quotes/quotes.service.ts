@@ -496,7 +496,7 @@ export async function createQuote(
 /*
  * Withdraw a quote that is no longer the offer we want to stand — the escape
  * hatch the "one live quote at a time" rule above needs. A paid quote is history
- * and can never be cancelled; unwinding money is a refund, in `payments`.
+ * and can never be cancelled — the money has already been collected.
  */
 export async function cancelQuote(
   actor: AuthContext,
@@ -517,9 +517,7 @@ export async function cancelQuote(
   if (!quote) throw AppError.notFound('Quote not found');
 
   if (quote.status === QuoteStatus.PAID) {
-    throw AppError.businessRule(
-      'A paid quote cannot be cancelled. Refund the payment instead.',
-    );
+    throw AppError.businessRule('A paid quote cannot be cancelled.');
   }
 
   if (quote.status === QuoteStatus.CANCELLED) return toQuoteView(quote);

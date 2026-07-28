@@ -29,6 +29,9 @@ router.post(
   chatRateLimit,
   controller.sendMessage,
 );
+// The REST twin of the socket's read event, for a client without a live
+// connection. Cheap and idempotent, so it carries the general limiter.
+router.post('/conversations/:conversationId/read', apiRateLimit, controller.markRead);
 router.patch(
   '/conversations/:conversationId',
   sensitiveRateLimit,

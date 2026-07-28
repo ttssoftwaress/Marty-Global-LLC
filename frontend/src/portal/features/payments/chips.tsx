@@ -1,11 +1,4 @@
-import {
-  AlertTriangle,
-  Check,
-  Clock,
-  Loader2,
-  RotateCcw,
-  TrendingUp,
-} from 'lucide-react';
+import { AlertTriangle, Check, Clock, Loader2, TrendingUp } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 import type { PaymentStatusView } from '../../types/payments';
@@ -44,7 +37,6 @@ const CONFIG: Record<
     className: 'status-missing',
   },
   overpaid: { label: 'Overpaid', icon: TrendingUp, className: 'status-review' },
-  refunded: { label: 'Refunded', icon: RotateCcw, className: 'status-draft' },
 };
 
 export function PaymentStateChip({ status }: { status: PaymentStatusView }) {

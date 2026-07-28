@@ -243,7 +243,7 @@ async function spendByCustomer(
       ...(await paymentScope(actor)),
       customerId: { in: [...customerIds] },
       deletedAt: null,
-      status: { in: [PaymentStatus.SUCCEEDED, PaymentStatus.PARTIALLY_REFUNDED] },
+      status: PaymentStatus.SUCCEEDED,
     },
     _sum: { amount: true },
   });

@@ -19,6 +19,7 @@ import { adminPaymentsRouter } from './payments/payments.routes.js';
 import { adminQuotesRouter } from './quotes/quotes.routes.js';
 import { adminReportsRouter } from './reports/reports.routes.js';
 import { adminResultFieldsRouter } from './result-fields/result-fields.routes.js';
+import { adminSettingsRouter } from './settings/settings.routes.js';
 import { adminSupportRouter } from './support/support.routes.js';
 import { adminTeamRouter } from './team/team.routes.js';
 
@@ -98,5 +99,16 @@ router.use('/conversations', adminConversationsRouter);
  */
 router.use('/requests', adminRequestsRouter);
 router.use('/reports', adminReportsRouter);
+/*
+ * Business settings — the locations services are offered in and the carriers the
+ * mail room ships with. Its own area rather than part of `/catalog`, because it
+ * sits upstream of it: the orders queue, the customer list, and the mail room's
+ * forwarding form all read this data without touching a service definition.
+ *
+ * Nothing seeds these tables any more. This router is the only way rows get
+ * there, which is the point — which jurisdictions we operate in is an
+ * operational decision, not a line in a seed script.
+ */
+router.use('/settings', adminSettingsRouter);
 
 export const adminRouter = router;

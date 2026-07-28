@@ -1,5 +1,4 @@
 import { ConversationStatus, MessageAuthor } from '@prisma/client';
-import type { Request } from 'express';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import type { AuthContext } from '../../../guards/auth-context.js';
@@ -35,8 +34,6 @@ function actor(userId: string, role: Role): AuthContext {
     emailVerified: true,
   };
 }
-
-const reqAs = (auth: AuthContext) => ({ auth }) as unknown as Request;
 
 const NOTE_BODY = 'Internal: waive the notary requirement, do not tell the customer yet.';
 const REPLY_BODY = 'We have everything we need — the filing goes out today.';
@@ -111,7 +108,7 @@ describe('internal notes', () => {
     });
 
     const thread = await portalSupport.getConversation(
-      reqAs(actor(CUSTOMER_ID, Role.CUSTOMER)),
+      actor(CUSTOMER_ID, Role.CUSTOMER),
       CONVERSATION_ID,
     );
 
@@ -126,7 +123,7 @@ describe('internal notes', () => {
     });
 
     const conversations = await portalSupport.listConversations(
-      reqAs(actor(CUSTOMER_ID, Role.CUSTOMER)),
+      actor(CUSTOMER_ID, Role.CUSTOMER),
       {},
     );
 
@@ -197,7 +194,7 @@ describe('internal notes', () => {
     });
 
     const thread = await portalSupport.getConversation(
-      reqAs(actor(CUSTOMER_ID, Role.CUSTOMER)),
+      actor(CUSTOMER_ID, Role.CUSTOMER),
       CONVERSATION_ID,
     );
 

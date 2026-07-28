@@ -1,8 +1,7 @@
-import { CreditCard, Download, Receipt } from 'lucide-react';
+import { Download, Receipt, Wallet } from 'lucide-react';
 
 import { formatMoney, formatOrderDate } from '../../lib/format';
 import type { PaymentHistoryRange, PaymentRecord } from '../../types/billing';
-import { formatCardLabel } from './card';
 import { PaymentStatusChip } from './chips';
 import { PaymentHistoryControls } from './PaymentHistoryControls';
 
@@ -13,7 +12,7 @@ import { PaymentHistoryControls } from './PaymentHistoryControls';
  *   - desktop (lg): full table — date · service · amount · method · status ·
  *     invoice, with a page counter + Prev/Next footer inside the card
  *   - tablet (md):  same table, folding away the PAYMENT METHOD column
- *   - mobile:       one card per payment (service + date·card meta + amount,
+ *   - mobile:       one card per payment (service + date·method meta + amount,
  *     status chip beside an Invoice download), over a "Load more" button
  *
  * Desktop/tablet page a fixed window through the loaded history; mobile appends.
@@ -180,7 +179,7 @@ export function PaymentHistory({
                         {payment.serviceName}
                       </p>
                       <p className="text-small text-text-secondary">
-                        {formatOrderDate(payment.paidAt)} · {formatCardLabel(payment.card)}
+                        {formatOrderDate(payment.paidAt)} · {payment.method}
                       </p>
                     </div>
                     <p className="shrink-0 text-body font-semibold text-text">
@@ -274,8 +273,8 @@ export function PaymentHistory({
 
                   <td className="hidden lg:table-cell">
                     <span className="flex items-center gap-1.5 text-body text-gray-700">
-                      <CreditCard className="size-4 shrink-0 text-gray-400" strokeWidth={1.75} aria-hidden="true" />
-                      {formatCardLabel(payment.card)}
+                      <Wallet className="size-4 shrink-0 text-gray-400" strokeWidth={1.75} aria-hidden="true" />
+                      {payment.method}
                     </span>
                   </td>
 

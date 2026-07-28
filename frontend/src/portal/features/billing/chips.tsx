@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, Clock, RotateCcw } from 'lucide-react';
+import { AlertTriangle, Check, Clock } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 import type { PaymentStatus, QuoteStatus } from '../../types/billing';
@@ -34,7 +34,6 @@ const PAYMENT_CONFIG: Record<
   { label: string; icon: LucideIcon; className: string }
 > = {
   paid: { label: 'Paid', icon: Check, className: 'status-approved' },
-  refunded: { label: 'Refunded', icon: RotateCcw, className: 'status-draft' },
   failed: { label: 'Failed', icon: AlertTriangle, className: 'status-missing' },
 };
 

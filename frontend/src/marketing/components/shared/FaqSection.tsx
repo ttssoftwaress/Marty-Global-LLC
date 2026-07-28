@@ -48,9 +48,9 @@ const HOME_FAQS: Faq[] = [
       'Yes, states in the US require a physical agent on standby to receive official state notices and compliance updates during business hours.',
   },
   {
-    question: 'What is your refund policy?',
+    question: 'How do I pay for a service?',
     answer:
-      'We offer a 100% money-back guarantee before government filings are officially processed. Once state fees are paid, those become non-refundable.',
+      'Once we review your application we issue a quote in your portal. You settle it in USDT (TRC-20) from the billing page, and we start work as soon as the transfer confirms on-chain.',
   },
 ];
 

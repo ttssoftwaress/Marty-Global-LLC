@@ -28,7 +28,15 @@ export function RequireRole({
   if (isPending) return null;
 
   if (!session) {
-    return <Navigate to={LOGIN_ROUTE} replace state={{ from: location.pathname }} />;
+    // Carry search and hash too — a deep link into /admin is rarely just a path,
+    // and returnPathFor() still rejects anything outside the role's area.
+    return (
+      <Navigate
+        to={LOGIN_ROUTE}
+        replace
+        state={{ from: `${location.pathname}${location.search}${location.hash}` }}
+      />
+    );
   }
 
   const { role } = session.user;

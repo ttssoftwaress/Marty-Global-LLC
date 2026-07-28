@@ -10,6 +10,7 @@ import {
   InboxPagination,
   MailItemSlideOver,
   MailList,
+  MailRoomError,
   MailRoomInboxKpiCards,
   useCreateMailRequest,
   useMailItem,
@@ -166,7 +167,12 @@ export function MailRoomInboxPage() {
   // Mobile appends the whole loaded set, so its "Load more" tracks the cursor
   // stream; desktop's Prev/Next tracks the page window (page vs totalPages).
   const canLoadMore = Boolean(items.hasNextPage);
-  const showSkeleton = detail.isLoading || !detail.data;
+  // Split loading from failure: folding `!room` into the skeleton left an errored
+  // fetch (isLoading false, data undefined) showing a skeleton forever with no
+  // retry, the same trap MailRoomPage already avoids.
+  const room = detail.data;
+  const showSkeleton = detail.isLoading;
+  const showError = !detail.isLoading && (detail.isError || !room);
 
   // The item slide-over is route-driven (/app/mailroom/:roomId/:itemId), so an
   // open item deep-links and Back returns to the list. The detail fetch brings
@@ -232,11 +238,17 @@ export function MailRoomInboxPage() {
               </div>
               <InboxSkeleton />
             </>
+          ) : showError || !room ? (
+            <MailRoomError
+              onRetry={() => void detail.refetch()}
+              title="We couldn't load this mail room"
+              body="Something went wrong fetching this mail room. Please try again."
+            />
           ) : (
             <>
-              <InboxHeader roomName={detail.data.name} address={detail.data.address} />
+              <InboxHeader roomName={room.name} address={room.address} />
 
-              <MailRoomInboxKpiCards stats={detail.data.stats} />
+              <MailRoomInboxKpiCards stats={room.stats} />
 
               <div className="flex w-full flex-col gap-6 lg:gap-7">
                 <InboxControls

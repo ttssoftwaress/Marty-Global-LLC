@@ -1,4 +1,4 @@
-import { PaymentStatus, Prisma, QuoteStatus } from '@prisma/client';
+import { PaymentProvider, PaymentStatus, Prisma, QuoteStatus } from '@prisma/client';
 
 import { getAuth } from '../../guards/index.js';
 import { prisma } from '../../lib/prisma.js';
@@ -9,34 +9,26 @@ import type {
 } from './billing.validation.js';
 
 /*
- * Billing owns what is owed (AGENTS.md, Payments): the customer's quotes, their
- * settled payments, and their saved cards. All Prisma access lives here.
+ * Billing owns what is owed (AGENTS.md, Payments): the customer's quotes and
+ * their settled payments. All Prisma access lives here.
  *
  * MONEY: every amount stays integer minor units + an ISO 4217 code, exactly as
  * stored — no float math, no division, no toFixed anywhere in this module. The
  * frontend formats at render (AGENTS.md, Money).
  *
- * PCI: a card is only ever brand + last four. No PAN, no CVC, in any shape this
- * module returns.
+ * Card payments are a later deployment, so there are no saved methods to list
+ * and no card shape in anything this module returns.
  */
 
 export type Money = { amount: number; currency: string };
 
 const DEFAULT_CURRENCY = 'USD';
 
-// The card networks the frontend renders a branded badge for; anything else
-// falls back to `unknown` so an unrecognised brand still renders a row.
-const KNOWN_CARD_BRANDS = new Set([
-  'visa',
-  'mastercard',
-  'amex',
-  'discover',
-]);
-
-function toCardBrand(brand: string | null | undefined): string {
-  const normalized = (brand ?? '').toLowerCase();
-  return KNOWN_CARD_BRANDS.has(normalized) ? normalized : 'unknown';
-}
+// How the money arrived, as the history row prints it. One provider today; the
+// map is what a second one extends rather than a string literal at the callsite.
+const METHOD_LABEL: Record<PaymentProvider, string> = {
+  [PaymentProvider.USDT_TRC20]: 'USDT (TRC-20)',
+};
 
 // --- Overview ------------------------------------------------------------
 export type BillingQuoteView = {
@@ -48,18 +40,9 @@ export type BillingQuoteView = {
   status: 'pending' | 'expired';
 };
 
-export type SavedPaymentMethodView = {
-  id: string;
-  card: { brand: string; last4: string };
-  expMonth: number;
-  expYear: number;
-  isDefault: boolean;
-};
-
 export type BillingOverview = {
   kpis: { amountDue: Money; totalPaid: Money; pendingQuotes: number };
   quotes: BillingQuoteView[];
-  savedMethods: SavedPaymentMethodView[];
 };
 
 export async function getOverview(
@@ -70,7 +53,7 @@ export async function getOverview(
 
   // A customer sees only their own billing; the ownership boundary is this where
   // clause, not a per-row check (AGENTS.md: guards are the real boundary).
-  const [quotes, succeeded, methods] = await Promise.all([
+  const [quotes, succeeded] = await Promise.all([
     prisma.quote.findMany({
       where: {
         customerId: auth.userId,
@@ -86,10 +69,6 @@ export async function getOverview(
         status: PaymentStatus.SUCCEEDED,
       },
       select: { amount: true, currency: true },
-    }),
-    prisma.paymentMethod.findMany({
-      where: { customerId: auth.userId, deletedAt: null },
-      orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
     }),
   ]);
 
@@ -127,13 +106,6 @@ export async function getOverview(
       pendingQuotes: payable.length,
     },
     quotes: views,
-    savedMethods: methods.map((method) => ({
-      id: method.id,
-      card: { brand: toCardBrand(method.brand), last4: method.last4 },
-      expMonth: method.expMonth,
-      expYear: method.expYear,
-      isDefault: method.isDefault,
-    })),
   };
 }
 
@@ -143,8 +115,9 @@ export type PaymentRecordView = {
   paidAt: string;
   serviceName: string;
   amount: Money;
-  card: { brand: string; last4: string };
-  status: 'paid' | 'refunded' | 'failed';
+  /** How it was collected, as the row prints it: "USDT (TRC-20)". */
+  method: string;
+  status: 'paid' | 'failed';
   invoiceHref?: string;
 };
 
@@ -160,14 +133,12 @@ export type PaymentHistoryPage = {
 // isn't history yet, so it stays off this list until it settles.
 const HISTORY_STATUSES: PaymentStatus[] = [
   PaymentStatus.SUCCEEDED,
-  PaymentStatus.REFUNDED,
   PaymentStatus.FAILED,
 ];
 
 const STATUS_TO_VIEW: Partial<Record<PaymentStatus, PaymentRecordView['status']>> =
   {
     [PaymentStatus.SUCCEEDED]: 'paid',
-    [PaymentStatus.REFUNDED]: 'refunded',
     [PaymentStatus.FAILED]: 'failed',
   };
 
@@ -235,10 +206,7 @@ export async function listPayments(
       paidAt: (payment.paidAt ?? payment.createdAt).toISOString(),
       serviceName: payment.quote?.serviceName ?? 'Payment',
       amount: { amount: payment.amount, currency: payment.currency },
-      card: {
-        brand: toCardBrand(payment.cardBrand),
-        last4: payment.cardLast4 ?? '',
-      },
+      method: METHOD_LABEL[payment.provider],
       status: STATUS_TO_VIEW[payment.status] ?? 'failed',
       // Short-TTL presigned URL, minted after the ownership check above
       // (AGENTS.md, Security & PII); absent until the invoice exists.

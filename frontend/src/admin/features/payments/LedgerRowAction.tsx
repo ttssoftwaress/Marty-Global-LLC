@@ -7,14 +7,10 @@ import type { BillingLedgerRow } from '../../types/payments';
  * (`row.action.kind`), so the UI never infers an action from a status:
  *
  *   - `remind` — an outlined button, the design's treatment for "Send reminder"
- *   - `refund` — a text button; refunding is destructive and money-moving, so it
- *                stays quiet until pressed and confirms in the handler above
  *   - `view`   — a link to the order, since that action only navigates
  *
- * The design draws "Issue refund" as plain grey text with no affordance at all.
- * It is a real control here — a `<button>` with hover and focus states, in the
- * error color on hover so a refund does not read like an ordinary link. The `-`
- * (`kind: 'none'`) case never reaches this component; the table prints the dash.
+ * The `-` (`kind: 'none'`) case never reaches this component; the table prints
+ * the dash.
  *
  * `fullWidth` is what the mobile cards pass, where the control spans the card.
  */
@@ -27,19 +23,6 @@ type LedgerRowActionProps = {
 
 export function LedgerRowAction({ row, onAction, fullWidth }: LedgerRowActionProps) {
   const { kind, label } = row.action;
-
-  if (kind === 'view') {
-    return (
-      <Link
-        to={row.to}
-        className={`items-center justify-center whitespace-nowrap rounded-control text-body font-medium text-gray-600 transition-colors hover:text-primary hover:underline ${
-          fullWidth ? 'flex h-9 w-full border border-gray-300' : 'inline-flex'
-        }`}
-      >
-        {label}
-      </Link>
-    );
-  }
 
   if (kind === 'remind') {
     return (
@@ -56,14 +39,13 @@ export function LedgerRowAction({ row, onAction, fullWidth }: LedgerRowActionPro
   }
 
   return (
-    <button
-      type="button"
-      onClick={() => onAction(row)}
-      className={`items-center justify-center whitespace-nowrap rounded-control text-body font-medium text-gray-600 transition-colors hover:text-error hover:underline ${
+    <Link
+      to={row.to}
+      className={`items-center justify-center whitespace-nowrap rounded-control text-body font-medium text-gray-600 transition-colors hover:text-primary hover:underline ${
         fullWidth ? 'flex h-9 w-full border border-gray-300' : 'inline-flex'
       }`}
     >
       {label}
-    </button>
+    </Link>
   );
 }

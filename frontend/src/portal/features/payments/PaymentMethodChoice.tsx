@@ -1,13 +1,14 @@
 import { Bitcoin, CreditCard, Loader2 } from 'lucide-react';
 
 /*
- * Choosing how to pay. The architecture has two methods; only USDT is built, so
- * the card option renders visibly but disabled rather than being hidden — a
- * customer who expects to pay by card should see that it's coming, not conclude
- * we don't take cards.
+ * Choosing how to pay. USDT is what we collect today; card payments are a later
+ * deployment, so the card option renders visibly but disabled rather than being
+ * hidden — a customer who expects to pay by card should see that it's coming,
+ * not conclude we don't take cards.
  *
- * Card entry, when it lands, is Stripe Elements (Design guide: never a
- * hand-rolled card input), which is why there is no card form anywhere here.
+ * There is no card form here and no card input anywhere in the app: card entry,
+ * when it lands, is a provider-hosted element (Design guide: never a hand-rolled
+ * card input).
  */
 
 type PaymentMethodChoiceProps = {

@@ -11,9 +11,8 @@ import type { PaymentStatusFilter, PaymentStatusTab } from '../../types/payments
  * the backend omits simply renders its label.
  *
  * Copy is the desktop link's (Design.md): the pending tab reads "Pending
- * payment" at every width rather than mobile's shortened "Pending", and the
- * "Refunded" tab that tablet drops is kept — the tab set should not change with
- * the viewport.
+ * payment" at every width rather than mobile's shortened "Pending" — the tab set
+ * and its wording should not change with the viewport.
  */
 
 type LedgerFilterTabsProps = {

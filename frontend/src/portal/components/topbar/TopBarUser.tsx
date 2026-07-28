@@ -55,6 +55,30 @@ export function TopBarUserMenu({
   onOpenUserMenu,
   chevronSize,
 }: TopBarUserMenuProps) {
+  const chevron = (
+    <ChevronDown
+      className={chevronSize === 20 ? 'size-5 text-gray-600' : 'size-4 text-gray-600'}
+      strokeWidth={1.75}
+      aria-hidden="true"
+    />
+  );
+
+  /*
+   * No menu wired up yet, so render the identity as plain content. An enabled
+   * button advertising `aria-haspopup="menu"` that opens nothing is a promise to
+   * keyboard and screen-reader users that the app cannot keep — better to have
+   * nothing focusable until the menu exists.
+   */
+  if (!onOpenUserMenu) {
+    return (
+      <div className="flex shrink-0 items-center gap-2">
+        <TopBarAvatar user={user} />
+        <span className="sr-only">{user.name}</span>
+        {chevron}
+      </div>
+    );
+  }
+
   return (
     <button
       type="button"
@@ -64,11 +88,7 @@ export function TopBarUserMenu({
       className="flex shrink-0 items-center gap-2 rounded-pill transition-opacity hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
     >
       <TopBarAvatar user={user} />
-      <ChevronDown
-        className={chevronSize === 20 ? 'size-5 text-gray-600' : 'size-4 text-gray-600'}
-        strokeWidth={1.75}
-        aria-hidden="true"
-      />
+      {chevron}
     </button>
   );
 }

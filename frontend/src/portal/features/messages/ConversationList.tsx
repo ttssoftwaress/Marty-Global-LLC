@@ -1,4 +1,4 @@
-import { MessageSquare, Search } from 'lucide-react';
+import { AlertTriangle, MessageSquare, Search } from 'lucide-react';
 
 import type { ConversationSummary } from '../../types/messages';
 import { ConversationListItem } from './ConversationListItem';
@@ -19,6 +19,8 @@ import { ConversationListItem } from './ConversationListItem';
 type ConversationListProps = {
   conversations: ConversationSummary[] | undefined;
   isLoading: boolean;
+  isError?: boolean;
+  onRetry?: () => void;
   search: string;
   onSearchChange: (value: string) => void;
   activeId?: string;
@@ -36,6 +38,34 @@ function ListSkeleton() {
           <div className="hidden size-full rounded-lg bg-gray-200 md:block" />
         </div>
       ))}
+    </div>
+  );
+}
+
+function ListErrorState({ onRetry }: { onRetry?: () => void }) {
+  return (
+    <div
+      role="alert"
+      className="flex flex-col items-center gap-3 px-6 py-16 text-center"
+    >
+      <span className="flex size-12 items-center justify-center rounded-[24px] bg-[var(--color-status-missing-bg)]">
+        <AlertTriangle className="size-6 text-error" strokeWidth={1.75} aria-hidden="true" />
+      </span>
+      <p className="text-body-lg font-semibold text-text">
+        We couldn&apos;t load your conversations
+      </p>
+      <p className="max-w-[300px] text-body text-gray-500">
+        Something went wrong fetching your messages. Please try again.
+      </p>
+      {onRetry ? (
+        <button
+          type="button"
+          onClick={onRetry}
+          className="btn btn-secondary mt-1 h-11 rounded-input px-5 text-body"
+        >
+          Try again
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -65,13 +95,18 @@ function ListEmptyState({ searching }: { searching: boolean }) {
 export function ConversationList({
   conversations,
   isLoading,
+  isError = false,
+  onRetry,
   search,
   onSearchChange,
   activeId,
   className = 'flex',
 }: ConversationListProps) {
-  const showSkeleton = isLoading || !conversations;
-  const isEmpty = !showSkeleton && conversations.length === 0;
+  // Skeleton means "still loading", not "no data". Folding `!conversations` into
+  // it left a rejected query showing a skeleton forever with no way to retry.
+  const showSkeleton = isLoading;
+  const showError = !isLoading && (isError || !conversations);
+  const isEmpty = !showSkeleton && !showError && conversations?.length === 0;
 
   return (
     <section
@@ -102,10 +137,12 @@ export function ConversationList({
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto md:gap-0">
         {showSkeleton ? (
           <ListSkeleton />
+        ) : showError ? (
+          <ListErrorState onRetry={onRetry} />
         ) : isEmpty ? (
           <ListEmptyState searching={search.trim().length > 0} />
         ) : (
-          conversations.map((conversation) => (
+          (conversations ?? []).map((conversation) => (
             <ConversationListItem
               key={conversation.id}
               conversation={conversation}

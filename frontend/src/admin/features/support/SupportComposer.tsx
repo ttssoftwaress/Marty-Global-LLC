@@ -22,6 +22,10 @@ import type { ComposerMode } from '../../types/support';
  *
  * Delivery is owned by the `support` module over `services/socket.ts`
  * (AGENTS.md, Live Chat) — this component owns the draft and hands the text up.
+ *
+ * `onTyping` fires as the agent writes, but ONLY in reply mode: an internal note
+ * is not addressed to the customer, and telling them someone is typing when
+ * nothing is coming their way would be a small lie the system tells itself.
  */
 
 const MODES: { value: ComposerMode; label: string }[] = [
@@ -32,11 +36,13 @@ const MODES: { value: ComposerMode; label: string }[] = [
 type SupportComposerProps = {
   customerFirstName: string;
   onSend: (mode: ComposerMode, body: string) => void;
+  onTyping?: (typing: boolean) => void;
 };
 
 export function SupportComposer({
   customerFirstName,
   onSend,
+  onTyping,
 }: SupportComposerProps) {
   const [mode, setMode] = useState<ComposerMode>('reply');
   const [draft, setDraft] = useState('');
@@ -47,6 +53,19 @@ export function SupportComposer({
     if (!canSend) return;
     onSend(mode, draft.trim());
     setDraft('');
+    onTyping?.(false);
+  };
+
+  const onType = (value: string) => {
+    setDraft(value);
+    onTyping?.(mode === 'reply' && value.length > 0);
+  };
+
+  const onModeChange = (next: ComposerMode) => {
+    setMode(next);
+    // Switching to a note stops the indicator immediately — the customer should
+    // not be left watching dots for something they will never receive.
+    if (next === 'note') onTyping?.(false);
   };
 
   const placeholder =
@@ -70,7 +89,7 @@ export function SupportComposer({
               type="button"
               role="tab"
               aria-selected={isActive}
-              onClick={() => setMode(item.value)}
+              onClick={() => onModeChange(item.value)}
               className={`border-b-2 py-2 text-[13px] font-semibold transition-colors ${
                 isActive
                   ? 'border-primary text-primary'
@@ -97,7 +116,7 @@ export function SupportComposer({
               type="button"
               role="tab"
               aria-selected={isActive}
-              onClick={() => setMode(item.value)}
+              onClick={() => onModeChange(item.value)}
               className={`rounded-pill px-3 py-1.5 text-caption font-semibold transition-colors lg:px-3.5 lg:py-2 lg:text-small ${
                 isActive
                   ? 'bg-primary-light text-primary'
@@ -129,7 +148,8 @@ export function SupportComposer({
           <textarea
             rows={1}
             value={draft}
-            onChange={(event) => setDraft(event.target.value)}
+            onChange={(event) => onType(event.target.value)}
+            onBlur={() => onTyping?.(false)}
             onKeyDown={(event) => {
               if (event.key === 'Enter' && !event.shiftKey) {
                 event.preventDefault();

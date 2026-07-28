@@ -16,7 +16,10 @@ import {
 } from '@prisma/client';
 
 import { seedAdminDemo } from './seed-admin-demo.js';
-import { seedCatalogPricing, seedReferenceData } from './seed-reference.js';
+import {
+  seedDemoCatalogPricing,
+  seedDemoReferenceData,
+} from './seed-reference.js';
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
@@ -1104,38 +1107,22 @@ async function seedDemoCustomer(): Promise<void> {
     update: { status: QuoteStatus.PAID, paidAt: daysFromNow(-60) },
   });
 
-  // A settled card payment for the paid quote. Brand + last four only — the card
-  // itself lives at Stripe (AGENTS.md, PCI). The `pi_…` reference is a test-mode
-  // placeholder, not a real intent.
+  // A settled USDT payment for the paid quote. The tx hash is a seed placeholder,
+  // not a real Tron transaction — it only has to be unique, which is what the
+  // never-double-credit constraint is checking.
   await upsertMany('payment', [
     {
       id: 'demo-payment-ecommerce',
       customerId: userId,
       quoteId: paidQuote.id,
-      provider: PaymentProvider.STRIPE,
+      provider: PaymentProvider.USDT_TRC20,
       status: PaymentStatus.SUCCEEDED,
       amount: 34_900,
       currency: 'USD',
-      cardBrand: 'visa',
-      cardLast4: '4242',
-      providerRef: 'pi_demo_ecommerce_seed',
+      providerRef: 'seed_demo_ecommerce',
       paidAt: daysFromNow(-60),
     },
   ]);
-
-  await prisma.paymentMethod.upsert({
-    where: { stripePaymentMethodId: 'pm_demo_visa_4242' },
-    create: {
-      customerId: userId,
-      stripePaymentMethodId: 'pm_demo_visa_4242',
-      brand: 'visa',
-      last4: '4242',
-      expMonth: 4,
-      expYear: 2029,
-      isDefault: true,
-    },
-    update: { isDefault: true },
-  });
 
   // --- Notification feed -------------------------------------------------
   await upsertMany('feedNotification', [
@@ -1311,14 +1298,24 @@ async function main() {
 
   console.info(`Seed complete — upserted ${SERVICES.length} services.`);
 
-  // Regions and carriers are reference data like the catalog itself, and the
-  // per-service pricing/coverage hangs off the services just upserted above.
-  await seedReferenceData(prisma);
-  await seedCatalogPricing(prisma);
-
-  // The catalog is real reference data and always seeds. The demo records are
-  // development-only fixture data, so they are opt-in.
+  /*
+   * Locations, carriers, and per-service coverage/pricing are deliberately NOT
+   * seeded here.
+   *
+   * They used to be, and that was the bug: the only way a jurisdiction existed
+   * was for someone to add it to a script and re-seed, so `db:reset` wiped a
+   * list nobody could put back from the app. They are operational decisions —
+   * locations and carriers are managed at `/admin/settings`, a service's
+   * coverage and price points at `/admin/catalog/:serviceId` — and a fresh
+   * database now starts with none of them rather than with someone else's.
+   *
+   * The demo fixtures below still need rows to point at (an order is filed under
+   * a location, a forwarded parcel shipped with a carrier), so they seed their
+   * own beside the rest of the development data.
+   */
   if (process.env.SEED_DEMO === 'true') {
+    await seedDemoReferenceData(prisma);
+    await seedDemoCatalogPricing(prisma);
     await seedDemoCustomer();
     await seedAdminDemo(prisma);
   }

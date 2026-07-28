@@ -1,11 +1,11 @@
-import { ChevronDown, Download, Search, SlidersHorizontal } from 'lucide-react';
+import { ChevronDown, Download, Search } from 'lucide-react';
 
 import type { PaymentHistoryRange } from '../../types/billing';
 
 /*
  * The payment-history control row: search, a time-range filter, and Export CSV.
- * The range filter and export sit inline from tablet up; mobile collapses them
- * behind a single filter button beside a full-width search, matching the links.
+ * Search and the range filter sit inline at every width; Export is tablet-and-up
+ * only, since a CSV download is not a phone action.
  *
  * Search and the range select are real controls so the page is usable, not a
  * static pill — the backend resolves the actual filtering. Export runs a
@@ -25,7 +25,6 @@ type PaymentHistoryControlsProps = {
   range: PaymentHistoryRange;
   onRangeChange: (range: PaymentHistoryRange) => void;
   onExport?: () => void;
-  onOpenFilters?: () => void;
 };
 
 export function PaymentHistoryControls({
@@ -34,7 +33,6 @@ export function PaymentHistoryControls({
   range,
   onRangeChange,
   onExport,
-  onOpenFilters,
 }: PaymentHistoryControlsProps) {
   return (
     <div className="flex w-full items-center gap-2 md:gap-3 lg:w-auto lg:justify-end">
@@ -51,13 +49,16 @@ export function PaymentHistoryControls({
         />
       </div>
 
-      {/* Time-range filter — tablet & desktop */}
-      <div className="relative hidden md:block">
+      {/* Time-range filter — every breakpoint. The design collapses it behind a
+       * filter button on mobile, but that button had nothing to open, leaving
+       * phones unable to change the range at all; showing the real control is
+       * the smaller deviation. */}
+      <div className="relative shrink-0">
         <select
           value={range}
           onChange={(event) => onRangeChange(event.target.value as PaymentHistoryRange)}
           aria-label="Payment time range"
-          className="h-10 cursor-pointer appearance-none rounded-input border border-gray-300 bg-white pl-3.5 pr-9 text-body text-gray-800 outline-none focus:border-primary focus:shadow-[0_0_0_1px_var(--ring-focus)]"
+          className="h-12 w-[132px] cursor-pointer appearance-none rounded-input border border-gray-300 bg-white pl-3.5 pr-9 text-body text-gray-800 outline-none focus:border-primary focus:shadow-[0_0_0_1px_var(--ring-focus)] md:h-10 md:w-auto"
         >
           {RANGE_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
@@ -82,15 +83,6 @@ export function PaymentHistoryControls({
         Export CSV
       </button>
 
-      {/* Compact filter — mobile only */}
-      <button
-        type="button"
-        onClick={onOpenFilters}
-        aria-label="Filter payments"
-        className="flex size-12 shrink-0 items-center justify-center rounded-input border border-gray-300 bg-white text-gray-500 transition-colors hover:bg-gray-100 md:hidden"
-      >
-        <SlidersHorizontal className="size-[18px] shrink-0" strokeWidth={1.75} aria-hidden="true" />
-      </button>
     </div>
   );
 }

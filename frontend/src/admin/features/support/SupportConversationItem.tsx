@@ -38,6 +38,7 @@ export function SupportConversationItem({
 }: SupportConversationItemProps) {
   const {
     customerName,
+    isGuest,
     subject,
     preview,
     lastMessageAt,
@@ -70,6 +71,14 @@ export function SupportConversationItem({
           >
             {customerName}
           </p>
+          {/* A thread from the marketing site's chat bubble. Same queue, same
+              routing — but there is no account behind it, so an agent should not
+              tell them to check their portal. */}
+          {isGuest ? (
+            <span className="shrink-0 rounded-pill bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
+              Visitor
+            </span>
+          ) : null}
           {unread ? <span className="sr-only">Unread</span> : null}
         </div>
 

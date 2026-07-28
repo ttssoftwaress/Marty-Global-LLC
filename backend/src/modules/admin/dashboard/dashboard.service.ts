@@ -190,7 +190,7 @@ export async function getSummary(
       where: {
         ...paymentScope,
         deletedAt: null,
-        status: { in: [PaymentStatus.SUCCEEDED, PaymentStatus.PARTIALLY_REFUNDED] },
+        status: PaymentStatus.SUCCEEDED,
         paidAt: inWindow,
       },
       _sum: { amount: true },
@@ -199,7 +199,7 @@ export async function getSummary(
       where: {
         ...paymentScope,
         deletedAt: null,
-        status: { in: [PaymentStatus.SUCCEEDED, PaymentStatus.PARTIALLY_REFUNDED] },
+        status: PaymentStatus.SUCCEEDED,
         paidAt: inPrevious,
       },
       _sum: { amount: true },

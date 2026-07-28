@@ -35,10 +35,44 @@ type SupportThreadPaneProps = {
   isLoading: boolean;
   onBack: () => void;
   onSend: (mode: ComposerMode, body: string) => void;
+  onTyping?: (typing: boolean) => void;
   onAssign: (agentId: string | null) => void;
   onStatusChange: (status: SupportStatus) => void;
+  // The customer has this conversation open right now — the agent can expect a
+  // live back-and-forth rather than a reply tomorrow.
+  customerOnline?: boolean;
+  customerTyping?: boolean;
   className?: string;
 };
+
+/*
+ * Whether the other party has this conversation open right now.
+ *
+ * Not "have they signed in" — presence is a fact about this instant, held in the
+ * server's memory and never persisted (AGENTS.md, Live Chat). It tells the agent
+ * whether to expect a live back-and-forth or to write something self-contained.
+ */
+function PresenceDot({ online }: { online: boolean }) {
+  return (
+    <span
+      className={`size-2 shrink-0 rounded-full ${online ? 'bg-success' : 'bg-gray-300'}`}
+      title={online ? 'Online now' : 'Offline'}
+      role="img"
+      aria-label={online ? 'Customer is online' : 'Customer is offline'}
+    />
+  );
+}
+
+// A thread opened from the marketing site. There is no account behind it and no
+// portal to point them at — worth saying before an agent writes "check your
+// dashboard".
+function GuestBadge() {
+  return (
+    <span className="shrink-0 rounded-pill bg-gray-100 px-2 py-0.5 text-caption font-medium text-gray-600">
+      Visitor
+    </span>
+  );
+}
 
 function ThreadSkeleton() {
   return (
@@ -65,20 +99,31 @@ export function SupportThreadPane({
   isLoading,
   onBack,
   onSend,
+  onTyping,
   onAssign,
   onStatusChange,
+  customerOnline = false,
+  customerTyping = false,
   className,
 }: SupportThreadPaneProps) {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const messageCount = thread?.messages.length ?? 0;
 
+  // The typing row adds height, so it pins too — a thread that stops following
+  // the conversation the moment someone starts replying is the wrong way round.
   useEffect(() => {
     const scroller = scrollerRef.current;
     if (scroller) scroller.scrollTop = scroller.scrollHeight;
-  }, [messageCount]);
+  }, [messageCount, customerTyping]);
 
+  /*
+   * A website visitor has no customer record to link to, so the header shows the
+   * email they gave when they opened the chat — which is also the only way to
+   * reach them once they close the tab.
+   */
   const subtitle = thread ? (
     <>
+      {thread.isGuest && thread.guestEmail ? `${thread.guestEmail} · ` : null}
       {thread.subject}
       {thread.orderReference ? (
         <>
@@ -117,8 +162,10 @@ export function SupportThreadPane({
             <ChevronLeft className="size-5" strokeWidth={2} aria-hidden="true" />
           </button>
           <div className="flex min-w-0 flex-col gap-0.5">
-            <p className="truncate text-body-lg font-semibold text-text">
-              {thread?.customerName ?? ''}
+            <p className="flex min-w-0 items-center gap-2 truncate text-body-lg font-semibold text-text">
+              <PresenceDot online={customerOnline} />
+              <span className="truncate">{thread?.customerName ?? ''}</span>
+              {thread?.isGuest ? <GuestBadge /> : null}
             </p>
             <p className="truncate text-caption font-normal text-text-secondary">
               {subtitle}
@@ -154,8 +201,10 @@ export function SupportThreadPane({
       {/* Tablet & desktop — name and controls share the header row. */}
       <div className="hidden shrink-0 items-center justify-between gap-4 border-b border-gray-200 p-3.5 md:flex lg:p-4">
         <div className="flex min-w-0 flex-col gap-0.5 lg:gap-1">
-          <p className="truncate text-body font-semibold text-text lg:text-body-lg lg:font-semibold">
-            {thread?.customerName ?? ''}
+          <p className="flex min-w-0 items-center gap-2 text-body font-semibold text-text lg:text-body-lg lg:font-semibold">
+            <PresenceDot online={customerOnline} />
+            <span className="truncate">{thread?.customerName ?? ''}</span>
+            {thread?.isGuest ? <GuestBadge /> : null}
           </p>
           <p className="truncate text-caption font-normal text-gray-500 lg:text-small">
             {subtitle}
@@ -195,6 +244,26 @@ export function SupportThreadPane({
           {thread.messages.map((message) => (
             <SupportMessageRow key={message.id} message={message} />
           ))}
+
+          {customerTyping ? (
+            <div
+              className="flex items-center gap-2 text-small text-gray-500"
+              role="status"
+              aria-live="polite"
+            >
+              <span className="flex items-center gap-1 rounded-pill bg-gray-100 px-3 py-2">
+                {[0, 1, 2].map((index) => (
+                  <span
+                    key={index}
+                    className="size-1.5 animate-bounce rounded-full bg-gray-400"
+                    style={{ animationDelay: `${index * 150}ms`, animationDuration: '1s' }}
+                    aria-hidden="true"
+                  />
+                ))}
+              </span>
+              {thread.customerFirstName} is typing…
+            </div>
+          ) : null}
         </div>
       )}
 
@@ -202,6 +271,7 @@ export function SupportThreadPane({
         <SupportComposer
           customerFirstName={thread.customerFirstName}
           onSend={onSend}
+          onTyping={onTyping}
         />
       ) : null}
     </section>

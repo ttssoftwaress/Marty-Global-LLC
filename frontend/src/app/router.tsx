@@ -6,11 +6,6 @@ import { createBrowserRouter, Outlet } from 'react-router-dom';
 const PORTAL_PLACEHOLDER_ROUTES = [
   { path: 'documents', title: 'Documents' },
   { path: 'support', title: 'Support' },
-  // Billing sub-flows the billing screen links to whose screens are not built
-  // yet — placeholders keep the links inside the portal instead of falling
-  // through to marketing. (The checkout at `billing/pay/:quoteId` is built; see
-  // the real route below.)
-  { path: 'billing/methods/new', title: 'Add payment method' },
   // Mail-room sub-flows the mail-room screens link to (the add-room wizard)
   // whose screens are not built yet — placeholders keep the links inside the
   // portal instead of falling through to marketing.
@@ -20,9 +15,11 @@ const PORTAL_PLACEHOLDER_ROUTES = [
 // Admin sections the sidebar links to that have no screen yet. Paths are
 // relative to `/admin` and mirror ADMIN_NAV_ITEMS in
 // admin/components/sidebar/nav-items.ts — keep the two in sync.
-const ADMIN_PLACEHOLDER_ROUTES = [
-  { path: 'settings', title: 'Admin settings' },
-];
+//
+// Empty: every admin section now has a real screen. Kept rather than deleted
+// because the next section to be scaffolded needs somewhere to land, and the
+// mapping below already handles it.
+const ADMIN_PLACEHOLDER_ROUTES: { path: string; title: string }[] = [];
 
 export const router = createBrowserRouter([
   {
@@ -124,17 +121,17 @@ export const router = createBrowserRouter([
     },
   },
   {
+    /*
+     * The one auth screen NOT behind RedirectIfAuthenticated. It carries a
+     * one-time token in `?token=`, and someone who forgot their password on one
+     * device commonly opens the emailed link on another that still holds a
+     * "Remember Me" session. Redirecting them to /app would burn the reset with
+     * no explanation, so this step always renders and consumes its token.
+     */
     path: '/reset-password/new',
     lazy: async () => {
       const { SetNewPasswordPage } = await import('@/auth/SetNewPasswordPage');
-      const { RedirectIfAuthenticated } = await import('@/auth/RedirectIfAuthenticated');
-      return {
-        Component: () => (
-          <RedirectIfAuthenticated>
-            <SetNewPasswordPage />
-          </RedirectIfAuthenticated>
-        ),
-      };
+      return { Component: SetNewPasswordPage };
     },
   },
   {
@@ -590,9 +587,9 @@ export const router = createBrowserRouter([
       {
         // Quotes & payments — revenue KPIs, the revenue-over-time chart, the
         // billing ledger (a table at `md` and up, cards on mobile) with its
-        // status filter tabs, and the refunds & adjustments log. Data loads from
-        // `GET /v1/admin/payments/summary`, `/payments/revenue`,
-        // `/payments/ledger`, and `/payments/refunds` once those endpoints land.
+        // status filter tabs, and the unattributed-transfer queue. Data loads
+        // from `GET /v1/admin/payments/summary`, `/payments/revenue`,
+        // `/payments/ledger`, and `/payments/unmatched`.
         path: 'payments',
         lazy: async () => {
           const { AdminQuotesPaymentsPage } = await import(
@@ -820,6 +817,31 @@ export const router = createBrowserRouter([
             Component: () => (
               <RequirePermission area="team" title="Team & staff">
                 <AdminTeamMemberEditPage />
+              </RequirePermission>
+            ),
+          };
+        },
+      },
+      {
+        /*
+         * Admin settings — the reference data every other section picks from:
+         * the locations services are offered in, and the carriers the mail room
+         * ships with. Neither is seeded any more, so this screen is where both
+         * lists come from. Reads `GET /v1/admin/settings/locations` and
+         * `/carriers`; writes are admin-only on the backend.
+         */
+        path: 'settings',
+        lazy: async () => {
+          const { AdminSettingsPage } = await import(
+            '@/admin/pages/AdminSettingsPage'
+          );
+          const { RequirePermission } = await import(
+            '@/admin/components/RequirePermission'
+          );
+          return {
+            Component: () => (
+              <RequirePermission area="settings" title="Admin settings">
+                <AdminSettingsPage />
               </RequirePermission>
             ),
           };

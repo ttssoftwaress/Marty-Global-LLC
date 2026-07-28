@@ -22,8 +22,8 @@ import { PickedFieldRow } from './PickedFieldRow';
  * are asking the same question by construction, so the order flow asks it once.
  *
  * No registered field can capture money or card data (AGENTS.md): the backend
- * resolves amounts and Stripe holds the card, so an admin-authored form must
- * never be able to collect either.
+ * resolves amounts and we never collect card data anywhere, so an admin-authored
+ * form must never be able to capture either.
  */
 
 type DetailFieldEditorProps = {

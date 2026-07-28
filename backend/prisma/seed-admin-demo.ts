@@ -363,8 +363,7 @@ const ORDERS: SeedOrder[] = [
 
 /*
  * Quotes and their payments. The ledger's status is derived from the pair, so
- * this set deliberately covers every tab: paid, pending, failed, refunded, and
- * partially refunded.
+ * this set deliberately covers every tab: paid, pending, and failed.
  *
  * MONEY: integer minor units. 59900 = $599.00.
  */
@@ -385,11 +384,8 @@ type SeedBilling = {
     id: string;
     status: PaymentStatus;
     provider: PaymentProvider;
-    cardBrand?: string;
-    cardLast4?: string;
     paidDaysAgo?: number;
   };
-  refund?: { id: string; amount: number; reason: string; processedById: string; daysAgo: number };
 };
 
 const BILLING: SeedBilling[] = [
@@ -409,9 +405,7 @@ const BILLING: SeedBilling[] = [
     payment: {
       id: 'pay-demo-1',
       status: PaymentStatus.SUCCEEDED,
-      provider: PaymentProvider.STRIPE,
-      cardBrand: 'visa',
-      cardLast4: '4242',
+      provider: PaymentProvider.USDT_TRC20,
       paidDaysAgo: 36,
     },
   },
@@ -450,18 +444,9 @@ const BILLING: SeedBilling[] = [
     validDays: -74,
     payment: {
       id: 'pay-demo-3',
-      status: PaymentStatus.REFUNDED,
-      provider: PaymentProvider.STRIPE,
-      cardBrand: 'mastercard',
-      cardLast4: '4444',
+      status: PaymentStatus.SUCCEEDED,
+      provider: PaymentProvider.USDT_TRC20,
       paidDaysAgo: 86,
-    },
-    refund: {
-      id: 'refund-demo-1',
-      amount: 34_900,
-      reason: 'Bank declined the application; fee returned in full.',
-      processedById: 'staff-sarah',
-      daysAgo: 70,
     },
   },
   {
@@ -479,18 +464,9 @@ const BILLING: SeedBilling[] = [
     validDays: -104,
     payment: {
       id: 'pay-demo-4',
-      status: PaymentStatus.PARTIALLY_REFUNDED,
-      provider: PaymentProvider.STRIPE,
-      cardBrand: 'visa',
-      cardLast4: '1881',
+      status: PaymentStatus.SUCCEEDED,
+      provider: PaymentProvider.USDT_TRC20,
       paidDaysAgo: 116,
-    },
-    refund: {
-      id: 'refund-demo-2',
-      amount: 10_000,
-      reason: 'Goodwill credit for the delayed verification.',
-      processedById: 'staff-sarah',
-      daysAgo: 100,
     },
   },
   {
@@ -541,9 +517,7 @@ const BILLING: SeedBilling[] = [
       // A failed attempt with nothing settled after it — the `failed` tab.
       id: 'pay-demo-5',
       status: PaymentStatus.FAILED,
-      provider: PaymentProvider.STRIPE,
-      cardBrand: 'visa',
-      cardLast4: '0341',
+      provider: PaymentProvider.USDT_TRC20,
     },
   },
 ];
@@ -802,61 +776,25 @@ export async function seedAdminDemo(prisma: PrismaClient): Promise<void> {
           status: entry.payment.status,
           amount: entry.total,
           currency: 'USD',
-          cardBrand: entry.payment.cardBrand ?? null,
-          cardLast4: entry.payment.cardLast4 ?? null,
           providerRef: `seed_${entry.payment.id}`,
           paidAt,
           createdAt: paidAt ?? issuedAt,
-          ...(entry.payment.provider === PaymentProvider.USDT_TRC20
-            ? {
-                // USDT has 6 decimals against USD's 2, so the raw on-chain
-                // integer is the minor-unit amount with four more zeros. Built
-                // by appending digits rather than multiplying: the column is
-                // Decimal(38,0) and no step of this may pass through a float
-                // (AGENTS.md, Money).
-                depositAddress: 'TSeedDemoAddressDoNotSendFunds00000',
-                usdtAmountRaw: `${entry.total}0000`,
-                usdtDecimals: 6,
-              }
-            : {}),
+          depositAddress: 'TSeedDemoAddressDoNotSendFunds00000',
+          usdtDecimals: 6,
+          // What actually landed on-chain — so only on a row that settled. A
+          // failed attempt received nothing, and a settled amount on it would
+          // read as money we hold.
+          //
+          // USDT has 6 decimals against USD's 2, so the raw on-chain integer is
+          // the minor-unit amount with four more zeros. Built by appending digits
+          // rather than multiplying: the column is Decimal(38,0) and no step of
+          // this may pass through a float (AGENTS.md, Money).
+          ...(paidAt ? { usdtAmountRaw: `${entry.total}0000` } : {}),
         },
         update: { status: entry.payment.status, paidAt },
       });
     }
-
-    if (entry.refund) {
-      await prisma.refund.upsert({
-        where: { id: entry.refund.id },
-        create: {
-          id: entry.refund.id,
-          paymentId: entry.payment!.id,
-          amount: entry.refund.amount,
-          currency: 'USD',
-          reason: entry.refund.reason,
-          processedById: entry.refund.processedById,
-          processedByName:
-            STAFF.find((s) => s.id === entry.refund!.processedById)?.name ?? 'Marty Global team',
-          processedAt: daysFromNow(-entry.refund.daysAgo),
-        },
-        update: { amount: entry.refund.amount, reason: entry.refund.reason },
-      });
-    }
   }
-
-  // A saved card so the customer's billing screen lists one.
-  await prisma.paymentMethod.upsert({
-    where: { stripePaymentMethodId: 'pm_seed_tobias_visa' },
-    create: {
-      customerId: 'cust-tobias',
-      stripePaymentMethodId: 'pm_seed_tobias_visa',
-      brand: 'visa',
-      last4: '4242',
-      expMonth: 8,
-      expYear: 2029,
-      isDefault: true,
-    },
-    update: { isDefault: true },
-  });
 
   // --- Mail rooms --------------------------------------------------------
   await upsertById(prisma, 'mailRoom', [

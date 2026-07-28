@@ -4,9 +4,9 @@
  * types exist so the UI compiles and composes before the endpoints land.
  *
  * Nothing on the screen is hardcoded business data: the KPI figures, the chart
- * series, the ledger rows, and the refund log all arrive from the API. Money is
- * an integer minor-unit amount plus its ISO 4217 code everywhere (AGENTS.md,
- * Money rules) — the UI never does arithmetic on it, only formats at render.
+ * series, and the ledger rows all arrive from the API. Money is an integer
+ * minor-unit amount plus its ISO 4217 code everywhere (AGENTS.md, Money rules)
+ * — the UI never does arithmetic on it, only formats at render.
  */
 
 import type { Money } from './dashboard';
@@ -17,12 +17,7 @@ export type { Money };
  * A payment's lifecycle state, which is what the ledger's status chip and its
  * filter tabs both key off. These mirror the backend's payment status enum.
  */
-export type PaymentStatus =
-  | 'paid'
-  | 'pending_payment'
-  | 'refunded'
-  | 'failed'
-  | 'partially_refunded';
+export type PaymentStatus = 'paid' | 'pending_payment' | 'failed';
 
 /*
  * The ledger's filter tab set. `all` is the unfiltered view the section opens
@@ -42,31 +37,27 @@ export type PaymentStatusTab = {
 };
 
 /*
- * How a payment was collected. `brand` and `last4` are the only card details we
- * ever hold (AGENTS.md — Stripe holds the card, we hold the token); a bank or
- * crypto settlement carries no card fields and renders from `label` alone.
+ * How a payment was collected, phrased by the backend. Card payments are a later
+ * deployment, so there is no card shape here — only the label the ledger prints.
  *
  * A row that has not been paid yet has no method at all — the ledger prints an
  * em dash for it — so the whole object is nullable on a row.
  */
 export type PaymentMethodSummary = {
-  label: string; // the backend's phrasing: "Visa", "ACH transfer", "USDT (TRC-20)"
-  brand?: string;
-  last4?: string;
+  label: string; // the backend's phrasing: "USDT (TRC-20)"
 };
 
 /*
  * What a ledger row's action control does. The backend decides which action a
  * row offers, so the UI never infers an action from a status:
- *   - `refund`   — a completed payment that can still be reversed
  *   - `remind`   — an unpaid invoice that can be chased
- *   - `view`     — a terminal row that only opens
+ *   - `view`     — a settled or terminal row that only opens
  *   - `none`     — no action available (renders as a muted em dash)
  *
- * `label` is the backend's word for it ("Issue refund", "Send reminder"), so a
- * wording change never needs a frontend deploy.
+ * `label` is the backend's word for it ("Send reminder", "View"), so a wording
+ * change never needs a frontend deploy.
  */
-export type LedgerActionKind = 'refund' | 'remind' | 'view' | 'none';
+export type LedgerActionKind = 'remind' | 'view' | 'none';
 
 export type LedgerAction = {
   kind: LedgerActionKind;
@@ -106,24 +97,52 @@ export type BillingLedgerPage = {
 };
 
 /*
- * A refunds & adjustments log entry. The amount is the money returned, printed
- * in the error color on every link; `processedBy` is the staff member who
- * approved it, which the audit module records alongside the payment.
+ * A USDT (TRC-20) transfer that landed on our deposit address and matched no
+ * payment — money nobody can be billed for and nobody can be credited with.
+ *
+ * TRC-20 carries no memo field, so a transfer is attributed by its amount alone;
+ * anything that misses every live payment ends up here for a human to sort out.
+ * AGENTS.md requires that such money is never silently dropped, and this queue is
+ * where it surfaces.
+ *
+ * MONEY: the amount arrives as the raw on-chain integer (a string, because it can
+ * exceed a safe JS integer) plus a display decimal the backend already formatted.
+ * The UI prints `amountDisplay` and never does arithmetic on either — this is not
+ * a `Money` object precisely because USDT is not a minor-unit fiat currency.
  */
-export type RefundLogRow = {
+export type UnmatchedTransferRow = {
   id: string;
-  reference: string;
-  customer: { id: string; name: string };
-  amount: Money;
-  reason: string;
-  processedAt: string; // ISO-8601 UTC
-  processedBy: string;
-  to: string;
+  transactionHash: string;
+  amountRaw: string;
+  amountDisplay: string; // "1.5" — already formatted, never re-derived here
+  decimals: number;
+  fromAddress: string;
+  toAddress: string;
+  contractAddress: string;
+  blockAt: string; // ISO-8601 UTC — when the money actually landed
+  firstSeenAt: string; // when a sweep first noticed it
+  lastSeenAt: string; // the most recent sweep that still saw it unresolved
+  /*
+   * How many sweeps have re-read this transfer. The poller re-reads an overlap
+   * window every interval, so a rising count is the queue's way of saying "still
+   * sitting here" — it is not a count of separate transfers.
+   */
+  sightings: number;
+  resolvedAt: string | null;
+  resolvedBy: string | null;
+  resolutionNote: string | null;
 };
 
-export type RefundLogPage = {
-  rows: RefundLogRow[];
+// `open` is what a reconciler works from; `resolved` is the record of what past
+// strays turned out to be.
+export type UnmatchedTransferFilter = 'open' | 'resolved' | 'all';
+
+export type UnmatchedTransferPage = {
+  rows: UnmatchedTransferRow[];
   nextCursor: string | null;
+  // Open items across the whole queue, not just this page, so the section header
+  // never has to count rows it happens to have loaded.
+  openCount: number;
 };
 
 /*

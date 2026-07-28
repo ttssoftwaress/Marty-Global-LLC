@@ -72,7 +72,8 @@ export type OrderServiceCatalog = {
  * for a select, rows for a textarea) and nothing it doesn't.
  *
  * No field type here captures money or a card number — those never live in a
- * generic form (AGENTS.md: the backend resolves amounts; Stripe holds the card).
+ * generic form (AGENTS.md: the backend resolves amounts; we never collect card
+ * data anywhere).
  * Step 2 is a quote request, so every field is descriptive.
  */
 export type ServiceFieldType = 'text' | 'select' | 'textarea' | 'file';

@@ -91,7 +91,9 @@ describe('createOrder', () => {
       notes: 'Prioritize the formation.',
     });
 
-    expect(confirmation.reference).toMatch(/^ORD-\d{5}$/);
+    expect(confirmation.reference).toMatch(
+      /^ORD-\d{4}-[0-9ABCDEFGHJKMNPQRSTVWXYZ]{8}$/,
+    );
     expect(confirmation.serviceNames).toHaveLength(2);
     expect(confirmation.confirmationEmail).toBe(`${OWNER_ID}@example.com`);
 

@@ -69,6 +69,13 @@ export type SupportConversationSummary = {
   id: string;
   customerName: string;
   customerInitials: string;
+  /*
+   * A website visitor rather than an account holder — a thread opened from the
+   * marketing site's chat bubble. It is routed exactly like any other help
+   * request, so it lives in the same queue; the badge exists because the agent
+   * should know there is no customer record behind it and no portal to point at.
+   */
+  isGuest: boolean;
   subject: string;
   preview: string;
   lastMessageAt: string; // ISO-8601 UTC
@@ -121,6 +128,16 @@ export type SupportMessage = {
   authorInitials: string;
   body: string;
   sentAt: string; // ISO-8601 UTC
+  /*
+   * Whether the customer has read this reply. Set on staff replies only — a tick
+   * under the customer's own message would report the agent's reading back to
+   * the agent — and absent on an internal note, which has no other side.
+   */
+  seen?: boolean;
+  // Local-only: drawn optimistically, not yet confirmed by the server. Carries
+  // the id the send was tagged with so the delivered copy replaces it.
+  pending?: boolean;
+  clientId?: string;
 };
 
 /*
@@ -139,6 +156,10 @@ export type SupportThread = {
   customerName: string;
   customerInitials: string;
   customerFirstName: string; // the composer's "Type your reply to Sarah..."
+  // A website visitor with no account. The header shows the email they gave
+  // instead of a link to a customer record that does not exist.
+  isGuest: boolean;
+  guestEmail: string | null;
   subject: string;
   orderReference: string | null;
   orderTo: string | null;

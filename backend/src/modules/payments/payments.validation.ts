@@ -10,9 +10,9 @@ import { z } from 'zod';
  * price would be rejected as an unknown key, not honoured.
  */
 
-// The providers a customer can start a payment with. Stripe is deliberately
-// absent: the card path is not built yet, and accepting the value here would
-// mean advertising a method that cannot complete.
+// The providers a customer can start a payment with. Cards are deliberately
+// absent — that vertical is a later deployment, and accepting a card value here
+// would mean advertising a method that cannot complete.
 export const paymentMethodKind = z.enum(['usdt_trc20']);
 export type PaymentMethodKind = z.infer<typeof paymentMethodKind>;
 

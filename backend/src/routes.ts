@@ -4,6 +4,7 @@ import { adminRouter } from './modules/admin/admin.routes.js';
 import { billingRouter } from './modules/billing/billing.routes.js';
 import { conversationsRouter } from './modules/conversations/conversations.routes.js';
 import { dashboardRouter } from './modules/dashboard/dashboard.routes.js';
+import { guestRouter } from './modules/guest/guest.routes.js';
 import { healthRouter } from './modules/health/health.routes.js';
 import { mailroomRouter } from './modules/mailroom/mailroom.routes.js';
 import { notificationsRouter } from './modules/notifications/notifications.routes.js';
@@ -41,6 +42,14 @@ router.use('/mailrooms', mailroomRouter);
  */
 router.use('/my-services', resultsRouter);
 router.use('/support', supportRouter);
+/*
+ * PUBLIC — the marketing site's chat bubble, for visitors with no account. Its
+ * own module rather than a branch inside `support`, because its caller is
+ * unauthenticated and its guards are therefore completely different: a bearer
+ * token, a Turnstile challenge, and a hard retention window. The threads it
+ * creates still land in the same admin inbox.
+ */
+router.use('/guest-chat', guestRouter);
 router.use('/profile', profileRouter);
 /*
  * Shared by every surface that attaches a file — order documents, mail scans,

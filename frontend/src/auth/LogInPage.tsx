@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import logoColor from '@/assets/Marty-Logo-Color.PNG';
@@ -134,7 +134,7 @@ function LogInForm() {
     }
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (submitting) return;
 
@@ -271,7 +271,7 @@ type FieldProps = {
   label: string;
   htmlFor: string;
   error?: string;
-  children: React.ReactNode;
+  children: ReactNode;
 };
 
 function Field({ label, htmlFor, error, children }: FieldProps) {

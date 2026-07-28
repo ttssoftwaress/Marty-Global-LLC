@@ -44,6 +44,18 @@ export const PERMISSION_AREAS = [
   { key: 'support', label: 'Support inbox' },
   { key: 'reports', label: 'Reports & analytics' },
   { key: 'team', label: 'Team & staff management' },
+  /*
+   * Business settings — the reference data every other section picks FROM: the
+   * locations services are offered in and the carriers the mail room ships with.
+   *
+   * Its own area rather than part of `catalog`, because it sits upstream of the
+   * catalog rather than inside it. The orders queue filters by location, a
+   * customer's row prints one, and the mail room's forwarding form picks a
+   * carrier — none of which involve a service's price or its form. Granting
+   * someone the catalog should not also let them retire a jurisdiction every one
+   * of those screens reads.
+   */
+  { key: 'settings', label: 'Business settings' },
 ] as const;
 
 export type PermissionAreaKey = (typeof PERMISSION_AREAS)[number]['key'];
@@ -74,11 +86,11 @@ export type PermissionAreaKey = (typeof PERMISSION_AREAS)[number]['key'];
 const SCOPE_SUFFIX = '.all';
 
 /*
- * Areas whose data belongs to somebody. `catalog` and `team` are absent on
- * purpose — a service's price and the staff directory are org-wide records with
- * no owner to scope them to, so an "All data" switch there would be a control
- * that changes nothing. `orders.assign` is absent because it is a write grant,
- * not a section.
+ * Areas whose data belongs to somebody. `catalog`, `team`, and `settings` are
+ * absent on purpose — a service's price, the staff directory, and the location
+ * list are org-wide records with no owner to scope them to, so an "All data"
+ * switch there would be a control that changes nothing. `orders.assign` is
+ * absent because it is a write grant, not a section.
  */
 export const SCOPED_AREAS = [
   'orders',
@@ -166,6 +178,9 @@ export const STAFF_ROLES: readonly StaffRoleDefinition[] = [
       'mailroom',
       'support',
       'reports',
+      // Which jurisdictions we operate in and who we ship with are operational
+      // decisions, which is exactly this role's remit.
+      'settings',
       // Overseeing the pipeline means seeing all of it — this role is the reason
       // the org-wide scope exists.
       ...ALL_SCOPES,

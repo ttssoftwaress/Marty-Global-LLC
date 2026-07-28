@@ -1,25 +1,34 @@
 import {
   ConversationCategory,
   ConversationKind,
+  ConversationStatus,
   MessageAuthor,
   OrderStatus,
   Prisma,
 } from '@prisma/client';
 
-import { getAuth } from '../../guards/index.js';
+import type { AuthContext } from '../../guards/auth-context.js';
 import { assertFound } from '../../guards/ownership.js';
 import { prisma } from '../../lib/prisma.js';
 import { presignObject } from '../../lib/storage.js';
+import { assertKeyForPurpose } from '../uploads/uploads.service.js';
+import { notifyNewSupportMessage } from './support.notifications.js';
 import type {
+  CreateConversationInput,
   ListConversationsQuery,
   SendMessageInput,
 } from './support.validation.js';
 
 /*
  * Support conversations — the portal's Messages screen and the persistence layer
- * the live-chat sockets will call (AGENTS.md, Live Chat: sockets are transport
- * only, every message is a row first). This is the one layer touching Prisma for
+ * the live-chat sockets call (AGENTS.md, Live Chat: sockets are transport only,
+ * every message is a row first). This is the one layer touching Prisma for
  * support, so REST and Socket.io share the same logic and the same guards.
+ *
+ * Every function here takes an AuthContext rather than the Express request. A
+ * socket has a session but no request, and the alternative — a second code path
+ * for the socket transport — is exactly the duplication that lets a guard exist
+ * on one transport and not the other.
  *
  * Message bodies are PII — never logged (AGENTS.md). Only ids appear in logs.
  */
@@ -32,6 +41,18 @@ const CATEGORY_TO_VIEW: Record<ConversationCategory, string> = {
   [ConversationCategory.BILLING]: 'billing',
   [ConversationCategory.DOCUMENTS]: 'documents',
   [ConversationCategory.SUPPORT]: 'support',
+};
+
+// The inverse, for the category a customer picks when opening a thread. Written
+// out rather than upper-casing the string, so an unknown value is a type error
+// here instead of a runtime enum failure inside Prisma.
+const VIEW_TO_CATEGORY: Record<string, ConversationCategory> = {
+  formation: ConversationCategory.FORMATION,
+  ecommerce: ConversationCategory.ECOMMERCE,
+  mailroom: ConversationCategory.MAILROOM,
+  billing: ConversationCategory.BILLING,
+  documents: ConversationCategory.DOCUMENTS,
+  support: ConversationCategory.SUPPORT,
 };
 
 // The list's status chip mirrors the linked order's status, read through the
@@ -88,13 +109,14 @@ function isUnread(
 }
 
 export async function listConversations(
-  req: Parameters<typeof getAuth>[0],
+  auth: AuthContext,
   query: ListConversationsQuery,
 ): Promise<ConversationSummary[]> {
-  const auth = getAuth(req);
-
   // A customer sees only their own threads; the ownership boundary is this where
   // clause, not a per-row check (AGENTS.md: guards are the real boundary).
+  //
+  // It also excludes guest threads for free: theirs carry a null customerId,
+  // which no user id can ever match.
   const where: Prisma.ConversationWhereInput = {
     customerId: auth.userId,
     deletedAt: null,
@@ -142,6 +164,13 @@ export type MessageView = {
   body: string;
   sentAt: string;
   senderName?: string;
+  /*
+   * Whether the team has read this message. Only meaningful on the customer's own
+   * messages — a "Seen" tick under an agent's reply would be telling the customer
+   * about their own reading. Derived from the thread's `staffReadAt` marker
+   * rather than stored per row, so it cannot disagree with itself.
+   */
+  seen?: boolean;
   attachments?: {
     id: string;
     name: string;
@@ -172,6 +201,12 @@ type ConversationWithThread = Prisma.ConversationGetPayload<{
   include: typeof threadInclude;
 }>;
 
+// A message is seen once the counterpart's read marker reaches its send time.
+// One comparison, used by both sides of the thread.
+export function isSeen(sentAt: Date, readAt: Date | null): boolean {
+  return readAt !== null && readAt >= sentAt;
+}
+
 async function toThread(
   conversation: ConversationWithThread,
 ): Promise<ConversationThread> {
@@ -186,6 +221,10 @@ async function toThread(
       senderName:
         message.author === MessageAuthor.AGENT
           ? message.authorName ?? undefined
+          : undefined,
+      seen:
+        message.author === MessageAuthor.CUSTOMER
+          ? isSeen(message.sentAt, conversation.staffReadAt)
           : undefined,
       attachments:
         message.attachments.length > 0
@@ -217,11 +256,9 @@ async function toThread(
 
 // Opening a thread marks it read — that is what clears the list's unread dot.
 export async function getConversation(
-  req: Parameters<typeof getAuth>[0],
+  auth: AuthContext,
   conversationId: string,
 ): Promise<ConversationThread> {
-  const auth = getAuth(req);
-
   /*
    * Scoped to SUPPORT threads, which is a security boundary and not just a
    * filter: an order conversation may only be answered by that order's assignee,
@@ -235,7 +272,9 @@ export async function getConversation(
   });
 
   // 404 (not 403) for another customer's thread, so the id isn't confirmed.
-  const found = assertFound(conversation, auth, (c) => c.customerId);
+  // A guest thread has no customerId at all, and '' matches no user id — so it
+  // is unreachable here for anyone but staff, who have the admin inbox anyway.
+  const found = assertFound(conversation, auth, (c) => c.customerId ?? '');
 
   // Only the owning customer reading their thread clears the dot; staff opening
   // it must not mark it read on the customer's behalf.
@@ -249,25 +288,46 @@ export async function getConversation(
   return await toThread(found);
 }
 
+/*
+ * Mark the customer's side of a thread read, without loading it.
+ *
+ * The socket calls this when the thread is on screen and a message arrives —
+ * re-fetching the whole conversation just to move one timestamp would be a query
+ * per keystroke of the other party. `updateMany` scoped to the owner means
+ * someone else's id updates nothing rather than throwing something that would
+ * confirm the thread exists.
+ */
+export async function markCustomerRead(
+  auth: AuthContext,
+  conversationId: string,
+): Promise<{ conversationId: string; readAt: string }> {
+  const readAt = new Date();
+
+  await prisma.conversation.updateMany({
+    where: { id: conversationId, customerId: auth.userId, deletedAt: null },
+    data: { customerReadAt: readAt },
+  });
+
+  return { conversationId, readAt: readAt.toISOString() };
+}
+
 // --- Send ----------------------------------------------------------------
 // Persist then emit (AGENTS.md, Live Chat): this writes the row and updates the
 // thread's denormalised preview in one transaction. The socket layer will call
 // this same function and emit afterwards, so history survives a reconnect.
 export async function sendMessage(
-  req: Parameters<typeof getAuth>[0],
+  auth: AuthContext,
   conversationId: string,
   input: SendMessageInput,
 ): Promise<MessageView> {
-  const auth = getAuth(req);
-
   // SUPPORT only, for the same reason as the read above: posting into an order
   // thread from here would sidestep the assignee lock.
   const conversation = await prisma.conversation.findFirst({
     where: { id: conversationId, kind: ConversationKind.SUPPORT, deletedAt: null },
-    select: { id: true, customerId: true },
+    select: { id: true, customerId: true, status: true },
   });
 
-  const found = assertFound(conversation, auth, (c) => c.customerId);
+  const found = assertFound(conversation, auth, (c) => c.customerId ?? '');
 
   // The author comes from the session, never the payload: a customer posting into
   // their own thread is a CUSTOMER message, a staff reply is an AGENT one.
@@ -284,6 +344,16 @@ export async function sendMessage(
     select: { name: true },
   });
 
+  /*
+   * Attachment keys are checked before anything is written. They arrive from the
+   * browser, which held them between minting and now, so the prefix check is what
+   * stops a key minted for one purpose (or one customer) being attached here
+   * (uploads.service.ts).
+   */
+  for (const attachment of input.attachments ?? []) {
+    assertKeyForPurpose(auth, 'support-attachment', attachment.objectKey);
+  }
+
   // One transaction so a message can never exist without the list preview that
   // sorts and displays it (schema.prisma: written in the same transaction).
   const message = await prisma.$transaction(async (tx) => {
@@ -295,7 +365,18 @@ export async function sendMessage(
         authorName: sender?.name ?? null,
         body: input.body,
         sentAt,
+        attachments: input.attachments?.length
+          ? {
+              create: input.attachments.map((attachment) => ({
+                name: attachment.name,
+                sizeBytes: attachment.sizeBytes,
+                contentType: attachment.contentType,
+                objectKey: attachment.objectKey,
+              })),
+            }
+          : undefined,
       },
+      include: { attachments: true },
     });
 
     await tx.conversation.update({
@@ -303,13 +384,28 @@ export async function sendMessage(
       data: {
         lastMessageAt: sentAt,
         preview: input.body.slice(0, 160),
-        // The sender has by definition read their own thread up to this message.
-        ...(isOwner ? { customerReadAt: sentAt } : {}),
+        /*
+         * A customer's message puts the ball back in our court. Without this a
+         * reply to a RESOLVED thread would leave it resolved — filtered out of
+         * the inbox's default view, so nobody would ever see it.
+         */
+        ...(isOwner
+          ? { customerReadAt: sentAt, status: ConversationStatus.OPEN }
+          : { staffReadAt: sentAt, status: ConversationStatus.PENDING }),
       },
     });
 
     return created;
   });
+
+  /*
+   * The offline handoff, enqueued here rather than in the socket handler so it
+   * fires whichever transport carried the message (AGENTS.md: never send inline —
+   * this only schedules a delayed job, which the first staff reply cancels).
+   */
+  if (isOwner) {
+    await notifyNewSupportMessage({ conversationId: found.id, messageId: message.id });
+  }
 
   return {
     id: message.id,
@@ -320,6 +416,92 @@ export async function sendMessage(
       message.author === MessageAuthor.AGENT
         ? message.authorName ?? undefined
         : undefined,
+    // The sender's own message is unread by the other side by definition.
+    seen: isOwner ? false : undefined,
+    attachments:
+      message.attachments.length > 0
+        ? await Promise.all(
+            message.attachments.map(async (attachment) => ({
+              id: attachment.id,
+              name: attachment.name,
+              size: attachment.sizeBytes,
+              href: await presignObject(attachment.objectKey),
+            })),
+          )
+        : undefined,
+  };
+}
+
+/*
+ * Open a new support thread.
+ *
+ * The subject and category come from the customer; everything that decides who
+ * answers it does not. It lands unassigned, which is what puts it in the admin
+ * inbox's claimable pool (admin/support.service.ts) rather than in front of one
+ * particular agent.
+ */
+export async function createConversation(
+  auth: AuthContext,
+  input: CreateConversationInput,
+): Promise<ConversationSummary> {
+  const sentAt = new Date();
+
+  const sender = await prisma.user.findUnique({
+    where: { id: auth.userId },
+    select: { name: true },
+  });
+
+  for (const attachment of input.attachments ?? []) {
+    assertKeyForPurpose(auth, 'support-attachment', attachment.objectKey);
+  }
+
+  const conversation = await prisma.$transaction(async (tx) => {
+    const created = await tx.conversation.create({
+      data: {
+        customerId: auth.userId,
+        subject: input.subject,
+        category: VIEW_TO_CATEGORY[input.category],
+        kind: ConversationKind.SUPPORT,
+        status: ConversationStatus.OPEN,
+        lastMessageAt: sentAt,
+        preview: input.body.slice(0, 160),
+        customerReadAt: sentAt,
+      },
+    });
+
+    await tx.message.create({
+      data: {
+        conversationId: created.id,
+        author: MessageAuthor.CUSTOMER,
+        authorUserId: auth.userId,
+        authorName: sender?.name ?? null,
+        body: input.body,
+        sentAt,
+        attachments: input.attachments?.length
+          ? {
+              create: input.attachments.map((attachment) => ({
+                name: attachment.name,
+                sizeBytes: attachment.sizeBytes,
+                contentType: attachment.contentType,
+                objectKey: attachment.objectKey,
+              })),
+            }
+          : undefined,
+      },
+    });
+
+    return created;
+  });
+
+  await notifyNewSupportMessage({ conversationId: conversation.id });
+
+  return {
+    id: conversation.id,
+    subject: conversation.subject,
+    category: CATEGORY_TO_VIEW[conversation.category],
+    preview: conversation.preview ?? '',
+    lastMessageAt: sentAt.toISOString(),
+    unread: false,
   };
 }
 

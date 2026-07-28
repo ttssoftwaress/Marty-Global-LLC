@@ -71,8 +71,13 @@ export function OrdersPage() {
   // Desktop page window into the loaded orders. Reset to the first page whenever
   // the filter or search changes, since the result set is different.
   const [pageIndex, setPageIndex] = useState(0);
+  // Mobile appends instead of paging, so how much it has revealed is its own
+  // count. Sharing pageIndex made "Load more" swap the visible orders for the
+  // next ten while the footer still claimed "Showing 1–20".
+  const [mobileCount, setMobileCount] = useState(PAGE_SIZE);
   useEffect(() => {
     setPageIndex(0);
+    setMobileCount(PAGE_SIZE);
   }, [activeFilter, debouncedSearch]);
 
   const loadedOrders = useMemo<Order[]>(
@@ -90,23 +95,31 @@ export function OrdersPage() {
     pageIndex * PAGE_SIZE + PAGE_SIZE,
   );
 
+  // Desktop shows one page window; mobile shows everything it has revealed.
+  const mobileOrders = loadedOrders.slice(0, mobileCount);
+
   const goPrev = () => setPageIndex((index) => Math.max(0, index - 1));
-  const goNext = () => {
+  // Await the fetch before moving the window, so the table never renders against
+  // rows that haven't arrived.
+  const goNext = async () => {
     const nextIndex = pageIndex + 1;
-    // If the next window isn't loaded yet but more remain on the server, fetch it.
     if (nextIndex * PAGE_SIZE >= loadedOrders.length && hasNextPage) {
-      void fetchNextPage();
+      await fetchNextPage();
     }
     if (nextIndex < totalPages) setPageIndex(nextIndex);
   };
-  const onLoadMore = () => {
-    // Mobile "Load more" reveals the next window, fetching it first if needed.
-    goNext();
+
+  // Mobile "Load more" grows the revealed set; it never moves the desktop window.
+  const onLoadMore = async () => {
+    if (mobileCount >= loadedOrders.length && hasNextPage) {
+      await fetchNextPage();
+    }
+    setMobileCount((count) => Math.min(count + PAGE_SIZE, totalCount));
   };
 
-  // More to see beyond the current window — either already loaded further down,
-  // or another page waiting on the server.
-  const hasMore = pageIndex < totalPages - 1;
+  // More to see beyond what's on screen — either already loaded further down, or
+  // another page waiting on the server.
+  const hasMore = mobileOrders.length < totalCount;
 
   const showSkeleton = isLoading;
 
@@ -159,17 +172,18 @@ export function OrdersPage() {
                 />
               </div>
 
-              <OrdersList orders={pageOrders} />
+              <OrdersList orders={pageOrders} mobileOrders={mobileOrders} />
 
               {totalCount > 0 && (
                 <OrdersPagination
                   page={pageIndex + 1}
                   totalPages={totalPages}
                   totalCount={totalCount}
+                  loadedCount={mobileOrders.length}
                   hasMore={hasMore}
                   onPrev={goPrev}
-                  onNext={goNext}
-                  onLoadMore={onLoadMore}
+                  onNext={() => void goNext()}
+                  onLoadMore={() => void onLoadMore()}
                 />
               )}
             </>

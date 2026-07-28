@@ -1,10 +1,11 @@
 import type { NextFunction, Request, Response } from 'express';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AppError } from '../lib/app-error.js';
 import { Role } from '../lib/roles.js';
 import type { AuthContext } from './auth-context.js';
 import { getAuth } from './auth-context.js';
+import { optionalAuth, requireAuth } from './require-auth.js';
 import {
   assertCanMutate,
   assertFound,
@@ -15,6 +16,11 @@ import {
 import { requireIdempotencyKey } from './require-idempotency-key.js';
 import { requireAdmin, requireRole, requireStaff } from './require-role.js';
 import { requireVerifiedEmail } from './require-verified-email.js';
+
+// The session guards call Better Auth; the boundary worth testing is what this
+// codebase does with each answer it can give, not Better Auth itself.
+const getSession = vi.hoisted(() => vi.fn());
+vi.mock('../config/auth.js', () => ({ auth: { api: { getSession } } }));
 
 function actor(role: Role, userId = 'user_1'): AuthContext {
   return {
@@ -29,6 +35,7 @@ function actor(role: Role, userId = 'user_1'): AuthContext {
 function mockReq(auth?: AuthContext, headers: Record<string, string> = {}) {
   return {
     auth,
+    headers,
     get: (name: string) => headers[name.toLowerCase()],
   } as unknown as Request;
 }
@@ -55,6 +62,126 @@ describe('getAuth', () => {
   it('returns the context when authenticated', () => {
     const context = actor(Role.CUSTOMER);
     expect(getAuth(mockReq(context))).toBe(context);
+  });
+});
+
+/*
+ * The session boundary. Every protected route group sits behind requireAuth, so
+ * each answer Better Auth can give has to land somewhere deliberate: a live
+ * session, no session, a session belonging to a suspended account, and the
+ * lookup itself failing.
+ */
+describe('session guards', () => {
+  const session = (overrides: Record<string, unknown> = {}) => ({
+    session: { id: 'sess_1' },
+    user: {
+      id: 'user_1',
+      email: 'person@example.com',
+      emailVerified: true,
+      role: Role.CUSTOMER,
+      banned: false,
+      ...overrides,
+    },
+  });
+
+  // The guards are async, so next() lands a tick after the call returns.
+  async function runAsync(
+    guard: (req: Request, res: Response, next: NextFunction) => Promise<void>,
+    req: Request,
+  ): Promise<unknown> {
+    const next = vi.fn();
+    await guard(req, res, next);
+    return next.mock.calls[0]?.[0];
+  }
+
+  beforeEach(() => {
+    getSession.mockReset();
+  });
+
+  describe('requireAuth', () => {
+    it('attaches the resolved context and allows the request through', async () => {
+      getSession.mockResolvedValue(session());
+
+      const req = mockReq();
+      expect(await runAsync(requireAuth, req)).toBeUndefined();
+      expect(req.auth).toMatchObject({
+        userId: 'user_1',
+        role: Role.CUSTOMER,
+        sessionId: 'sess_1',
+        emailVerified: true,
+      });
+    });
+
+    it('rejects a request with no session with 401', async () => {
+      getSession.mockResolvedValue(null);
+
+      const err = await runAsync(requireAuth, mockReq());
+      expect(err).toBeInstanceOf(AppError);
+      expect((err as AppError).status).toBe(401);
+    });
+
+    it('rejects a suspended account with 403 even though the cookie is valid', async () => {
+      getSession.mockResolvedValue(session({ banned: true, banExpires: null }));
+
+      const err = await runAsync(requireAuth, mockReq());
+      expect((err as AppError).status).toBe(403);
+    });
+
+    it('lets a lapsed ban through', async () => {
+      getSession.mockResolvedValue(
+        session({ banned: true, banExpires: new Date(Date.now() - 60_000) }),
+      );
+
+      expect(await runAsync(requireAuth, mockReq())).toBeUndefined();
+    });
+
+    it('falls back to the customer role for an unrecognised one', async () => {
+      getSession.mockResolvedValue(session({ role: 'wizard' }));
+
+      const req = mockReq();
+      expect(await runAsync(requireAuth, req)).toBeUndefined();
+      expect(req.auth?.role).toBe(Role.CUSTOMER);
+    });
+
+    it('passes a session-lookup failure to the error middleware', async () => {
+      getSession.mockRejectedValue(new Error('auth store unreachable'));
+
+      const err = await runAsync(requireAuth, mockReq());
+      expect(err).toBeInstanceOf(Error);
+    });
+  });
+
+  describe('optionalAuth', () => {
+    it('attaches the context when a session exists', async () => {
+      getSession.mockResolvedValue(session());
+
+      const req = mockReq();
+      expect(await runAsync(optionalAuth, req)).toBeUndefined();
+      expect(req.auth?.userId).toBe('user_1');
+    });
+
+    it('continues anonymously when there is no session', async () => {
+      getSession.mockResolvedValue(null);
+
+      const req = mockReq();
+      expect(await runAsync(optionalAuth, req)).toBeUndefined();
+      expect(req.auth).toBeUndefined();
+    });
+
+    it('still rejects a suspended account rather than treating it as anonymous', async () => {
+      getSession.mockResolvedValue(session({ banned: true, banExpires: null }));
+
+      const err = await runAsync(optionalAuth, mockReq());
+      expect((err as AppError).status).toBe(403);
+    });
+
+    it('continues anonymously when the session lookup fails', async () => {
+      getSession.mockRejectedValue(new Error('auth store unreachable'));
+
+      const req = mockReq();
+      expect(await runAsync(optionalAuth, req)).toBeUndefined();
+      expect(req.auth).toBeUndefined();
+    });
   });
 });
 

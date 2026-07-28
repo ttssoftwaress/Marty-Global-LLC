@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { RotateCcw } from 'lucide-react';
+import { ScanSearch } from 'lucide-react';
 
+import { Role } from '@/constants/roles';
+import { useAdminMe } from '@/admin/queries/admin-me';
 import { AdminLayout } from '../components/AdminLayout';
 import {
   LedgerCardList,
@@ -11,40 +13,49 @@ import {
   PaymentsEmptyState,
   PaymentsHeader,
   PaymentsKpiCards,
-  RefundLogCardList,
-  RefundLogTable,
+  ResolveTransferDialog,
   RevenueChartCard,
+  UnmatchedTransferCardList,
+  UnmatchedTransferTable,
   useAdminBillingLedger,
   useAdminPaymentsSummary,
-  useAdminRefundLog,
   useAdminRevenueSeries,
+  useAdminUnmatchedTransfers,
+  useResolveUnmatchedTransfer,
 } from '../features/payments';
 import { useAdminShell } from '../hooks/useAdminShell';
 import type {
   BillingLedgerRow,
   PaymentStatusFilter,
   RevenuePeriod,
+  UnmatchedTransferFilter,
+  UnmatchedTransferRow,
 } from '../types/payments';
 
 /*
- * Quotes & payments — the staff screen for revenue, the billing ledger, and the
- * refunds log.
+ * Quotes & payments — the staff screen for revenue and the billing ledger.
  *
  * The section order is the same at every width — header, KPIs, revenue chart,
- * billing ledger, refunds log — so one tree covers all three links. What changes
- * is how each list renders: `md` and up show tables inside bordered cards,
- * mobile shows card stacks on the page background, which is what the mobile link
- * shows.
+ * billing ledger — so one tree covers all three links. What changes is how each
+ * list renders: `md` and up show tables inside bordered cards, mobile shows card
+ * stacks on the page background, which is what the mobile link shows.
  *
  * Every figure, row, and chart point comes from the API; nothing on this page is
- * hardcoded business data. Four queries back it (endpoints land later): the
- * summary for the KPI figures and tab counts, the revenue series (re-fetched per
- * period), the ledger as an infinite query, and the refunds log.
+ * hardcoded business data: the summary for the KPI figures and tab counts, the
+ * revenue series (re-fetched per period), and the ledger as an infinite query.
  *
  * Ledger pagination is one cursor stream shown two ways (AGENTS.md): mobile's
  * "Load more" appends the next page, while the wider links' numbered pager steps
  * a window over what has loaded, fetching ahead when the window runs past the
  * loaded edge — the same approach the orders queue uses.
+ *
+ * A last section — unattributed transfers — sits below the ledger. The Figma
+ * links do not cover it: it is the screen half of a backend rule, AGENTS.md's
+ * "money we cannot attribute is never silently dropped", and until it existed
+ * the only record of a stray USDT transfer was a log line nobody outside the
+ * server ever read. It is built from this screen's own patterns — table in a
+ * card from `md`, card stack below — so it reads as part of the page rather
+ * than as a bolted-on panel.
  */
 
 const PAGE_SIZE = 7;
@@ -82,7 +93,42 @@ export function AdminQuotesPaymentsPage() {
   const summary = useAdminPaymentsSummary();
   const revenue = useAdminRevenueSeries(period);
   const ledger = useAdminBillingLedger(status);
-  const refunds = useAdminRefundLog();
+
+  /*
+   * Unattributed transfers. The list is readable by anyone holding the
+   * `payments` area; closing one out is admin-only, enforced server-side —
+   * this check only decides whether to offer a control that would 403.
+   */
+  const me = useAdminMe();
+  const canResolveTransfers = me.data?.role === Role.ADMIN;
+
+  const [transferFilter, setTransferFilter] =
+    useState<UnmatchedTransferFilter>('open');
+  const [resolving, setResolving] = useState<UnmatchedTransferRow | null>(null);
+
+  const transfers = useAdminUnmatchedTransfers(transferFilter);
+  const resolveTransfer = useResolveUnmatchedTransfer();
+
+  const transferRows = useMemo(
+    () => transfers.data?.pages.flatMap((page) => page.rows) ?? [],
+    [transfers.data],
+  );
+
+  const openTransfers = transfers.data?.pages[0]?.openCount ?? 0;
+
+  const onResolveSubmit = (note: string) => {
+    if (!resolving) return;
+
+    resolveTransfer.mutate(
+      { transferId: resolving.id, note },
+      { onSuccess: () => setResolving(null) },
+    );
+  };
+
+  const onResolveClose = () => {
+    setResolving(null);
+    resolveTransfer.reset();
+  };
 
   // The page window the wider links' pager steps over. Changing the filter
   // returns it to the first page, since the old offset means nothing now.
@@ -94,11 +140,6 @@ export function AdminQuotesPaymentsPage() {
   const loadedRows = useMemo<BillingLedgerRow[]>(
     () => ledger.data?.pages.flatMap((page) => page.rows) ?? [],
     [ledger.data],
-  );
-
-  const refundRows = useMemo(
-    () => refunds.data?.pages.flatMap((page) => page.rows) ?? [],
-    [refunds.data],
   );
 
   const totalResults = ledger.data?.pages[0]?.totalResults ?? 0;
@@ -124,9 +165,9 @@ export function AdminQuotesPaymentsPage() {
   };
 
   /*
-   * Refunds and reminders both move money or reach the customer, so neither
-   * fires from here — the mutations land with the `billing` / `payments`
-   * endpoints, and every one of them is audited server-side (AGENTS.md).
+   * A reminder reaches the customer, so it does not fire from here — the
+   * mutation lands with the `billing` endpoints, and it is audited server-side
+   * (AGENTS.md).
    */
   const onLedgerAction = (_row: BillingLedgerRow) => {};
 
@@ -136,9 +177,6 @@ export function AdminQuotesPaymentsPage() {
 
   const rangeStart = totalResults === 0 ? 0 : pageIndex * PAGE_SIZE + 1;
   const rangeEnd = pageIndex * PAGE_SIZE + windowRows.length;
-
-  const isRefundsLoading = refunds.isPending;
-  const isRefundsEmpty = !isRefundsLoading && refundRows.length === 0;
 
   return (
     <AdminLayout user={user} onLogout={onLogout}>
@@ -244,44 +282,144 @@ export function AdminQuotesPaymentsPage() {
             )}
           </section>
 
-          {/* Refunds & adjustments log */}
-          <section className="flex w-full flex-col gap-4">
-            <h2 className="text-h5 font-semibold text-text md:text-h6 lg:text-h4">
-              Refunds &amp; adjustments log
-            </h2>
-
-            {isRefundsLoading ? (
-              <TableSkeleton rows={4} />
-            ) : (
-              <>
-                {isRefundsEmpty ? null : <RefundLogCardList rows={refundRows} />}
-
-                <div className="hidden w-full flex-col overflow-hidden rounded-table border border-gray-200 bg-white shadow-sm-elevation md:flex">
-                  {isRefundsEmpty ? (
-                    <PaymentsEmptyState
-                      icon={RotateCcw}
-                      title="No refunds issued"
-                      description="Refunds and manual adjustments will be logged here once any are processed."
-                    />
-                  ) : (
-                    <RefundLogTable rows={refundRows} />
-                  )}
+          {/*
+            * Unattributed transfers — USDT that arrived matching no payment.
+            *
+            * Rendered only once the queue has ever held something. An operation
+            * where every transfer matches should not carry a permanently empty
+            * panel explaining a problem it does not have; the section appears
+            * the moment stray money does.
+            */}
+          {transfers.isPending || (transferRows.length === 0 && openTransfers === 0) ? null : (
+            <section className="flex w-full flex-col gap-4">
+              <div className="flex w-full flex-col gap-3 lg:flex-row lg:items-center lg:justify-between lg:gap-6">
+                <div className="flex min-w-0 flex-col gap-1">
+                  <h2 className="text-h5 font-semibold text-text md:text-h6 lg:text-h4">
+                    Unattributed transfers
+                  </h2>
+                  <p className="text-caption text-gray-500 md:text-small">
+                    {openTransfers > 0
+                      ? `${openTransfers} on-chain ${
+                          openTransfers === 1 ? 'payment' : 'payments'
+                        } we could not match to an invoice.`
+                      : 'Nothing outstanding — every transfer has been reconciled.'}
+                  </p>
                 </div>
 
-                {isRefundsEmpty ? (
-                  <div className="rounded-card border border-gray-200 bg-white md:hidden">
-                    <PaymentsEmptyState
-                      icon={RotateCcw}
-                      title="No refunds issued"
-                      description="Refunds and manual adjustments will be logged here once any are processed."
-                    />
-                  </div>
-                ) : null}
-              </>
-            )}
-          </section>
+                <div
+                  role="tablist"
+                  aria-label="Filter unattributed transfers"
+                  className="flex shrink-0 items-center gap-2"
+                >
+                  {(
+                    [
+                      { value: 'open', label: 'Open' },
+                      { value: 'resolved', label: 'Reconciled' },
+                      { value: 'all', label: 'All' },
+                    ] as const
+                  ).map((tab) => {
+                    const isActive = tab.value === transferFilter;
+
+                    return (
+                      <button
+                        key={tab.value}
+                        type="button"
+                        role="tab"
+                        aria-selected={isActive}
+                        onClick={() => setTransferFilter(tab.value)}
+                        className={`flex shrink-0 items-center whitespace-nowrap rounded-pill px-3 py-1.5 text-small transition-colors md:px-4 md:py-2 lg:text-body ${
+                          isActive
+                            ? 'bg-primary font-semibold text-white'
+                            : 'border border-gray-300 bg-white font-medium text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {transferRows.length === 0 ? null : (
+                <UnmatchedTransferCardList
+                  rows={transferRows}
+                  canResolve={canResolveTransfers}
+                  resolvingId={resolveTransfer.isPending ? resolving?.id ?? null : null}
+                  onResolve={setResolving}
+                />
+              )}
+
+              <div className="hidden w-full flex-col overflow-hidden rounded-table border border-gray-200 bg-white shadow-sm-elevation md:flex">
+                {transferRows.length === 0 ? (
+                  <PaymentsEmptyState
+                    icon={ScanSearch}
+                    title={
+                      transferFilter === 'resolved'
+                        ? 'Nothing reconciled yet'
+                        : 'No unattributed transfers'
+                    }
+                    description={
+                      transferFilter === 'resolved'
+                        ? 'Transfers your team closes out will be logged here with the note that explains them.'
+                        : 'Every payment that has landed on the deposit address matched an invoice.'
+                    }
+                  />
+                ) : (
+                  <UnmatchedTransferTable
+                    rows={transferRows}
+                    canResolve={canResolveTransfers}
+                    resolvingId={resolveTransfer.isPending ? resolving?.id ?? null : null}
+                    onResolve={setResolving}
+                  />
+                )}
+              </div>
+
+              {transferRows.length === 0 ? (
+                <div className="rounded-card border border-gray-200 bg-white md:hidden">
+                  <PaymentsEmptyState
+                    icon={ScanSearch}
+                    title={
+                      transferFilter === 'resolved'
+                        ? 'Nothing reconciled yet'
+                        : 'No unattributed transfers'
+                    }
+                    description={
+                      transferFilter === 'resolved'
+                        ? 'Transfers your team closes out will be logged here with the note that explains them.'
+                        : 'Every payment that has landed on the deposit address matched an invoice.'
+                    }
+                  />
+                </div>
+              ) : null}
+
+              {/*
+                * Its own "Load more" rather than the ledger's: that one prints
+                * "Showing N of M orders", and this list is not orders. Shown at
+                * every width — the queue is short enough that a pager would be
+                * more chrome than the section is worth.
+                */}
+              {transfers.hasNextPage ? (
+                <button
+                  type="button"
+                  onClick={() => void transfers.fetchNextPage()}
+                  disabled={transfers.isFetchingNextPage}
+                  className="flex h-10 w-full items-center justify-center rounded-control border border-primary bg-white px-4 text-body font-semibold text-primary transition-colors hover:bg-primary-light disabled:cursor-default disabled:border-gray-200 disabled:text-gray-400 md:w-fit md:self-center md:px-6"
+                >
+                  {transfers.isFetchingNextPage ? 'Loading…' : 'Load more'}
+                </button>
+              ) : null}
+            </section>
+          )}
         </div>
       </div>
+
+      <ResolveTransferDialog
+        transfer={resolving}
+        isSubmitting={resolveTransfer.isPending}
+        error={resolveTransfer.error}
+        onSubmit={onResolveSubmit}
+        onClose={onResolveClose}
+      />
     </AdminLayout>
   );
 }

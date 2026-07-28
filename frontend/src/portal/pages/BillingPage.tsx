@@ -6,8 +6,8 @@ import { PortalLayout } from '../components/PortalLayout';
 import {
   BillingKpiCards,
   PaymentHistory,
+  PaymentMethods,
   QuotesAwaitingPayment,
-  SavedPaymentMethods,
   useBillingOverview,
   usePaymentHistory,
 } from '../features/billing';
@@ -103,11 +103,13 @@ export function BillingPage() {
   const totalPages = history.data?.pages[0]?.totalPages ?? 1;
 
   const goPrev = () => setPageIndex((index) => Math.max(0, index - 1));
-  const goNext = () => {
+  // Await the fetch before advancing: PaymentHistory keys its empty/skeleton
+  // checks off the full loaded set, so moving the window to rows that haven't
+  // arrived yet renders an empty table body with no loading state.
+  const goNext = async () => {
     const nextIndex = pageIndex + 1;
-    // If the next window isn't loaded yet but more remain on the server, fetch it.
     if (nextIndex * PAGE_SIZE >= loadedPayments.length && history.hasNextPage) {
-      void history.fetchNextPage();
+      await history.fetchNextPage();
     }
     if (nextIndex < totalPages) setPageIndex(nextIndex);
   };
@@ -144,10 +146,10 @@ export function BillingPage() {
                 canLoadMore={Boolean(history.hasNextPage)}
                 onLoadMore={onLoadMore}
                 onPrev={goPrev}
-                onNext={goNext}
+                onNext={() => void goNext()}
               />
 
-              <SavedPaymentMethods methods={overview.data.savedMethods} />
+              <PaymentMethods />
             </>
           )}
         </div>

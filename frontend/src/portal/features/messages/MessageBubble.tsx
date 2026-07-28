@@ -1,4 +1,4 @@
-import { Download } from 'lucide-react';
+import { Check, CheckCheck, Download } from 'lucide-react';
 
 import { formatFileSize, formatMessageTime } from '../../lib/format';
 import type { Message } from '../../types/messages';
@@ -87,10 +87,14 @@ export function MessageBubble({ message, firstOfRun }: MessageBubbleProps) {
       ) : null}
 
       <div
-        className={`flex max-w-[280px] flex-col gap-2 rounded-2xl p-3 md:max-w-[300px] md:px-3.5 md:py-2.5 lg:max-w-[480px] lg:px-4 lg:py-3 ${
+        className={`flex max-w-[280px] flex-col gap-2 rounded-2xl p-3 transition-opacity md:max-w-[300px] md:px-3.5 md:py-2.5 lg:max-w-[480px] lg:px-4 lg:py-3 ${
           isAgent
             ? `bg-gray-100 ${firstOfRun ? 'rounded-tl-[4px]' : ''}`
             : `bg-primary-light ${firstOfRun ? 'rounded-tr-[4px]' : ''}`
+        } ${
+          // In flight: dimmed rather than replaced by a spinner, so the message
+          // reads as sent-and-settling instead of as an error state.
+          message.pending ? 'opacity-60' : ''
         }`}
       >
         <p className="whitespace-pre-wrap break-words text-[14px] leading-5 text-text md:text-[13px] md:leading-[18px] lg:text-[14px] lg:leading-5">
@@ -111,8 +115,30 @@ export function MessageBubble({ message, firstOfRun }: MessageBubbleProps) {
         ) : null}
       </div>
 
-      <span className="text-caption text-gray-400">
+      <span className="flex items-center gap-1 text-caption text-gray-400">
         {formatMessageTime(message.sentAt)}
+        {/*
+         * The read receipt sits on the customer's own messages only — one tick
+         * delivered, two ticks read by the team. An agent's reply carries none:
+         * telling the customer they have read something is noise.
+         */}
+        {!isAgent && !message.pending ? (
+          message.seen ? (
+            <>
+              <CheckCheck
+                className="size-3.5 text-primary"
+                strokeWidth={2}
+                aria-hidden="true"
+              />
+              <span className="sr-only">Seen by the team</span>
+            </>
+          ) : (
+            <>
+              <Check className="size-3.5" strokeWidth={2} aria-hidden="true" />
+              <span className="sr-only">Sent</span>
+            </>
+          )
+        ) : null}
       </span>
     </div>
   );

@@ -80,6 +80,47 @@ const envSchema = z.object({
     .max(3600)
     .default(300),
 
+  // --- Live chat (Socket.io) ---------------------------------------------
+  /*
+   * How long a customer's unanswered message waits before we email them.
+   *
+   * The window exists so an agent who picks the thread up promptly cancels the
+   * email simply by replying; too short and the customer gets both a reply and a
+   * "we'll get back to you", too long and someone who closed the tab hears
+   * nothing for a while.
+   */
+  SUPPORT_HANDOFF_DELAY_MINUTES: z.coerce.number().int().min(1).max(120).default(5),
+  // Inbound socket messages per connection per minute. The socket equivalent of
+  // chatRateLimit on the REST side — one posture regardless of transport.
+  SUPPORT_SOCKET_MESSAGES_PER_MINUTE: z.coerce.number().int().min(5).max(600).default(60),
+
+  /*
+   * How long an anonymous visitor's chat survives after their last message,
+   * after which it is deleted outright — the one hard delete in this schema, and
+   * a deliberate one (AGENTS.md requires asking first). A pre-sales chat carries
+   * no regulatory retention, so keeping it past its usefulness is a liability.
+   */
+  GUEST_CHAT_RETENTION_DAYS: z.coerce.number().int().min(1).max(90).default(7),
+  // How often the purge sweeps, in seconds. Daily is plenty for a 7-day window.
+  GUEST_CHAT_PURGE_INTERVAL_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(60)
+    .max(86_400)
+    .default(86_400),
+
+  /*
+   * Cloudflare Turnstile. The anonymous chat widget is the first endpoint on this
+   * backend a bot can reach without a session, so thread creation is verified
+   * server-side (AGENTS.md: the browser never calls a third party directly).
+   *
+   * Optional, like SES and R2 above: without the secret, verification logs a
+   * warning and passes through, so local dev and tests need no Cloudflare
+   * account. Production must set it — an unverified public write endpoint is a
+   * spam queue with extra steps.
+   */
+  TURNSTILE_SECRET_KEY: optionalString,
+
   // --- USDT (TRC-20) via TronGrid ----------------------------------------
   // We only ever WATCH the chain: no private key, no seed phrase, no signing
   // (AGENTS.md, Payments). Everything below is public data or a read-only key.
@@ -166,7 +207,25 @@ const envSchema = z.object({
       message:
         'ADMIN_EMAIL and ADMIN_PASSWORD must be set together (or both left unset)',
     },
-  );
+  )
+  /*
+   * SES credentials are a complete pair in production. A half-filled or empty
+   * block would boot cleanly and then skip every send (config/ses.ts), so a
+   * deploy that never delivers a verification email or a payment receipt would
+   * look healthy. Dev and test keep them optional.
+   */
+  .superRefine((value, ctx) => {
+    if (value.NODE_ENV !== 'production') return;
+
+    if (!value.AWS_ACCESS_KEY_ID || !value.AWS_SECRET_ACCESS_KEY) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['AWS_SECRET_ACCESS_KEY'],
+        message:
+          'NODE_ENV=production requires both AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY',
+      });
+    }
+  });
 
 const parsed = envSchema.safeParse(process.env);
 

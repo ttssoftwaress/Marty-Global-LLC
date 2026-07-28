@@ -49,6 +49,21 @@ export type Message = {
   senderName?: string; // "Sarah — Client Success"
   senderAvatarUrl?: string;
   attachments?: MessageAttachment[];
+  /*
+   * Whether the team has read this message. Set on the customer's own messages
+   * only — a "Seen" tick under an agent's reply would be reporting the
+   * customer's own reading back to them. Derived server-side from the thread's
+   * staff read marker.
+   */
+  seen?: boolean;
+  /*
+   * Local-only, never from the API: a message this browser has drawn but the
+   * server has not confirmed yet. It carries the id the send was tagged with, so
+   * the delivered copy replaces the optimistic bubble instead of appearing
+   * beside it.
+   */
+  pending?: boolean;
+  clientId?: string;
 };
 
 /*

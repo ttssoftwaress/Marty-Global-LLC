@@ -71,20 +71,6 @@ export async function paymentScope(
     : { quote: { is: { order: { is: { assigneeId: actor.userId } } } } };
 }
 
-// --- Refund --------------------------------------------------------------
-// Refund → Payment → Quote → Order, the deepest path in the module.
-export async function refundScope(
-  actor: AuthContext,
-): Promise<Prisma.RefundWhereInput> {
-  return (await canSeeAll(actor, 'payments'))
-    ? UNSCOPED
-    : {
-        payment: {
-          is: { quote: { is: { order: { is: { assigneeId: actor.userId } } } } },
-        },
-      };
-}
-
 /*
  * --- Customer ------------------------------------------------------------
  *

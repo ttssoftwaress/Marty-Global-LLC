@@ -41,8 +41,6 @@ model User {
   conversations           Conversation[]
   quotes                  Quote[]
   payments                Payment[]
-  paymentMethods          PaymentMethod[]
-  stripeCustomer          StripeCustomer?
   // Delivered services and the follow-ups raised against them.
   serviceResults          ServiceResult[]  @relation("ServiceResultCustomer")
   serviceRequests         ServiceRequest[] @relation("ServiceRequestCustomer")
@@ -56,7 +54,7 @@ model User {
   mailRequestsRequested   MailRequest[]     @relation("MailRequestCustomer")
   mailRequestsProcessed   MailRequest[]     @relation("MailRequestProcessor")
   mailActionsProcessed    MailActionLog[]   @relation("MailActionProcessor")
-  refundsProcessed        Refund[]          @relation("RefundProcessor")
+  transfersReconciled     UnmatchedTransfer[] @relation("UnmatchedTransferResolver")
 
   @@unique([email])
   @@map("user")
@@ -126,6 +124,20 @@ enum StaffStatus {
   DEACTIVATED
 }
 
+/*
+ * Whether this agent is taking live chat right now.
+ *
+ * Deliberately separate from "has a socket connected". Connected is a fact about
+ * a browser tab; available is a statement of intent — an agent writing a filing
+ * with the inbox open in another tab is connected and not available. Only ONLINE
+ * agents count toward "is anyone there", which is what decides whether a
+ * customer's message triggers the offline email handoff.
+ */
+enum StaffAvailability {
+  ONLINE
+  AWAY
+}
+
 model StaffProfile {
   id     String @id @default(cuid())
   userId String @unique
@@ -133,6 +145,9 @@ model StaffProfile {
   // from lib/permissions.ts. Distinct from user.role, which is the auth role.
   roleKey String
   status  StaffStatus @default(INVITED)
+  // The agent's own Online/Away switch in the admin shell. Defaults to ONLINE so
+  // an existing team is reachable the moment live chat ships.
+  availability StaffAvailability @default(ONLINE)
   // Granted permission-area keys. Absent from the array = not granted.
   permissions String[]
   // What the support inbox's narrow capsules print ("Marcus T."), snapshotted so
@@ -1370,9 +1385,68 @@ enum ConversationStatus {
   RESOLVED
 }
 
+/*
+ * A visitor chatting from the marketing site without an account.
+ *
+ * They are NOT a User and never become one: there is no merge path, by design.
+ * Identity is a bearer token the browser keeps in localStorage, so a visitor who
+ * closes the tab and returns days later reaches the same thread — and anyone
+ * holding the token reaches it too, which is the entire security model. That is
+ * acceptable for a thread whose only contents are what the visitor themselves
+ * typed, and it is why the token is stored hashed: a database leak must not hand
+ * out live conversation access.
+ *
+ * Everything here is PII the visitor volunteered to get a reply. It is purged
+ * wholesale 7 days after the last message — a real DELETE, not a soft one, which
+ * is the one place this schema hard-deletes and was explicitly agreed (AGENTS.md
+ * requires asking first). Nothing regulatory attaches to a pre-sales chat, so
+ * retaining it past its usefulness is a liability rather than a record.
+ */
+model GuestVisitor {
+  id String @id @default(cuid())
+  /*
+   * SHA-256 of the token the browser holds. We never store the token itself, for
+   * the same reason a session table stores a hash: the column is a bearer
+   * credential, and a read-only leak of this table would otherwise be a takeover
+   * of every live guest conversation.
+   */
+  tokenHash String @unique
+  name      String
+  email     String
+  // Coarse abuse signal for the public surface — the address that created the
+  // thread. Never rendered to staff and never logged; the purge takes it with
+  // everything else.
+  createdIp String?
+  // Drives the 7-day window. Bumped on every message in either direction, so an
+  // active conversation is never cut off mid-flow (agreed retention rule).
+  lastSeenAt DateTime @default(now()) @db.Timestamptz(3)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+
+  conversations Conversation[]
+
+  // The purge job's scan: everything untouched since the cutoff.
+  @@index([lastSeenAt])
+  @@map("guest_visitor")
+}
+
 model Conversation {
-  id         String               @id @default(cuid())
-  customerId String
+  id String @id @default(cuid())
+  /*
+   * The account this thread belongs to. Nullable only because of the guest
+   * surface below: exactly one of `customerId` / `guestId` is set, which Prisma
+   * cannot express, so the services enforce it and the partial indexes below
+   * assume it.
+   *
+   * Every customer-scoped read is `customerId: <their id>`, which a null can
+   * never satisfy — so a guest thread is invisible to the portal by construction
+   * rather than by a filter someone has to remember.
+   */
+  customerId String?
+  // Set instead of `customerId` on a thread opened from the marketing site. The
+  // thread still lands in the same admin inbox; it is `kind: SUPPORT` like any
+  // other help request, because it is routed by the identical rule.
+  guestId    String?
   subject    String
   category   ConversationCategory @default(SUPPORT)
   kind       ConversationKind     @default(SUPPORT)
@@ -1397,17 +1471,30 @@ model Conversation {
   // When the customer last opened the thread — the unread dot is
   // `lastMessageAt > customerReadAt`, derived rather than a stored boolean.
   customerReadAt DateTime? @db.Timestamptz(3)
+  /*
+   * The staff half of the same idea, and what draws the customer's "Seen" tick.
+   *
+   * Two markers rather than a per-message read flag: a thread is read up to a
+   * point in time, so one timestamp answers it for every message at once and
+   * cannot drift out of step with itself. A message is seen by the other side
+   * when their marker is at or past its `sentAt`.
+   */
+  staffReadAt    DateTime? @db.Timestamptz(3)
   closedAt       DateTime? @db.Timestamptz(3)
   createdAt      DateTime  @default(now()) @db.Timestamptz(3)
   updatedAt      DateTime  @updatedAt @db.Timestamptz(3)
   deletedAt      DateTime? @db.Timestamptz(3)
 
-  customer User      @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  assignee User?     @relation("ConversationAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  order    Order?    @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  customer User?         @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  // Cascade, unlike every other relation here: purging the visitor is meant to
+  // take the conversation and its messages with it, in one statement.
+  guest    GuestVisitor? @relation(fields: [guestId], references: [id], onDelete: Cascade)
+  assignee User?         @relation("ConversationAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  order    Order?        @relation(fields: [orderId], references: [id], onDelete: SetNull)
   messages Message[]
 
   @@index([customerId, lastMessageAt])
+  @@index([guestId])
   // An order has at most one conversation, so the order-detail screen resolves it
   // by lookup rather than by "newest thread that happens to mention this order".
   // A partial unique index is what the database can actually express here: a
@@ -1545,13 +1632,14 @@ model QuoteLineItem {
 // --- Payments ------------------------------------------------------------
 // `payments` owns collecting what billing says is owed. A Payment row is the
 // source of truth for a collection attempt and carries the provider reference —
-// a Stripe PaymentIntent id or a Tron tx hash — so reconciliation is a lookup,
-// never a guess (AGENTS.md, Payments).
+// the Tron tx hash — so reconciliation is a lookup, never a guess (AGENTS.md,
+// Payments).
 //
-// We never store a PAN or CVC anywhere: Stripe holds the card, we hold the token.
+// Card payments are a later deployment. Nothing here models a card: no PAN, no
+// CVC, and no card token either, so there is no shape to misuse before the card
+// vertical is actually built.
 
 enum PaymentProvider {
-  STRIPE
   USDT_TRC20
 }
 
@@ -1561,11 +1649,6 @@ enum PaymentStatus {
   PROCESSING
   SUCCEEDED
   FAILED
-  REFUNDED
-  // Part of the collected amount was returned. Explicit rather than inferred
-  // from summing refunds at read time: the admin ledger filters on it, and a
-  // status the ledger can index is what keeps that a cheap query.
-  PARTIALLY_REFUNDED
   // USDT only: the chain settled an amount that doesn't match the quote. Never a
   // silent pass — an explicit state a human resolves (AGENTS.md, Money).
   UNDERPAID
@@ -1583,13 +1666,9 @@ model Payment {
   amount   Int
   currency String @default("USD")
 
-  // Card display only — brand + last four. Never a PAN, never a CVC.
-  cardBrand String?
-  cardLast4 String?
-
-  // Stripe PaymentIntent id / Tron tx hash. Unique so a webhook or a poller that
-  // fires twice can never create or credit a second row (AGENTS.md: match and
-  // credit in one transaction, never double-credit).
+  // The Tron tx hash. Unique so a poller that fires twice can never create or
+  // credit a second row (AGENTS.md: match and credit in one transaction, never
+  // double-credit).
   providerRef String? @unique
 
   // --- USDT (TRC-20) only ------------------------------------------------
@@ -1639,9 +1718,8 @@ model Payment {
   updatedAt        DateTime  @updatedAt @db.Timestamptz(3)
   deletedAt        DateTime? @db.Timestamptz(3)
 
-  customer User     @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  quote    Quote?   @relation(fields: [quoteId], references: [id], onDelete: SetNull)
-  refunds  Refund[]
+  customer User   @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  quote    Quote? @relation(fields: [quoteId], references: [id], onDelete: SetNull)
 
   @@index([customerId, createdAt])
   @@index([status])
@@ -1676,97 +1754,73 @@ model ChainSyncCursor {
   @@map("chain_sync_cursor")
 }
 
-// One reversal against a payment — the admin "Refunds & adjustments" log. A row
-// per refund rather than a nullable column on the payment, because a payment can
-// be partially refunded more than once and each reversal has its own reason,
-// approver, and provider reference.
-//
-// MONEY: integer minor units + ISO 4217, positive (the amount returned). The
-// direction is the record's meaning, not its sign — the ledger prints it in the
-// error hue rather than as a negative number.
-model Refund {
-  id        String @id @default(cuid())
-  paymentId String
-  amount    Int
-  currency  String @default("USD")
-  reason    String
-  // Stripe refund id (`re_…`) or the Tron tx hash of the return. Unique so a
-  // retried job or a redelivered webhook can never record the same reversal
-  // twice (AGENTS.md, Payments).
-  providerRef String? @unique
-  // The Idempotency-Key the endpoint accepted. Unique, so a retried request
-  // resolves to this same reversal rather than refunding twice — the guard only
-  // surfaces the header, this column is what actually makes it retry-safe
-  // (AGENTS.md, API Conventions).
-  idempotencyKey String? @unique
-  // Who approved it. Kept by id without an FK cascade plus a snapshotted name, so
-  // the log still reads after the approver's account is gone.
-  processedById   String?
-  processedByName String
-  processedAt DateTime  @default(now()) @db.Timestamptz(3)
-  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
-  deletedAt   DateTime? @db.Timestamptz(3)
+/*
+ * A verified USDT transfer into our deposit address that matched no live payment
+ * — money we cannot attribute.
+ *
+ * AGENTS.md is explicit that this is never silently dropped, and before this
+ * table the only record was a log line. That was not enough in either direction:
+ * the poller re-reads a five-minute overlap window on every sweep, so one
+ * unattributable transfer re-emitted the same warning every poll interval for as
+ * long as it stayed unresolved, while nothing outside the log ever knew it
+ * existed.
+ *
+ * The unique tx hash is what fixes both. It gives the sweep the same
+ * already-seen answer that a claimed `Payment.providerRef` gives for a matched
+ * transfer — so the second sighting quietly updates this row instead of warning
+ * again — and it gives a human a queue to reconcile from.
+ *
+ * MONEY: the raw on-chain integer plus its precision, never a float (AGENTS.md).
+ */
+model UnmatchedTransfer {
+  id String @id @default(cuid())
 
-  payment     Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
-  processedBy User?   @relation("RefundProcessor", fields: [processedById], references: [id], onDelete: SetNull)
+  // The Tron transaction hash. Unique: one row per transfer no matter how many
+  // sweeps re-read it — this IS the de-duplication.
+  transactionHash String @unique
 
-  @@index([paymentId])
-  @@index([processedAt])
-  @@map("refund")
-}
+  // The contract that emitted the transfer, already verified as the real USDT
+  // contract before this row is written. Stored rather than assumed, so the
+  // queue can prove which asset arrived instead of trusting a token's name.
+  contractAddress String
 
-// The Stripe Customer a user's saved cards attach to. One per user, kept apart
-// from the Better Auth `user` row so a Better Auth regeneration never drops it.
-model StripeCustomer {
-  id               String @id @default(cuid())
-  userId           String @unique
-  stripeCustomerId String @unique
+  // Who sent it and which of our addresses it landed on. The sender is the only
+  // lead a reconciler has on unattributed money, which is why it is kept — it is
+  // never logged, only stored (AGENTS.md, Security & PII).
+  fromAddress String
+  toAddress   String
+
+  // 1500000 at 6 decimals is 1.5 USDT. Decimal(38,0) + the token's precision,
+  // matching how Payment stores a settled amount.
+  amountRaw Decimal @db.Decimal(38, 0)
+  decimals  Int
+
+  // The transfer's own block time, kept apart from when we first noticed it —
+  // a cold start can see a transfer hours or days after it landed.
+  blockAt     DateTime @db.Timestamptz(3)
+  firstSeenAt DateTime @default(now()) @db.Timestamptz(3)
+  lastSeenAt  DateTime @default(now()) @db.Timestamptz(3)
+
+  // How many sweeps have re-read it. A counter rather than a repeated warning:
+  // it says "still sitting here" without costing a log line every interval.
+  sightings Int @default(1)
+
+  // Reconciliation. Null until a human closes it out; the note is their record
+  // of what the money turned out to be. The resolver's name is snapshotted
+  // alongside their id, so the trail still reads after the account is gone.
+  resolvedAt     DateTime? @db.Timestamptz(3)
+  resolvedById   String?
+  resolvedByName String?
+  resolutionNote String?
+
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resolvedBy User? @relation("UnmatchedTransferResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
 
-  @@map("stripe_customer")
-}
-
-// A saved card, as the Billing screen lists it. Brand, last four, and expiry are
-// all we persist — the card itself lives at Stripe behind `stripePaymentMethodId`
-// (AGENTS.md, PCI: no PAN or CVC in any column, log, or endpoint, ever).
-model PaymentMethod {
-  id                    String @id @default(cuid())
-  customerId            String
-  stripePaymentMethodId String @unique
-  brand                 String
-  last4                 String
-  expMonth              Int
-  expYear               Int
-  isDefault             Boolean   @default(false)
-  createdAt             DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt             DateTime  @updatedAt @db.Timestamptz(3)
-  deletedAt             DateTime? @db.Timestamptz(3)
-
-  customer User @relation(fields: [customerId], references: [id], onDelete: Cascade)
-
-  @@index([customerId])
-  @@map("payment_method")
-}
-
-// Every Stripe webhook we accept, keyed by the Stripe event id. The unique
-// constraint is the dedupe: a redelivered event inserts nothing and the handler
-// no-ops (AGENTS.md, Payments).
-model WebhookEvent {
-  id            String   @id @default(cuid())
-  provider      String
-  // Stripe's `evt_…` id.
-  externalId    String
-  type          String
-  processedAt   DateTime? @db.Timestamptz(3)
-  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt     DateTime  @updatedAt @db.Timestamptz(3)
-
-  @@unique([provider, externalId])
-  @@map("webhook_event")
+  // The queue's own order: open items first, newest transfer first within them.
+  @@index([resolvedAt, blockAt])
+  @@map("unmatched_transfer")
 }
 
 // --- Marketing contact form ----------------------------------------------

@@ -65,6 +65,16 @@ export async function sendMessage(
   }
 }
 
+export async function markRead(req: Request, res: Response, next: NextFunction) {
+  try {
+    res.json({
+      data: await service.markStaffRead(getAuth(req), pathParam(req, 'conversationId')),
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function updateConversation(
   req: Request,
   res: Response,

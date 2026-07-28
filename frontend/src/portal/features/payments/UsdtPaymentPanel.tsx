@@ -220,10 +220,6 @@ function ProblemState({ payment }: { payment: Payment }) {
       body: 'The exchange rate we quoted is no longer valid. Start the payment again to get a fresh amount — nothing has been charged.',
     },
     failed: FALLBACK,
-    refunded: {
-      title: 'This payment was refunded',
-      body: 'The amount has been returned. Contact us if you have any questions.',
-    },
   };
 
   const { title, body } = copy[status] ?? FALLBACK;
@@ -323,7 +319,7 @@ export function UsdtPaymentPanel({ payment }: { payment: Payment }) {
       {status === 'awaiting_payment' ? <AwaitingState payment={payment} /> : null}
       {status === 'confirming' ? <ConfirmingState payment={payment} /> : null}
       {status === 'succeeded' ? <SucceededState payment={payment} /> : null}
-      {['failed', 'expired', 'underpaid', 'overpaid', 'refunded'].includes(status) ? (
+      {['failed', 'expired', 'underpaid', 'overpaid'].includes(status) ? (
         <ProblemState payment={payment} />
       ) : null}
     </section>

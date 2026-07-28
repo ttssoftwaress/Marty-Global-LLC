@@ -99,12 +99,21 @@ export async function listMyConversations(
     }
   }
 
-  const rows: StaffConversationRow[] = conversations.map((conversation) => ({
+  const rows: StaffConversationRow[] = conversations.map((conversation) => {
+    /*
+     * `customerId` is nullable on the model only because of the anonymous chat
+     * (schema.prisma), and a visitor cannot have an order. This query is scoped
+     * to ORDER threads, so the customer is always there — the fallback exists to
+     * satisfy the type, not because it is reachable.
+     */
+    const customerName = conversation.customer?.name ?? 'Unknown customer';
+
+    return {
     id: conversation.id,
     orderId: conversation.order?.id ?? '',
     orderReference: conversation.order?.reference ?? '',
-    customerName: conversation.customer.name,
-    customerInitials: toInitials(conversation.customer.name),
+    customerName,
+    customerInitials: toInitials(customerName),
     preview: conversation.preview ?? '',
     lastMessageAt: iso(conversation.lastMessageAt ?? conversation.createdAt),
     awaitingReply: latestAuthor.get(conversation.id) === MessageAuthor.CUSTOMER,
@@ -112,7 +121,8 @@ export async function listMyConversations(
     // The thread is read on the order, not on a page of its own — that is what
     // keeps it tied to the work it is about.
     to: `/admin/orders/${conversation.order?.id ?? ''}`,
-  }));
+    };
+  });
 
   // Waiting-on-us first: the list is a work queue, and a thread the customer is
   // waiting on outranks one we already answered.

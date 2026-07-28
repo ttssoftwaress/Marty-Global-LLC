@@ -1,14 +1,21 @@
 import type { PrismaClient } from '@prisma/client';
 
 /*
- * Reference data — the jurisdictions services can be offered in and the carriers
- * the mail room ships with. Both are real operational data rather than fixtures,
- * so they always seed, exactly like the service catalog.
+ * DEMO-ONLY reference data — the jurisdictions services are offered in, the
+ * carriers the mail room ships with, and the per-service coverage and price
+ * points that hang off them.
  *
- * They live in tables rather than as frontend constants because both apps read
- * them and neither should need a deploy to add a row: Design.md forbids exporting
- * flag glyphs as assets (so the emoji travels with the row), and AGENTS.md keeps
- * the catalog server-owned.
+ * None of this is seeded any more on the normal path, and that is the point.
+ * Which countries we operate in is an operational decision that belongs to
+ * whoever runs the business, not to a list in a seed script: locations and
+ * carriers are created and retired from `/admin/settings`, and a service's
+ * coverage and tiers from `/admin/catalog/:serviceId`. A fresh database
+ * therefore has none of this, and the admin puts in the rows they actually want.
+ *
+ * What survives here is a fixture. The demo customer's orders are filed under a
+ * region code, and the demo mail request shipped with a carrier, so those rows
+ * need something to point at — which is why this runs only behind
+ * `SEED_DEMO=true`, beside the rest of the development fixtures.
  *
  * Idempotent: every row upserts on its stable code.
  */
@@ -35,7 +42,7 @@ const CARRIERS = [
   { code: 'royal-mail', label: 'Royal Mail', sortOrder: 5 },
 ];
 
-export async function seedReferenceData(prisma: PrismaClient): Promise<void> {
+export async function seedDemoReferenceData(prisma: PrismaClient): Promise<void> {
   for (const region of REGIONS) {
     await prisma.region.upsert({
       where: { code: region.code },
@@ -53,7 +60,7 @@ export async function seedReferenceData(prisma: PrismaClient): Promise<void> {
   }
 
   console.info(
-    `Reference data seeded — ${REGIONS.length} regions, ${CARRIERS.length} carriers.`,
+    `Demo reference data seeded — ${REGIONS.length} locations, ${CARRIERS.length} carriers. Manage these at /admin/settings.`,
   );
 }
 
@@ -61,6 +68,11 @@ export async function seedReferenceData(prisma: PrismaClient): Promise<void> {
  * Which regions each seeded service is offered in, and its price points. The
  * catalog itself is quote-based, so a tier is the team's reference price rather
  * than something a customer is charged automatically.
+ *
+ * Demo-only for the same reason as the lists above: coverage and pricing are
+ * configured per service from `/admin/catalog/:serviceId`, and both reference
+ * the demo locations, so seeding them outside the fixture would put back exactly
+ * the hard-coded data this file no longer inserts.
  *
  * MONEY: integer minor units + ISO 4217 (AGENTS.md). 59900 = $599.00.
  */
@@ -183,7 +195,7 @@ const SERVICE_TIERS: Record<string, SeedTier[]> = {
   ],
 };
 
-export async function seedCatalogPricing(prisma: PrismaClient): Promise<void> {
+export async function seedDemoCatalogPricing(prisma: PrismaClient): Promise<void> {
   for (const [serviceId, regions] of Object.entries(SERVICE_REGIONS)) {
     const service = await prisma.service.findUnique({ where: { id: serviceId } });
     if (!service) continue;
@@ -211,5 +223,5 @@ export async function seedCatalogPricing(prisma: PrismaClient): Promise<void> {
     }
   }
 
-  console.info('Catalog pricing seeded — region offerings and tiers.');
+  console.info('Demo catalog pricing seeded — coverage and tiers.');
 }

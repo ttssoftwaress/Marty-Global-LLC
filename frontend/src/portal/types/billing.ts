@@ -4,8 +4,10 @@
  * these types exist so the UI compiles and composes before the endpoints land.
  *
  * Money stays integer minor units + ISO code (AGENTS.md, Money rules) — never a
- * float, formatted only at render. We store brand + last four for a card, never
- * a PAN or CVC: Stripe holds the card, we hold the token (AGENTS.md, PCI).
+ * float, formatted only at render.
+ *
+ * Card payments are a later deployment, so nothing here models a card: a payment
+ * carries the method's label and that is all the screen prints.
  */
 
 import type { Money } from './dashboard';
@@ -32,25 +34,17 @@ export type BillingQuote = {
   status: QuoteStatus;
 };
 
-// The four card networks we surface a branded badge for, plus a fallback.
-export type CardBrand = 'visa' | 'mastercard' | 'amex' | 'discover' | 'unknown';
-
-// A card reference — brand + last four only. Never a full number or CVC.
-export type CardSummary = {
-  brand: CardBrand;
-  last4: string;
-};
-
-// The design shows `paid`; `refunded` and `failed` are the other terminal
-// states a real payment row can carry, so the chip covers them too.
-export type PaymentStatus = 'paid' | 'refunded' | 'failed';
+// The design shows `paid`; `failed` is the other terminal state a real payment
+// row can carry, so the chip covers it too.
+export type PaymentStatus = 'paid' | 'failed';
 
 export type PaymentRecord = {
   id: string;
   paidAt: string; // ISO-8601 UTC — "Date"
   serviceName: string;
   amount: Money;
-  card: CardSummary; // renders as "Visa •••• 4242"
+  // How it was collected, already phrased by the backend: "USDT (TRC-20)".
+  method: string;
   status: PaymentStatus;
   // The invoice PDF is a short-TTL presigned URL the backend hands out after an
   // ownership check (AGENTS.md, Security & PII); absent until it is ready.
@@ -71,20 +65,11 @@ export type PaymentHistoryPage = {
   nextCursor: string | null;
 };
 
-export type SavedPaymentMethod = {
-  id: string;
-  card: CardSummary;
-  expMonth: number; // 1–12
-  expYear: number; // four-digit year
-  isDefault: boolean;
-};
-
-// The single overview payload: KPIs, quotes, and saved methods. Payment history
-// is paginated on its own endpoint.
+// The single overview payload: KPIs and quotes. Payment history is paginated on
+// its own endpoint.
 export type BillingOverview = {
   kpis: BillingKpis;
   quotes: BillingQuote[];
-  savedMethods: SavedPaymentMethod[];
 };
 
 // Time window for the payment-history query; the backend resolves the range.

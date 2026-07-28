@@ -90,6 +90,36 @@ export async function deliverEmail(notificationId: string) {
     );
   }
 
+  /*
+   * Claim the row before handing anything to SES. The status read above is a
+   * check, not a claim: a stalled job recovered by BullMQ (or any concurrent
+   * retrigger of the same notificationId) would otherwise pass it twice and send
+   * the email twice.
+   *
+   * `attempts` is the claim token — a compare-and-swap against the value we just
+   * read. Two workers racing on the same row both match the WHERE, but Postgres
+   * serialises them on the row lock and re-checks the predicate for the loser,
+   * whose `attempts` no longer matches. Exactly one claim wins, so exactly one
+   * send happens. The increment here is the attempt count for this delivery —
+   * the success and failure paths below deliberately do not increment again.
+   */
+  const claim = await prisma.notification.updateMany({
+    where: {
+      id: notification.id,
+      status: { not: NotificationStatus.SENT },
+      attempts: notification.attempts,
+    },
+    data: { attempts: { increment: 1 } },
+  });
+
+  if (claim.count === 0) {
+    logger.info(
+      { notificationId },
+      'Notification already claimed by another job — send skipped',
+    );
+    return { delivered: false, reason: 'already-sent' as const };
+  }
+
   try {
     const providerRef = await sendEmail({
       to: notification.recipient,
@@ -104,7 +134,6 @@ export async function deliverEmail(notificationId: string) {
         status: NotificationStatus.SENT,
         providerRef,
         sentAt: new Date(),
-        attempts: { increment: 1 },
         lastError: null,
       },
     });
@@ -116,10 +145,11 @@ export async function deliverEmail(notificationId: string) {
     const message = error instanceof Error ? error.message : 'Unknown error';
 
     // Stay PENDING while BullMQ still has attempts left; markFailed() flips the
-    // row to FAILED once the job is permanently exhausted.
+    // row to FAILED once the job is permanently exhausted. `attempts` was
+    // already incremented by the claim above.
     await prisma.notification.update({
       where: { id: notification.id },
-      data: { attempts: { increment: 1 }, lastError: message },
+      data: { lastError: message },
     });
 
     throw error;
