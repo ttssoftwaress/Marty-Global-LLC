@@ -27,5 +27,9 @@ export type StaffConversationRow = {
 
 export type StaffConversationsView = {
   conversations: StaffConversationRow[];
+  // Counted over the whole queue, not the loaded page, so the header pill stays
+  // truthful as the list pages in.
   awaitingCount: number;
+  // Cursor pagination, like every other admin list (AGENTS.md, API Conventions).
+  nextCursor: string | null;
 };

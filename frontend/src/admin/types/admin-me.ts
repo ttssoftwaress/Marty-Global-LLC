@@ -26,4 +26,7 @@ export type AdminMe = {
   roleKey: string | null;
   roleLabel: string;
   permissions: string[];
+  // The member's own profile picture as a short-TTL presigned URL, absent until
+  // they upload one. The shell prints initials in its place.
+  avatarUrl?: string;
 };

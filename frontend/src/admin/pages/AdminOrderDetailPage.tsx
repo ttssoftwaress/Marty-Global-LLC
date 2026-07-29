@@ -27,7 +27,7 @@ import { useAdminShell } from '../hooks/useAdminShell';
  * customer actually ask for, and what do I do about it. That order is the same
  * at every width; what changes is how the two groups sit:
  *   - lg (desktop): a two-column bento — a main column (application, documents,
- *     activity) beside a 380px rail (actions, customer, order information)
+ *     activity) beside a 23.75rem rail (actions, customer, order information)
  *   - md (tablet) & mobile: one column, with the rail's cards lifted above the
  *     application. A reviewer on a phone is there to act, not to re-read the
  *     form, so the controls come first.

@@ -24,8 +24,8 @@ export async function listConversations(
       throw AppError.validation('Invalid conversations query', parsed.error.issues);
     }
 
-    const conversations = await service.listConversations(getAuth(req), parsed.data);
-    res.json({ data: conversations });
+    const page = await service.listConversations(getAuth(req), parsed.data);
+    res.json({ data: page });
   } catch (error) {
     next(error);
   }

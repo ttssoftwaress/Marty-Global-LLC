@@ -35,6 +35,48 @@ import { StaffStatus } from '@prisma/client';
  *     absent grant list is "denied", never "unrestricted".
  */
 
+type StaffGrant = { permissions: string[]; status: StaffStatus } | null;
+
+/*
+ * The grant lookup, memoized per actor.
+ *
+ * One admin screen asks this many times over: the dashboard alone resolves six
+ * scopes, every scope calls `canSeeAll`, and `canSeeAll` calls `hasPermission`
+ * once or twice — all of which issued the identical `StaffProfile` query. The
+ * key is the AuthContext object itself, which `requireAuth` mints fresh for
+ * every request, so one request now costs one query and the entry is collected
+ * with the request that owns it.
+ *
+ * A socket is the reason there is also a clock: `socket.auth` is one context
+ * object held for the life of the connection, so identity alone would cache a
+ * member's grants until they reconnected. The window is short enough that
+ * deactivating a member still takes effect while they are sitting in the admin
+ * portal, which is the property the status check below exists for.
+ */
+const GRANT_TTL_MS = 3_000;
+
+const grantCache = new WeakMap<
+  AuthContext,
+  { readAt: number; grant: Promise<StaffGrant> }
+>();
+
+function loadGrant(actor: AuthContext): Promise<StaffGrant> {
+  const cached = grantCache.get(actor);
+  if (cached && Date.now() - cached.readAt < GRANT_TTL_MS) return cached.grant;
+
+  const grant = prisma.staffProfile.findFirst({
+    where: { userId: actor.userId, deletedAt: null },
+    select: { permissions: true, status: true },
+  });
+
+  // A failed lookup is not an authorization decision — drop it so the next
+  // caller retries rather than inheriting the rejection for the whole window.
+  grant.catch(() => grantCache.delete(actor));
+
+  grantCache.set(actor, { readAt: Date.now(), grant });
+  return grant;
+}
+
 /*
  * Does this actor hold an area? The same three rules as the guard below, as a
  * predicate.
@@ -51,10 +93,7 @@ export async function hasPermission(
   if (actor.role === Role.ADMIN) return true;
   if (actor.role !== Role.STAFF) return false;
 
-  const profile = await prisma.staffProfile.findFirst({
-    where: { userId: actor.userId, deletedAt: null },
-    select: { permissions: true, status: true },
-  });
+  const profile = await loadGrant(actor);
 
   // A deactivated member keeps their session until it expires; the profile
   // status is what actually revokes their access.

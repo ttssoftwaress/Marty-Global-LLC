@@ -303,7 +303,7 @@ function EditMemberSkeleton() {
         <div className="h-4 w-[13.75rem] animate-pulse rounded bg-gray-200" />
         <div className="h-9 w-[17.5rem] animate-pulse rounded bg-gray-200" />
       </div>
-      {[220, 620].map((height, index) => (
+      {['13.75rem', '38.75rem'].map((height, index) => (
         <div
           key={index}
           style={{ height }}

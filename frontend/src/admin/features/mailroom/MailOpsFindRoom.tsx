@@ -44,15 +44,52 @@ type MailOpsFindRoomProps = {
   names: MailOpsRoomName[];
   isSearching: boolean;
   hasSearched: boolean;
+  /*
+   * Either step failing looks identical to "nothing found" — and "no mail room
+   * matches that name" is the answer that makes an operator go looking for a
+   * customer record that is in fact fine. Each step says which it is.
+   */
+  namesError?: boolean;
+  onRetryNames?: () => void;
   onSelectName: (name: string) => void;
   // Step two's options — the rooms carrying `selectedName`.
   rooms: MailOpsRoom[];
   isLoadingRooms: boolean;
+  roomsError?: boolean;
+  onRetryRooms?: () => void;
   onSelectRoom: (room: MailOpsRoom) => void;
   // Back to step one from step two, and back to step one from the settled row.
   onBackToNames: () => void;
   onClear: () => void;
 };
+
+/*
+ * A failed step, reported in the same one-line slot the card's "Searching…" and
+ * "nothing found" copy uses — there is no room in this card for the page-level
+ * alert, and the retry rule 4 asks for is the button beside the sentence.
+ */
+function StepError({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry?: () => void;
+}) {
+  return (
+    <p role="alert" className="flex flex-wrap items-center gap-2 text-small text-error">
+      {message}
+      {onRetry ? (
+        <button
+          type="button"
+          onClick={onRetry}
+          className="rounded-sm font-semibold text-primary underline transition-colors hover:text-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        >
+          Try again
+        </button>
+      ) : null}
+    </p>
+  );
+}
 
 export function MailOpsFindRoom({
   selected,
@@ -62,9 +99,13 @@ export function MailOpsFindRoom({
   names,
   isSearching,
   hasSearched,
+  namesError,
+  onRetryNames,
   onSelectName,
   rooms,
   isLoadingRooms,
+  roomsError,
+  onRetryRooms,
   onSelectRoom,
   onBackToNames,
   onClear,
@@ -131,6 +172,11 @@ export function MailOpsFindRoom({
 
           {isLoadingRooms ? (
             <p className="text-small text-gray-400">Loading addresses…</p>
+          ) : roomsError ? (
+            <StepError
+              message="Those addresses could not be loaded."
+              onRetry={onRetryRooms}
+            />
           ) : rooms.length === 0 ? (
             <p className="text-small text-gray-400">
               No active mail rooms are named “{selectedName}” any more.
@@ -193,7 +239,14 @@ export function MailOpsFindRoom({
            */}
           {isSearching ? <p className="text-small text-gray-400">Searching…</p> : null}
 
-          {!isSearching && hasSearched && names.length === 0 ? (
+          {!isSearching && namesError ? (
+            <StepError
+              message="Mail room search is unavailable right now."
+              onRetry={onRetryNames}
+            />
+          ) : null}
+
+          {!isSearching && !namesError && hasSearched && names.length === 0 ? (
             <p className="text-small text-gray-400">
               No active mail rooms match that name.
             </p>

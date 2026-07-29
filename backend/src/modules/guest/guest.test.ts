@@ -157,12 +157,12 @@ describe('the boundary with the customer portal', () => {
   it('keeps guest threads out of a customer’s conversation list', async () => {
     await start('Anonymous Visitor', 'visitor@guest-test.example');
 
-    const conversations = await portalSupport.listConversations(
+    const page = await portalSupport.listConversations(
       actor(CUSTOMER_ID, Role.CUSTOMER),
-      {},
+      { limit: 20 },
     );
 
-    expect(conversations).toHaveLength(0);
+    expect(page.conversations).toHaveLength(0);
   });
 
   it('refuses a customer reading a guest thread by id', async () => {

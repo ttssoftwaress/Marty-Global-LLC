@@ -74,7 +74,13 @@ export type Payment = {
   createdAt: string;
 };
 
-// The quote the checkout is collecting for.
+/*
+ * The quote the checkout is collecting for. All five of the backend's
+ * `QuoteStatus` values — checkout resolves a quote by id, so unlike the order
+ * screen (four) and the billing list (two) it has no server-side filter in front
+ * of it and must be able to name whatever it is handed, including a `draft` it
+ * then refuses to take payment for.
+ */
 export type CheckoutQuoteStatus = 'pending' | 'expired' | 'paid' | 'cancelled' | 'draft';
 
 export type CheckoutQuote = {

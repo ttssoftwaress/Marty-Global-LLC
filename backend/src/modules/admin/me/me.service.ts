@@ -8,6 +8,7 @@ import {
 } from '../../../lib/permissions.js';
 import { prisma } from '../../../lib/prisma.js';
 import { Role } from '../../../lib/roles.js';
+import { presignObject } from '../../../lib/storage.js';
 
 /*
  * Who the signed-in staff member is, as the admin shell needs them: their name,
@@ -36,6 +37,17 @@ export type AdminMe = {
   roleKey: string | null;
   roleLabel: string;
   permissions: PermissionKey[];
+  /*
+   * The staff member's own profile picture, as a short-TTL presigned URL
+   * (AGENTS.md, Security & PII) — absent until they upload one. It rides along
+   * here because this is already the query every `/admin/*` screen runs to build
+   * its shell, so the sidebar and top bar need no second request to show it.
+   *
+   * The key lives on the same CustomerProfile satellite a customer's does: an
+   * avatar belongs to the User, and a staff member is a User like any other, so
+   * there is one avatar per account rather than a second staff-only copy.
+   */
+  avatarUrl?: string;
 };
 
 const ALL_AREAS = PERMISSION_AREAS.map((area) => area.key) as PermissionKey[];
@@ -54,7 +66,12 @@ export async function getAdminMe(auth: AuthContext): Promise<AdminMe> {
   const [user, profile] = await Promise.all([
     prisma.user.findUnique({
       where: { id: auth.userId },
-      select: { name: true, email: true },
+      select: {
+        name: true,
+        email: true,
+        // The avatar satellite, for the presigned URL below.
+        profile: { select: { avatarKey: true } },
+      },
     }),
     prisma.staffProfile.findFirst({
       where: { userId: auth.userId, deletedAt: null },
@@ -80,6 +97,9 @@ export async function getAdminMe(auth: AuthContext): Promise<AdminMe> {
     permissions: isAdmin
       ? ALL_AREAS
       : ALL_AREAS.filter((area) => granted.includes(area)),
+    // Minted after the id check above — this only ever resolves the caller's own
+    // key, so there is no ownership question to answer separately.
+    avatarUrl: await presignObject(user?.profile?.avatarKey),
   };
 }
 

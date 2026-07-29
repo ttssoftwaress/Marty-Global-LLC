@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 
+import { FormDialog } from '../../components/FormDialog';
 import {
   carrierCreatePayload,
   carrierUpdatePayload,
@@ -13,8 +14,7 @@ import type {
   CarrierDraft,
   SettingsFormErrors,
 } from '../../types/settings';
-import { Field, TextInput } from '../catalog/FormControls';
-import { ServiceFormDialog } from '../catalog/ServiceFormDialog';
+import { Field, TextInput } from '../../components/FormControls';
 import { ToggleSwitch } from '../catalog/detail/ToggleSwitch';
 
 /*
@@ -80,7 +80,7 @@ export function CarrierFormDialog({
   };
 
   return (
-    <ServiceFormDialog
+    <FormDialog
       open={open}
       title={isEdit ? 'Edit carrier' : 'Add a carrier'}
       description={
@@ -172,6 +172,6 @@ export function CarrierFormDialog({
           </span>
         </div>
       </div>
-    </ServiceFormDialog>
+    </FormDialog>
   );
 }

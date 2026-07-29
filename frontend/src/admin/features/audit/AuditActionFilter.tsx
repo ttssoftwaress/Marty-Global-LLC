@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Check, ChevronDown } from 'lucide-react';
 
+import { useDismissablePopover } from '../../hooks/useDismissablePopover';
 import { ALL_ACTIONS, type AuditActionOption } from '../../types/audit';
 
 /*
@@ -48,25 +49,12 @@ export function AuditActionFilter({
   const selected = options.find((option) => option.value === value);
   const isFiltered = value !== ALL_ACTIONS;
 
-  useEffect(() => {
-    if (!open) return;
-
-    const onPointerDown = (event: PointerEvent) => {
-      if (!containerRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      setOpen(false);
-      triggerRef.current?.focus();
-    };
-
-    document.addEventListener('pointerdown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('pointerdown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [open]);
+  useDismissablePopover({
+    open,
+    onClose: () => setOpen(false),
+    containerRef,
+    triggerRef,
+  });
 
   // The type-ahead resets each time the panel opens, so reopening never starts
   // mid-search from a previous visit.

@@ -27,6 +27,13 @@ import type { MailScanAttachment } from '../../types/mailroom';
  * On mobile the button leaves this card entirely and lives in the page's sticky
  * bottom bar, exactly as the mobile link draws it, so the page owns it and this
  * card only renders it from `md` up.
+ *
+ * A third departure: "Response needed by" is not in any of the links. Some post
+ * needs the customer to do something by a date, and the portal inbox already
+ * draws that row in red with a deadline and a Respond action — this is the only
+ * place that state can be set, so the form that files the envelope is where it
+ * belongs. Entering a date makes Notes required: the note is the reason printed
+ * beside the deadline, and a deadline without one is a demand with no ask.
  */
 
 type MailScanDetailsFormProps = {
@@ -36,6 +43,8 @@ type MailScanDetailsFormProps = {
   onReceivedOnChange: (value: string) => void;
   notes: string;
   onNotesChange: (value: string) => void;
+  responseDueOn: string;
+  onResponseDueOnChange: (value: string) => void;
   // Ordered — a file's position is the page it is filed as.
   files: MailScanAttachment[];
   onFilesAdd: (files: File[]) => void;
@@ -56,6 +65,8 @@ export function MailScanDetailsForm({
   onReceivedOnChange,
   notes,
   onNotesChange,
+  responseDueOn,
+  onResponseDueOnChange,
   files,
   onFilesAdd,
   onFileRemove,
@@ -66,6 +77,8 @@ export function MailScanDetailsForm({
   errorMessage,
   onSubmit,
 }: MailScanDetailsFormProps) {
+  const notesRequired = Boolean(responseDueOn);
+
   return (
     <form
       id={formId}
@@ -116,17 +129,48 @@ export function MailScanDetailsForm({
       />
 
       <div className="flex w-full flex-col gap-2">
+        <label htmlFor={`${formId}-response-due`} className="text-form-label text-text">
+          Response needed by (optional)
+        </label>
+        <input
+          id={`${formId}-response-due`}
+          type="date"
+          value={responseDueOn}
+          // The mail cannot need answering before it arrived; the backend
+          // rejects it either way (AGENTS.md — the guard is server-side).
+          min={receivedOn || undefined}
+          onChange={(event) => onResponseDueOnChange(event.target.value)}
+          aria-describedby={`${formId}-response-due-hint`}
+          className="input-field bg-gray-50 md:max-w-[20rem]"
+        />
+        <p id={`${formId}-response-due-hint`} className="text-small text-gray-500">
+          Files this item as “Action requested” in the customer’s inbox. Add a
+          note saying what they need to do.
+        </p>
+      </div>
+
+      <div className="flex w-full flex-col gap-2">
         <label htmlFor={`${formId}-notes`} className="text-form-label text-text">
-          Notes (optional)
+          {notesRequired ? 'Notes' : 'Notes (optional)'}
         </label>
         <textarea
           id={`${formId}-notes`}
           value={notes}
           onChange={(event) => onNotesChange(event.target.value)}
           rows={3}
-          placeholder="e.g. Tax year 2025, confidential"
+          placeholder={
+            notesRequired
+              ? 'e.g. Forwarding address required'
+              : 'e.g. Tax year 2025, confidential'
+          }
+          aria-required={notesRequired}
           className="input-field h-20 resize-none bg-gray-50 py-3"
         />
+        {notesRequired && !notes.trim() ? (
+          <p role="alert" className="text-small text-error">
+            Say what the customer needs to do before the response date.
+          </p>
+        ) : null}
       </div>
 
       {errorMessage ? (

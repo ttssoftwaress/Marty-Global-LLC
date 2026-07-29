@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { ApiError } from '@/services/api';
 import { uploadFiles } from '@/services/upload';
 import { AdminLayout } from '../components/AdminLayout';
+import { DataErrorState } from '../components/DataErrorState';
 import {
   MailLogPanel,
   MailOpsComingSoonPanel,
@@ -105,6 +106,9 @@ export function AdminVirtualMailOpsPage() {
   const [sender, setSender] = useState('');
   const [receivedOn, setReceivedOn] = useState('');
   const [notes, setNotes] = useState('');
+  // Set only for post the customer has to answer — it files the item as "Action
+  // requested" with a deadline rather than as ordinary unread mail.
+  const [responseDueOn, setResponseDueOn] = useState('');
   // The files the operator has attached, in the order they will be filed as
   // pages. Held as `File` objects until submit, when they go to R2.
   const [scans, setScans] = useState<File[]>([]);
@@ -143,6 +147,7 @@ export function AdminVirtualMailOpsPage() {
     setSender('');
     setReceivedOn('');
     setNotes('');
+    setResponseDueOn('');
     setScans([]);
     setUploadError(null);
   };
@@ -151,8 +156,15 @@ export function AdminVirtualMailOpsPage() {
 
   // The submit is only meaningful once every required part is in hand; the
   // backend re-validates all of it (AGENTS.md — the guard is server-side).
+  // A response date needs the note that says what the response is for — the
+  // customer's inbox prints the two together.
   const canSubmit = Boolean(
-    selected && sender.trim() && receivedOn && scans.length > 0 && !isBusy,
+    selected &&
+      sender.trim() &&
+      receivedOn &&
+      scans.length > 0 &&
+      (!responseDueOn || notes.trim()) &&
+      !isBusy,
   );
 
   /*
@@ -187,6 +199,7 @@ export function AdminVirtualMailOpsPage() {
             sizeBytes: file.sizeBytes,
           })),
           notes: notes.trim() || undefined,
+          responseDueOn: responseDueOn || undefined,
         },
         { onSuccess: resetForm },
       );
@@ -201,6 +214,12 @@ export function AdminVirtualMailOpsPage() {
     }
   };
 
+  /*
+   * The summary and the recent feed fail independently of the work this screen
+   * does, so neither takes the page down: the summary's failure is reported where
+   * its KPI cards would have been (the tabs stay, counts absent), the feed's
+   * inside its own rail, and filing a scan carries on either way.
+   */
   const isLoading = summary.isPending || recent.isPending;
 
   return (
@@ -217,7 +236,16 @@ export function AdminVirtualMailOpsPage() {
         <div className="mx-auto flex w-full max-w-[80rem] flex-col gap-5 md:gap-card">
           <MailOpsHeader />
 
-          {summary.data ? <MailOpsKpiCards kpis={summary.data.kpis} /> : null}
+          {summary.isError ? (
+            <DataErrorState
+              title="We couldn’t load the mail room summary"
+              description="The counts above the tabs are unavailable. Filing a scan and working the queues still works."
+              onRetry={() => void summary.refetch()}
+              isRetrying={summary.isFetching}
+            />
+          ) : summary.data ? (
+            <MailOpsKpiCards kpis={summary.data.kpis} />
+          ) : null}
 
           <MailOpsTabs value={tab} onChange={setTab} tabs={summary.data?.tabs} />
 
@@ -245,9 +273,13 @@ export function AdminVirtualMailOpsPage() {
                       names={roomNames.data ?? []}
                       isSearching={roomNames.isFetching}
                       hasSearched={debouncedSearch.trim().length > 1}
+                      namesError={roomNames.isError}
+                      onRetryNames={() => void roomNames.refetch()}
                       onSelectName={onSelectRoomName}
                       rooms={rooms.data ?? []}
                       isLoadingRooms={rooms.isFetching}
+                      roomsError={rooms.isError}
+                      onRetryRooms={() => void rooms.refetch()}
                       onSelectRoom={onSelectRoom}
                       onBackToNames={onClearRoom}
                       onClear={onClearRoom}
@@ -260,6 +292,8 @@ export function AdminVirtualMailOpsPage() {
                       onReceivedOnChange={setReceivedOn}
                       notes={notes}
                       onNotesChange={setNotes}
+                      responseDueOn={responseDueOn}
+                      onResponseDueOnChange={setResponseDueOn}
                       files={scans.map((file) => ({
                         name: file.name,
                         size: file.size,
@@ -292,6 +326,9 @@ export function AdminVirtualMailOpsPage() {
                     <MailOpsRecentUploads
                       uploads={uploads}
                       isLoading={recent.isPending}
+                      isError={recent.isError}
+                      isRetrying={recent.isFetching}
+                      onRetry={() => void recent.refetch()}
                       hasMore={Boolean(recent.hasNextPage)}
                       isLoadingMore={recent.isFetchingNextPage}
                       onLoadMore={() => {

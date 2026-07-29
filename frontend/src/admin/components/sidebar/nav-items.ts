@@ -8,6 +8,7 @@ import {
   LayoutGrid,
   ListChecks,
   Mail,
+  MessageSquareText,
   MessagesSquare,
   ScrollText,
   Settings,
@@ -123,6 +124,12 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
    */
   { label: 'Form fields', to: '/admin/fields', icon: ListChecks, permission: 'catalog' },
   { label: 'Reports & analytics', to: '/admin/reports', icon: BarChart2, permission: 'reports' },
+  /*
+   * Submissions from the marketing site's contact form. Its own area rather
+   * than `support`, because a lead isn't a conversation — there is no reply
+   * thread, only the record and whether someone has followed up.
+   */
+  { label: 'Leads', to: '/admin/leads', icon: MessageSquareText, permission: 'leads' },
   /*
    * The reference data every other section picks from — the locations services
    * are offered in, and the carriers the mail room ships with.

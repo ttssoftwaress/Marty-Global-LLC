@@ -119,11 +119,11 @@ export function evictFromConversation(conversationId: string, userId: string): v
 }
 
 /*
- * Read someone's two unread counters. The one query behind both the socket
- * handler's push and the REST endpoint the badge falls back to, so a number that
- * arrives live and the same number fetched on load cannot disagree.
+ * Read someone's two unread counters. The one query behind both the live push
+ * below and the REST endpoint the badge falls back to, so a number that arrives
+ * live and the same number fetched on load cannot disagree.
  */
-export async function readUnread(
+async function readUnread(
   userId: string,
 ): Promise<{ messages: number; notifications: number }> {
   const [messages, notifications] = await Promise.all([
@@ -132,6 +132,23 @@ export async function readUnread(
   ]);
 
   return { messages, notifications };
+}
+
+/*
+ * Push one user's unread counters to every tab they have open.
+ *
+ * Scoped to that user's room, never broadcast: an unread count is derived from
+ * conversations they own, so sending it anywhere else would leak the fact that
+ * those conversations exist.
+ *
+ * The awaitable form, for a caller already inside an async handler that wants
+ * the push ordered with its own work. Everything else uses `emitUnreadChanged`.
+ */
+export async function pushUnread(userId: string): Promise<void> {
+  const server = io;
+  if (!server) return;
+
+  server.to(userRoom(userId)).emit(ServerEvent.UNREAD, await readUnread(userId));
 }
 
 /*
@@ -148,14 +165,7 @@ export async function readUnread(
  * fetch. It must never fail the write that produced it.
  */
 export function emitUnreadChanged(userId: string): void {
-  if (!io) return;
-  const server = io;
-
-  void readUnread(userId)
-    .then((counters) => {
-      server.to(userRoom(userId)).emit(ServerEvent.UNREAD, counters);
-    })
-    .catch((error: unknown) => {
-      logger.error({ err: error, userId }, 'Failed to push unread counters');
-    });
+  void pushUnread(userId).catch((error: unknown) => {
+    logger.error({ err: error, userId }, 'Failed to push unread counters');
+  });
 }

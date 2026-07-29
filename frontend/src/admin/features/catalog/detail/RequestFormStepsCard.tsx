@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp, GripVertical, Plus, Trash2 } from 'lucide-react';
 
 import { emptyStepDraft, fieldDraft, moveItem } from '../../../lib/catalog';
@@ -10,7 +10,7 @@ import type {
 import type { FieldDefinition } from '../../../types/fields';
 import { FieldPicker } from '../FieldPicker';
 import { PickedFieldRow } from '../PickedFieldRow';
-import { Field, TextInput } from '../FormControls';
+import { Field, TextInput } from '../../../components/FormControls';
 import { DashedAddButton, DetailCard } from './DetailCard';
 
 /*
@@ -47,6 +47,9 @@ type RequestFormStepsCardProps = {
   // The live registry the picker offers.
   registry: FieldDefinition[];
   isRegistryLoading: boolean;
+  isRegistryError?: boolean;
+  isRetryingRegistry?: boolean;
+  onRetryRegistry?: () => void;
   onChange: (steps: ServiceFormStepDraft[]) => void;
 };
 
@@ -55,6 +58,9 @@ export function RequestFormStepsCard({
   errors,
   registry,
   isRegistryLoading,
+  isRegistryError = false,
+  isRetryingRegistry = false,
+  onRetryRegistry,
   onChange,
 }: RequestFormStepsCardProps) {
   // Every step starts open on a fresh load; collapsing is per-session state that
@@ -125,6 +131,9 @@ export function RequestFormStepsCard({
                 registry={registry}
                 registryByKey={registryByKey}
                 isRegistryLoading={isRegistryLoading}
+                isRegistryError={isRegistryError}
+                isRetryingRegistry={isRetryingRegistry}
+                onRetryRegistry={onRetryRegistry}
                 pickedKeys={pickedKeys}
                 collapsed={collapsed.has(step.key)}
                 onToggleCollapsed={() => toggleCollapsed(step.key)}
@@ -150,6 +159,9 @@ function StepRow({
   registry,
   registryByKey,
   isRegistryLoading,
+  isRegistryError,
+  isRetryingRegistry,
+  onRetryRegistry,
   pickedKeys,
   collapsed,
   onToggleCollapsed,
@@ -164,6 +176,9 @@ function StepRow({
   registry: FieldDefinition[];
   registryByKey: Map<string, FieldDefinition>;
   isRegistryLoading: boolean;
+  isRegistryError: boolean;
+  isRetryingRegistry: boolean;
+  onRetryRegistry?: () => void;
   pickedKeys: string[];
   collapsed: boolean;
   onToggleCollapsed: () => void;
@@ -175,6 +190,7 @@ function StepRow({
   const titleError = errors[`${prefix}.title`];
 
   const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const addQuestionRef = useRef<HTMLButtonElement>(null);
 
   const setFields = (fields: ServiceFieldDraft[]) => onChange({ fields });
 
@@ -317,6 +333,9 @@ function StepRow({
             open={isPickerOpen}
             fields={registry}
             isLoading={isRegistryLoading}
+            isError={isRegistryError}
+            isRetrying={isRetryingRegistry}
+            onRetry={onRetryRegistry}
             // Every key the whole service already asks, not just this step:
             // answers land in one flat map per service, so a field picked on
             // another step would collide here.
@@ -326,10 +345,12 @@ function StepRow({
               setIsPickerOpen(false);
             }}
             onClose={() => setIsPickerOpen(false)}
+            triggerRef={addQuestionRef}
           />
 
           {!isPickerOpen && (
             <button
+              ref={addQuestionRef}
               type="button"
               onClick={() => setIsPickerOpen(true)}
               className="flex h-10 items-center justify-center gap-2 self-start rounded-control border border-dashed border-gray-300 bg-white px-4 text-body font-medium text-primary transition-colors hover:border-primary hover:bg-primary-light focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"

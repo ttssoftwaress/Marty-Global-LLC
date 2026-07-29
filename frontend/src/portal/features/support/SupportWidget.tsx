@@ -4,7 +4,7 @@ import { Link, useLocation } from 'react-router-dom';
 
 import { Composer } from './Composer';
 import { MessageList } from './MessageList';
-import { useConversation, useConversations } from './queries';
+import { conversationsOf, useConversation, useConversations } from './queries';
 import { useConversationSocket } from './useConversationSocket';
 
 /*
@@ -28,24 +28,26 @@ export function SupportWidget() {
   const [open, setOpen] = useState(false);
   const location = useLocation();
 
-  // The list is already cached by the Support screen in most cases, so opening
-  // the widget usually costs nothing.
+  /*
+   * The list is already cached by the Support screen in most cases, so opening
+   * the widget usually costs nothing. Only the first page is ever fetched here —
+   * the widget never pages, and an unread thread is by definition one that moved
+   * recently, so it is on the newest page or it is not unread.
+   */
   const conversationsQuery = useConversations('');
+  const conversations = conversationsOf(conversationsQuery.data);
 
   /*
    * "Most recent open conversation." The list arrives newest-first from the
    * backend, so this is the first entry — resolved rather than remembered,
    * because the thread the customer cares about is whichever one moved last.
    */
-  const activeId = useMemo(
-    () => conversationsQuery.data?.[0]?.id ?? '',
-    [conversationsQuery.data],
-  );
+  const activeId = useMemo(() => conversations?.[0]?.id ?? '', [conversations]);
 
   const threadQuery = useConversation(open ? activeId : '');
   const chat = useConversationSocket(open ? activeId : '');
 
-  const unread = conversationsQuery.data?.some((entry) => entry.unread) ?? false;
+  const unread = conversations?.some((entry) => entry.unread) ?? false;
 
   // Close on Escape, the same as every other overlay in the portal.
   useEffect(() => {
@@ -76,7 +78,7 @@ export function SupportWidget() {
           <header className="flex shrink-0 items-start justify-between gap-3 border-b border-gray-200 p-4">
             <div className="flex min-w-0 flex-col gap-0.5">
               <h2 className="truncate text-body font-semibold text-text">
-                {conversationsQuery.data?.[0]?.subject ?? 'Support'}
+                {conversations?.[0]?.subject ?? 'Support'}
               </h2>
               <p className="text-caption text-gray-500">
                 {chat.agentsAvailable === null

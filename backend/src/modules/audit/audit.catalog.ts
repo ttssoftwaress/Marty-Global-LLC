@@ -148,6 +148,13 @@ const CATALOG: Record<string, Entry> = {
     category: 'orders',
     severity: 'normal',
   },
+  // The customer supplying a file. A write and a routine one — the `alert` two
+  // entries up is about staff *reading* a passport, which this is not.
+  [AuditAction.ORDER_DOCUMENT_UPLOADED]: {
+    label: 'Document uploaded by customer',
+    category: 'orders',
+    severity: 'normal',
+  },
 
   // --- Service delivery --------------------------------------------------
   [AuditAction.RESULT_DELIVERED]: {
@@ -231,6 +238,13 @@ const CATALOG: Record<string, Entry> = {
     category: 'billing',
     severity: 'normal',
   },
+  // Money we cannot attribute to anyone. `alert` for the same reason as the
+  // mismatch above: it sits in a queue until a human decides what it was.
+  [AuditAction.UNMATCHED_TRANSFER_RECORDED]: {
+    label: 'Unmatched transfer received',
+    category: 'billing',
+    severity: 'alert',
+  },
   [AuditAction.UNMATCHED_TRANSFER_RESOLVED]: {
     label: 'Unmatched transfer resolved',
     category: 'billing',
@@ -288,13 +302,10 @@ const CATALOG: Record<string, Entry> = {
     category: 'catalog',
     severity: 'notice',
   },
-  [AuditAction.REQUEST_TYPE_CREATED]: {
-    label: 'Request type created',
-    category: 'catalog',
-    severity: 'normal',
-  },
+  // One entry, matching the one verb — see the note in audit.service.ts for why
+  // the batch write does not split into created/updated.
   [AuditAction.REQUEST_TYPE_UPDATED]: {
-    label: 'Request type updated',
+    label: 'Request types updated',
     category: 'catalog',
     severity: 'normal',
   },

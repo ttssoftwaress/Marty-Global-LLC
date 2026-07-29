@@ -6,7 +6,7 @@ import type {
   ServiceFormErrors,
   ServiceRegion,
 } from '../../types/catalog';
-import { Field, SelectInput, TextInput } from './FormControls';
+import { Field, SelectInput, TextInput } from '../../components/FormControls';
 
 /*
  * How a service is priced — the write side of the table's "N pricing tiers"

@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Plus, Search, X } from 'lucide-react';
 
-import { groupByCategory } from '../../lib/fields';
+import { groupByCategory } from '../../lib/field-registry';
 import type { FieldDefinition } from '../../types/fields';
 import { fieldTypeLabel } from '../../types/fields';
 
@@ -20,28 +20,57 @@ import { fieldTypeLabel } from '../../types/fields';
  * A field the registry doesn't have yet is registered on the Form fields screen,
  * which the empty state links to. That separation is deliberate: allowing
  * inline authoring here is exactly how per-service drift would creep back in.
+ *
+ * This is an inline panel in normal flow, not a floating overlay, so it is not a
+ * `useOverlay` case (Design.md) — no scrim, no scroll lock, no Tab trap. It does
+ * take Escape, because the panel autofocuses its search box and a keyboard user
+ * who opened it has no other dismissal within reach. Escape is handled on the
+ * panel rather than on `document` so it only fires while focus is inside, and it
+ * stops propagating so it never also closes the service dialog this can sit in.
  */
 
 type FieldPickerProps = {
   open: boolean;
   fields: FieldDefinition[];
   isLoading: boolean;
+  /** The registry failed to load — distinct from nothing being registered. */
+  isError?: boolean;
+  isRetrying?: boolean;
+  onRetry?: () => void;
   // Keys the service already asks — on any step, since answers land in one flat
   // map per service.
   pickedKeys: string[];
   onPick: (field: FieldDefinition) => void;
   onClose: () => void;
+  /*
+   * The button that opened the panel, refocused after Escape. Every call site
+   * unmounts its trigger while the picker is open, so the focus restore has to
+   * wait for the button to render again — hence the ref rather than a snapshot
+   * of `document.activeElement`, which is a dead node by then.
+   */
+  triggerRef?: React.RefObject<HTMLButtonElement | null>;
 };
 
 export function FieldPicker({
   open,
   fields,
   isLoading,
+  isError = false,
+  isRetrying = false,
+  onRetry,
   pickedKeys,
   onPick,
   onClose,
+  triggerRef,
 }: FieldPickerProps) {
   const [search, setSearch] = useState('');
+  const restoreFocus = useRef(false);
+
+  useEffect(() => {
+    if (open || !restoreFocus.current) return;
+    restoreFocus.current = false;
+    triggerRef?.current?.focus();
+  }, [open, triggerRef]);
 
   const picked = useMemo(() => new Set(pickedKeys), [pickedKeys]);
 
@@ -60,8 +89,18 @@ export function FieldPicker({
 
   if (!open) return null;
 
+  const closeOnEscape = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Escape') return;
+    event.stopPropagation();
+    restoreFocus.current = true;
+    onClose();
+  };
+
   return (
-    <div className="flex flex-col gap-3 rounded-card border border-primary/30 bg-primary-light/30 p-3 md:p-4">
+    <div
+      onKeyDown={closeOnEscape}
+      className="flex flex-col gap-3 rounded-card border border-primary/30 bg-primary-light/30 p-3 md:p-4"
+    >
       <div className="flex items-center justify-between gap-3">
         <span className="text-caption font-medium uppercase tracking-[0.4px] text-gray-600">
           Add a question
@@ -95,6 +134,32 @@ export function FieldPicker({
 
       {isLoading ? (
         <p className="py-4 text-center text-body text-gray-500">Loading fields…</p>
+      ) : isError ? (
+        /*
+         * Before the empty branch: a failed registry load also leaves the list
+         * empty, and "No fields registered yet" would send an admin off to
+         * register questions that already exist.
+         */
+        <div
+          role="alert"
+          className="flex flex-col items-center gap-2 py-5 text-center"
+        >
+          <p className="text-body text-error">
+            The field registry didn&rsquo;t load, so no questions can be picked
+            yet.
+          </p>
+
+          {onRetry ? (
+            <button
+              type="button"
+              onClick={onRetry}
+              disabled={isRetrying}
+              className="flex h-9 items-center justify-center rounded-control border border-primary px-3 text-small font-semibold text-primary transition-colors hover:bg-primary-light disabled:cursor-not-allowed disabled:border-gray-200 disabled:text-gray-400 disabled:hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            >
+              {isRetrying ? 'Retrying…' : 'Try again'}
+            </button>
+          ) : null}
+        </div>
       ) : groups.length === 0 ? (
         <div className="flex flex-col items-center gap-2 py-5 text-center">
           <p className="text-body text-gray-600">

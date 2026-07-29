@@ -42,11 +42,17 @@ const TICK_COUNT = 4; // the four captions every link prints: max → 0
 type RevenueOverTimeCardProps = {
   series: ReportSeries | undefined;
   isLoading: boolean;
+  isError?: boolean;
+  isRetrying?: boolean;
+  onRetry?: () => void;
 };
 
 export function RevenueOverTimeCard({
   series,
   isLoading,
+  isError,
+  isRetrying,
+  onRetry,
 }: RevenueOverTimeCardProps) {
   return (
     <ChartCard
@@ -54,6 +60,10 @@ export function RevenueOverTimeCard({
       description="Monthly accumulated revenue"
       legend={[{ label: 'Revenue ($)', color: 'var(--color-primary)' }]}
       isLoading={isLoading}
+      isError={isError}
+      isRetrying={isRetrying}
+      onRetry={onRetry}
+      errorTitle="Couldn't load revenue over time"
       skeletonClassName="h-[12.5rem] md:h-[15rem] lg:h-[17.5rem]"
     >
       {series && series.points.length > 0 ? (

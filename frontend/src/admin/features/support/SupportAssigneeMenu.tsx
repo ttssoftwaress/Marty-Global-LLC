@@ -1,6 +1,7 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { Check, ChevronDown, UserPlus } from 'lucide-react';
 
+import { useDismissablePopover } from '../../hooks/useDismissablePopover';
 import type { SupportAgent } from '../../types/support';
 import { SupportAgentAvatar } from './SupportAgentAvatar';
 
@@ -46,27 +47,14 @@ export function SupportAssigneeMenu({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const listId = useId();
 
-  useEffect(() => {
-    if (!open) return;
-
-    const onPointerDown = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    // Escape returns focus to the capsule rather than stranding it on the
-    // list that is about to unmount.
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      setOpen(false);
-      triggerRef.current?.focus();
-    };
-
-    document.addEventListener('pointerdown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('pointerdown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [open]);
+  // Escape returns focus to the capsule rather than stranding it on the list
+  // that is about to unmount — the shared popover hook owns that.
+  useDismissablePopover({
+    open,
+    onClose: () => setOpen(false),
+    containerRef: rootRef,
+    triggerRef,
+  });
 
   // One frame for both variants, so the capsule sits in exactly the same place
   // whether or not this member may open it.

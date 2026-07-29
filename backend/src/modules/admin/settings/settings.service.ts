@@ -37,9 +37,11 @@ import type {
  *      hard delete). Deleting is offered only for a row nothing references at
  *      all, which is the genuine "added by mistake" case.
  *
- *   3. Order is a property of the list. Positions are rewritten from a complete
- *      submitted sequence in one transaction, so two admins reordering at once
- *      cannot interleave into a ranking neither of them chose.
+ *   3. Order is a property of the list. Positions are rewritten as one complete
+ *      sequence in one transaction — a partial payload is completed with the
+ *      codes it omitted (`orderedCodes`) rather than renumbering a subset — so
+ *      two admins reordering at once cannot interleave into a ranking neither of
+ *      them chose, and no two rows end up sharing a position.
  */
 
 // --- Views ---------------------------------------------------------------
@@ -130,6 +132,26 @@ const NO_LOCATION_USAGE: LocationUsage = {
   pricingTiers: 0,
   orders: 0,
 };
+
+/*
+ * The full sequence a reorder writes: the submitted codes in the order given,
+ * then every code the payload omitted, in the order it already had.
+ *
+ * Rule 3 says positions are rewritten from a complete sequence, and this is what
+ * keeps that true for a partial payload. Renumbering only the submitted codes
+ * would leave an omitted row holding a position now also assigned to a submitted
+ * one — today a tie broken by label in every read, but a ranking nobody chose as
+ * soon as either list grows. Duplicates are collapsed so positions stay dense.
+ */
+function orderedCodes(
+  submitted: readonly string[],
+  existing: readonly string[],
+): string[] {
+  const unique = [...new Set(submitted)];
+  const chosen = new Set(unique);
+
+  return [...unique, ...existing.filter((code) => !chosen.has(code))];
+}
 
 // --- Locations -----------------------------------------------------------
 
@@ -303,7 +325,10 @@ export async function reorderLocations(
   actor: AuthContext,
   input: ReorderLocationsInput,
 ): Promise<{ locations: LocationView[] }> {
-  const known = await prisma.region.findMany({ select: { code: true } });
+  const known = await prisma.region.findMany({
+    orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
+    select: { code: true },
+  });
   const codes = new Set(known.map((row) => row.code));
 
   const unknown = input.codes.filter((code) => !codes.has(code));
@@ -311,13 +336,17 @@ export async function reorderLocations(
     throw AppError.validation('Unknown location code', { codes: unknown });
   }
 
+  const ordered = orderedCodes(
+    input.codes,
+    known.map((row) => row.code),
+  );
+
   /*
    * One transaction: a half-applied reorder would leave two rows sharing a
-   * position, and the list would come back in an order nobody chose. Codes the
-   * payload omits keep their position and simply sort after the submitted ones.
+   * position, and the list would come back in an order nobody chose.
    */
   await prisma.$transaction(
-    input.codes.map((code, index) =>
+    ordered.map((code, index) =>
       prisma.region.update({ where: { code }, data: { sortOrder: index } }),
     ),
   );
@@ -327,7 +356,7 @@ export async function reorderLocations(
     action: AuditAction.LOCATIONS_REORDERED,
     entityType: 'Region',
     entityId: 'all',
-    metadata: { count: input.codes.length },
+    metadata: { count: ordered.length, submitted: input.codes.length },
   });
 
   return listLocations();
@@ -476,7 +505,10 @@ export async function reorderCarriers(
   actor: AuthContext,
   input: ReorderCarriersInput,
 ): Promise<{ carriers: CarrierView[] }> {
-  const known = await prisma.mailCarrier.findMany({ select: { code: true } });
+  const known = await prisma.mailCarrier.findMany({
+    orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
+    select: { code: true },
+  });
   const codes = new Set(known.map((row) => row.code));
 
   const unknown = input.codes.filter((code) => !codes.has(code));
@@ -484,8 +516,13 @@ export async function reorderCarriers(
     throw AppError.validation('Unknown carrier code', { codes: unknown });
   }
 
+  const ordered = orderedCodes(
+    input.codes,
+    known.map((row) => row.code),
+  );
+
   await prisma.$transaction(
-    input.codes.map((code, index) =>
+    ordered.map((code, index) =>
       prisma.mailCarrier.update({ where: { code }, data: { sortOrder: index } }),
     ),
   );
@@ -495,7 +532,7 @@ export async function reorderCarriers(
     action: AuditAction.CARRIERS_REORDERED,
     entityType: 'MailCarrier',
     entityId: 'all',
-    metadata: { count: input.codes.length },
+    metadata: { count: ordered.length, submitted: input.codes.length },
   });
 
   return listCarriers();

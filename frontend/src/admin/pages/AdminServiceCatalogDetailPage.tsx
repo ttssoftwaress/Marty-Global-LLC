@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 
 import { AdminLayout } from '../components/AdminLayout';
+import { DataErrorState } from '../components/DataErrorState';
 import {
   IncludedItemsCard,
   PricingTemplatesCard,
@@ -68,15 +69,23 @@ export function AdminServiceCatalogDetailPage() {
    * Seed the draft once both queries have landed. Keyed on the service id and
    * the loaded records, so a refetch that returns the same data doesn't discard
    * edits in progress, but navigating to a different service re-seeds.
+   *
+   * A failed region list still seeds — with no region rows — so the page renders
+   * the rest of the service instead of animating a skeleton forever waiting for
+   * a fetch that already failed. Saving is blocked for as long as it stays that
+   * way (below), since a draft seeded from an empty region list would write
+   * every region off.
    */
   const loadedService = service.data;
   const loadedRegions = regions.data;
+  const regionsUnavailable = regions.isError;
 
   useEffect(() => {
-    if (!loadedService || !loadedRegions) return;
-    setDraft(detailDraftFromService(loadedService, loadedRegions));
+    if (!loadedService) return;
+    if (!loadedRegions && !regionsUnavailable) return;
+    setDraft(detailDraftFromService(loadedService, loadedRegions ?? []));
     setShowErrors(false);
-  }, [loadedService, loadedRegions]);
+  }, [loadedService, loadedRegions, regionsUnavailable]);
 
   const errors = useMemo(
     () => (draft ? validateDetailDraft(draft) : {}),
@@ -89,21 +98,28 @@ export function AdminServiceCatalogDetailPage() {
   const visibleErrors = showErrors ? errors : {};
 
   const isDirty = useMemo(() => {
-    if (!draft || !loadedService || !loadedRegions) return false;
-    const original = detailDraftFromService(loadedService, loadedRegions);
+    if (!draft || !loadedService || (!loadedRegions && !regionsUnavailable))
+      return false;
+    const original = detailDraftFromService(loadedService, loadedRegions ?? []);
     // The drafts carry per-session React keys, which differ between two seeds of
     // the same data — compare the payloads instead, which is what would be sent.
     return (
       JSON.stringify(detailPayloadFromDraft(draft)) !==
       JSON.stringify(detailPayloadFromDraft(original))
     );
-  }, [draft, loadedService, loadedRegions]);
+  }, [draft, loadedService, loadedRegions, regionsUnavailable]);
+
+  // Save is off while the region list is missing: the payload carries every
+  // region's setting, so writing one seeded from an empty list would switch this
+  // service off in every jurisdiction it covers.
+  const canSave = isDirty && !regionsUnavailable;
 
   const patch = (next: Partial<ServiceDetailDraft>) =>
     setDraft((prev) => (prev ? { ...prev, ...next } : prev));
 
   const onSave = () => {
-    if (!draft || !serviceId || updateService.isPending) return;
+    if (!draft || !serviceId || updateService.isPending || regionsUnavailable)
+      return;
 
     if (hasErrors) {
       setShowErrors(true);
@@ -124,24 +140,52 @@ export function AdminServiceCatalogDetailPage() {
 
   const isLoading = service.isPending || regions.isPending || !draft;
 
-  // A service that doesn't exist (or that the API refused) has nothing to edit —
-  // say so rather than rendering an empty form over a failed fetch.
+  /*
+   * A service that isn't there and a request that failed are different answers
+   * and get different screens (Design.md). A 404 is the API saying the service
+   * is gone — there is nothing to retry and the way out is the catalog. Anything
+   * else is the fetch itself failing, which retrying can fix, so it gets a
+   * `role="alert"` and a Try again rather than a claim the service was removed.
+   */
+  const isNotFound =
+    service.isError &&
+    service.error instanceof ApiError &&
+    service.error.status === 404;
+
   if (service.isError) {
     return (
       <AdminLayout user={user} onLogout={onLogout}>
         <div className="w-full p-4 md:p-6 lg:p-content">
           <div className="mx-auto flex w-full max-w-[80rem] flex-col gap-4">
             <ServiceDetailHeader
-              title="Service not found"
+              title={isNotFound ? 'Service not found' : 'Service unavailable'}
               backTo={CATALOG_ROUTE}
               canSave={false}
               isSaving={false}
               onSave={() => {}}
             />
-            <p className="rounded-card border border-gray-200 bg-white p-card text-body text-gray-500">
-              This service could not be loaded. It may have been removed from the
-              catalog.
-            </p>
+
+            {isNotFound ? (
+              <div className="flex w-full flex-col items-start gap-3 rounded-card border border-gray-200 bg-white p-card">
+                <p className="text-body text-gray-500">
+                  This service is no longer in the catalog. It may have been
+                  removed.
+                </p>
+                <Link
+                  to={CATALOG_ROUTE}
+                  className="flex h-10 items-center justify-center rounded-control border border-primary px-4 text-body font-semibold text-primary transition-colors hover:bg-primary-light focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                >
+                  Back to the catalog
+                </Link>
+              </div>
+            ) : (
+              <DataErrorState
+                title="Couldn't load this service"
+                description="Nothing about this service loaded, so the catalog entry is unchanged and nothing here can be edited yet. Try again in a moment."
+                onRetry={() => void service.refetch()}
+                isRetrying={service.isFetching}
+              />
+            )}
           </div>
         </div>
       </AdminLayout>
@@ -161,10 +205,26 @@ export function AdminServiceCatalogDetailPage() {
               <ServiceDetailHeader
                 title={loadedService?.name ?? ''}
                 backTo={CATALOG_ROUTE}
-                canSave={isDirty}
+                canSave={canSave}
                 isSaving={updateService.isPending}
                 onSave={onSave}
               />
+
+              {/*
+               * Why Save is dead, said where the admin can see it rather than
+               * leaving a button that never enables (Design.md — a control
+               * disabled for a fixable reason states the reason).
+               */}
+              {regionsUnavailable ? (
+                <p
+                  role="alert"
+                  className="rounded-input border border-error/30 bg-error/5 px-4 py-3 text-small text-error"
+                >
+                  The region list didn&rsquo;t load, so this service
+                  can&rsquo;t be saved yet — saving now would clear the regions
+                  it&rsquo;s offered in. Retry the region list below, then save.
+                </p>
+              ) : null}
 
               <ServiceAvailabilityCard
                 active={draft.active}
@@ -188,6 +248,9 @@ export function AdminServiceCatalogDetailPage() {
                 regions={loadedRegions ?? []}
                 settings={draft.regions}
                 error={visibleErrors.regions}
+                isError={regionsUnavailable}
+                isRetrying={regions.isFetching}
+                onRetry={() => void regions.refetch()}
                 onChange={(nextRegions) => patch({ regions: nextRegions })}
               />
 
@@ -203,6 +266,9 @@ export function AdminServiceCatalogDetailPage() {
                 errors={visibleErrors}
                 registry={registry.data ?? []}
                 isRegistryLoading={registry.isLoading}
+                isRegistryError={registry.isError}
+                isRetryingRegistry={registry.isFetching}
+                onRetryRegistry={() => void registry.refetch()}
                 onChange={(steps) => patch({ steps })}
               />
 
@@ -257,7 +323,7 @@ export function AdminServiceCatalogDetailPage() {
 
               <ServiceDetailFooter
                 cancelTo={CATALOG_ROUTE}
-                canSave={isDirty}
+                canSave={canSave}
                 isSaving={updateService.isPending}
                 onSave={onSave}
               />
@@ -273,7 +339,7 @@ function DetailSkeleton() {
   return (
     <div className="flex w-full flex-col gap-6" aria-hidden="true">
       <div className="h-10 w-full max-w-[30rem] animate-pulse rounded-input bg-gray-200" />
-      {[160, 280, 300, 320, 280].map((height, index) => (
+      {['10rem', '17.5rem', '18.75rem', '20rem', '17.5rem'].map((height, index) => (
         <div
           key={index}
           style={{ height }}

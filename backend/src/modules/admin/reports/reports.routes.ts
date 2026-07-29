@@ -1,6 +1,6 @@
 import { Router } from 'express';
 
-import { apiRateLimit } from '../../../guards/index.js';
+import { apiRateLimit, sensitiveRateLimit } from '../../../guards/index.js';
 import { requirePermission } from '../admin.guards.js';
 import * as controller from './reports.controller.js';
 
@@ -18,5 +18,8 @@ router.get('/revenue', apiRateLimit, controller.getRevenue);
 router.get('/breakdown/:dimension', apiRateLimit, controller.getBreakdown);
 router.get('/funnel', apiRateLimit, controller.getFunnel);
 router.get('/growth', apiRateLimit, controller.getGrowth);
+// The export runs all five reads above in one request, so it carries the
+// tighter limit rather than the general read allowance.
+router.get('/export', sensitiveRateLimit, controller.getExport);
 
 export const adminReportsRouter = router;

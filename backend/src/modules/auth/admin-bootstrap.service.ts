@@ -26,9 +26,18 @@ import { Role } from '../../lib/roles.js';
  *
  * Because the password is re-applied from env, rotating ADMIN_PASSWORD and
  * restarting is the supported way to change it — env is the source of truth.
+ *
+ * Safe to run on several instances at once. The check-then-create below is not
+ * atomic — two containers booting together can both read "no such user" — so the
+ * unique index on `User.email` is the arbiter rather than the read: the loser of
+ * the race falls through to the reconcile path and converges on the same row,
+ * exactly as if it had booted a second later. No lock, no leader election, and
+ * nothing to release if a boot crashes mid-way.
  */
 
 type BootstrapOutcome = 'skipped' | 'created' | 'updated' | 'unchanged';
+
+type AdminUserRow = { id: string; role: string | null; deletedAt: Date | null };
 
 export async function ensureAdminAccount(): Promise<BootstrapOutcome> {
   const { ADMIN_EMAIL, ADMIN_PASSWORD, ADMIN_NAME } = env;
@@ -42,19 +51,56 @@ export async function ensureAdminAccount(): Promise<BootstrapOutcome> {
   // Better Auth lowercases the email on create, so match on the same form.
   const email = ADMIN_EMAIL.toLowerCase();
 
-  const existing = await prisma.user.findUnique({
-    where: { email },
-    select: { id: true, role: true, name: true, deletedAt: true },
-  });
+  const existing = await findAdminUser(email);
 
   if (!existing) {
+    const created = await createAdminUser(email, ADMIN_PASSWORD, ADMIN_NAME);
+
+    if (created) {
+      logger.info({ userId: created }, 'Admin account created from env');
+      return 'created';
+    }
+
+    /*
+     * The insert lost to a concurrent boot. Re-read and reconcile: the other
+     * instance has already created the row from the same env, so there is
+     * nothing to repair — but going through the same path keeps this idempotent
+     * rather than assuming what the winner wrote.
+     */
+    const winner = await findAdminUser(email);
+    if (!winner) {
+      throw new Error('Admin bootstrap could not create or find the admin user');
+    }
+
+    return reconcileAdminUser(winner, ADMIN_PASSWORD);
+  }
+
+  return reconcileAdminUser(existing, ADMIN_PASSWORD);
+}
+
+function findAdminUser(email: string): Promise<AdminUserRow | null> {
+  return prisma.user.findUnique({
+    where: { email },
+    select: { id: true, role: true, deletedAt: true },
+  });
+}
+
+/*
+ * Create the account through Better Auth, returning the new user id — or null
+ * when another instance created it first.
+ *
+ * Any failure here is treated as "we lost the race" only if the row now exists;
+ * otherwise the error is real and is rethrown, so a broken credential config
+ * still fails the boot loudly.
+ */
+async function createAdminUser(
+  email: string,
+  password: string,
+  name: string,
+): Promise<string | null> {
+  try {
     const { user } = await auth.api.createUser({
-      body: {
-        email,
-        password: ADMIN_PASSWORD,
-        name: ADMIN_NAME,
-        role: Role.ADMIN,
-      },
+      body: { email, password, name, role: Role.ADMIN },
     });
 
     // The admin is staff, not a customer signing up — there is no verification
@@ -64,22 +110,32 @@ export async function ensureAdminAccount(): Promise<BootstrapOutcome> {
       data: { emailVerified: true },
     });
 
-    logger.info({ userId: user.id }, 'Admin account created from env');
-    return 'created';
+    return user.id;
+  } catch (err) {
+    if (await findAdminUser(email)) {
+      logger.debug({ err }, 'Admin bootstrap lost a concurrent create — reconciling');
+      return null;
+    }
+    throw err;
   }
+}
 
+async function reconcileAdminUser(
+  user: AdminUserRow,
+  password: string,
+): Promise<BootstrapOutcome> {
   const changes: string[] = [];
 
-  if (existing.role !== Role.ADMIN) {
+  if (user.role !== Role.ADMIN) {
     changes.push('role');
   }
-  if (existing.deletedAt) {
+  if (user.deletedAt) {
     changes.push('restored');
   }
 
   if (changes.length > 0) {
     await prisma.user.update({
-      where: { id: existing.id },
+      where: { id: user.id },
       data: { role: Role.ADMIN, deletedAt: null, emailVerified: true },
     });
   }
@@ -87,17 +143,17 @@ export async function ensureAdminAccount(): Promise<BootstrapOutcome> {
   // The password is re-applied whenever it no longer matches env — that covers
   // both a rotated ADMIN_PASSWORD and an account that has no credential account
   // at all (e.g. created by an earlier seed).
-  if (await syncAdminPassword(existing.id, ADMIN_PASSWORD)) {
+  if (await syncAdminPassword(user.id, password)) {
     changes.push('password');
   }
 
   if (changes.length === 0) {
-    logger.debug({ userId: existing.id }, 'Admin account already in sync');
+    logger.debug({ userId: user.id }, 'Admin account already in sync');
     return 'unchanged';
   }
 
   // Log the fields that changed, never the values (AGENTS.md, Security & PII).
-  logger.info({ userId: existing.id, changes }, 'Admin account reconciled from env');
+  logger.info({ userId: user.id, changes }, 'Admin account reconciled from env');
   return 'updated';
 }
 

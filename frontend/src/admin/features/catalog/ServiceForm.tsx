@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 
 import { ApiError } from '@/services/api';
 
+import { FormDialog } from '../../components/FormDialog';
 import {
   draftFromService,
   newServiceDraft,
@@ -25,10 +26,9 @@ import {
   SelectInput,
   TextArea,
   TextInput,
-} from './FormControls';
+} from '../../components/FormControls';
 import { PricingTierEditor } from './PricingTierEditor';
 import { RegionPicker } from './RegionPicker';
-import { ServiceFormDialog } from './ServiceFormDialog';
 
 /*
  * Add / manage a service — the one form behind both entry points, since adding
@@ -61,6 +61,11 @@ type ServiceFormProps = {
   isLoadingService?: boolean;
   regions: ServiceRegion[];
   isLoadingRegions?: boolean;
+  // The region list failed to load — the picker says so rather than reading as
+  // "no jurisdictions configured".
+  isRegionsError?: boolean;
+  isRetryingRegions?: boolean;
+  onRetryRegions?: () => void;
   isSaving?: boolean;
   error?: unknown;
   onSubmit: (payload: ServiceWritePayload) => void;
@@ -74,6 +79,9 @@ export function ServiceForm({
   isLoadingService,
   regions,
   isLoadingRegions,
+  isRegionsError,
+  isRetryingRegions,
+  onRetryRegions,
   isSaving,
   error,
   onSubmit,
@@ -152,7 +160,7 @@ export function ServiceForm({
   const showSkeleton = mode === 'edit' && isLoadingService && !service;
 
   return (
-    <ServiceFormDialog
+    <FormDialog
       open={open}
       title={mode === 'create' ? 'Add service' : 'Manage service'}
       description={
@@ -330,6 +338,9 @@ export function ServiceForm({
               onChange={(codes) => setField('regionCodes', codes)}
               error={errors.regionCodes}
               isLoading={isLoadingRegions}
+              isError={isRegionsError}
+              isRetrying={isRetryingRegions}
+              onRetry={onRetryRegions}
             />
           </FormSection>
 
@@ -374,7 +385,7 @@ export function ServiceForm({
           </FormSection>
         </div>
       )}
-    </ServiceFormDialog>
+    </FormDialog>
   );
 }
 

@@ -10,7 +10,7 @@ import {
 import type { AuthContext } from '../../../guards/auth-context.js';
 import { AppError } from '../../../lib/app-error.js';
 import { toInitials } from '../../../lib/initials.js';
-import { cursorArgs, offsetArgs, takePage, totalPages } from '../../../lib/pagination.js';
+import { cursorArgs, takePage, totalPages } from '../../../lib/pagination.js';
 import { prisma } from '../../../lib/prisma.js';
 import { Role } from '../../../lib/roles.js';
 import { presignObject } from '../../../lib/storage.js';
@@ -355,6 +355,30 @@ export async function uploadScan(
   storageExpiresAt.setUTCDate(storageExpiresAt.getUTCDate() + STORAGE_DAYS);
 
   /*
+   * The response deadline, when the operator set one. Anchored at the END of the
+   * named day rather than midnight: "respond by the 12th" includes the 12th, and
+   * a midnight anchor would read as overdue for the whole of it.
+   *
+   * A deadline before the post arrived is a typo, not a rule we can hold anyone
+   * to, so it is rejected rather than filed as instantly overdue.
+   */
+  const responseDueAt = input.responseDueOn
+    ? new Date(`${input.responseDueOn}T23:59:59.999Z`)
+    : null;
+
+  if (responseDueAt) {
+    if (Number.isNaN(responseDueAt.getTime())) {
+      throw AppError.validation('responseDueOn is not a real date');
+    }
+
+    if (responseDueAt < receivedAt) {
+      throw AppError.validation(
+        'The response date cannot be before the day the mail arrived',
+      );
+    }
+  }
+
+  /*
    * Every key is checked to be one this module's uploads mint. The keys are
    * unguessable, so this is a second line of defence: it stops a key obtained
    * for some other purpose from being filed as a customer's mail.
@@ -377,9 +401,17 @@ export async function uploadScan(
     data: {
       roomId: room.id,
       sender: input.sender,
-      status: MailItemStatus.NEW,
+      /*
+       * A deadline is the whole difference between post to read and post to
+       * answer: with one the item lands as ACTION_REQUESTED and no open request
+       * of the customer's own, which is exactly the "we are waiting on you"
+       * state the inbox draws in red with a Respond action (mailroom.service.ts,
+       * `hasOpenRequest`). Without one it is ordinary unread mail.
+       */
+      status: responseDueAt ? MailItemStatus.ACTION_REQUESTED : MailItemStatus.NEW,
       receivedAt,
       storageExpiresAt,
+      responseDueAt,
       // The objects exist — the operator uploaded them before submitting — so the
       // item is readable immediately rather than sitting in a scanning state.
       scanReady: true,
@@ -405,7 +437,14 @@ export async function uploadScan(
     entityType: 'MailItem',
     entityId: item.id,
     // Ids and the room only — the sender is on an envelope and counts as PII.
-    metadata: { roomId: room.id, customerId: room.customerId, files: input.files.length },
+    // Whether a response was demanded of the customer is a state change worth
+    // the trail; the date itself is on the row.
+    metadata: {
+      roomId: room.id,
+      customerId: room.customerId,
+      files: input.files.length,
+      responseRequested: Boolean(responseDueAt),
+    },
   });
 
   /*
@@ -517,16 +556,18 @@ function toRequestRow(request: RequestRow): MailRequestRow {
 
 export type MailRequestPage = {
   requests: MailRequestRow[];
+  nextCursor: string | null;
   page: number;
-  pageSize: number;
   totalResults: number;
   totalPages: number;
 };
 
 /*
- * Offset-paginated, unlike every other admin list. The design's footer prints an
- * absolute range ("Showing 1–10 of 34") and a jumpable page strip, and a cursor
- * can answer neither. The frontend documents this as a deliberate exception.
+ * Cursor-paginated like every other admin list (AGENTS.md): `?cursor=&limit=`
+ * in, `nextCursor` out. The design's footer prints an absolute range ("Showing
+ * 1–10 of 34") and a jumpable page strip, which the count beside the cursor
+ * answers — the same display convenience the customers and audit lists layer
+ * over their own streams (lib/pagination.ts).
  */
 export async function listRequests(
   actor: AuthContext,
@@ -543,18 +584,23 @@ export async function listRequests(
     prisma.mailRequest.findMany({
       where,
       include: requestInclude,
-      // Oldest first: a queue is worked in the order it arrived.
+      // Oldest first: a queue is worked in the order it arrived. The id tiebreak
+      // keeps the cursor stable when two requests share a timestamp.
       orderBy: [{ requestedAt: 'asc' }, { id: 'asc' }],
-      ...offsetArgs(query.page, query.pageSize),
+      ...cursorArgs(query.cursor, query.limit),
     }),
   ]);
 
+  const page = takePage(rows, query.limit);
+
   return {
-    requests: rows.map(toRequestRow),
-    page: query.page,
-    pageSize: query.pageSize,
+    requests: page.rows.map(toRequestRow),
+    nextCursor: page.nextCursor,
+    // The numbered pager is a display convenience over the cursor stream; the
+    // first fetch is page 1 and the cursor steps from there.
+    page: query.cursor ? 0 : 1,
     totalResults,
-    totalPages: totalPages(totalResults, query.pageSize),
+    totalPages: totalPages(totalResults, query.limit),
   };
 }
 
@@ -790,8 +836,8 @@ export type MailLogPage = {
     closedAt: string;
     processedBy: string;
   }[];
+  nextCursor: string | null;
   page: number;
-  pageSize: number;
   totalResults: number;
   totalPages: number;
 };
@@ -854,13 +900,17 @@ export async function listLog(
           },
         },
       },
+      // Newest first — a history is read from the present backwards. The id
+      // tiebreak keeps the cursor stable when two rows close in the same tick.
       orderBy: [{ closedAt: 'desc' }, { id: 'desc' }],
-      ...offsetArgs(query.page, query.pageSize),
+      ...cursorArgs(query.cursor, query.limit),
     }),
   ]);
 
+  const page = takePage(rows, query.limit);
+
   return {
-    entries: rows.map((entry) => ({
+    entries: page.rows.map((entry) => ({
       id: entry.id,
       customer: toCustomer(entry.mailItem.room.customer),
       room: { id: entry.mailItem.room.id, name: entry.mailItem.room.name },
@@ -870,9 +920,9 @@ export async function listLog(
       closedAt: iso(entry.closedAt),
       processedBy: entry.processedByName,
     })),
-    page: query.page,
-    pageSize: query.pageSize,
+    nextCursor: page.nextCursor,
+    page: query.cursor ? 0 : 1,
     totalResults,
-    totalPages: totalPages(totalResults, query.pageSize),
+    totalPages: totalPages(totalResults, query.limit),
   };
 }

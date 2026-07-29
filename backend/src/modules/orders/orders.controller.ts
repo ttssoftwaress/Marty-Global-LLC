@@ -55,12 +55,7 @@ export async function getOrder(
   next: NextFunction,
 ) {
   try {
-    const id = req.params.id;
-    if (typeof id !== 'string' || !id) {
-      throw AppError.validation('Order id is required');
-    }
-
-    const order = await service.getOrderDetail(req, id);
+    const order = await service.getOrderDetail(req, pathParam(req, 'id'));
     res.json({ data: order });
   } catch (error) {
     next(error);

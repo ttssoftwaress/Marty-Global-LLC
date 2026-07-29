@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { formatOrderDate } from '../../lib/format';
 import type { AdminOrderRow } from '../../types/orders';
 import { OrderStatusChip } from './OrderStatusChip';
-import { stopRowClick, useOpenOrderRow } from './rowNavigation';
+import { ROW_FOCUS_CLASS, stopRowClick, useOrderRowProps } from './rowNavigation';
 
 /*
  * The mobile presentation of the queue — one card per order, replacing the table
@@ -21,6 +21,10 @@ import { stopRowClick, useOpenOrderRow } from './rowNavigation';
  * anchors cannot nest, and a card-sized anchor would make the reference and the
  * customer's name unselectable. So the card navigates on tap, its two links stop
  * the tap themselves, and a tap that ends a text selection is left alone.
+ *
+ * The card carries the row props rather than a bare `onClick`, so it is a tab
+ * stop that Enter/Space opens as well — the enlarged target is not pointer-only
+ * (rowNavigation).
  */
 
 type OrderCardListProps = {
@@ -28,15 +32,15 @@ type OrderCardListProps = {
 };
 
 export function OrderCardList({ orders }: OrderCardListProps) {
-  const openOrderRow = useOpenOrderRow();
+  const rowProps = useOrderRowProps();
 
   return (
     <ul className="flex w-full flex-col gap-3 md:hidden">
       {orders.map((order) => (
         <li
           key={order.id}
-          onClick={() => openOrderRow(order.to)}
-          className="flex cursor-pointer flex-col gap-3 rounded-card bg-white p-4 shadow-sm-elevation transition-colors active:bg-gray-50"
+          {...rowProps(order.to)}
+          className={`flex cursor-pointer flex-col gap-3 rounded-card bg-white p-4 shadow-sm-elevation transition-colors active:bg-gray-50 ${ROW_FOCUS_CLASS}`}
         >
           <div className="flex items-center justify-between gap-2">
             <Link

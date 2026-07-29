@@ -82,7 +82,7 @@ const resolvedFieldBase = z.object({
   hint: z.string().optional(),
 });
 
-export const serviceFieldSchema = z.discriminatedUnion('type', [
+const serviceFieldSchema = z.discriminatedUnion('type', [
   resolvedFieldBase.extend({ type: z.literal('text') }),
   resolvedFieldBase.extend({
     type: z.literal('select'),
@@ -99,8 +99,6 @@ export const serviceFieldSchema = z.discriminatedUnion('type', [
     multiple: z.boolean().optional(),
   }),
 ]);
-
-export const serviceDetailFieldsSchema = z.array(serviceFieldSchema);
 
 // --- A service's form, as stored ------------------------------------------
 

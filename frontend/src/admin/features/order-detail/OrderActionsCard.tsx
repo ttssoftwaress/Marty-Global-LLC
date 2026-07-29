@@ -70,6 +70,17 @@ export function OrderActionsCard({ order }: OrderActionsCardProps) {
   const [status, setStatus] = useState<OrderStatus>(order.status);
   const [assigneeId, setAssigneeId] = useState<string>(currentAssignee);
 
+  /*
+   * Whether the last save landed, tracked here rather than read off
+   * `isSuccess && !dirty`. That pair was a statement about the refetch, not about
+   * the write: between the mutation resolving and the invalidated query coming
+   * back, the draft still differs from the stale record, so `dirty` is briefly
+   * true — the confirmation would be withheld at exactly the moment it is owed,
+   * and the Save button would go live again over a change already committed. A
+   * slow or failed refetch stretches that window out.
+   */
+  const [saved, setSaved] = useState(false);
+
   const update = useUpdateAdminOrder(order.id);
 
   // The record is the source of truth: once a save lands (or the query refetches
@@ -97,7 +108,7 @@ export function OrderActionsCard({ order }: OrderActionsCardProps) {
   );
 
   const onSave = () => {
-    if (!dirty) return;
+    if (!dirty || update.isPending) return;
 
     const input: AdminOrderUpdate = {
       ...(statusChanged ? { status } : {}),
@@ -106,11 +117,36 @@ export function OrderActionsCard({ order }: OrderActionsCardProps) {
         : {}),
     };
 
-    update.mutate(input);
+    setSaved(false);
+    update.mutate(input, { onSuccess: () => setSaved(true) });
   };
 
-  const errorMessage =
-    update.error instanceof ApiError
+  // Editing again withdraws the confirmation: it belongs to what was saved, not
+  // to the draft now sitting in the controls.
+  const onStatusChange = (value: string) => {
+    setSaved(false);
+    setStatus(value as OrderStatus);
+  };
+
+  const onAssigneeChange = (value: string) => {
+    setSaved(false);
+    setAssigneeId(value);
+  };
+
+  /*
+   * A 403 here is not the quote card's 403. Quoting is a whole area (`payments`)
+   * a member either holds or doesn't, so that card hides itself; status and
+   * assignment are this card's whole purpose, so it stays and says why the save
+   * didn't land. The backend's message names the endpoint, not the grant — the
+   * wording below points at the same place the assign hint does, since asking an
+   * administrator is the only thing the reviewer can do about it.
+   */
+  const permissionDenied =
+    update.error instanceof ApiError && update.error.status === 403;
+
+  const errorMessage = permissionDenied
+    ? 'You do not have permission to make this change. An administrator can grant it from Team & staff.'
+    : update.error instanceof ApiError
       ? update.error.message
       : update.error
         ? 'Could not update this order. Try again.'
@@ -123,7 +159,7 @@ export function OrderActionsCard({ order }: OrderActionsCardProps) {
           label="Status"
           options={statusSelectOptions(order)}
           value={status}
-          onChange={(value) => setStatus(value as OrderStatus)}
+          onChange={onStatusChange}
           disabled={update.isPending}
         />
 
@@ -137,7 +173,7 @@ export function OrderActionsCard({ order }: OrderActionsCardProps) {
           label="Assigned to"
           options={assigneeSelectOptions(order)}
           value={assigneeId}
-          onChange={setAssigneeId}
+          onChange={onAssigneeChange}
           disabled={update.isPending || !order.canAssign}
         />
 
@@ -166,7 +202,10 @@ export function OrderActionsCard({ order }: OrderActionsCardProps) {
       <button
         type="button"
         onClick={onSave}
-        disabled={!dirty || update.isPending}
+        // `saved` closes the same window the confirmation opens: the record has
+        // not refetched yet, so the draft still reads dirty, and without this the
+        // button would go live again over a change already committed.
+        disabled={!dirty || update.isPending || saved}
         className="btn btn-primary h-11 w-full rounded-input text-body disabled:cursor-not-allowed disabled:opacity-50"
       >
         {update.isPending ? 'Saving…' : 'Save changes'}
@@ -179,7 +218,7 @@ export function OrderActionsCard({ order }: OrderActionsCardProps) {
         </p>
       ) : null}
 
-      {update.isSuccess && !dirty ? (
+      {saved ? (
         <p className="flex items-center gap-2 text-small text-[var(--color-success)]">
           <CheckCircle2 className="size-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
           Order updated.

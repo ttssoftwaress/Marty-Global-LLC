@@ -2,7 +2,6 @@ import type {
   ResultFieldConfig,
   ResultFieldDefinition,
   ResultFieldType,
-  ResultSelectOption,
   ResultStatusOption,
   StatusTone,
 } from '../types/delivery';
@@ -10,15 +9,22 @@ import type {
   ResultFieldCreatePayload,
   ResultFieldUpdatePayload,
 } from '../features/result-fields/queries';
-import { deriveKey } from './fields';
+import {
+  deriveKey,
+  optionSlug,
+  parseOptions,
+  serializeOptions,
+  validateKey,
+} from './field-registry';
 
 /*
  * The result registry form's plumbing — the draft the dialog edits and the
  * payloads it submits.
  *
- * The mirror of `lib/fields.ts`, and it reuses that file's `deriveKey`: both
- * registries store under the same key format, and two copies of that derivation
- * would be two chances to drift from the backend's `fieldKeySchema`.
+ * The mirror of `lib/fields.ts`, and both draw their shared half — key
+ * derivation and validation, choice parsing — from `field-registry`. What stays
+ * here is what only a delivered fact has: status tones, a number's prefix and
+ * decimals, and the primary/list defaults a service inherits.
  */
 
 export type ResultFieldDraft = {
@@ -67,14 +73,6 @@ export function newResultFieldDraft(): ResultFieldDraft {
   return { ...EMPTY_RESULT_FIELD_DRAFT };
 }
 
-function optionSlug(value: string) {
-  return value
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
-
 const TONES: readonly StatusTone[] = [
   'neutral',
   'success',
@@ -85,21 +83,6 @@ const TONES: readonly StatusTone[] = [
 
 function isTone(value: string): value is StatusTone {
   return (TONES as readonly string[]).includes(value);
-}
-
-export function parseResultOptions(value: string): ResultSelectOption[] {
-  return value
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const [rawValue = '', rawLabel] = line.split('|');
-      if (rawLabel !== undefined) {
-        return { value: rawValue.trim(), label: rawLabel.trim() };
-      }
-      const label = rawValue.trim();
-      return { value: optionSlug(label), label };
-    });
 }
 
 /*
@@ -123,16 +106,6 @@ export function parseStatusOptions(value: string): ResultStatusOption[] {
 
       return { value: optionValue, label, tone };
     });
-}
-
-function serializeOptions(options: ResultSelectOption[]): string {
-  return options
-    .map((option) =>
-      option.value === optionSlug(option.label)
-        ? option.label
-        : `${option.value}|${option.label}`,
-    )
-    .join('\n');
 }
 
 function serializeStatusOptions(options: ResultStatusOption[]): string {
@@ -184,15 +157,10 @@ export function validateResultFieldDraft(
 
   if (!draft.label.trim()) errors.label = 'Name this field.';
 
-  const key = draft.key.trim() || deriveKey(draft.label);
-  if (!key) {
-    errors.key = 'A field key is required.';
-  } else if (!/^[a-z][a-z0-9_]*$/.test(key)) {
-    errors.key =
-      'Use lowercase letters, numbers, and underscores, starting with a letter.';
-  }
+  const keyError = validateKey(draft.key.trim() || deriveKey(draft.label));
+  if (keyError) errors.key = keyError;
 
-  if (draft.type === 'select' && parseResultOptions(draft.options).length === 0) {
+  if (draft.type === 'select' && parseOptions(draft.options).length === 0) {
     errors.options = 'Add at least one choice.';
   }
 
@@ -224,7 +192,7 @@ export function validateResultFieldDraft(
 function configFromDraft(draft: ResultFieldDraft): ResultFieldConfig | undefined {
   switch (draft.type) {
     case 'select':
-      return { options: parseResultOptions(draft.options) };
+      return { options: parseOptions(draft.options) };
     case 'status':
       return { statusOptions: parseStatusOptions(draft.options) };
     case 'textarea': {

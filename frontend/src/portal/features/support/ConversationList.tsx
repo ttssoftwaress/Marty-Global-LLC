@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { AlertTriangle, MessageSquare, Search } from 'lucide-react';
 
 import type { ConversationSummary } from '../../types/support';
@@ -24,6 +25,11 @@ type ConversationListProps = {
   search: string;
   onSearchChange: (value: string) => void;
   activeId?: string;
+  // The list is one page of a cursor stream, so it loads the next as the bottom
+  // comes into view rather than fetching every thread the customer ever opened.
+  hasNextPage?: boolean;
+  isFetchingNextPage?: boolean;
+  onLoadMore?: () => void;
   className?: string;
 };
 
@@ -100,6 +106,9 @@ export function ConversationList({
   search,
   onSearchChange,
   activeId,
+  hasNextPage = false,
+  isFetchingNextPage = false,
+  onLoadMore,
   className = 'flex',
 }: ConversationListProps) {
   // Skeleton means "still loading", not "no data". Folding `!conversations` into
@@ -107,6 +116,23 @@ export function ConversationList({
   const showSkeleton = isLoading;
   const showError = !isLoading && (isError || !conversations);
   const isEmpty = !showSkeleton && !showError && conversations?.length === 0;
+
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || !hasNextPage || isFetchingNextPage || !onLoadMore) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) onLoadMore();
+      },
+      { rootMargin: '12.5rem' },
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, onLoadMore]);
 
   return (
     <section
@@ -142,13 +168,23 @@ export function ConversationList({
         ) : isEmpty ? (
           <ListEmptyState searching={search.trim().length > 0} />
         ) : (
-          (conversations ?? []).map((conversation) => (
-            <ConversationListItem
-              key={conversation.id}
-              conversation={conversation}
-              active={conversation.id === activeId}
-            />
-          ))
+          <>
+            {(conversations ?? []).map((conversation) => (
+              <ConversationListItem
+                key={conversation.id}
+                conversation={conversation}
+                active={conversation.id === activeId}
+              />
+            ))}
+
+            <div ref={sentinelRef} className="h-px shrink-0" aria-hidden="true" />
+
+            {isFetchingNextPage ? (
+              <p className="shrink-0 py-3 text-center text-small text-gray-400">
+                Loading more…
+              </p>
+            ) : null}
+          </>
         )}
       </div>
     </section>

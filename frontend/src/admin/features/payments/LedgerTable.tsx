@@ -37,12 +37,14 @@ import { PaymentStatusChip } from './PaymentStatusChip';
 type LedgerTableProps = {
   rows: BillingLedgerRow[];
   onAction: (row: BillingLedgerRow) => void;
+  /** The row whose reminder is in flight, if any — one chase at a time. */
+  sendingId?: string | null;
 };
 
 const HEAD_CELL =
   'py-0 text-left text-caption font-medium uppercase tracking-[0.3px] text-gray-500';
 
-export function LedgerTable({ rows, onAction }: LedgerTableProps) {
+export function LedgerTable({ rows, onAction, sendingId }: LedgerTableProps) {
   return (
     <div className="hidden w-full overflow-x-auto md:block">
       <table className="w-full table-fixed border-collapse text-left lg:min-w-[65rem]">
@@ -152,7 +154,12 @@ export function LedgerTable({ rows, onAction }: LedgerTableProps) {
                 {row.action.kind === 'none' ? (
                   <span className="text-body text-gray-400">{EM_DASH}</span>
                 ) : (
-                  <LedgerRowAction row={row} onAction={onAction} />
+                  <LedgerRowAction
+                    row={row}
+                    onAction={onAction}
+                    isSending={sendingId === row.id}
+                    isBusy={Boolean(sendingId)}
+                  />
                 )}
               </td>
             </tr>

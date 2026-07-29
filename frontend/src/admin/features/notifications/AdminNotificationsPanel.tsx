@@ -33,6 +33,11 @@ type AdminNotificationsPanelProps = {
   onClose: () => void;
   notifications: AdminNotification[];
   isLoading?: boolean;
+  // A failed feed is not a caught-up one — the content below reports it rather
+  // than printing "You're all caught up" over a request that never arrived.
+  isError?: boolean;
+  isRetrying?: boolean;
+  onRetry?: () => void;
   onSelect?: (notification: AdminNotification) => void;
   onMarkAllRead?: () => void;
 };
@@ -48,6 +53,9 @@ export function AdminNotificationsPanel({
   onClose,
   notifications,
   isLoading,
+  isError,
+  isRetrying,
+  onRetry,
   onSelect,
   onMarkAllRead,
 }: AdminNotificationsPanelProps) {
@@ -87,7 +95,9 @@ export function AdminNotificationsPanel({
         <AdminNotificationPanelContent
           notifications={notifications}
           isLoading={isLoading}
-          variant="sheet"
+          isError={isError}
+          isRetrying={isRetrying}
+          onRetry={onRetry}
           settingsHref={SETTINGS_HREF}
           viewAllHref={VIEW_ALL_HREF}
           onSelect={onSelect}

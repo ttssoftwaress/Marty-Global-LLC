@@ -29,17 +29,27 @@ const LABEL_INSIDE_MIN_RATIO = 0.12;
 type ConversionFunnelCardProps = {
   stages: FunnelStage[] | undefined;
   isLoading: boolean;
+  isError?: boolean;
+  isRetrying?: boolean;
+  onRetry?: () => void;
 };
 
 export function ConversionFunnelCard({
   stages,
   isLoading,
+  isError,
+  isRetrying,
+  onRetry,
 }: ConversionFunnelCardProps) {
   return (
     <ChartCard
       title="Conversion funnel"
       description="Stage drop-offs from discovery to final checkout"
       isLoading={isLoading}
+      isError={isError}
+      isRetrying={isRetrying}
+      onRetry={onRetry}
+      errorTitle="Couldn't load the conversion funnel"
       skeletonClassName="h-[13.75rem]"
     >
       {stages && stages.length > 0 ? (

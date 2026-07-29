@@ -74,14 +74,23 @@ export function isGuestOnline(conversationId: string): boolean {
   return guests.has(conversationId);
 }
 
-// Read once when a staff socket connects, so the count below never has to query.
+/*
+ * Read once when a staff socket connects, so the count below never has to query.
+ *
+ * A missing profile falls back to AWAY, not ONLINE. Only a staff socket reaches
+ * here and a staff socket implies a profile (sockets/chat.handlers.ts), so the
+ * fallback should be unreachable — but if that invariant ever breaks, the safe
+ * direction is to leave the agent out of the available count. Announcing "we're
+ * here" on behalf of someone the database does not know about is the worse
+ * failure: the customer waits on a reply nobody was routed to.
+ */
 export async function loadStaffAvailability(userId: string): Promise<void> {
   const profile = await prisma.staffProfile.findFirst({
     where: { userId, deletedAt: null },
     select: { availability: true },
   });
 
-  staffAvailability.set(userId, profile?.availability ?? StaffAvailability.ONLINE);
+  staffAvailability.set(userId, profile?.availability ?? StaffAvailability.AWAY);
 }
 
 export function setStaffAvailability(
@@ -119,12 +128,4 @@ export function availableAgentIds(): Set<string> {
   }
 
   return available;
-}
-
-// Test seam: the maps are module state, so a suite that connects sockets needs a
-// way back to a known starting point.
-export function resetPresence(): void {
-  users.clear();
-  guests.clear();
-  staffAvailability.clear();
 }

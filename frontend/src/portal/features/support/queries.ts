@@ -1,10 +1,16 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 
 import { apiFetch } from '@/services/api';
 import type { ApiSuccess } from '@/types/api';
 import type {
   ConversationCategory,
   ConversationSummary,
+  ConversationsPage,
   ConversationThread,
   Message,
   MessageAttachment,
@@ -26,23 +32,45 @@ import type {
 export const conversationsKey = (search: string) =>
   ['support', 'conversations', search] as const;
 
-// GET /v1/support/conversations?search= — the customer's conversations, newest
-// first. The backend resolves the search and ordering.
+// GET /v1/support/conversations?search=&cursor= — one page of the customer's
+// conversations, newest first. The backend resolves the search and the ordering.
+function fetchConversationsPage(
+  search: string,
+  cursor: string | null,
+): Promise<ConversationsPage> {
+  const query = new URLSearchParams();
+  if (search.trim()) query.set('search', search.trim());
+  if (cursor) query.set('cursor', cursor);
+
+  const suffix = query.toString() ? `?${query.toString()}` : '';
+
+  return apiFetch<ApiSuccess<ConversationsPage>>(
+    `/support/conversations${suffix}`,
+  ).then((res) => res.data);
+}
+
+/*
+ * An infinite query over one cursor stream, like the admin inbox: the list pane
+ * appends as it scrolls rather than asking the backend for every thread the
+ * customer has ever opened.
+ */
 export function useConversations(search: string) {
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: conversationsKey(search),
-    queryFn: () => {
-      const query = search.trim()
-        ? `?search=${encodeURIComponent(search.trim())}`
-        : '';
-      return apiFetch<ApiSuccess<ConversationSummary[]>>(
-        `/support/conversations${query}`,
-      ).then((res) => res.data);
-    },
+    queryFn: ({ pageParam }) => fetchConversationsPage(search, pageParam),
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
     // Keep the previous results on screen while a new search resolves, so typing
     // doesn't flash the skeleton.
     placeholderData: (previous) => previous,
   });
+}
+
+// The pages flattened into the single list every consumer actually renders.
+export function conversationsOf(
+  data: { pages: ConversationsPage[] } | undefined,
+): ConversationSummary[] | undefined {
+  return data?.pages.flatMap((page) => page.conversations);
 }
 
 export const conversationKey = (conversationId: string) =>

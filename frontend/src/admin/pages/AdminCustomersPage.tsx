@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { AdminLayout } from '../components/AdminLayout';
+import { DataErrorState } from '../components/DataErrorState';
 import {
   CustomerCardList,
   CustomerRegionFilter,
@@ -15,6 +16,7 @@ import {
   useAdminCustomersSummary,
 } from '../features/customers';
 import { useAdminShell } from '../hooks/useAdminShell';
+import { useCursorPageWindow } from '../hooks/useCursorPageWindow';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import type { AdminCustomerRow, CustomerSegment } from '../types/customers';
 import { ALL_REGIONS } from '../types/customers';
@@ -88,13 +90,6 @@ export function AdminCustomersPage() {
     search: debouncedSearch,
   });
 
-  // The page window the wider links' pager steps over. Any change to the result
-  // set returns it to the first page, since the old offset means nothing now.
-  const [pageIndex, setPageIndex] = useState(0);
-  useEffect(() => {
-    setPageIndex(0);
-  }, [segment, region, debouncedSearch]);
-
   const loadedCustomers = useMemo<AdminCustomerRow[]>(
     () => customers.data?.pages.flatMap((page) => page.customers) ?? [],
     [customers.data],
@@ -104,19 +99,22 @@ export function AdminCustomersPage() {
   const totalPages = customers.data?.pages[0]?.totalPages ?? 1;
 
   // The table shows one window; the mobile cards show everything loaded.
-  const windowCustomers = useMemo(
-    () => loadedCustomers.slice(pageIndex * PAGE_SIZE, (pageIndex + 1) * PAGE_SIZE),
-    [loadedCustomers, pageIndex],
-  );
-
-  const goToPage = (nextPage: number) => {
-    const nextIndex = Math.max(0, Math.min(nextPage - 1, totalPages - 1));
-    // Pull the next cursor page in when the window runs past what has loaded.
-    if (nextIndex * PAGE_SIZE >= loadedCustomers.length && customers.hasNextPage) {
-      void customers.fetchNextPage();
-    }
-    setPageIndex(nextIndex);
-  };
+  const {
+    page,
+    rows: windowCustomers,
+    rangeStart,
+    rangeEnd,
+    goToPage,
+  } = useCursorPageWindow({
+    rows: loadedCustomers,
+    totalPages,
+    totalResults,
+    pageSize: PAGE_SIZE,
+    hasNextPage: customers.hasNextPage,
+    isFetchingNextPage: customers.isFetchingNextPage,
+    fetchNextPage: customers.fetchNextPage,
+    resetKey: `${segment}|${region}|${debouncedSearch}`,
+  });
 
   const onLoadMore = () => {
     if (customers.hasNextPage) void customers.fetchNextPage();
@@ -131,17 +129,29 @@ export function AdminCustomersPage() {
   const isFiltered =
     segment !== 'all' || region !== ALL_REGIONS || Boolean(debouncedSearch.trim());
 
+  /*
+   * The four states, each derived from the queries' own flags rather than from
+   * "the data is absent" (Design.md) — a failed fetch leaves no rows, and
+   * treating that as emptiness would print "No customers yet" over a broken
+   * request, which reads as a false all-clear about the whole customer base.
+   */
   const isLoading = summary.isPending || customers.isPending;
-  const isEmpty = !isLoading && loadedCustomers.length === 0;
+  const isError = summary.isError || customers.isError;
+  const isEmpty = !isLoading && !isError && loadedCustomers.length === 0;
 
-  const rangeStart = totalResults === 0 ? 0 : pageIndex * PAGE_SIZE + 1;
-  const rangeEnd = pageIndex * PAGE_SIZE + windowCustomers.length;
+  const onRetry = () => {
+    void summary.refetch();
+    void customers.refetch();
+  };
 
   return (
     <AdminLayout user={user} onLogout={onLogout}>
       <div className="w-full p-4 md:p-6 lg:p-content">
         <div className="mx-auto flex w-full max-w-[87.5rem] flex-col gap-5 md:gap-6">
-          <CustomersHeader totalCustomers={summary.data?.totalCustomers ?? 0} />
+          <CustomersHeader
+            totalCustomers={summary.data?.totalCustomers}
+            scope={summary.data?.scope}
+          />
 
           {summary.data ? (
             /*
@@ -174,6 +184,13 @@ export function AdminCustomersPage() {
 
           {isLoading ? (
             <CustomersSkeleton />
+          ) : isError ? (
+            <DataErrorState
+              title="Couldn't load customers"
+              description="The customer list didn't load, so this is not a sign that there are none. Try again in a moment."
+              onRetry={onRetry}
+              isRetrying={summary.isFetching || customers.isFetching}
+            />
           ) : (
             <>
               {/* Mobile — cards on the page background, no surrounding frame. */}
@@ -202,7 +219,7 @@ export function AdminCustomersPage() {
                 <>
                   {/* The pager sits under the table card, not inside it. */}
                   <CustomersPagination
-                    page={pageIndex + 1}
+                    page={page}
                     totalPages={totalPages}
                     totalResults={totalResults}
                     rangeStart={rangeStart}

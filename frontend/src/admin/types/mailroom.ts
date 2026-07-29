@@ -137,6 +137,11 @@ export type MailScanFile = {
  * `receivedOn` is a plain calendar date (`yyyy-MM-dd`) — the day the physical
  * mail was received, which has no time-of-day and must not be built from a
  * zoneless timestamp (AGENTS.md, Dates).
+ *
+ * `responseDueOn` is the same kind of date, and it is what turns filed post into
+ * post the customer must answer: with it the backend files the item as "Action
+ * requested" and their inbox prints "Response needed by …". It requires `notes`
+ * — that is the reason shown beside the deadline.
  */
 export type MailScanDraft = {
   roomId: string;
@@ -144,6 +149,7 @@ export type MailScanDraft = {
   receivedOn: string; // yyyy-MM-dd
   files: MailScanFile[];
   notes?: string;
+  responseDueOn?: string; // yyyy-MM-dd
 };
 
 // A scan the operator has attached but not yet uploaded.
@@ -210,14 +216,15 @@ export type MailRequestRow = {
 };
 
 /*
- * One page of the queue. The list is offset-paginated rather than
- * cursor-paginated: the design's footer prints "Showing 1–10 of 34" and a
- * numbered page strip, neither of which a cursor can answer.
+ * One page of the queue, cursor-paginated like every other admin list
+ * (AGENTS.md). The design's footer prints "Showing 1–10 of 34" and a numbered
+ * page strip, which the totals returned beside the cursor answer — the strip
+ * windows over the stream rather than stepping an offset.
  */
 export type MailRequestPage = {
   requests: MailRequestRow[];
+  nextCursor: string | null;
   page: number;
-  pageSize: number;
   totalResults: number;
   totalPages: number;
 };
@@ -357,14 +364,14 @@ export type MailLogRow = {
 };
 
 /*
- * One page of the log. Offset-paginated for the same reason the pending queue
- * is: the footer prints "Showing 1–8 of 120 items" and a numbered strip, neither
- * of which a cursor can answer.
+ * One page of the log, cursor-paginated for the same reason the pending queue
+ * is: the footer prints "Showing 1–8 of 120 items" and a numbered strip, both
+ * derived from the totals the endpoint returns beside the cursor.
  */
 export type MailLogPage = {
   entries: MailLogRow[];
+  nextCursor: string | null;
   page: number;
-  pageSize: number;
   totalResults: number;
   totalPages: number;
 };

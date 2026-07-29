@@ -15,6 +15,7 @@ import {
 import { publicAppUrl } from '../../../config/env.js';
 import type { AuthContext } from '../../../guards/auth-context.js';
 import { AppError } from '../../../lib/app-error.js';
+import { withIdempotency } from '../../../lib/idempotency.js';
 import { toInitials } from '../../../lib/initials.js';
 import { logger } from '../../../lib/logger.js';
 import { cursorArgs, takePage, totalPages } from '../../../lib/pagination.js';
@@ -910,16 +911,51 @@ export async function updateOrder(
 
   const actorName = await staffDisplayName(actor.userId);
 
-  // One transaction so an order can never change state without the activity row
-  // that explains it.
+  /*
+   * One transaction so an order can never change state without the activity row
+   * that explains it — and a compare-and-set so it can never change state on top
+   * of a decision someone else already made.
+   *
+   * Every gate above was decided from `existing`, a row read before this
+   * transaction opened: the transition check, the quote requirement, the assignee
+   * lookup. A plain update by id would let two reviewers pressing at the same
+   * moment both clear those gates against the same stale row, and the second
+   * write would silently overwrite the first — leaving the order in a state
+   * neither transition was ever checked for, with two activity rows each claiming
+   * to explain it.
+   *
+   * So the `where` pins the fields the gates were read from. The loser matches no
+   * row, writes nothing, and is told to reload (409 — the request was valid, the
+   * order simply moved underneath it).
+   */
+  // Filled inside the transaction, audited after it commits — the threads that
+  // actually changed hands, which is not always "all of them" (a thread already
+  // pointing at the new assignee is not a state change).
+  let movedConversations: { id: string; from: string | null }[] = [];
+
   const order = await prisma.$transaction(async (tx) => {
-    await tx.order.update({
-      where: { id: orderId },
+    const written = await tx.order.updateMany({
+      where: {
+        id: orderId,
+        ...ACTIVE_ORDERS,
+        ...(statusChanged ? { status: existing.status } : {}),
+        ...(assigneeChanged ? { assigneeId: existing.assigneeId } : {}),
+      },
       data: {
         ...(nextStatus ? { status: nextStatus } : {}),
         ...(input.assigneeId === undefined ? {} : { assigneeId: input.assigneeId }),
       },
     });
+
+    if (written.count === 0) {
+      throw AppError.conflict(
+        'This order changed while you were working on it. Reload the order and try again.',
+        {
+          from: ORDER_STATUS_VIEW[existing.status],
+          ...(nextStatus ? { to: ORDER_STATUS_VIEW[nextStatus] } : {}),
+        },
+      );
+    }
 
     /*
      * The order's conversation follows the work. A customer's order thread is
@@ -929,7 +965,7 @@ export async function updateOrder(
      * In the same transaction, because those two facts must never disagree.
      */
     if (assigneeChanged) {
-      await syncAssignee(tx, orderId, input.assigneeId ?? null);
+      movedConversations = await syncAssignee(tx, orderId, input.assigneeId ?? null);
     }
 
     /*
@@ -1008,6 +1044,27 @@ export async function updateOrder(
       entityId: orderId,
       metadata: { from: existing.assigneeId, to: input.assigneeId ?? null },
     });
+
+    /*
+     * The order's thread moved with it, and a conversation changing hands is
+     * audited on the conversation wherever it happens — the support inbox writes
+     * this entry for a manual reassignment and the router writes it for an
+     * automatic one, so the order-driven path writes it too rather than leaving
+     * the same state change traceable only through the order.
+     */
+    for (const conversation of movedConversations) {
+      void record({
+        actor,
+        action: AuditAction.CONVERSATION_ASSIGNED,
+        entityType: 'Conversation',
+        entityId: conversation.id,
+        metadata: {
+          from: conversation.from,
+          to: input.assigneeId ?? null,
+          via: 'order_reassignment',
+        },
+      });
+    }
   }
 
   return toRow(order);
@@ -1036,11 +1093,19 @@ async function staffDisplayName(userId: string): Promise<string> {
  * trail records that a note was written and whether it was internal, which is
  * what an auditor needs, without copying customer correspondence into a second
  * table (AGENTS.md, Security & PII).
+ *
+ * Retry-safe by key rather than by shape (AGENTS.md, API Conventions): unlike
+ * `updateOrder`, which compares against current state and so does nothing the
+ * second time, there is no state here to compare — a repeated call is a
+ * perfectly valid second reply. The key is what tells a retry apart from a
+ * reviewer deliberately writing twice, and without it a double-submit put two
+ * identical entries on the customer's order and emailed them both.
  */
 export async function addActivity(
   actor: AuthContext,
   orderId: string,
   input: AddActivityInput,
+  idempotencyKey: string,
 ): Promise<AdminOrderActivityEntry> {
   // Writing to an order's feed — and, for a customer-visible reply, emailing
   // them — is acting on the filing, so it takes the same scope as moving it.
@@ -1059,16 +1124,29 @@ export async function addActivity(
   const internal = input.visibility === 'internal';
   const authorName = await staffDisplayName(actor.userId);
 
-  const entry = await prisma.orderActivity.create({
-    data: {
-      orderId,
-      author: OrderActivityAuthor.TEAM,
-      authorName,
-      authorUserId: actor.userId,
-      message: input.message,
-      internal,
-    },
+  // The scope check above runs first, so a caller who cannot reach the order is
+  // refused before a key is ever looked up — a spent key must not be a way to
+  // learn anything about a filing that is not theirs.
+  const { record: entry, replayed } = await withIdempotency({
+    find: () => prisma.orderActivity.findUnique({ where: { idempotencyKey } }),
+    create: () =>
+      prisma.orderActivity.create({
+        data: {
+          orderId,
+          author: OrderActivityAuthor.TEAM,
+          authorName,
+          authorUserId: actor.userId,
+          message: input.message,
+          internal,
+          idempotencyKey,
+        },
+      }),
+    owns: (found) => found.orderId === order.id,
   });
+
+  // Nothing was written, so nothing below it happened either: no audit entry for
+  // a reply that already has one, and above all no second email.
+  if (replayed) return toActivityEntry(entry);
 
   void record({
     actor,
@@ -1136,11 +1214,16 @@ export async function addActivity(
  * This is the only writer of the DOCUMENT feed category, and the only caller of
  * the `documentRequests` preference — the row of the settings screen that
  * offered a toggle over nothing until now.
+ *
+ * Retry-safe by key, for the same reason the reply above is: a resent request
+ * would otherwise put a second identical placeholder on the Documents card and
+ * chase the customer for paperwork they have already been asked for once.
  */
 export async function requestDocument(
   actor: AuthContext,
   orderId: string,
   input: RequestDocumentInput,
+  idempotencyKey: string,
 ): Promise<AdminOrderDocument> {
   // Same scope as replying to the customer: asking them for identity paperwork
   // is acting on the filing.
@@ -1158,31 +1241,44 @@ export async function requestDocument(
    * customer can see on the card but that left no trace of who asked or when is
    * the drift worth designing against — the order's history is how they tell a
    * request from a document we simply have not filed yet.
+   *
+   * The key rides on the placeholder rather than on the activity row: the
+   * placeholder is what the customer's upload fills in, so it is the record a
+   * replay has to resolve back to.
    */
-  const document = await prisma.$transaction(async (tx) => {
-    const created = await tx.orderDocument.create({
-      data: {
-        orderId,
-        name: input.name,
-        status: OrderDocumentStatus.PENDING,
-        source: OrderDocumentSource.CUSTOMER,
-      },
-    });
+  const { record: document, replayed } = await withIdempotency({
+    find: () => prisma.orderDocument.findUnique({ where: { idempotencyKey } }),
+    create: () =>
+      prisma.$transaction(async (tx) => {
+        const created = await tx.orderDocument.create({
+          data: {
+            orderId,
+            name: input.name,
+            status: OrderDocumentStatus.PENDING,
+            source: OrderDocumentSource.CUSTOMER,
+            idempotencyKey,
+          },
+        });
 
-    await tx.orderActivity.create({
-      data: {
-        orderId,
-        author: OrderActivityAuthor.TEAM,
-        authorName,
-        authorUserId: actor.userId,
-        message: `Requested ${input.name} from the customer.`,
-        // The customer is being asked for it — hiding the ask would be absurd.
-        internal: false,
-      },
-    });
+        await tx.orderActivity.create({
+          data: {
+            orderId,
+            author: OrderActivityAuthor.TEAM,
+            authorName,
+            authorUserId: actor.userId,
+            message: `Requested ${input.name} from the customer.`,
+            // The customer is being asked for it — hiding the ask would be absurd.
+            internal: false,
+          },
+        });
 
-    return created;
+        return created;
+      }),
+    owns: (found) => found.orderId === order.id,
   });
+
+  // The request already exists and the customer has already been told about it.
+  if (replayed) return toDocument(document);
 
   void record({
     actor,

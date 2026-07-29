@@ -1,6 +1,7 @@
 import { differenceInDays, differenceInHours, parseISO } from 'date-fns';
 import { BellOff } from 'lucide-react';
 
+import { DataErrorState } from '../../components/DataErrorState';
 import type {
   AdminNotification,
   AdminNotificationGroup,
@@ -80,6 +81,11 @@ function FeedEmptyState() {
 type AdminNotificationFeedListProps = {
   notifications: AdminNotification[];
   isLoading?: boolean;
+  // A failed feed is not a caught-up one: without this the card would print
+  // "You're all caught up" over a request that never arrived.
+  isError?: boolean;
+  isRetrying?: boolean;
+  onRetry?: () => void;
   onSelect?: (notification: AdminNotification) => void;
   onMarkRead?: (notification: AdminNotification) => void;
 };
@@ -87,6 +93,9 @@ type AdminNotificationFeedListProps = {
 export function AdminNotificationFeedList({
   notifications,
   isLoading,
+  isError,
+  isRetrying,
+  onRetry,
   onSelect,
   onMarkRead,
 }: AdminNotificationFeedListProps) {
@@ -99,6 +108,15 @@ export function AdminNotificationFeedList({
     <div className="w-full overflow-hidden rounded-card border border-gray-200 bg-white shadow-sm-elevation">
       {isLoading ? (
         <FeedSkeleton />
+      ) : isError ? (
+        // `bare` — this card already draws the frame the alert would nest inside.
+        <DataErrorState
+          bare
+          title="We couldn’t load your notifications"
+          description="Something went wrong fetching the feed. Try again."
+          onRetry={() => onRetry?.()}
+          isRetrying={isRetrying}
+        />
       ) : notifications.length === 0 ? (
         <FeedEmptyState />
       ) : (

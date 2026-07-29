@@ -35,15 +35,25 @@ router.post(
  * Close an open payment window on purpose — the checkout's "Cancel transfer".
  *
  * `sensitiveRateLimit` for the same reason as the intent: it moves a payment's
- * state and frees the amount it was watching. No `requireIdempotencyKey`, unlike
- * the intent — cancelling is guarded by the payment's own status rather than by
- * a key, so a retry lands on an already-cancelled row and returns it unchanged.
+ * state and frees the amount it was watching.
+ *
+ * `requireIdempotencyKey` because AGENTS.md asks for it on every mutating
+ * payment endpoint, without carve-outs. What makes a retry safe here is still
+ * the payment's own status — a repeat lands on an already-cancelled row and
+ * returns it unchanged — so the key is a requirement met rather than the
+ * mechanism. Keeping the rule literal means the next payment mutation starts
+ * from "of course it has one".
  *
  * Mounted before `/:paymentId` would ever be considered for it; Express matches
  * on the full path, but keeping the specific route above the parameterised read
  * keeps the file's reading order honest.
  */
-router.post('/:paymentId/cancel', sensitiveRateLimit, controller.cancelPayment);
+router.post(
+  '/:paymentId/cancel',
+  sensitiveRateLimit,
+  requireIdempotencyKey,
+  controller.cancelPayment,
+);
 
 // The checkout screen reads the quote it is collecting for, then polls the
 // payment while the transfer confirms — both plain authenticated reads.

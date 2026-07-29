@@ -36,14 +36,3 @@ export function takePage<T extends { id: string }>(rows: T[], limit: number): Pa
 export function totalPages(totalResults: number, limit: number): number {
   return Math.max(1, Math.ceil(totalResults / limit));
 }
-
-/*
- * Two admin lists — the mail-room pending queue and the mail log — are offset
- * paginated instead, because their footers print an absolute range ("Showing
- * 1–10 of 34") and a jumpable page strip, neither of which a cursor can answer.
- * The frontend documents this as a deliberate exception; these helpers keep it
- * to those two rather than letting offsets spread.
- */
-export function offsetArgs(page: number, pageSize: number) {
-  return { skip: (Math.max(1, page) - 1) * pageSize, take: pageSize };
-}

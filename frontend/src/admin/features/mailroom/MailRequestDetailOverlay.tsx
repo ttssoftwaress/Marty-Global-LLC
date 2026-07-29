@@ -98,7 +98,10 @@ export function MailRequestDetailOverlay({
   if (detail.isError) {
     return (
       <OverlayFrame onClose={onClose} label="Request could not be loaded">
-        <div className="flex w-full flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+        <div
+          role="alert"
+          className="flex w-full flex-1 flex-col items-center justify-center gap-3 p-6 text-center"
+        >
           <span className="flex size-12 items-center justify-center rounded-full bg-gray-100">
             <XCircle
               className="size-6 text-gray-400"

@@ -1,10 +1,13 @@
 import type { NextFunction, Request, Response } from 'express';
 
 import { getAuth } from '../../../guards/auth-context.js';
+import { AppError } from '../../../lib/app-error.js';
 import * as service from './conversations.service.js';
+import { listMyConversationsQuerySchema } from './conversations.validation.js';
 
-// Thin: call service → respond with the { data } envelope. No input to validate —
-// the list is scoped to the caller's own session, never to a requested id.
+// Thin: validate → call service → respond with the { data } envelope. The only
+// input is the cursor — whose list to load is the session's answer, never a
+// parameter.
 
 export async function listMyConversations(
   req: Request,
@@ -12,7 +15,12 @@ export async function listMyConversations(
   next: NextFunction,
 ) {
   try {
-    const view = await service.listMyConversations(getAuth(req));
+    const parsed = listMyConversationsQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      throw AppError.validation('Invalid conversations query', parsed.error.issues);
+    }
+
+    const view = await service.listMyConversations(getAuth(req), parsed.data);
     res.json({ data: view });
   } catch (error) {
     next(error);

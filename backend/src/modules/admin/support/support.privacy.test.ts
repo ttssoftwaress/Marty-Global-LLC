@@ -147,12 +147,12 @@ describe('internal notes', () => {
       kind: 'note',
     });
 
-    const conversations = await portalSupport.listConversations(
+    const page = await portalSupport.listConversations(
       actor(CUSTOMER_ID, Role.CUSTOMER),
-      {},
+      { limit: 20 },
     );
 
-    const thread = conversations.find((entry) => entry.id === CONVERSATION_ID);
+    const thread = page.conversations.find((entry) => entry.id === CONVERSATION_ID);
     expect(thread?.preview).not.toContain('waive the notary');
   });
 

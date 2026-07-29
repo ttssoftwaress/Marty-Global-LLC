@@ -61,9 +61,9 @@ export type ResultFieldDefinitionView = {
   usageCount: number;
   /*
    * Whether removing this field outright is available at all. False as soon as a
-   * service returns it or a delivered record holds a value for it — the exact
-   * check `deleteResultField` re-runs, so a hidden button and a refused call
-   * cannot disagree.
+   * service returns it or a delivered record holds a value for it — resolved by
+   * `isDeletable`, the same helper `deleteResultField` refuses on, so a hidden
+   * button and a refused call cannot disagree.
    */
   canDelete: boolean;
 };
@@ -97,6 +97,19 @@ function toView(
     usageCount,
     canDelete,
   };
+}
+
+/*
+ * The one expression of rule 3's "removing this outright is still available".
+ *
+ * Every caller reads it from here — the list, the update response, and the
+ * delete guard's own refusal — because the same predicate written out twice is
+ * the drift that lets a visible button meet a refused call. The delivered-value
+ * side arrives as a boolean rather than a count so the list (a grouped id probe)
+ * and the write paths (a count for one field) can both use it.
+ */
+function isDeletable(usageCount: number, hasDeliveredValues: boolean): boolean {
+  return usageCount === 0 && !hasDeliveredValues;
 }
 
 // Strip config keys that don't belong to the field's type, so a field switched
@@ -199,7 +212,7 @@ export async function listResultFields(
   return {
     fields: page.rows.map((row) => {
       const usageCount = usage.get(row.key) ?? 0;
-      return toView(row, usageCount, usageCount === 0 && !delivered.has(row.id));
+      return toView(row, usageCount, isDeletable(usageCount, delivered.has(row.id)));
     }),
     nextCursor: page.nextCursor,
     totalResults,
@@ -322,7 +335,7 @@ export async function updateResultField(
     metadata: { key: definition.key, fields: Object.keys(input), usageCount },
   });
 
-  return toView(definition, usageCount, usageCount === 0 && valueCount === 0);
+  return toView(definition, usageCount, isDeletable(usageCount, valueCount > 0));
 }
 
 /*
@@ -355,7 +368,7 @@ export async function deleteResultField(
 
   const usageCount = usage.get(existing.key) ?? 0;
 
-  if (usageCount > 0 || valueCount > 0) {
+  if (!isDeletable(usageCount, valueCount > 0)) {
     const reason =
       valueCount > 0
         ? `${valueCount} delivered record${valueCount === 1 ? '' : 's'} hold${valueCount === 1 ? 's' : ''} a value for it`

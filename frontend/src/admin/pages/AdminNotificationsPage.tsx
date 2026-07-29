@@ -115,7 +115,9 @@ export function AdminNotificationsPage() {
   // not just what's loaded — so the "Unread" tab's pill is accurate.
   const unreadCount = feed.data?.pages[0]?.unreadCount ?? 0;
 
-  const showSkeleton = feed.isLoading || !feed.data;
+  // A failed feed has no `data` either, so the skeleton has to stand down for the
+  // error state rather than spinning forever over a request that already failed.
+  const showSkeleton = !feed.isError && (feed.isLoading || !feed.data);
 
   // Opening a linking row marks it read alongside navigating.
   const onSelectNotification = (notification: AdminNotification) => {
@@ -141,6 +143,9 @@ export function AdminNotificationsPage() {
           <AdminNotificationFeedList
             notifications={notifications}
             isLoading={showSkeleton}
+            isError={feed.isError}
+            isRetrying={feed.isFetching}
+            onRetry={() => void feed.refetch()}
             onSelect={onSelectNotification}
             onMarkRead={(notification) => markRead.mutate(notification.id)}
           />

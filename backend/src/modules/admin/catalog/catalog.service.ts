@@ -641,8 +641,25 @@ export async function updateRequestTypes(
     input.requestTypes.flatMap((type) => type.fields?.map((ref) => ref.fieldKey) ?? []),
   );
 
-  const service = await prisma.$transaction(async (tx) => {
+  const { service, added, deactivated } = await prisma.$transaction(async (tx) => {
     const submittedKeys = new Set(input.requestTypes.map((type) => type.key));
+
+    /*
+     * Read before writing so the audit row can say which types this submission
+     * actually introduced. The endpoint takes the whole list at once and upserts
+     * every entry, so without this the trail records a batch write and nothing
+     * about a new follow-up action appearing on a customer's result page.
+     */
+    const before = await tx.serviceRequestType.findMany({
+      where: { serviceId, deletedAt: null },
+      select: { key: true, active: true },
+    });
+
+    const liveKeys = new Set(before.map((row) => row.key));
+    const added = [...submittedKeys].filter((key) => !liveKeys.has(key));
+    const deactivated = before
+      .filter((row) => row.active && !submittedKeys.has(row.key))
+      .map((row) => row.key);
 
     // Anything the admin removed from the list stops being offered but stays
     // readable for the requests already raised under it.
@@ -672,10 +689,12 @@ export async function updateRequestTypes(
       });
     }
 
-    return tx.service.findFirstOrThrow({
+    const service = await tx.service.findFirstOrThrow({
       where: { id: serviceId },
       include: detailInclude,
     });
+
+    return { service, added, deactivated };
   });
 
   void record({
@@ -683,9 +702,12 @@ export async function updateRequestTypes(
     action: AuditAction.REQUEST_TYPE_UPDATED,
     entityType: 'Service',
     entityId: serviceId,
+    // Keys only — they are admin-authored identifiers, not customer data.
     metadata: {
       typeCount: input.requestTypes.length,
       keys: input.requestTypes.map((type) => type.key),
+      added,
+      deactivated,
     },
   });
 

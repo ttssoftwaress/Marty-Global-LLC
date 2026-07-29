@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ScanSearch } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { AlertCircle, CheckCircle2, ScanSearch } from 'lucide-react';
 
 import { Role } from '@/constants/roles';
+import { ApiError } from '@/services/api';
 import { useAdminMe } from '@/admin/queries/admin-me';
 import { AdminLayout } from '../components/AdminLayout';
 import {
@@ -22,8 +23,10 @@ import {
   useAdminRevenueSeries,
   useAdminUnmatchedTransfers,
   useResolveUnmatchedTransfer,
+  useSendPaymentReminder,
 } from '../features/payments';
 import { useAdminShell } from '../hooks/useAdminShell';
+import { useCursorPageWindow } from '../hooks/useCursorPageWindow';
 import type {
   BillingLedgerRow,
   PaymentStatusFilter,
@@ -130,13 +133,6 @@ export function AdminQuotesPaymentsPage() {
     resolveTransfer.reset();
   };
 
-  // The page window the wider links' pager steps over. Changing the filter
-  // returns it to the first page, since the old offset means nothing now.
-  const [pageIndex, setPageIndex] = useState(0);
-  useEffect(() => {
-    setPageIndex(0);
-  }, [status]);
-
   const loadedRows = useMemo<BillingLedgerRow[]>(
     () => ledger.data?.pages.flatMap((page) => page.rows) ?? [],
     [ledger.data],
@@ -146,37 +142,60 @@ export function AdminQuotesPaymentsPage() {
   const totalPages = ledger.data?.pages[0]?.totalPages ?? 1;
 
   // The table shows one window; the mobile cards show everything loaded.
-  const windowRows = useMemo(
-    () => loadedRows.slice(pageIndex * PAGE_SIZE, (pageIndex + 1) * PAGE_SIZE),
-    [loadedRows, pageIndex],
-  );
-
-  const goToPage = (nextPage: number) => {
-    const nextIndex = Math.max(0, Math.min(nextPage - 1, totalPages - 1));
-    // Pull the next cursor page in when the window runs past what has loaded.
-    if (nextIndex * PAGE_SIZE >= loadedRows.length && ledger.hasNextPage) {
-      void ledger.fetchNextPage();
-    }
-    setPageIndex(nextIndex);
-  };
+  const {
+    page,
+    rows: windowRows,
+    rangeStart,
+    rangeEnd,
+    goToPage,
+  } = useCursorPageWindow({
+    rows: loadedRows,
+    totalPages,
+    totalResults,
+    pageSize: PAGE_SIZE,
+    hasNextPage: ledger.hasNextPage,
+    isFetchingNextPage: ledger.isFetchingNextPage,
+    fetchNextPage: ledger.fetchNextPage,
+    resetKey: status,
+  });
 
   const onLoadMore = () => {
     if (ledger.hasNextPage) void ledger.fetchNextPage();
   };
 
   /*
-   * A reminder reaches the customer, so it does not fire from here — the
-   * mutation lands with the `billing` endpoints, and it is audited server-side
-   * (AGENTS.md).
+   * "Send reminder" on an unpaid row. A reminder reaches the customer, so it
+   * goes through the backend the same way every other message does — queued,
+   * preference-gated, and audited (AGENTS.md). The 24-hour cooldown is claimed
+   * server-side, so nothing here guards against a double send beyond disabling
+   * the control while one is in flight.
+   *
+   * The outcome is announced in one line under the ledger rather than per row:
+   * the row it names has just been invalidated and re-rendered, and a message
+   * living inside a row would be replaced along with it.
    */
-  const onLedgerAction = (_row: BillingLedgerRow) => {};
+  const [reminded, setReminded] = useState<string | null>(null);
+  const remind = useSendPaymentReminder();
+
+  const onLedgerAction = (row: BillingLedgerRow) => {
+    if (remind.isPending) return;
+
+    setReminded(null);
+    remind.mutate(row.id, {
+      onSuccess: () => setReminded(row.reference),
+    });
+  };
+
+  const reminderError = remind.isError
+    ? remind.error instanceof ApiError
+      ? remind.error.message
+      : 'Could not send that reminder. Try again.'
+    : null;
 
   const isLedgerLoading = ledger.isPending;
   const isLedgerEmpty = !isLedgerLoading && loadedRows.length === 0;
   const isFiltered = status !== 'all';
 
-  const rangeStart = totalResults === 0 ? 0 : pageIndex * PAGE_SIZE + 1;
-  const rangeEnd = pageIndex * PAGE_SIZE + windowRows.length;
 
   return (
     <AdminLayout user={user} onLogout={onLogout}>
@@ -226,7 +245,11 @@ export function AdminQuotesPaymentsPage() {
               <>
                 {/* Mobile — cards on the page background, no surrounding frame. */}
                 {isLedgerEmpty ? null : (
-                  <LedgerCardList rows={loadedRows} onAction={onLedgerAction} />
+                  <LedgerCardList
+                    rows={loadedRows}
+                    onAction={onLedgerAction}
+                    sendingId={remind.isPending ? remind.variables : null}
+                  />
                 )}
 
                 {/* Tablet & desktop — the table in its own card. */}
@@ -243,9 +266,13 @@ export function AdminQuotesPaymentsPage() {
                     />
                   ) : (
                     <>
-                      <LedgerTable rows={windowRows} onAction={onLedgerAction} />
+                      <LedgerTable
+                        rows={windowRows}
+                        onAction={onLedgerAction}
+                        sendingId={remind.isPending ? remind.variables : null}
+                      />
                       <LedgerPagination
-                        page={pageIndex + 1}
+                        page={page}
                         totalPages={totalPages}
                         totalResults={totalResults}
                         rangeStart={rangeStart}
@@ -280,6 +307,38 @@ export function AdminQuotesPaymentsPage() {
                 )}
               </>
             )}
+
+            {/*
+              * What the last reminder did. A refusal is the backend's own
+              * sentence — a cooldown, a settled invoice, a customer who muted
+              * quote alerts — since each of those is something the reviewer
+              * needs to read rather than a code (Design.md, error states).
+              */}
+            {reminderError ? (
+              <p
+                role="alert"
+                className="flex items-start gap-2 text-small text-error"
+              >
+                <AlertCircle
+                  className="mt-px size-4 shrink-0"
+                  strokeWidth={1.75}
+                  aria-hidden="true"
+                />
+                {reminderError}
+              </p>
+            ) : reminded ? (
+              <p
+                role="status"
+                className="flex items-start gap-2 text-small text-[var(--color-success)]"
+              >
+                <CheckCircle2
+                  className="mt-px size-4 shrink-0"
+                  strokeWidth={1.75}
+                  aria-hidden="true"
+                />
+                Payment reminder sent for {reminded}.
+              </p>
+            ) : null}
           </section>
 
           {/*

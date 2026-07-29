@@ -1,4 +1,4 @@
-import type { MouseEvent } from 'react';
+import type { KeyboardEvent, MouseEvent } from 'react';
 import { ChevronDown, PackageOpen } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -20,8 +20,9 @@ import { OrderRowAction } from './OrderRowAction';
  * a list of records where the record itself is inert is a list people click at
  * and nothing happens — and it left an order reachable only through one small
  * target. The service name is a real anchor inside the row, so the destination
- * is keyboard-reachable, focusable, and can be opened in a new tab; the row's
- * own handler is the convenience layer over it, not the only way in.
+ * can be opened in a new tab; the row is the convenience layer over it, not the
+ * only way in. The row is a keyboard target too — `useRowProps` gives it a tab
+ * stop and Enter/Space activation, so the enlarged target is not pointer-only.
  *
  * The DATE SUBMITTED header carries the design's sort affordance (highlighted
  * label + chevron). Sorting is a data concern the backend owns, so the header
@@ -51,19 +52,44 @@ export const orderDetailPath = (orderId: string) => `/app/orders/${orderId}`;
  *     navigating
  *   - a click inside the action cell belongs to that control, which stops the
  *     event itself
+ *
+ * Enter/Space on the focused row does the same. The keydown only fires when the
+ * row itself is focused — a key press inside the service link or the action
+ * control belongs to that control and must not navigate twice.
+ *
+ * No `role` is set on the row: `role="button"`/`role="link"` may not contain
+ * interactive descendants (every row holds at least two), and on a `<tr>` it
+ * would drop the row out of the table's structure. The element keeps its native
+ * role and gains the behaviour.
  */
-function useOpenOrder() {
+function useRowProps() {
   const navigate = useNavigate();
 
-  return (orderId: string) => {
+  const openOrder = (orderId: string) => {
     if (window.getSelection()?.toString()) return;
     navigate(orderDetailPath(orderId));
   };
+
+  return (orderId: string) => ({
+    tabIndex: 0,
+    onClick: () => openOrder(orderId),
+    onKeyDown: (event: KeyboardEvent<HTMLElement>) => {
+      if (event.target !== event.currentTarget) return;
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      openOrder(orderId);
+    },
+  });
 }
 
 // The trailing control is a link of its own; without this its click would also
 // run the row handler and both would navigate.
 const stopRowClick = (event: MouseEvent) => event.stopPropagation();
+
+// Inset — a row sits flush against its neighbours, so an outward offset would be
+// clipped or overlap the row above.
+const ROW_FOCUS_CLASS =
+  'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary';
 
 function EmptyState() {
   return (
@@ -99,7 +125,7 @@ export function OrdersList({
 }: OrdersListProps) {
   const isEmpty = orders.length === 0;
   const cardOrders = mobileOrders ?? orders;
-  const openOrder = useOpenOrder();
+  const rowProps = useRowProps();
 
   return (
     <>
@@ -113,8 +139,8 @@ export function OrdersList({
           cardOrders.map((order) => (
             <li
               key={order.id}
-              onClick={() => openOrder(order.id)}
-              className="flex cursor-pointer flex-col gap-3 rounded-input border border-gray-300 bg-white p-4 transition-colors active:bg-gray-50"
+              {...rowProps(order.id)}
+              className={`flex cursor-pointer flex-col gap-3 rounded-input border border-gray-300 bg-white p-4 transition-colors active:bg-gray-50 ${ROW_FOCUS_CLASS}`}
             >
               <div className="flex items-start gap-2">
                 <Link
@@ -185,8 +211,8 @@ export function OrdersList({
               orders.map((order) => (
                 <tr
                   key={order.id}
-                  onClick={() => openOrder(order.id)}
-                  className="h-16 cursor-pointer border-b border-gray-200 transition-colors last:border-b-0 hover:bg-gray-50 lg:h-table-row"
+                  {...rowProps(order.id)}
+                  className={`h-16 cursor-pointer border-b border-gray-200 transition-colors last:border-b-0 hover:bg-gray-50 lg:h-table-row ${ROW_FOCUS_CLASS}`}
                 >
                   <td className="min-w-0 px-4 lg:px-6">
                     <Link

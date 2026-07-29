@@ -1,6 +1,8 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Check, ChevronDown } from 'lucide-react';
 
+import { useDismissablePopover } from '../../hooks/useDismissablePopover';
+
 /*
  * The select the two order actions use. Built rather than a native `<select>`
  * for the same reason the queue's filter dropdown is — the panel has to match
@@ -46,25 +48,12 @@ export function ActionSelect({
 
   const selected = options.find((option) => option.value === value);
 
-  useEffect(() => {
-    if (!open) return;
-
-    const onPointerDown = (event: PointerEvent) => {
-      if (!containerRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      setOpen(false);
-      triggerRef.current?.focus();
-    };
-
-    document.addEventListener('pointerdown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('pointerdown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [open]);
+  useDismissablePopover({
+    open,
+    onClose: () => setOpen(false),
+    containerRef,
+    triggerRef,
+  });
 
   // A closed panel must not survive the control going disabled mid-flight (the
   // card disables both selects while a save is in the air).

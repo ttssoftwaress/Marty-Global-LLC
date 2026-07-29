@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Inbox } from 'lucide-react';
 
+import { useCursorPageWindow } from '../../hooks/useCursorPageWindow';
 import { isRequestActionable } from '../../lib/mail-requests';
 import type { MailRequestFilter, MailRequestRow } from '../../types/mailroom';
 import { MailRequestCardList } from './MailRequestCardList';
@@ -16,6 +17,10 @@ import { useAdminMailRequests, useProcessMailRequest } from './queries';
  * because neither outlives the tab: switching sections and coming back should
  * land on an unfiltered first page, not on wherever the operator left off.
  *
+ * The queue is one cursor stream (AGENTS.md); the footer's numbered strip is a
+ * window over what has loaded, and stepping past the end pulls the next cursor
+ * page in — the same shape the customers list uses.
+ *
  * The section is one card at every width from `md` up (filter strip above,
  * table inside the card, footer beneath the rows) and a stack of cards on
  * mobile with the footer on the page background under them.
@@ -30,6 +35,10 @@ import { useAdminMailRequests, useProcessMailRequest } from './queries';
 type MailRequestsPanelProps = {
   onOpen: (request: MailRequestRow) => void;
 };
+
+// Matches the endpoint's default `limit`, so a fetched cursor page fills exactly
+// one printed page of the footer's strip.
+const PAGE_SIZE = 10;
 
 function TableSkeleton() {
   return (
@@ -81,17 +90,32 @@ function EmptyState({
 
 export function MailRequestsPanel({ onOpen }: MailRequestsPanelProps) {
   const [filter, setFilter] = useState<MailRequestFilter>('all');
-  const [page, setPage] = useState(1);
 
-  const requests = useAdminMailRequests(filter, page);
+  const requests = useAdminMailRequests(filter);
   const processRequest = useProcessMailRequest();
 
-  const onFilterChange = (next: MailRequestFilter) => {
-    setFilter(next);
-    setPage(1); // A narrower filter has fewer pages; page 4 may not exist in it.
-  };
+  const clearFilter = () => setFilter('all');
 
-  const clearFilter = () => onFilterChange('all');
+  const loadedRows = useMemo<MailRequestRow[]>(
+    () => requests.data?.pages.flatMap((page) => page.requests) ?? [],
+    [requests.data],
+  );
+
+  const totalResults = requests.data?.pages[0]?.totalResults ?? 0;
+  const totalPages = requests.data?.pages[0]?.totalPages ?? 1;
+
+  // A narrower filter has fewer pages; page 4 may not exist in it, so the
+  // filter keys the window back to the first page.
+  const { page, rows, goToPage } = useCursorPageWindow({
+    rows: loadedRows,
+    totalPages,
+    totalResults,
+    pageSize: PAGE_SIZE,
+    hasNextPage: requests.hasNextPage,
+    isFetchingNextPage: requests.isFetchingNextPage,
+    fetchNextPage: requests.fetchNextPage,
+    resetKey: filter,
+  });
 
   // Tracked per row so claiming one request does not disable every other button.
   const processingId = processRequest.isPending
@@ -119,9 +143,12 @@ export function MailRequestsPanel({ onOpen }: MailRequestsPanelProps) {
   if (requests.isError) {
     return (
       <div className="flex w-full flex-col gap-4">
-        <MailRequestFilters value={filter} onChange={onFilterChange} />
+        <MailRequestFilters value={filter} onChange={setFilter} />
 
-        <div className="flex w-full flex-col items-center gap-3 rounded-card border border-gray-200 bg-white px-6 py-12 text-center shadow-sm-elevation">
+        <div
+          role="alert"
+          className="flex w-full flex-col items-center gap-3 rounded-card border border-gray-200 bg-white px-6 py-12 text-center shadow-sm-elevation"
+        >
           <p className="text-body-lg font-semibold text-text">
             That queue could not be loaded
           </p>
@@ -140,12 +167,11 @@ export function MailRequestsPanel({ onOpen }: MailRequestsPanelProps) {
     );
   }
 
-  const { requests: rows, pageSize, totalResults, totalPages } = requests.data;
-  const isEmpty = rows.length === 0;
+  const isEmpty = loadedRows.length === 0;
 
   return (
     <div className="flex w-full flex-col gap-4">
-      <MailRequestFilters value={filter} onChange={onFilterChange} />
+      <MailRequestFilters value={filter} onChange={setFilter} />
 
       {/*
        * The claim failing is not the operator's action failing — the panel is
@@ -191,10 +217,10 @@ export function MailRequestsPanel({ onOpen }: MailRequestsPanelProps) {
 
               <MailRequestsPagination
                 page={page}
-                pageSize={pageSize}
+                pageSize={PAGE_SIZE}
                 totalResults={totalResults}
                 totalPages={totalPages}
-                onPageChange={setPage}
+                onPageChange={goToPage}
               />
             </div>
           </>

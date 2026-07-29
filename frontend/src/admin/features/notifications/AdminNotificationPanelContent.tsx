@@ -1,6 +1,7 @@
 import { BellOff, Settings } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
+import { DataErrorState } from '../../components/DataErrorState';
 import type { AdminNotification } from '../../types/notifications';
 import { AdminNotificationItem } from './AdminNotificationItem';
 
@@ -20,13 +21,11 @@ import { AdminNotificationItem } from './AdminNotificationItem';
 type AdminNotificationPanelContentProps = {
   notifications: AdminNotification[];
   isLoading?: boolean;
-  /**
-   * Which chrome is hosting the content. The header's sizing is now handled by
-   * responsive classes (sheet below `md`, dropdown from `md` up), so this no
-   * longer switches styles — it stays as the caller-facing description of the
-   * surface.
-   */
-  variant: 'dropdown' | 'sheet';
+  // A failed feed is not a caught-up one: without this the panel would print
+  // "You're all caught up" over a request that never arrived.
+  isError?: boolean;
+  isRetrying?: boolean;
+  onRetry?: () => void;
   settingsHref: string;
   viewAllHref: string;
   onSelect?: (notification: AdminNotification) => void;
@@ -71,6 +70,9 @@ function PanelEmptyState() {
 export function AdminNotificationPanelContent({
   notifications,
   isLoading,
+  isError,
+  isRetrying,
+  onRetry,
   settingsHref,
   viewAllHref,
   onSelect,
@@ -112,6 +114,15 @@ export function AdminNotificationPanelContent({
       <div className="min-h-0 flex-1 overflow-y-auto">
         {isLoading ? (
           <PanelSkeleton />
+        ) : isError ? (
+          // `bare` — the surface hosting this content already draws the frame.
+          <DataErrorState
+            bare
+            title="We couldn’t load your notifications"
+            description="Something went wrong fetching the feed. Try again."
+            onRetry={() => onRetry?.()}
+            isRetrying={isRetrying}
+          />
         ) : notifications.length === 0 ? (
           <PanelEmptyState />
         ) : (

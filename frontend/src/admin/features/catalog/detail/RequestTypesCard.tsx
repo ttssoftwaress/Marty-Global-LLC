@@ -1,14 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import { ApiError } from '@/services/api';
-import { deriveKey } from '../../../lib/fields';
+import { deriveKey } from '../../../lib/field-registry';
 import type { ServiceRequestTypeDraft } from '../../../types/delivery';
 import type { FieldDefinition } from '../../../types/fields';
 import { useFieldPicker } from '../../fields/queries';
 import { FieldPicker } from '../FieldPicker';
-import { Field, TextInput } from '../FormControls';
+import { Field, TextInput } from '../../../components/FormControls';
 import { useUpdateRequestTypes } from '../queries';
 import { DashedAddButton, DetailCard } from './DetailCard';
 
@@ -54,6 +54,7 @@ function RequestTypeRow({
   onRemove: () => void;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
+  const askQuestionRef = useRef<HTMLButtonElement>(null);
   const byKey = useMemo(
     () => new Map(registry.map((field) => [field.key, field])),
     [registry],
@@ -198,10 +199,12 @@ function RequestTypeRow({
             setPickerOpen(false);
           }}
           onClose={() => setPickerOpen(false)}
+          triggerRef={askQuestionRef}
         />
 
         {!pickerOpen ? (
           <button
+            ref={askQuestionRef}
             type="button"
             onClick={() => setPickerOpen(true)}
             className="w-fit text-body font-medium text-primary hover:underline"

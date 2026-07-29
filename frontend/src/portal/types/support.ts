@@ -83,6 +83,16 @@ export type ConversationSummary = {
   unread: boolean;
 };
 
+/*
+ * One page of the conversation list. The backend paginates by cursor like every
+ * other list (AGENTS.md, API Conventions), so the screen appends pages rather
+ * than holding the customer's entire history in one response.
+ */
+export type ConversationsPage = {
+  conversations: ConversationSummary[];
+  nextCursor: string | null;
+};
+
 // A single conversation with its full message history. The list summary fills
 // the thread header while this resolves.
 export type ConversationThread = {

@@ -1,10 +1,17 @@
 import type { ReactNode } from 'react';
 
 /*
- * The form's control primitives — one label/error wrapper plus the three inputs
- * the service form uses. They live here so every field in the form (and every
- * nested tier and detail-field row) gets the same height, radius, focus ring,
- * and error treatment without repeating the class strings.
+ * The admin form's control primitives — one label/error wrapper plus the three
+ * inputs, so every field gets the same height, radius, focus ring, and error
+ * treatment without repeating the class strings.
+ *
+ * They were written for the service form and lived in `features/catalog`, but
+ * four other features had already reached across to import them (fields,
+ * settings' location and carrier dialogs) and one — the result registry's dialog
+ * — hand-rolled its own `inputClass` string instead, which is how its inputs
+ * ended up a different height with a different focus treatment. A primitive
+ * every feature uses belongs beside `FormDialog` and `RowActions` rather than
+ * inside one feature.
  *
  * An invalid control is marked with `aria-invalid` and points at its message
  * with `aria-describedby`, so the error is announced rather than only colored.

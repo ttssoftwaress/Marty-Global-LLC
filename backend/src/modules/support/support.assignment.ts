@@ -183,6 +183,13 @@ export async function pickAssignee(): Promise<AssignmentOutcome> {
  * every inbound message: it is a compare-and-set, so a thread that gained an
  * owner between the read and the write keeps the owner it has rather than being
  * quietly moved off them.
+ *
+ * It answers with the thread's owner, not with "did I assign it" — null means
+ * the thread genuinely has nobody, never merely that this call was not the one
+ * that routed it. Callers broadcast the answer as the conversation's assignee
+ * (support.service.ts, guest.service.ts), and a caller that could not tell
+ * "already owned" and "lost the race" apart from "unassigned" would announce a
+ * false unassigned state to every supervisor watching the queue.
  */
 export async function ensureAssigned(conversationId: string): Promise<string | null> {
   const conversation = await prisma.conversation.findFirst({
@@ -190,12 +197,12 @@ export async function ensureAssigned(conversationId: string): Promise<string | n
       id: conversationId,
       kind: ConversationKind.SUPPORT,
       deletedAt: null,
-      assigneeId: null,
     },
-    select: { id: true },
+    select: { assigneeId: true },
   });
 
   if (!conversation) return null;
+  if (conversation.assigneeId) return conversation.assigneeId;
 
   const { assigneeId, assignedAt } = await pickAssignee();
   if (!assigneeId) return null;
@@ -205,11 +212,23 @@ export async function ensureAssigned(conversationId: string): Promise<string | n
     data: { assigneeId, assignedAt },
   });
 
-  if (count === 0) return null;
+  // Lost the compare-and-set: a concurrent message routed the thread first, so
+  // it has an owner — just not the one picked here. Read back the owner it
+  // actually got rather than reporting none.
+  if (count === 0) return currentAssignee(conversationId);
 
   await recordAutoAssignment(conversationId, assigneeId);
 
   return assigneeId;
+}
+
+async function currentAssignee(conversationId: string): Promise<string | null> {
+  const conversation = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    select: { assigneeId: true },
+  });
+
+  return conversation?.assigneeId ?? null;
 }
 
 /*

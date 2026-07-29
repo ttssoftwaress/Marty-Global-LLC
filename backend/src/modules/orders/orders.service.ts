@@ -25,6 +25,7 @@ import {
   notifyStaffDocumentUploaded,
   notifyStaffOrderSubmitted,
 } from '../admin/admin.notifications.js';
+import { AuditAction, record } from '../audit/audit.service.js';
 import { queueEmail } from '../notifications/notifications.service.js';
 import { assertKeyForPurpose } from '../uploads/uploads.service.js';
 import {
@@ -343,7 +344,7 @@ export async function createOrder(
             name: document.name,
             objectKey: document.objectKey,
             contentType: document.contentType,
-            sizeBytes: document.sizeBytes ?? null,
+            sizeBytes: document.sizeBytes,
             status: OrderDocumentStatus.AVAILABLE,
             source: OrderDocumentSource.CUSTOMER,
           })),
@@ -475,10 +476,12 @@ export async function advanceOrderStatus(
   orderId: string,
   target: OrderStatus,
   activity: { authorName: string; authorUserId?: string; message: string },
-): Promise<{ from: OrderStatus; to: OrderStatus } | null> {
+): Promise<{ from: OrderStatus; to: OrderStatus; reference: string } | null> {
   const order = await tx.order.findFirst({
     where: { id: orderId, deletedAt: null },
-    select: { id: true, status: true },
+    // The reference travels back with the move so the caller can audit it
+    // without a second read — the trail names the order the way a human does.
+    select: { id: true, status: true, reference: true },
   });
 
   if (!order) return null;
@@ -499,7 +502,7 @@ export async function advanceOrderStatus(
     },
   });
 
-  return { from: order.status, to: target };
+  return { from: order.status, to: target, reference: order.reference };
 }
 
 // --- List ----------------------------------------------------------------
@@ -511,10 +514,16 @@ export type OrderListItem = {
   status: string;
 };
 
+/*
+ * `totalPages` is the "Page X of Y" denominator; there is deliberately no `page`
+ * on the wire. This is a cursor stream (AGENTS.md), so the server has no offset
+ * to report — it used to answer 1 for the first fetch and 0 for every one after,
+ * which reads as a page number and is not one. The client owns the window it is
+ * showing, which is what both portal screens already do.
+ */
 export type OrdersPage = {
   orders: OrderListItem[];
   counts: Record<OrderFilter, number>;
-  page: number;
   totalPages: number;
   totalCount: number;
   hasMore: boolean;
@@ -559,17 +568,40 @@ export async function listOrders(
 
   const where: Prisma.OrderWhereInput = { ...scope, ...searchWhere, ...filterWhere };
 
-  // Counts for every filter tab, over the same search scope, so the badges stay
-  // correct as the customer narrows the list.
+  /*
+   * Counts for every filter tab, over the same search scope, so the badges stay
+   * correct as the customer narrows the list.
+   *
+   * One grouped count rather than a query per tab (the shape the admin queue
+   * already uses). Every tab is a set of statuses over the identical scope, so
+   * five separate `count` round trips were five ways of adding up the same
+   * grouped result — including the filtered total, which is by definition the
+   * count of the tab the customer is on.
+   */
   const countsScope: Prisma.OrderWhereInput = { ...scope, ...searchWhere };
-  const [totalCount, activeCount, completedCount, attentionCount] = await Promise.all([
-    prisma.order.count({ where: countsScope }),
-    prisma.order.count({ where: { ...countsScope, status: { in: FILTER_STATUSES.active } } }),
-    prisma.order.count({ where: { ...countsScope, status: { in: FILTER_STATUSES.completed } } }),
-    prisma.order.count({ where: { ...countsScope, status: { in: FILTER_STATUSES.attention } } }),
-  ]);
+  const grouped = await prisma.order.groupBy({
+    by: ['status'],
+    where: countsScope,
+    _count: { _all: true },
+  });
 
-  const filteredCount = await prisma.order.count({ where });
+  const byStatus = new Map(grouped.map((row) => [row.status, row._count._all]));
+  const countFor = (filter: OrderFilter): number =>
+    filter === 'all'
+      ? grouped.reduce((sum, row) => sum + row._count._all, 0)
+      : FILTER_STATUSES[filter].reduce(
+          (sum, status) => sum + (byStatus.get(status) ?? 0),
+          0,
+        );
+
+  const counts: Record<OrderFilter, number> = {
+    all: countFor('all'),
+    active: countFor('active'),
+    completed: countFor('completed'),
+    attention: countFor('attention'),
+  };
+
+  const filteredCount = counts[query.filter];
 
   // Cursor pagination (AGENTS.md): fetch limit+1 to know whether more remain.
   const rows = await prisma.order.findMany({
@@ -596,15 +628,7 @@ export async function listOrders(
 
   return {
     orders,
-    counts: {
-      all: totalCount,
-      active: activeCount,
-      completed: completedCount,
-      attention: attentionCount,
-    },
-    // The design's "Page X of Y" is a convenience over the cursor stream; without
-    // an offset we report page 1 for the first fetch and let the cursor advance.
-    page: query.cursor ? 0 : 1,
+    counts,
     totalPages,
     totalCount: filteredCount,
     hasMore,
@@ -749,6 +773,10 @@ function applicationFields(
  * its window reads as expired on this render rather than waiting for a job to
  * flip the row — the same rule the billing screen applies, so a customer never
  * sees one screen offer to take payment for something another calls expired.
+ *
+ * DRAFT never reaches here — the query above excludes it — which is what lets the
+ * final branch fall through to `pending` rather than mislabelling an unsent
+ * offer as payable.
  */
 function toQuoteView(
   quote: Quote & { lineItems: QuoteLineItem[] },
@@ -838,9 +866,15 @@ export async function getOrderDetail(
        * still travels rather than being filtered out — the customer who was sent
        * a price is entitled to see what happened to it, and the card renders the
        * status rather than silently emptying.
+       *
+       * A DRAFT is the one status that does not travel: it is an offer nobody has
+       * sent yet. Without this filter it would arrive as the newest quote, render
+       * as `pending`, and hand the customer a Pay button for a price the checkout
+       * refuses (`payments.service.ts` rejects DRAFT). That is why the customer's
+       * `OrderQuoteView['status']` is four values and not the enum's five.
        */
       quotes: {
-        where: { deletedAt: null },
+        where: { deletedAt: null, status: { not: QuoteStatus.DRAFT } },
         include: { lineItems: { orderBy: { sortOrder: 'asc' } } },
         orderBy: { createdAt: 'desc' },
         take: 1,
@@ -1026,6 +1060,8 @@ export async function attachDocuments(
    * The rows and the activity entry are written together: a document the team
    * cannot see arrived is a document the customer will be asked for again.
    */
+  const documentIds: string[] = [];
+
   await prisma.$transaction(async (tx) => {
     for (const { document, fills } of resolved) {
       if (fills) {
@@ -1034,24 +1070,27 @@ export async function attachDocuments(
           data: {
             objectKey: document.objectKey,
             contentType: document.contentType,
-            sizeBytes: document.sizeBytes ?? null,
+            sizeBytes: document.sizeBytes,
             status: OrderDocumentStatus.AVAILABLE,
           },
         });
+        documentIds.push(fills);
         continue;
       }
 
-      await tx.orderDocument.create({
+      const created = await tx.orderDocument.create({
         data: {
           orderId: ownedOrderId,
           name: document.name,
           objectKey: document.objectKey,
           contentType: document.contentType,
-          sizeBytes: document.sizeBytes ?? null,
+          sizeBytes: document.sizeBytes,
           status: OrderDocumentStatus.AVAILABLE,
           source: OrderDocumentSource.CUSTOMER,
         },
+        select: { id: true },
       });
+      documentIds.push(created.id);
     }
 
     await tx.orderActivity.create({
@@ -1065,6 +1104,26 @@ export async function attachDocuments(
         }.`,
       },
     });
+  });
+
+  /*
+   * A document arriving on an order is a state change on a document, so it
+   * carries a trail like the staff-side request and access already do
+   * (AGENTS.md, Backend). The metadata is ids and a count — never a filename,
+   * which is the customer's own words and routinely names them.
+   */
+  await record({
+    actor: auth,
+    action: AuditAction.ORDER_DOCUMENT_UPLOADED,
+    entityType: 'Order',
+    entityId: ownedOrderId,
+    metadata: {
+      documentIds,
+      count: documentIds.length,
+      // How many of them answered a document the team had asked for, which is
+      // what makes this upload the close of a request rather than an addition.
+      filledRequests: resolved.filter((entry) => entry.fills).length,
+    },
   });
 
   // The reviewer holding the order is the one who was waiting on this, so they
@@ -1117,7 +1176,16 @@ export async function getDocumentLink(
     throw AppError.businessRule('That document is not available yet');
   }
 
-  const url = await presignObject(document.objectKey);
+  /*
+   * `attachment` is what makes the card's control a download rather than a
+   * preview: the disposition is signed into the URL, so the file saves under its
+   * own name instead of rendering in the tab under its raw R2 key
+   * (lib/storage.ts) — the same posture as documents.getDownloadLink.
+   */
+  const url = await presignObject(document.objectKey, {
+    disposition: 'attachment',
+    fileName: document.name,
+  });
 
   if (!url) {
     throw AppError.businessRule('That document cannot be downloaded right now');

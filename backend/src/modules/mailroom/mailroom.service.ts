@@ -13,6 +13,7 @@ import { AppError } from '../../lib/app-error.js';
 import { prisma } from '../../lib/prisma.js';
 import { presignObject, presignObjects } from '../../lib/storage.js';
 import { notifyStaffMailRequest } from '../admin/admin.notifications.js';
+import { AuditAction, record } from '../audit/audit.service.js';
 import type {
   CreateMailRequestInput,
   ListMailItemsQuery,
@@ -42,7 +43,6 @@ const ROOM_STATUS_TO_VIEW: Record<MailRoomStatus, string> = {
 const ITEM_STATUS_TO_VIEW: Record<MailItemStatus, string> = {
   [MailItemStatus.NEW]: 'new',
   [MailItemStatus.VIEWED]: 'viewed',
-  [MailItemStatus.SCANNED]: 'scanned',
   [MailItemStatus.FORWARDED]: 'forwarded',
   [MailItemStatus.ACTION_REQUESTED]: 'action_requested',
   [MailItemStatus.ARCHIVED]: 'archived',
@@ -54,7 +54,6 @@ const VIEW_TO_ITEM_STATUS: Record<
 > = {
   new: MailItemStatus.NEW,
   viewed: MailItemStatus.VIEWED,
-  scanned: MailItemStatus.SCANNED,
   forwarded: MailItemStatus.FORWARDED,
   action_requested: MailItemStatus.ACTION_REQUESTED,
   archived: MailItemStatus.ARCHIVED,
@@ -497,6 +496,25 @@ export async function createRequest(
     });
 
     return created;
+  });
+
+  /*
+   * The customer's own hand on their mail — the second state change in this
+   * codebase with a customer as the actor (PAYMENT_CANCELLED is the other), and
+   * audited for the same reason: what happens to a scanned document afterwards
+   * is only evidence if the trail also shows who asked for it. Awaited because
+   * `record` swallows its own failure (audit.service, rule 1), so it can never
+   * fail the request it describes.
+   *
+   * Ids and the request type only — never the shipping address or the room name
+   * (a customer's own address and company name; AGENTS.md, Security & PII).
+   */
+  await record({
+    actor: auth,
+    action: AuditAction.MAIL_REQUEST_CREATED,
+    entityType: 'MailRequest',
+    entityId: request.id,
+    metadata: { type, mailItemId: item.id, roomId: ownedRoomId },
   });
 
   // The mail-ops queue's arrival signal. After the commit, and never able to

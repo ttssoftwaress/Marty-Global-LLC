@@ -22,13 +22,6 @@ import { NotificationItem } from './NotificationItem';
 type NotificationPanelContentProps = {
   notifications: Notification[];
   isLoading?: boolean;
-  /**
-   * Which chrome is hosting the content. The header's sizing is now handled by
-   * responsive classes (sheet below `md`, dropdown from `md` up), so this no
-   * longer switches styles — it stays as the caller-facing description of the
-   * surface.
-   */
-  variant: 'dropdown' | 'sheet';
   settingsHref: string;
   viewAllHref: string;
   onSelect?: (notification: Notification) => void;

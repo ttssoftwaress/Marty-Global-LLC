@@ -61,12 +61,16 @@ export type MailRoomOverview = {
 // A scanned mail item's lifecycle. Labels come from the desktop link (the copy
 // source): "Viewed" (not the mobile "Opened"), "Action requested" (not the
 // mobile "Action required"). `new`/`forwarded` read as the navy pill, `viewed`/
-// `archived` as the neutral pill, `scanned` as the green pill, and
-// `action_requested` as the red pill that swaps the row's action to "Respond".
+// `archived` as the neutral pill, and `action_requested` as the red pill that
+// swaps the row's action to "Respond".
+//
+// The links also draw a green "Scanned" pill. It is deliberately not here: the
+// backend has no such state and cannot have one — whether the scan is ready is
+// `scanReady` below, and the row already renders that as a "Scanning" preview,
+// so a status of the same name would be a second answer to the same question.
 export type MailStatus =
   | 'new'
   | 'viewed'
-  | 'scanned'
   | 'forwarded'
   | 'action_requested'
   | 'archived';

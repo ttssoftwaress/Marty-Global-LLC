@@ -26,6 +26,10 @@ type SupportedRegionsCardProps = {
   settings: ServiceRegionSetting[];
   error?: string;
   isLoading?: boolean;
+  /** The region list failed to load — distinct from none being configured. */
+  isError?: boolean;
+  isRetrying?: boolean;
+  onRetry?: () => void;
   onChange: (settings: ServiceRegionSetting[]) => void;
 };
 
@@ -34,6 +38,9 @@ export function SupportedRegionsCard({
   settings,
   error,
   isLoading = false,
+  isError = false,
+  isRetrying = false,
+  onRetry,
   onChange,
 }: SupportedRegionsCardProps) {
   const patch = (code: string, next: Partial<ServiceRegionSetting>) => {
@@ -54,6 +61,30 @@ export function SupportedRegionsCard({
               className="h-14 w-full animate-pulse rounded-input bg-gray-100"
             />
           ))}
+        </div>
+      ) : isError ? (
+        /*
+         * Ahead of the empty branch on purpose: a failed load leaves the same
+         * empty list, and saying "no regions are configured" would describe a
+         * catalog state that isn't true — and this service's own regions are
+         * still set, they just aren't loaded.
+         */
+        <div role="alert" className="flex flex-col items-start gap-2">
+          <p className="text-body text-error">
+            The region list didn&rsquo;t load, so this service&rsquo;s coverage
+            can&rsquo;t be shown or edited yet.
+          </p>
+
+          {onRetry ? (
+            <button
+              type="button"
+              onClick={onRetry}
+              disabled={isRetrying}
+              className="flex h-9 items-center justify-center rounded-control border border-primary px-3 text-small font-semibold text-primary transition-colors hover:bg-primary-light disabled:cursor-not-allowed disabled:border-gray-200 disabled:text-gray-400 disabled:hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            >
+              {isRetrying ? 'Retrying…' : 'Try again'}
+            </button>
+          ) : null}
         </div>
       ) : regions.length === 0 ? (
         <p className="text-body text-gray-500">

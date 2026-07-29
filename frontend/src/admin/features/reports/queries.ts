@@ -1,6 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 
-import { apiFetch } from '@/services/api';
+import { apiDownload, apiFetch, saveBlob } from '@/services/api';
 import type { ApiSuccess } from '@/types/api';
 import type {
   GrowthSeries,
@@ -123,6 +123,29 @@ export function useAdminReportsFunnel(range: ReportRange) {
         `/admin/reports/funnel?${rangeParams(range)}`,
       ).then((res) => res.data.stages),
     ...keepPrevious,
+  });
+}
+
+/*
+ * GET /v1/admin/reports/export?period= — the whole screen as a CSV.
+ *
+ * A mutation rather than a query because pressing Export is an action with a
+ * side effect (a file lands on disk) and must not be cached, refetched, or run
+ * on mount. Its `isPending` is what disables the button while the file is being
+ * built, so the control cannot be pressed twice (Design.md, in-flight state).
+ *
+ * The file is composed server-side from the same range the page is showing, so
+ * it holds what the API agrees this actor may see rather than whatever this
+ * browser happened to have cached.
+ */
+export function useExportReport() {
+  return useMutation({
+    mutationFn: async (range: ReportRange) => {
+      const { blob, filename } = await apiDownload(
+        `/admin/reports/export?${rangeParams(range)}`,
+      );
+      saveBlob(blob, filename ?? 'marty-reports.csv');
+    },
   });
 }
 

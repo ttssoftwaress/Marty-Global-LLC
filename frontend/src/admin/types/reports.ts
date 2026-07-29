@@ -157,9 +157,19 @@ export type FunnelStage = {
 };
 
 /*
+ * Whether these figures cover the org or only this actor's own filings. Reports
+ * is a scoped area, so the backend narrows the numbers and sends the answer down
+ * with them; the header prints it rather than inferring it from a role, because
+ * "$127,450 collected" and "$127,450 collected on your orders" are the same
+ * figure meaning very different things (AGENTS.md, Auth).
+ */
+export type ReportsScope = 'all' | 'assigned';
+
+/*
  * Everything the screen's chrome needs in one call, so the KPI figures agree
  * with each other and with the charts beneath them.
  */
 export type ReportsSummary = {
   kpis: ReportKpi[];
+  scope: ReportsScope;
 };

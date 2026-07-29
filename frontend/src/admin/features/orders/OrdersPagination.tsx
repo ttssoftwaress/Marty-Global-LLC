@@ -1,4 +1,5 @@
 import { formatCount } from '../../lib/format';
+import { pageWindow } from '../../lib/pagination';
 
 /*
  * The queue footer — two presentations of one cursor-paginated stream
@@ -17,28 +18,9 @@ import { formatCount } from '../../lib/format';
  * the footer's height and alignment stay put.
  */
 
+// The design shows four consecutive numbers, so this queue widens the shared
+// pager's default window of three.
 const WINDOW_SIZE = 4;
-
-// The page numbers to print: a sliding window of `WINDOW_SIZE`, always including
-// the first and last page, with `null` marking an elided run.
-function pageWindow(page: number, totalPages: number): (number | null)[] {
-  if (totalPages <= WINDOW_SIZE + 2) {
-    return Array.from({ length: totalPages }, (_, index) => index + 1);
-  }
-
-  const half = Math.floor(WINDOW_SIZE / 2);
-  let start = Math.max(2, page - half);
-  const end = Math.min(totalPages - 1, start + WINDOW_SIZE - 1);
-  start = Math.max(2, end - WINDOW_SIZE + 1);
-
-  const pages: (number | null)[] = [1];
-  if (start > 2) pages.push(null);
-  for (let current = start; current <= end; current += 1) pages.push(current);
-  if (end < totalPages - 1) pages.push(null);
-  pages.push(totalPages);
-
-  return pages;
-}
 
 /*
  * The two footers are separate exports rather than one component with internal
@@ -117,7 +99,7 @@ export function OrdersPagination({
           </button>
 
           <div className="flex items-center gap-1">
-            {pageWindow(page, totalPages).map((entry, index) =>
+            {pageWindow(page, totalPages, WINDOW_SIZE).map((entry, index) =>
               entry === null ? (
                 <span
                   key={`gap-${index}`}

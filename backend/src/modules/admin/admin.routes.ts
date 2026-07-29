@@ -12,6 +12,7 @@ import {
   adminRequestsRouter,
 } from './delivery/delivery.routes.js';
 import { adminFieldsRouter } from './fields/fields.routes.js';
+import { adminLeadsRouter } from './leads/leads.routes.js';
 import { adminMailroomRouter } from './mailroom/mailroom.routes.js';
 import { adminMeRouter } from './me/me.routes.js';
 import { adminNotificationsRouter } from './notifications/notifications.routes.js';
@@ -100,6 +101,8 @@ router.use('/conversations', adminConversationsRouter);
  */
 router.use('/requests', adminRequestsRouter);
 router.use('/reports', adminReportsRouter);
+// The marketing contact form's queue — its own `leads` area (lib/permissions.ts).
+router.use('/leads', adminLeadsRouter);
 /*
  * Business settings — the locations services are offered in and the carriers the
  * mail room ships with. Its own area rather than part of `/catalog`, because it

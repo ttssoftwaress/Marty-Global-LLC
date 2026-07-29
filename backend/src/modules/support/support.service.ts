@@ -9,6 +9,7 @@ import {
 
 import type { AuthContext } from '../../guards/auth-context.js';
 import { assertFound } from '../../guards/ownership.js';
+import { cursorArgs, takePage } from '../../lib/pagination.js';
 import { prisma } from '../../lib/prisma.js';
 import { presignObject } from '../../lib/storage.js';
 import { emitConversationChanged } from '../../sockets/broadcast.js';
@@ -114,10 +115,18 @@ function isUnread(
   return lastMessageAt > customerReadAt;
 }
 
+// One page of the customer's threads. `{ data, nextCursor }` in the AGENTS.md
+// sense — the envelope carries `data`, and the cursor to step with rides inside
+// it beside the rows, exactly as the admin inbox returns it.
+export type ConversationsPage = {
+  conversations: ConversationSummary[];
+  nextCursor: string | null;
+};
+
 export async function listConversations(
   auth: AuthContext,
   query: ListConversationsQuery,
-): Promise<ConversationSummary[]> {
+): Promise<ConversationsPage> {
   // A customer sees only their own threads; the ownership boundary is this where
   // clause, not a per-row check (AGENTS.md: guards are the real boundary).
   //
@@ -141,26 +150,34 @@ export async function listConversations(
       : {}),
   };
 
-  const conversations = await prisma.conversation.findMany({
+  const rows = await prisma.conversation.findMany({
     where,
     include: { order: { select: { id: true, status: true } } },
-    orderBy: [{ lastMessageAt: 'desc' }, { createdAt: 'desc' }],
+    // `id` as the tiebreak rather than `createdAt`: the cursor IS the id, so the
+    // order has to be total on it or a page boundary could repeat or skip a row.
+    orderBy: [{ lastMessageAt: 'desc' }, { id: 'desc' }],
+    ...cursorArgs(query.cursor, query.limit),
   });
 
-  return conversations.map((conversation) => ({
-    id: conversation.id,
-    subject: conversation.subject,
-    category: CATEGORY_TO_VIEW[conversation.category],
-    status: conversation.order
-      ? ORDER_STATUS_TO_VIEW[conversation.order.status]
-      : undefined,
-    orderId: conversation.order?.id,
-    preview: conversation.preview ?? '',
-    lastMessageAt: (
-      conversation.lastMessageAt ?? conversation.createdAt
-    ).toISOString(),
-    unread: isUnread(conversation.lastMessageAt, conversation.customerReadAt),
-  }));
+  const page = takePage(rows, query.limit);
+
+  return {
+    conversations: page.rows.map((conversation) => ({
+      id: conversation.id,
+      subject: conversation.subject,
+      category: CATEGORY_TO_VIEW[conversation.category],
+      status: conversation.order
+        ? ORDER_STATUS_TO_VIEW[conversation.order.status]
+        : undefined,
+      orderId: conversation.order?.id,
+      preview: conversation.preview ?? '',
+      lastMessageAt: (
+        conversation.lastMessageAt ?? conversation.createdAt
+      ).toISOString(),
+      unread: isUnread(conversation.lastMessageAt, conversation.customerReadAt),
+    })),
+    nextCursor: page.nextCursor,
+  };
 }
 
 // --- Thread --------------------------------------------------------------
@@ -417,7 +434,9 @@ export async function sendMessage(
      * see, so a customer writing into one — because it predates automatic
      * routing, or because its agent's account was removed — gets it routed now
      * rather than waiting for a supervisor to notice
-     * (support.assignment.ts).
+     * (support.assignment.ts). It answers with the owner the thread ends up
+     * with, so the broadcast below cannot claim "unassigned" for a thread a
+     * concurrent message routed first.
      */
     const assigneeId = found.assigneeId ?? (await ensureAssigned(found.id));
 

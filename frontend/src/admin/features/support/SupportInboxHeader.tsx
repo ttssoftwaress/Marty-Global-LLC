@@ -43,7 +43,7 @@ export function SupportInboxHeader({
 
   const pill =
     typeof totalOpen === 'number' && typeof totalUnassigned === 'number' ? (
-      <span className="shrink-0 rounded-pill bg-[#fef3c7] px-3 py-1.5 text-small font-semibold text-[#b45309] lg:px-4 lg:py-2 lg:text-body">
+      <span className="status-review shrink-0 rounded-pill px-3 py-1.5 text-small font-semibold lg:px-4 lg:py-2 lg:text-body">
         {formatCount(totalOpen)} open
         {seesAll ? ` · ${formatCount(totalUnassigned)} unassigned` : ''}
       </span>

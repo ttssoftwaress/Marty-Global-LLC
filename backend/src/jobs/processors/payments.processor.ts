@@ -16,6 +16,7 @@ import {
   creditConfirmedPayments,
   expireStalePayments,
   settleTransfer,
+  type PaymentNotice,
 } from '../../modules/payments/payments.service.js';
 import {
   notifyStaffPaymentConfirmed,
@@ -160,7 +161,7 @@ export async function pollUsdtTransfers(now = new Date()): Promise<PollResult> {
     switch (outcome.result) {
       case 'credited':
         result.credited += 1;
-        await onCredited(outcome.paymentId, transfer.transactionId);
+        await onCredited(outcome.notice, transfer.transactionId);
         break;
       case 'confirming':
         result.confirming += 1;
@@ -168,7 +169,7 @@ export async function pollUsdtTransfers(now = new Date()): Promise<PollResult> {
       case 'underpaid':
       case 'overpaid':
         result.mismatched += 1;
-        await onMismatched(outcome.paymentId, outcome.result, transfer.value);
+        await onMismatched(outcome.notice, outcome.result, transfer.value);
         break;
       case 'duplicate':
         result.duplicates += 1;
@@ -220,9 +221,9 @@ export async function pollUsdtTransfers(now = new Date()): Promise<PollResult> {
     estimateConfirmations(chainConfirmedAt.getTime(), nowMs),
   );
 
-  for (const paymentId of credited) {
+  for (const notice of credited) {
     result.credited += 1;
-    await onCredited(paymentId, null);
+    await onCredited(notice, null);
   }
 
   result.expired = await expireStalePayments(now);
@@ -241,22 +242,15 @@ export async function pollUsdtTransfers(now = new Date()): Promise<PollResult> {
  * of this may fail the credit — the money is already reconciled and the row is
  * committed, so every side effect below swallows its own failure (the same
  * posture the audit module takes).
+ *
+ * The payment arrives as a snapshot the settlement already loaded rather than an
+ * id to look up again — see `PaymentNotice` in payments.service.
  */
-async function onCredited(paymentId: string, txHash: string | null): Promise<void> {
-  const payment = await prisma.payment.findUnique({
-    where: { id: paymentId },
-    select: {
-      id: true,
-      amount: true,
-      currency: true,
-      customerId: true,
-      quoteId: true,
-      customer: { select: { email: true } },
-      quote: { select: { reference: true, serviceName: true } },
-    },
-  });
-
-  if (!payment) return;
+async function onCredited(
+  payment: PaymentNotice,
+  txHash: string | null,
+): Promise<void> {
+  const paymentId = payment.id;
 
   void record({
     actor: null, // A job credit is a system write, which the audit schema allows.
@@ -266,7 +260,7 @@ async function onCredited(paymentId: string, txHash: string | null): Promise<voi
     // Ids, minor units, and a reference — no name, no address, no tx-linked PII.
     metadata: {
       quoteId: payment.quoteId,
-      reference: payment.quote?.reference ?? null,
+      reference: payment.quoteReference,
       amount: payment.amount,
       currency: payment.currency,
       provider: 'usdt_trc20',
@@ -299,7 +293,7 @@ async function onCredited(paymentId: string, txHash: string | null): Promise<voi
     preference: 'statusUpdates',
     category: FeedNotificationCategory.PAYMENT,
     message: `Payment of ${amount} received${
-      payment.quote?.reference ? ` for quote ${payment.quote.reference}` : ''
+      payment.quoteReference ? ` for quote ${payment.quoteReference}` : ''
     }. Thank you!`,
     href: '/app/billing',
   });
@@ -309,19 +303,19 @@ async function onCredited(paymentId: string, txHash: string | null): Promise<voi
   void notifyStaffPaymentConfirmed({
     paymentId,
     amountLabel: amount,
-    quoteReference: payment.quote?.reference ?? null,
+    quoteReference: payment.quoteReference,
   });
 
   if (!channels.email) return;
 
   try {
     await queueEmail({
-      to: payment.customer.email,
+      to: payment.customerEmail,
       subject: `Payment received — ${amount}`,
       template: 'generic',
       heading: 'We received your payment',
       body: `Your payment of ${amount}${
-        payment.quote?.serviceName ? ` for ${payment.quote.serviceName}` : ''
+        payment.quoteServiceName ? ` for ${payment.quoteServiceName}` : ''
       } has been confirmed on-chain. Your order will continue processing.`,
       actionLabel: 'View billing',
       actionUrl: `${publicAppUrl}/app/billing`,
@@ -336,25 +330,15 @@ async function onCredited(paymentId: string, txHash: string | null): Promise<voi
  * An under- or overpayment. AGENTS.md is explicit that this is never a silent
  * pass, so it is audited and surfaced to the customer rather than only logged —
  * they are the one person who can tell us what they intended to send.
+ *
+ * Takes the same settlement-loaded snapshot as `onCredited` above.
  */
 async function onMismatched(
-  paymentId: string,
+  payment: PaymentNotice,
   kind: 'underpaid' | 'overpaid',
   receivedRaw: string,
 ): Promise<void> {
-  const payment = await prisma.payment.findUnique({
-    where: { id: paymentId },
-    select: {
-      id: true,
-      amount: true,
-      currency: true,
-      customerId: true,
-      quoteId: true,
-      usdtExpectedRaw: true,
-    },
-  });
-
-  if (!payment) return;
+  const paymentId = payment.id;
 
   void record({
     actor: null,
@@ -364,7 +348,7 @@ async function onMismatched(
     metadata: {
       kind,
       quoteId: payment.quoteId,
-      expectedUsdtRaw: payment.usdtExpectedRaw?.toFixed(0) ?? null,
+      expectedUsdtRaw: payment.expectedUsdtRaw,
       receivedUsdtRaw: receivedRaw,
       amount: payment.amount,
       currency: payment.currency,

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { AdminLayout } from '../components/AdminLayout';
+import { DataErrorState } from '../components/DataErrorState';
 import {
   CatalogCardList,
   CatalogEmptyState,
@@ -109,8 +110,14 @@ export function AdminServiceCatalogPage() {
     });
   };
 
+  /*
+   * Derived from the query's own flags, never from "there are no rows"
+   * (Design.md): a failed list would otherwise render the empty state, telling
+   * an admin the catalog is unconfigured when it is the request that broke.
+   */
   const isLoading = services.isPending;
-  const isEmpty = !isLoading && rows.length === 0;
+  const isError = services.isError;
+  const isEmpty = !isLoading && !isError && rows.length === 0;
 
   return (
     <AdminLayout user={user} onLogout={onLogout}>
@@ -129,6 +136,13 @@ export function AdminServiceCatalogPage() {
 
           {isLoading ? (
             <CatalogSkeleton />
+          ) : isError ? (
+            <DataErrorState
+              title="Couldn't load the service catalog"
+              description="The services didn't load, so this is not a sign that none are configured. Try again in a moment."
+              onRetry={() => void services.refetch()}
+              isRetrying={services.isFetching}
+            />
           ) : isEmpty ? (
             <div className="w-full rounded-card border border-gray-200 bg-white md:rounded-table md:shadow-sm-elevation">
               <CatalogEmptyState onAddService={openCreate} />
@@ -173,6 +187,9 @@ export function AdminServiceCatalogPage() {
         mode="create"
         regions={regions.data ?? []}
         isLoadingRegions={regions.isPending}
+        isRegionsError={regions.isError}
+        isRetryingRegions={regions.isFetching}
+        onRetryRegions={() => void regions.refetch()}
         isSaving={createService.isPending}
         error={createService.error}
         onSubmit={handleSubmit}

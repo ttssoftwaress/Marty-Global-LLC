@@ -9,11 +9,12 @@ export const mailRoomTab = z.enum(['inbox', 'requests', 'history']);
 export type MailRoomTab = z.infer<typeof mailRoomTab>;
 
 // `all` clears the filter; the rest map one-for-one onto a MailItemStatus.
+// There is no `scanned` — whether the scan is ready is `scanReady`, not a
+// lifecycle state (schema.prisma, MailItemStatus).
 export const mailStatusFilter = z.enum([
   'all',
   'new',
   'viewed',
-  'scanned',
   'forwarded',
   'action_requested',
   'archived',

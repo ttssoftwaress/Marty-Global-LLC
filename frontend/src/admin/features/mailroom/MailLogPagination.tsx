@@ -1,4 +1,5 @@
 import { formatCount } from '../../lib/format';
+import { pageWindow } from '../../lib/pagination';
 
 /*
  * The log's footer — the range line and the Previous / numbered pages / Next
@@ -18,27 +19,6 @@ import { formatCount } from '../../lib/format';
  * Both step buttons carry a real disabled state: the design shows "Previous"
  * greyed on page one, which is that state drawn rather than a separate style.
  */
-
-const WINDOW_SIZE = 3;
-
-function pageWindow(page: number, totalPages: number): (number | null)[] {
-  if (totalPages <= WINDOW_SIZE + 2) {
-    return Array.from({ length: totalPages }, (_, index) => index + 1);
-  }
-
-  const half = Math.floor(WINDOW_SIZE / 2);
-  let start = Math.max(2, page - half);
-  const end = Math.min(totalPages - 1, start + WINDOW_SIZE - 1);
-  start = Math.max(2, end - WINDOW_SIZE + 1);
-
-  const pages: (number | null)[] = [1];
-  if (start > 2) pages.push(null);
-  for (let current = start; current <= end; current += 1) pages.push(current);
-  if (end < totalPages - 1) pages.push(null);
-  pages.push(totalPages);
-
-  return pages;
-}
 
 type MailLogPaginationProps = {
   page: number;

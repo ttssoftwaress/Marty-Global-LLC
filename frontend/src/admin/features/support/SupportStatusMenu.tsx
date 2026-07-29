@@ -1,6 +1,7 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { Check, ChevronDown } from 'lucide-react';
 
+import { useDismissablePopover } from '../../hooks/useDismissablePopover';
 import type { SupportStatus } from '../../types/support';
 
 /*
@@ -21,7 +22,7 @@ import type { SupportStatus } from '../../types/support';
  */
 
 const STATUS_STYLES: Record<SupportStatus, { pill: string; dot: string }> = {
-  open: { pill: 'bg-[#e0f2fe] text-info', dot: 'bg-info' },
+  open: { pill: 'status-info', dot: 'bg-info' },
   pending: { pill: 'status-review', dot: 'bg-warning' },
   resolved: { pill: 'status-approved', dot: 'bg-success' },
 };
@@ -48,25 +49,12 @@ export function SupportStatusMenu({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const listId = useId();
 
-  useEffect(() => {
-    if (!open) return;
-
-    const onPointerDown = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      setOpen(false);
-      triggerRef.current?.focus();
-    };
-
-    document.addEventListener('pointerdown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('pointerdown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [open]);
+  useDismissablePopover({
+    open,
+    onClose: () => setOpen(false),
+    containerRef: rootRef,
+    triggerRef,
+  });
 
   const styles = STATUS_STYLES[status];
 

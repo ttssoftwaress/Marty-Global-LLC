@@ -4,6 +4,8 @@ import {
   QuoteStatus,
   StaffStatus,
 } from '@prisma/client';
+import { randomUUID } from 'node:crypto';
+
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Role } from '../../../lib/roles.js';
@@ -27,8 +29,23 @@ const queueEmail = vi.hoisted(() => vi.fn(async () => ({ id: 'notif_test' })));
 vi.mock('../../notifications/notifications.service.js', () => ({ queueEmail }));
 
 const { prisma } = await import('../../../lib/prisma.js');
-const { cancelQuote, createQuote, listOrderQuotes, listQuoteTemplates } =
-  await import('./quotes.service.js');
+const quotes = await import('./quotes.service.js');
+const { cancelQuote, listOrderQuotes, listQuoteTemplates } = quotes;
+
+/*
+ * Sending takes an Idempotency-Key (AGENTS.md, API Conventions), and every call
+ * below is a deliberate separate send rather than a retry — so this mints a
+ * fresh key per call and the replay behaviour is exercised on its own, by the
+ * one test that passes the same key twice.
+ */
+const newKey = () => `idem_${randomUUID()}`;
+
+const createQuote = (
+  actor: AuthContext,
+  orderId: string,
+  input: Parameters<typeof quotes.createQuote>[2],
+  idempotencyKey: string = newKey(),
+) => quotes.createQuote(actor, orderId, input, idempotencyKey);
 const { getOrder, updateOrder } = await import('../orders/orders.service.js');
 const { getOrderDetail } = await import('../../orders/orders.service.js');
 
@@ -295,6 +312,33 @@ describe('createQuote', () => {
     await expect(
       createQuote(auth(ADMIN_ID, Role.ADMIN), order.id, input),
     ).rejects.toMatchObject({ status: 409 });
+
+    expect(await listOrderQuotes(auth(ADMIN_ID, Role.ADMIN), order.id)).toHaveLength(1);
+  });
+
+  /*
+   * The distinction the Idempotency-Key exists to draw. The test above is a
+   * reviewer deliberately sending twice, which is a conflict; this is one send
+   * that was retried, which must resolve to the quote it already created rather
+   * than to that same 409 — and must not email the customer a second time.
+   */
+  it('resolves a retried send to the same quote and emails once', async () => {
+    const order = await createOrder();
+    const key = `idem_${randomUUID()}`;
+    const input = {
+      lineItems: LINES,
+      tax: 0,
+      discount: 0,
+      currency: 'USD',
+      validForDays: 14,
+    };
+
+    const first = await createQuote(auth(ADMIN_ID, Role.ADMIN), order.id, input, key);
+    const retry = await createQuote(auth(ADMIN_ID, Role.ADMIN), order.id, input, key);
+
+    expect(retry.id).toBe(first.id);
+    expect(retry.reference).toBe(first.reference);
+    expect(queueEmail).toHaveBeenCalledTimes(1);
 
     expect(await listOrderQuotes(auth(ADMIN_ID, Role.ADMIN), order.id)).toHaveLength(1);
   });

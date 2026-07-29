@@ -30,11 +30,14 @@ export type OrderFilterCounts = Record<OrderFilter, number>;
  * Cursor pagination, mirroring the API envelope (AGENTS.md, API Conventions).
  * Desktop and tablet render the page counter + Previous/Next; mobile renders
  * "Load more" over the same cursor.
+ *
+ * There is no `page` here because a cursor stream has no offset to report — the
+ * screen owns which window it is showing, and the backend supplies only the
+ * "of Y" half of the counter.
  */
 export type OrdersPage = {
   orders: Order[];
   counts: OrderFilterCounts;
-  page: number;
   totalPages: number;
   totalCount: number;
   hasMore: boolean;
@@ -115,6 +118,13 @@ export type OrderPayment = {
  * An entry in the order's activity feed. `author` is either the customer or the
  * Marty Global team (the team entries carry the TEAM tag and a monogram avatar);
  * `avatarUrl` is present for a person, absent for the team monogram.
+ *
+ * Two of the three values, not three: the backend's `OrderActivityAuthor` enum
+ * also has SYSTEM, and `orders.service.ts` deliberately collapses it to `team`
+ * on this wire — a system-authored entry is the business writing to the customer
+ * exactly as a team one is, and this screen draws both with the same monogram.
+ * The admin mirror keeps all three because that screen does tell them apart.
+ * Widening this would add a branch the wire can never produce.
  */
 export type OrderActivityAuthor = 'team' | 'customer';
 
@@ -135,6 +145,18 @@ export type OrderActivityEntry = {
  * `payable` is the backend's decision, not one the browser re-derives from the
  * status and the date: the Pay button and the payment endpoint have to agree,
  * and the endpoint is the real boundary (AGENTS.md, Auth).
+ */
+/*
+ * Four of the backend enum's five. DRAFT is missing on purpose: an unsent draft
+ * is internal to the admin's quote builder, and the customer's order query
+ * filters it out (`orders.service.ts`, the `quotes` include) so this screen is
+ * never handed a price nobody has sent. Do not add `draft` here without
+ * removing that filter — the two are one decision.
+ *
+ * The admin's own mirror carries all five (`AdminQuoteStatus` in
+ * `admin/types/order-detail.ts`), as does
+ * checkout's `CheckoutQuoteStatus` (`portal/types/payments.ts`), which sees a
+ * quote by id rather than through the order's filter.
  */
 export type QuoteStatus = 'pending' | 'paid' | 'expired' | 'cancelled';
 

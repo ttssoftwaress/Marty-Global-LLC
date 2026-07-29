@@ -20,13 +20,9 @@ export {
 export { requireVerifiedEmail } from './require-verified-email.js';
 export { requireIdempotencyKey } from './require-idempotency-key.js';
 
-export {
-  assertCanMutate,
-  assertFound,
-  assertOwner,
-  canAccess,
-  isStaff,
-} from './ownership.js';
+// `assertOwner`/`assertFound` are owner-only — a staff role is not a bypass.
+// Staff reach customer records through the admin module; see ownership.ts.
+export { assertFound, assertOwner, isStaff } from './ownership.js';
 
 export {
   apiRateLimit,

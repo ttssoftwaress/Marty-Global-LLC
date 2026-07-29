@@ -86,10 +86,13 @@ export async function addActivity(
       throw AppError.validation('Invalid activity entry', parsed.error.issues);
     }
 
+    // `requireIdempotencyKey` runs ahead of this handler and 400s without one,
+    // so the key is present here; the assertion is the guard's contract.
     const entry = await service.addActivity(
       getAuth(req),
       pathParam(req, 'orderId'),
       parsed.data,
+      req.idempotencyKey as string,
     );
     res.status(201).json({ data: entry });
   } catch (error) {
@@ -108,10 +111,12 @@ export async function requestDocument(
       throw AppError.validation('Invalid document request', parsed.error.issues);
     }
 
+    // Same guard contract as `addActivity` above.
     const document = await service.requestDocument(
       getAuth(req),
       pathParam(req, 'orderId'),
       parsed.data,
+      req.idempotencyKey as string,
     );
     res.status(201).json({ data: document });
   } catch (error) {

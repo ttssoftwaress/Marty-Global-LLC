@@ -4,6 +4,8 @@ import {
   OrderStatus,
   StaffStatus,
 } from '@prisma/client';
+import { randomUUID } from 'node:crypto';
+
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Role } from '../../../lib/roles.js';
@@ -29,14 +31,30 @@ const queueEmail = vi.hoisted(() => vi.fn(async () => ({ id: 'notif_test' })));
 vi.mock('../../notifications/notifications.service.js', () => ({ queueEmail }));
 
 const { prisma } = await import('../../../lib/prisma.js');
-const {
-  addActivity,
-  getDocumentLink,
-  getOrder,
-  getSummary,
-  listOrders,
-  updateOrder,
-} = await import('./orders.service.js');
+const orders = await import('./orders.service.js');
+const { getDocumentLink, getOrder, getSummary, listOrders, updateOrder } = orders;
+
+/*
+ * Replying and requesting a document take an Idempotency-Key (AGENTS.md, API
+ * Conventions). Every call below is a deliberate separate write rather than a
+ * retry, so this mints a fresh key per call; the replay behaviour has its own
+ * test, which passes the same key twice.
+ */
+const newKey = () => `idem_${randomUUID()}`;
+
+const addActivity = (
+  actor: AuthContext,
+  orderId: string,
+  input: Parameters<typeof orders.addActivity>[2],
+  idempotencyKey: string = newKey(),
+) => orders.addActivity(actor, orderId, input, idempotencyKey);
+
+const requestDocument = (
+  actor: AuthContext,
+  orderId: string,
+  input: Parameters<typeof orders.requestDocument>[2],
+  idempotencyKey: string = newKey(),
+) => orders.requestDocument(actor, orderId, input, idempotencyKey);
 const { getOrderDetail } = await import('../../orders/orders.service.js');
 
 const CUSTOMER_ID = 'admin_orders_test_customer';
@@ -553,5 +571,71 @@ describe('addActivity — replying to the customer', () => {
     // The admin feed still has it — the note exists, it is only scoped.
     const adminDetail = await getOrder(auth(STAFF_ID, Role.STAFF), order.id);
     expect(adminDetail.activity.filter((item) => item.internal)).toHaveLength(1);
+  });
+});
+
+/*
+ * The retry-safety AGENTS.md asks of a mutating endpoint, on the two admin
+ * writes that reach the customer. Both insert a row AND queue a message, and
+ * neither has any current state to compare against — so without the key a
+ * retried request writes twice and emails twice, and an email cannot be recalled.
+ */
+describe('idempotency — a retried admin write', () => {
+  it('resolves a repeated reply to the same entry and emails once', async () => {
+    const order = await createOrder(OrderStatus.UNDER_REVIEW);
+    const key = newKey();
+    const input = {
+      message: 'Your filing has been submitted to the registry.',
+      visibility: 'customer' as const,
+    };
+
+    const first = await addActivity(auth(STAFF_ID, Role.STAFF), order.id, input, key);
+    const retry = await addActivity(auth(STAFF_ID, Role.STAFF), order.id, input, key);
+
+    expect(retry.id).toBe(first.id);
+    expect(queueEmail).toHaveBeenCalledTimes(1);
+
+    const detail = await getOrderDetail(reqAs(auth(CUSTOMER_ID, Role.CUSTOMER)), order.id);
+    expect(detail.activity).toHaveLength(1);
+  });
+
+  it('resolves a repeated document request to the same placeholder', async () => {
+    const order = await createOrder(OrderStatus.UNDER_REVIEW);
+    const key = newKey();
+
+    const first = await requestDocument(
+      auth(STAFF_ID, Role.STAFF),
+      order.id,
+      { name: 'Passport' },
+      key,
+    );
+    const retry = await requestDocument(
+      auth(STAFF_ID, Role.STAFF),
+      order.id,
+      { name: 'Passport' },
+      key,
+    );
+
+    expect(retry.id).toBe(first.id);
+
+    const documents = await prisma.orderDocument.findMany({
+      where: { orderId: order.id, deletedAt: null },
+    });
+    expect(documents).toHaveLength(1);
+  });
+
+  // The key is the caller's, so a guessed one must not be a way to reach a
+  // record on another order — it reports a spent key and nothing else.
+  it('refuses a key already spent on a different order', async () => {
+    const first = await createOrder(OrderStatus.UNDER_REVIEW);
+    const second = await createOrder(OrderStatus.UNDER_REVIEW);
+    const key = newKey();
+    const input = { message: 'Noted.', visibility: 'internal' as const };
+
+    await addActivity(auth(STAFF_ID, Role.STAFF), first.id, input, key);
+
+    await expect(
+      addActivity(auth(STAFF_ID, Role.STAFF), second.id, input, key),
+    ).rejects.toMatchObject({ status: 409 });
   });
 });

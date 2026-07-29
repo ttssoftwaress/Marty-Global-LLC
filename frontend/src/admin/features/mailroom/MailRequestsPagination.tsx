@@ -1,4 +1,5 @@
 import { formatCount } from '../../lib/format';
+import { pageWindow } from '../../lib/pagination';
 
 /*
  * The queue's footer — the range on the left, Previous / numbered pages / Next
@@ -16,27 +17,6 @@ import { formatCount } from '../../lib/format';
  * worked through — the numbers just get tighter, and the range line drops to
  * keep the footer one line tall on a 390px screen.
  */
-
-const WINDOW_SIZE = 3;
-
-function pageWindow(page: number, totalPages: number): (number | null)[] {
-  if (totalPages <= WINDOW_SIZE + 2) {
-    return Array.from({ length: totalPages }, (_, index) => index + 1);
-  }
-
-  const half = Math.floor(WINDOW_SIZE / 2);
-  let start = Math.max(2, page - half);
-  const end = Math.min(totalPages - 1, start + WINDOW_SIZE - 1);
-  start = Math.max(2, end - WINDOW_SIZE + 1);
-
-  const pages: (number | null)[] = [1];
-  if (start > 2) pages.push(null);
-  for (let current = start; current <= end; current += 1) pages.push(current);
-  if (end < totalPages - 1) pages.push(null);
-  pages.push(totalPages);
-
-  return pages;
-}
 
 type MailRequestsPaginationProps = {
   page: number;

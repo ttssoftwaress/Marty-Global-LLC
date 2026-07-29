@@ -138,29 +138,35 @@ export function useUploadMailScan() {
   });
 }
 
-export const adminMailRequestsKey = (filter: MailRequestFilter, page: number) =>
-  ['admin', 'mailroom', 'requests', filter, page] as const;
+export const adminMailRequestsKey = (filter: MailRequestFilter) =>
+  ['admin', 'mailroom', 'requests', 'list', filter] as const;
 
 /*
- * GET /v1/admin/mailroom/requests?filter=&page= — the forwarding / shredding
- * queue behind the "Pending requests" tab.
+ * GET /v1/admin/mailroom/requests?filter=&cursor=&limit= — the forwarding /
+ * shredding queue behind the "Pending requests" tab.
  *
- * Offset-paginated rather than cursor-paginated (the exception AGENTS.md's list
- * rule allows for): the footer prints an absolute range and a numbered page
- * strip, and a page can be jumped to directly — none of which a cursor answers.
- * The filter is applied server-side so the screen never holds the whole queue
- * to narrow a copy of it locally.
+ * Cursor-paginated like every other admin list (AGENTS.md), read as an infinite
+ * query so the footer's numbered strip steps a window over one stream: the
+ * absolute range and the page count come from the totals the backend returns
+ * beside the cursor. The filter is applied server-side so the screen never holds
+ * the whole queue to narrow a copy of it locally.
  *
- * The previous page is kept in place while the next resolves, so paging and
- * filtering swap the rows without the table collapsing to a spinner.
+ * The previous rows are kept in place while the next page or filter resolves, so
+ * paging and filtering swap them without the table collapsing to a spinner.
  */
-export function useAdminMailRequests(filter: MailRequestFilter, page: number) {
-  return useQuery({
-    queryKey: adminMailRequestsKey(filter, page),
-    queryFn: () =>
-      apiFetch<ApiSuccess<MailRequestPage>>(
-        `/admin/mailroom/requests?filter=${filter}&page=${page}`,
-      ).then((res) => res.data),
+export function useAdminMailRequests(filter: MailRequestFilter) {
+  return useInfiniteQuery({
+    queryKey: adminMailRequestsKey(filter),
+    queryFn: ({ pageParam }) => {
+      const params = new URLSearchParams({ filter });
+      if (pageParam) params.set('cursor', pageParam);
+
+      return apiFetch<ApiSuccess<MailRequestPage>>(
+        `/admin/mailroom/requests?${params.toString()}`,
+      ).then((res) => res.data);
+    },
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
     placeholderData: (previous) => previous,
   });
 }
@@ -254,39 +260,41 @@ export function useResolveMailRequest() {
   });
 }
 
-export const adminMailLogKey = (filters: MailLogFilters, page: number) =>
-  ['admin', 'mailroom', 'log', filters, page] as const;
+export const adminMailLogKey = (filters: MailLogFilters) =>
+  ['admin', 'mailroom', 'log', filters] as const;
 
 /*
- * GET /v1/admin/mailroom/log?search=&range=&action=&page= — the closed history
- * behind the "Mail log" tab.
+ * GET /v1/admin/mailroom/log?search=&range=&action=&cursor=&limit= — the closed
+ * history behind the "Mail log" tab.
  *
- * Offset-paginated for the same reason the pending queue is (the footer prints
- * an absolute range and a numbered strip). All three filters are applied
- * server-side, so the screen never holds the whole log to narrow a copy of it
- * locally — the log is the longest list in this module and the one that must
- * never be fetched whole.
+ * Cursor-paginated for the same reason the pending queue is, and read the same
+ * way: an infinite query the footer's numbered strip steps a window over. All
+ * three filters are applied server-side, so the screen never holds the whole log
+ * to narrow a copy of it locally — the log is the longest list in this module
+ * and the one that must never be fetched whole.
  *
- * The previous page is kept in place while the next resolves, so paging and
- * re-filtering swap the rows without the table collapsing to a spinner.
+ * The previous rows are kept in place while the next page resolves, so paging
+ * and re-filtering swap them without the table collapsing to a spinner.
  */
-export function useAdminMailLog(filters: MailLogFilters, page: number) {
-  return useQuery({
-    queryKey: adminMailLogKey(filters, page),
-    queryFn: () => {
+export function useAdminMailLog(filters: MailLogFilters) {
+  return useInfiniteQuery({
+    queryKey: adminMailLogKey(filters),
+    queryFn: ({ pageParam }) => {
       const params = new URLSearchParams({
         range: filters.range,
         action: filters.action,
-        page: String(page),
       });
 
       const search = filters.search.trim();
       if (search) params.set('search', search);
+      if (pageParam) params.set('cursor', pageParam);
 
       return apiFetch<ApiSuccess<MailLogPage>>(
         `/admin/mailroom/log?${params.toString()}`,
       ).then((res) => res.data);
     },
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
     placeholderData: (previous) => previous,
   });
 }

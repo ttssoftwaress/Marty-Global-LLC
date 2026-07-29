@@ -18,6 +18,7 @@ import {
   useAdminAuditSummary,
 } from '../features/audit';
 import { useAdminShell } from '../hooks/useAdminShell';
+import { useCursorPageWindow } from '../hooks/useCursorPageWindow';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import type { AdminAuditRow } from '../types/audit';
 import { ALL_ACTIONS, ALL_CATEGORIES } from '../types/audit';
@@ -134,12 +135,33 @@ export function AdminAuditLogPage() {
     to,
   });
 
-  // The page window the wider links' pager steps over. Any change to the result
-  // set returns it to the first page, since the old offset means nothing now.
-  const [pageIndex, setPageIndex] = useState(0);
-  useEffect(() => {
-    setPageIndex(0);
-  }, [category, action, debouncedSearch, from, to]);
+  const loadedEntries = useMemo<AdminAuditRow[]>(
+    () => audit.data?.pages.flatMap((page) => page.entries) ?? [],
+    [audit.data],
+  );
+
+  const totalResults = audit.data?.pages[0]?.totalResults ?? 0;
+  const totalPages = audit.data?.pages[0]?.totalPages ?? 1;
+
+  const filterKey = `${category}|${action}|${debouncedSearch}|${from ?? ''}|${to ?? ''}`;
+
+  // The table shows one window; the mobile cards show everything loaded.
+  const {
+    page,
+    rows: windowEntries,
+    rangeStart,
+    rangeEnd,
+    goToPage,
+  } = useCursorPageWindow({
+    rows: loadedEntries,
+    totalPages,
+    totalResults,
+    pageSize: PAGE_SIZE,
+    hasNextPage: audit.hasNextPage,
+    isFetchingNextPage: audit.isFetchingNextPage,
+    fetchNextPage: audit.fetchNextPage,
+    resetKey: filterKey,
+  });
 
   /*
    * Which row is expanded. One at a time, and cleared whenever the result set
@@ -150,33 +172,10 @@ export function AdminAuditLogPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   useEffect(() => {
     setExpandedId(null);
-  }, [category, action, debouncedSearch, from, to, pageIndex]);
+  }, [filterKey, page]);
 
   const toggleExpanded = (id: string) =>
     setExpandedId((current) => (current === id ? null : id));
-
-  const loadedEntries = useMemo<AdminAuditRow[]>(
-    () => audit.data?.pages.flatMap((page) => page.entries) ?? [],
-    [audit.data],
-  );
-
-  const totalResults = audit.data?.pages[0]?.totalResults ?? 0;
-  const totalPages = audit.data?.pages[0]?.totalPages ?? 1;
-
-  // The table shows one window; the mobile cards show everything loaded.
-  const windowEntries = useMemo(
-    () => loadedEntries.slice(pageIndex * PAGE_SIZE, (pageIndex + 1) * PAGE_SIZE),
-    [loadedEntries, pageIndex],
-  );
-
-  const goToPage = (nextPage: number) => {
-    const nextIndex = Math.max(0, Math.min(nextPage - 1, totalPages - 1));
-    // Pull the next cursor page in when the window runs past what has loaded.
-    if (nextIndex * PAGE_SIZE >= loadedEntries.length && audit.hasNextPage) {
-      void audit.fetchNextPage();
-    }
-    setPageIndex(nextIndex);
-  };
 
   const onLoadMore = () => {
     if (audit.hasNextPage) void audit.fetchNextPage();
@@ -210,9 +209,6 @@ export function AdminAuditLogPage() {
     void summary.refetch();
     void audit.refetch();
   };
-
-  const rangeStart = totalResults === 0 ? 0 : pageIndex * PAGE_SIZE + 1;
-  const rangeEnd = pageIndex * PAGE_SIZE + windowEntries.length;
 
   return (
     <AdminLayout user={user} onLogout={onLogout}>
@@ -308,7 +304,7 @@ export function AdminAuditLogPage() {
                 <>
                   {/* The pager sits under the table card, not inside it. */}
                   <AuditPagination
-                    page={pageIndex + 1}
+                    page={page}
                     totalPages={totalPages}
                     totalResults={totalResults}
                     rangeStart={rangeStart}

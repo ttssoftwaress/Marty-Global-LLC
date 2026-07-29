@@ -1,4 +1,5 @@
 import { env } from './env.js';
+import { fetchWithTimeout, isTimeoutError } from '../lib/http.js';
 import { logger } from '../lib/logger.js';
 
 /*
@@ -15,6 +16,16 @@ import { logger } from '../lib/logger.js';
  */
 
 const VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
+
+/*
+ * This call sits in the request path of a public, unauthenticated endpoint, and
+ * `fetch` has no default timeout — a Cloudflare edge that accepts the connection
+ * and then stops answering would pin one of our request handlers per visitor
+ * until the socket died. Short, because a human is waiting on the other end of
+ * it, and the failure path is already correct: a timeout rejects, the catch
+ * below fails closed, and the visitor is asked to try again.
+ */
+const TURNSTILE_TIMEOUT_MS = 5_000;
 
 export const turnstileEnabled = Boolean(env.TURNSTILE_SECRET_KEY);
 
@@ -46,7 +57,11 @@ export async function verifyTurnstile(
     });
     if (remoteIp) body.set('remoteip', remoteIp);
 
-    const response = await fetch(VERIFY_URL, { method: 'POST', body });
+    const response = await fetchWithTimeout(
+      VERIFY_URL,
+      { method: 'POST', body },
+      TURNSTILE_TIMEOUT_MS,
+    );
 
     if (!response.ok) {
       logger.error({ status: response.status }, 'Turnstile verification unreachable');
@@ -63,7 +78,12 @@ export async function verifyTurnstile(
 
     return result.success;
   } catch (error) {
-    logger.error({ err: error }, 'Turnstile verification failed');
+    // Fail closed here too — a timeout is an unanswered challenge, not a passed
+    // one.
+    logger.error(
+      { err: error, timedOut: isTimeoutError(error) },
+      'Turnstile verification failed',
+    );
     return false;
   }
 }

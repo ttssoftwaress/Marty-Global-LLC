@@ -1,4 +1,5 @@
 import { formatCount } from '../../lib/format';
+import { pageWindow } from '../../lib/pagination';
 
 /*
  * The ledger footer — two presentations of one cursor-paginated stream
@@ -15,27 +16,6 @@ import { formatCount } from '../../lib/format';
  * the page puts them in different parents: the pager belongs inside the table
  * card, "Load more" sits on the page background under the mobile stack.
  */
-
-const WINDOW_SIZE = 3;
-
-function pageWindow(page: number, totalPages: number): (number | null)[] {
-  if (totalPages <= WINDOW_SIZE + 2) {
-    return Array.from({ length: totalPages }, (_, index) => index + 1);
-  }
-
-  const half = Math.floor(WINDOW_SIZE / 2);
-  let start = Math.max(2, page - half);
-  const end = Math.min(totalPages - 1, start + WINDOW_SIZE - 1);
-  start = Math.max(2, end - WINDOW_SIZE + 1);
-
-  const pages: (number | null)[] = [1];
-  if (start > 2) pages.push(null);
-  for (let current = start; current <= end; current += 1) pages.push(current);
-  if (end < totalPages - 1) pages.push(null);
-  pages.push(totalPages);
-
-  return pages;
-}
 
 type LedgerLoadMoreProps = {
   totalResults: number;

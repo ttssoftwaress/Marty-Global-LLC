@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Plus, Search } from 'lucide-react';
 
 import { AdminLayout } from '../components/AdminLayout';
+import { DataErrorState } from '../components/DataErrorState';
 import { FieldFormDialog } from '../features/fields/FieldFormDialog';
 import { FieldsList } from '../features/fields/FieldsList';
 import {
@@ -257,6 +258,16 @@ export function AdminFormFieldsPage() {
                 />
               ))}
             </div>
+          ) : fields.isError ? (
+            /* A failed fetch is not an empty registry: "No fields registered
+               yet" over a load error reads as data loss rather than a request
+               that failed, and points the admin at the wrong problem. */
+            <DataErrorState
+              title="We couldn’t load the field registry"
+              description="Something went wrong fetching the registered fields. Try again."
+              onRetry={() => void fields.refetch()}
+              isRetrying={fields.isFetching}
+            />
           ) : rows.length === 0 ? (
             <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-gray-300 px-6 py-12 text-center">
               <p className="text-body-lg font-medium text-text">

@@ -14,7 +14,7 @@ import type { SupportStatus } from '../../types/support';
  */
 
 const STATUS_STYLES: Record<SupportStatus, { pill: string; dot: string }> = {
-  open: { pill: 'bg-[#e0f2fe] text-info', dot: 'bg-info' },
+  open: { pill: 'status-info', dot: 'bg-info' },
   pending: { pill: 'status-review', dot: 'bg-warning' },
   resolved: { pill: 'status-approved', dot: 'bg-success' },
 };

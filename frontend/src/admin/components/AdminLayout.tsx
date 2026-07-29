@@ -75,9 +75,17 @@ export function AdminLayout({
    * record lands — the auth role the session carries reads as a permission
    * level, not a job title. Until then the shell's own label stands in, so the
    * user block never renders blank.
+   *
+   * The profile picture rides on the same record: it is a short-TTL presigned
+   * URL, so it cannot come off the session and has to be read from `/admin/me`.
+   * Both the sidebar and the top bar render this one object, so the photo is
+   * identical in each.
    */
   const sidebarUser = useMemo<AdminSidebarUser>(
-    () => (me.data ? { ...user, role: me.data.roleLabel } : user),
+    () =>
+      me.data
+        ? { ...user, role: me.data.roleLabel, avatarUrl: me.data.avatarUrl }
+        : user,
     [user, me.data],
   );
 
@@ -134,6 +142,9 @@ export function AdminLayout({
         onClose={() => setNotificationsOpen(false)}
         notifications={notifications}
         isLoading={panel.isLoading}
+        isError={panel.isError}
+        isRetrying={panel.isFetching}
+        onRetry={() => void panel.refetch()}
         onSelect={onSelectNotification}
         onMarkAllRead={() => markAllRead.mutate()}
       />

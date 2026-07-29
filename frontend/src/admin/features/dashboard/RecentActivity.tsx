@@ -34,7 +34,7 @@ const KIND_ICON: Record<ActivityKind, LucideIcon> = {
 };
 
 const KIND_CHIP: Record<ActivityKind, string> = {
-  application: 'bg-[#e0f2fe] text-info',
+  application: 'bg-[var(--color-status-processing-bg)] text-info',
   payment: 'bg-[var(--color-status-approved-bg)] text-success',
   document: 'bg-primary-light text-primary',
   approval: 'bg-[var(--color-status-approved-bg)] text-success',

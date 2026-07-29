@@ -1,4 +1,5 @@
 import { env } from './env.js';
+import { fetchWithTimeout, isTimeoutError } from '../lib/http.js';
 import { logger } from '../lib/logger.js';
 
 /*
@@ -30,6 +31,15 @@ const TRONGRID_BASE_URL = {
 // on the Payment row so a future token with different precision can't be
 // misread (AGENTS.md, Money).
 export const USDT_DECIMALS = 6;
+
+/*
+ * The deadline on every chain read. TronGrid is a third party on the critical
+ * path of the payment sweep, and `fetch` waits forever by default — a node that
+ * accepts the connection and then stops answering would hold the poller (and
+ * every credit queued behind it) indefinitely. Failing is recoverable: the
+ * cursor has not advanced, so the next sweep re-reads the same window.
+ */
+const TRONGRID_TIMEOUT_MS = 10_000;
 
 export const tronConfig = {
   network: env.TRON_NETWORK,
@@ -149,7 +159,7 @@ export async function fetchUsdtTransfers(
     `&min_timestamp=${sinceMs}&contract_address=${tronConfig.usdtContract}`;
 
   for (let page = 0; page < maxPages; page += 1) {
-    const response = await fetch(url, { headers });
+    const response = await fetchWithTimeout(url, { headers }, TRONGRID_TIMEOUT_MS);
 
     if (!response.ok) {
       // Log the status only — never the key, never the body (AGENTS.md: log the
@@ -189,11 +199,11 @@ export async function fetchLatestBlockNumber(): Promise<number | null> {
   if (tronConfig.apiKey) headers['TRON-PRO-API-KEY'] = tronConfig.apiKey;
 
   try {
-    const response = await fetch(`${tronConfig.baseUrl}/wallet/getnowblock`, {
-      method: 'POST',
-      headers,
-      body: '{}',
-    });
+    const response = await fetchWithTimeout(
+      `${tronConfig.baseUrl}/wallet/getnowblock`,
+      { method: 'POST', headers, body: '{}' },
+      TRONGRID_TIMEOUT_MS,
+    );
 
     if (!response.ok) return null;
 
@@ -204,7 +214,10 @@ export async function fetchLatestBlockNumber(): Promise<number | null> {
     const number = body.block_header?.raw_data?.number;
     return typeof number === 'number' && Number.isFinite(number) ? number : null;
   } catch (error) {
-    logger.error({ err: error }, 'Failed to read latest Tron block');
+    logger.error(
+      { err: error, timedOut: isTimeoutError(error) },
+      'Failed to read latest Tron block',
+    );
     return null;
   }
 }

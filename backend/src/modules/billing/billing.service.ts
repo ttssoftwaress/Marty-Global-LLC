@@ -1,6 +1,7 @@
 import { PaymentProvider, PaymentStatus, Prisma, QuoteStatus } from '@prisma/client';
 
 import { getAuth } from '../../guards/index.js';
+import { logger } from '../../lib/logger.js';
 import { prisma } from '../../lib/prisma.js';
 import { presignObject } from '../../lib/storage.js';
 import type {
@@ -30,6 +31,47 @@ const METHOD_LABEL: Record<PaymentProvider, string> = {
   [PaymentProvider.USDT_TRC20]: 'USDT (TRC-20)',
 };
 
+/*
+ * Total a set of amounts the only way integer minor units may be totalled:
+ * within one currency.
+ *
+ * Everything quoted and collected today is USD, so this is a guard rather than a
+ * feature — but the shape it replaced added every row together and then labelled
+ * the result with whichever code happened to come first, which prints a number
+ * that is not an amount in any currency. AGENTS.md's money rules have no room
+ * for that kind of silent pass.
+ *
+ * When more than one code is present the largest is reported and the rest are
+ * left out, with a log line naming what was dropped (codes and the owner id, no
+ * amounts attached to a person). A KPI that quietly under-reports is still
+ * wrong, but it is wrong by omission and visible in the logs, where a fabricated
+ * cross-currency sum is neither.
+ */
+function sumOneCurrency(
+  rows: { amount: number; currency: string }[],
+  context: { userId: string; kpi: string },
+): Money {
+  const totals = new Map<string, number>();
+
+  for (const row of rows) {
+    totals.set(row.currency, (totals.get(row.currency) ?? 0) + row.amount);
+  }
+
+  const ranked = [...totals].sort(([, a], [, b]) => b - a);
+  const top = ranked[0];
+
+  if (!top) return { amount: 0, currency: DEFAULT_CURRENCY };
+
+  if (ranked.length > 1) {
+    logger.warn(
+      { ...context, currencies: ranked.map(([code]) => code), reported: top[0] },
+      'Mixed-currency billing total — only the dominant currency is reported',
+    );
+  }
+
+  return { amount: top[1], currency: top[0] };
+}
+
 // --- Overview ------------------------------------------------------------
 export type BillingQuoteView = {
   id: string;
@@ -40,10 +82,108 @@ export type BillingQuoteView = {
   status: 'pending' | 'expired';
 };
 
+export type BillingKpis = {
+  amountDue: Money;
+  totalPaid: Money;
+  pendingQuotes: number;
+};
+
 export type BillingOverview = {
-  kpis: { amountDue: Money; totalPaid: Money; pendingQuotes: number };
+  kpis: BillingKpis;
   quotes: BillingQuoteView[];
 };
+
+/*
+ * The rows every billing reader works from — the billing screen and the
+ * dashboard's billing card.
+ *
+ * There is one loader and one KPI computation below because "what this customer
+ * owes and has paid" had been written twice, and two implementations of the same
+ * money question drift the moment one of them is corrected and the other is
+ * forgotten. EXPIRED quotes come back too: the overview lists them, and
+ * `isPayable` excludes them from the totals either way, so the summary reading a
+ * slightly wider set costs one status value and buys a single definition.
+ */
+type BillingQuoteRow = {
+  id: string;
+  serviceName: string;
+  total: number;
+  currency: string;
+  issuedAt: Date;
+  validUntil: Date;
+  status: QuoteStatus;
+};
+
+type SettledPaymentRow = { amount: number; currency: string };
+
+async function loadBillingRows(
+  userId: string,
+): Promise<[BillingQuoteRow[], SettledPaymentRow[]]> {
+  // A customer sees only their own billing; the ownership boundary is this where
+  // clause, not a per-row check (AGENTS.md: guards are the real boundary).
+  return Promise.all([
+    prisma.quote.findMany({
+      where: {
+        customerId: userId,
+        deletedAt: null,
+        status: { in: [QuoteStatus.PENDING, QuoteStatus.EXPIRED] },
+      },
+      orderBy: { issuedAt: 'desc' },
+      select: {
+        id: true,
+        serviceName: true,
+        total: true,
+        currency: true,
+        issuedAt: true,
+        validUntil: true,
+        status: true,
+      },
+    }),
+    prisma.payment.findMany({
+      where: {
+        customerId: userId,
+        deletedAt: null,
+        status: PaymentStatus.SUCCEEDED,
+      },
+      select: { amount: true, currency: true },
+    }),
+  ]);
+}
+
+/*
+ * A PENDING quote past its validity window reads as expired without waiting for
+ * the job that flips the row — the customer sees the truth on this render, and it
+ * is excluded from what they owe. The single definition of "payable", read by
+ * both the KPIs and the quote list so a quote can never be owed on one and
+ * expired on the other.
+ */
+function isPayable(quote: BillingQuoteRow, now: Date): boolean {
+  return quote.status === QuoteStatus.PENDING && quote.validUntil > now;
+}
+
+/*
+ * The one definition of what a customer owes and has paid.
+ *
+ * Integer addition only, and only within one currency — minor units summed as
+ * integers, never divided, never added across codes.
+ */
+function billingKpis(
+  quotes: BillingQuoteRow[],
+  succeeded: SettledPaymentRow[],
+  now: Date,
+  userId: string,
+): BillingKpis {
+  const payable = quotes.filter((quote) => isPayable(quote, now));
+
+  return {
+    amountDue: sumOneCurrency(
+      payable.map((quote) => ({ amount: quote.total, currency: quote.currency })),
+      { userId, kpi: 'amountDue' },
+    ),
+    totalPaid: sumOneCurrency(succeeded, { userId, kpi: 'totalPaid' }),
+    pendingQuotes: payable.length,
+  };
+}
 
 export async function getOverview(
   req: Parameters<typeof getAuth>[0],
@@ -51,61 +191,18 @@ export async function getOverview(
   const auth = getAuth(req);
   const now = new Date();
 
-  // A customer sees only their own billing; the ownership boundary is this where
-  // clause, not a per-row check (AGENTS.md: guards are the real boundary).
-  const [quotes, succeeded] = await Promise.all([
-    prisma.quote.findMany({
-      where: {
-        customerId: auth.userId,
-        deletedAt: null,
-        status: { in: [QuoteStatus.PENDING, QuoteStatus.EXPIRED] },
-      },
-      orderBy: { issuedAt: 'desc' },
-    }),
-    prisma.payment.findMany({
-      where: {
-        customerId: auth.userId,
-        deletedAt: null,
-        status: PaymentStatus.SUCCEEDED,
-      },
-      select: { amount: true, currency: true },
-    }),
-  ]);
-
-  // A PENDING quote past its validity window reads as expired without waiting for
-  // the job that flips the row — the customer sees the truth on this render, and
-  // it is excluded from what they owe.
-  const views: BillingQuoteView[] = quotes.map((quote) => ({
-    id: quote.id,
-    serviceName: quote.serviceName,
-    amount: { amount: quote.total, currency: quote.currency },
-    issuedAt: quote.issuedAt.toISOString(),
-    validUntil: quote.validUntil.toISOString(),
-    status:
-      quote.status === QuoteStatus.PENDING && quote.validUntil > now
-        ? 'pending'
-        : 'expired',
-  }));
-
-  const payable = views.filter((quote) => quote.status === 'pending');
-
-  // Integer addition only — minor units summed as integers, never divided.
-  const amountDue = payable.reduce((sum, quote) => sum + quote.amount.amount, 0);
-  const totalPaid = succeeded.reduce((sum, payment) => sum + payment.amount, 0);
-
-  // Currency comes from the records themselves; mixing currencies in one total
-  // would be wrong, so the first payable quote's code wins and USD is the
-  // fallback when there is nothing to sum.
-  const dueCurrency = payable[0]?.amount.currency ?? DEFAULT_CURRENCY;
-  const paidCurrency = succeeded[0]?.currency ?? DEFAULT_CURRENCY;
+  const [quotes, succeeded] = await loadBillingRows(auth.userId);
 
   return {
-    kpis: {
-      amountDue: { amount: amountDue, currency: dueCurrency },
-      totalPaid: { amount: totalPaid, currency: paidCurrency },
-      pendingQuotes: payable.length,
-    },
-    quotes: views,
+    kpis: billingKpis(quotes, succeeded, now, auth.userId),
+    quotes: quotes.map((quote) => ({
+      id: quote.id,
+      serviceName: quote.serviceName,
+      amount: { amount: quote.total, currency: quote.currency },
+      issuedAt: quote.issuedAt.toISOString(),
+      validUntil: quote.validUntil.toISOString(),
+      status: isPayable(quote, now) ? 'pending' : 'expired',
+    })),
   };
 }
 
@@ -121,9 +218,15 @@ export type PaymentRecordView = {
   invoiceHref?: string;
 };
 
+/*
+ * `totalPages` is the "Page X of Y" denominator; there is deliberately no `page`
+ * on the wire. This is a cursor stream (AGENTS.md), so the server has no offset
+ * to report — it used to answer 1 for the first fetch and 0 for every one after
+ * it, which reads as a page number and is not one. The client owns the window it
+ * is showing, which is what the billing screen already does.
+ */
 export type PaymentHistoryPage = {
   payments: PaymentRecordView[];
-  page: number;
   totalPages: number;
   totalCount: number;
   nextCursor: string | null;
@@ -216,9 +319,6 @@ export async function listPayments(
 
   return {
     payments,
-    // The design's "Page X of Y" is a convenience over the cursor stream; without
-    // an offset we report page 1 for the first fetch and let the cursor advance.
-    page: query.cursor ? 0 : 1,
     totalPages: Math.max(1, Math.ceil(totalCount / query.limit)),
     totalCount,
     nextCursor: hasMore ? pageRows.at(-1)?.id ?? null : null,
@@ -226,40 +326,15 @@ export async function listPayments(
 }
 
 // --- Cross-module summaries ----------------------------------------------
-// The dashboard's billing card reads the same figures as the billing KPIs, so
-// it calls this rather than re-deriving them (one definition, no drift).
-export async function getBillingSummary(userId: string): Promise<{
-  amountDue: Money;
-  totalPaid: Money;
-  pendingQuotes: number;
-}> {
+/*
+ * The dashboard's billing card. It reads the billing KPIs through the same
+ * loader and the same computation the billing screen uses, so the two surfaces
+ * cannot disagree about what a customer owes — which is the whole reason this
+ * is a call and not a second implementation.
+ */
+export async function getBillingSummary(userId: string): Promise<BillingKpis> {
   const now = new Date();
+  const [quotes, succeeded] = await loadBillingRows(userId);
 
-  const [payable, succeeded] = await Promise.all([
-    prisma.quote.findMany({
-      where: {
-        customerId: userId,
-        deletedAt: null,
-        status: QuoteStatus.PENDING,
-        validUntil: { gt: now },
-      },
-      select: { total: true, currency: true },
-    }),
-    prisma.payment.findMany({
-      where: { customerId: userId, deletedAt: null, status: PaymentStatus.SUCCEEDED },
-      select: { amount: true, currency: true },
-    }),
-  ]);
-
-  return {
-    amountDue: {
-      amount: payable.reduce((sum, quote) => sum + quote.total, 0),
-      currency: payable[0]?.currency ?? DEFAULT_CURRENCY,
-    },
-    totalPaid: {
-      amount: succeeded.reduce((sum, payment) => sum + payment.amount, 0),
-      currency: succeeded[0]?.currency ?? DEFAULT_CURRENCY,
-    },
-    pendingQuotes: payable.length,
-  };
+  return billingKpis(quotes, succeeded, now, userId);
 }

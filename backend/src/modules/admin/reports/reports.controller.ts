@@ -90,3 +90,31 @@ export async function getGrowth(
     next(error);
   }
 }
+
+/*
+ * The one endpoint here that does not return the `{ data }` envelope: the body
+ * IS the file. A failure still leaves through the shared error middleware and
+ * answers with the envelope, because nothing has been written to the response
+ * until the CSV is in hand.
+ */
+export async function getExport(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const { filename, csv } = await service.exportCsv(
+      getAuth(req),
+      parseRange(req),
+    );
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    // The browser reads the name off this header, and a cross-origin fetch
+    // cannot see a header that is not exposed.
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+    res.send(csv);
+  } catch (error) {
+    next(error);
+  }
+}

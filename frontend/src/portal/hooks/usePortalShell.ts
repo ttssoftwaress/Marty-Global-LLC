@@ -4,6 +4,9 @@ import { useNavigate } from 'react-router-dom';
 import { signOut, useSession } from '@/auth/client';
 import { closeSocket } from '@/services/socket';
 import type { SidebarUser } from '@/portal/components/sidebar';
+// Imported from the query module rather than the feature barrel so the shell —
+// which every portal page mounts — doesn't pull in the settings cards too.
+import { useProfile } from '@/portal/features/settings/queries';
 
 /*
  * Shell wiring shared by every `/app/*` screen: who is signed in, and how they
@@ -13,6 +16,13 @@ import type { SidebarUser } from '@/portal/components/sidebar';
  * `role` is the label the sidebar prints under the name. Better Auth types it
  * as an optional string (the admin plugin's role field), so it falls back to
  * the customer label — the backend guards are the real role boundary.
+ *
+ * The avatar comes from the same `GET /v1/profile` query the settings screen
+ * reads, deliberately rather than from the session: the served link is a
+ * short-TTL presigned URL (AGENTS.md, Security & PII) and the session carries no
+ * such thing. Sharing that one cache key is what keeps the picture consistent
+ * everywhere — saving a new photo writes the refreshed profile into it, so the
+ * sidebar and top bar repaint from that same write without a refetch.
  */
 
 const LOGIN_ROUTE = '/login';
@@ -25,6 +35,7 @@ function roleLabel(role: unknown): string {
 
 export function usePortalShell(): { user: SidebarUser; onLogout: () => void } {
   const { data: session } = useSession();
+  const { data: profile } = useProfile();
   const navigate = useNavigate();
 
   /*
@@ -53,8 +64,12 @@ export function usePortalShell(): { user: SidebarUser; onLogout: () => void } {
 
   return {
     user: {
-      name: session?.user.name ?? '',
+      // The profile record wins over the session for the name too: saving a new
+      // one updates that record immediately, while the session copy only
+      // refreshes on its own schedule.
+      name: profile?.fullName || (session?.user.name ?? ''),
       role: roleLabel(session?.user.role),
+      avatarUrl: profile?.avatarUrl,
     },
     onLogout,
   };

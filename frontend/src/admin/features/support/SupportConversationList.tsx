@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Inbox } from 'lucide-react';
 
+import { DataErrorState } from '../../components/DataErrorState';
 import type {
   SupportConversationSummary,
   SupportFilter,
@@ -31,6 +32,11 @@ import { SupportSearch } from './SupportSearch';
 type SupportConversationListProps = {
   conversations: SupportConversationSummary[];
   isLoading: boolean;
+  // A failed list is not an empty inbox: "No conversations" over a dropped fetch
+  // tells an agent nobody is waiting when the queue is simply unreadable.
+  isError?: boolean;
+  isRetrying?: boolean;
+  onRetry?: () => void;
   // The cohorts this member is offered, resolved by the backend with the list.
   filters: SupportFilterOption[];
   filter: SupportFilter;
@@ -92,6 +98,9 @@ function ConversationsEmptyState({
 export function SupportConversationList({
   conversations,
   isLoading,
+  isError,
+  isRetrying,
+  onRetry,
   filters,
   filter,
   onFilterChange,
@@ -122,7 +131,7 @@ export function SupportConversationList({
   }, [hasNextPage, isFetchingNextPage, onLoadMore]);
 
   const isFiltered = filter !== 'all' || Boolean(search.trim());
-  const isEmpty = !isLoading && conversations.length === 0;
+  const isEmpty = !isLoading && !isError && conversations.length === 0;
 
   return (
     <section
@@ -139,6 +148,16 @@ export function SupportConversationList({
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pt-4 md:gap-0 md:pt-0">
         {isLoading ? (
           <ConversationsSkeleton />
+        ) : isError ? (
+          // `bare` — from `md` up the pane is already a card; the alert must not
+          // draw a second border inside it.
+          <DataErrorState
+            bare
+            title="We couldn’t load the inbox"
+            description="Something went wrong fetching the conversations. Try again."
+            onRetry={() => onRetry?.()}
+            isRetrying={isRetrying}
+          />
         ) : isEmpty ? (
           <ConversationsEmptyState isFiltered={isFiltered} />
         ) : (

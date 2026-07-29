@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 
 import { AdminLayout } from '../components/AdminLayout';
+import { DataErrorState } from '../components/DataErrorState';
 import {
   CustomerDetailBreadcrumbs,
   CustomerDetailHeader,
@@ -20,6 +21,7 @@ import {
   DEFAULT_CUSTOMER_DETAIL_TAB,
   isCustomerDetailTab,
 } from '../types/customer-detail';
+import { ApiError } from '@/services/api';
 
 /*
  * Customer detail — the staff screen for one customer account.
@@ -88,6 +90,9 @@ function CustomerDetailSkeleton() {
   );
 }
 
+// Only for a 404 — the API answering that this account is not there. A request
+// that failed gets the error state instead, since retrying is the action that
+// resolves it and "not found" would be a claim we cannot make.
 function NotFoundState() {
   return (
     <div className="flex w-full flex-col items-center gap-2 rounded-card border border-gray-200 bg-white px-6 py-16 text-center">
@@ -95,6 +100,12 @@ function NotFoundState() {
       <p className="max-w-[26.25rem] text-body text-gray-500">
         This account may have been removed, or the link is no longer valid.
       </p>
+      <Link
+        to="/admin/customers"
+        className="mt-2 flex h-10 items-center justify-center rounded-control border border-primary px-4 text-body font-semibold text-primary transition-colors hover:bg-primary-light focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+      >
+        Back to customers
+      </Link>
     </div>
   );
 }
@@ -129,6 +140,20 @@ export function AdminCustomerDetailPage() {
 
   const isLoading = customer.isPending;
 
+  /*
+   * A missing customer and a failed fetch are different answers and get
+   * different screens (Design.md). Both arrive here as a rejected query — a 404
+   * is the API saying the account is not there, anything else is the request
+   * itself failing — so the status is what tells them apart. Without this split
+   * a dropped connection would claim the account had been removed, and offer no
+   * way to find out otherwise.
+   */
+  const isNotFound =
+    customer.isError &&
+    customer.error instanceof ApiError &&
+    customer.error.status === 404;
+  const isLoadFailure = customer.isError && !isNotFound;
+
   return (
     <AdminLayout user={user} onLogout={onLogout}>
       <div className="w-full p-4 md:p-6 lg:p-content">
@@ -137,6 +162,13 @@ export function AdminCustomerDetailPage() {
 
           {isLoading ? (
             <CustomerDetailSkeleton />
+          ) : isLoadFailure ? (
+            <DataErrorState
+              title="Couldn't load this customer"
+              description="The account didn't load, so nothing here reflects its real state. Try again in a moment."
+              onRetry={() => void customer.refetch()}
+              isRetrying={customer.isFetching}
+            />
           ) : customer.data ? (
             <>
               <CustomerDetailHeader customer={customer.data} />
@@ -156,6 +188,18 @@ export function AdminCustomerDetailPage() {
                     <div
                       className="h-[20rem] w-full animate-pulse rounded-card bg-gray-200 md:rounded-table"
                       aria-hidden="true"
+                    />
+                  ) : orders.isError ? (
+                    /*
+                     * The orders panel fails on its own, so the tab says so
+                     * rather than falling through to "No orders yet" — the
+                     * identity block and the KPI cards above are still good.
+                     */
+                    <DataErrorState
+                      title="Couldn't load this customer's orders"
+                      description="The order history didn't load, so this is not a sign that there are none. Try again in a moment."
+                      onRetry={() => void orders.refetch()}
+                      isRetrying={orders.isFetching}
                     />
                   ) : (
                     <CustomerOrdersPanel

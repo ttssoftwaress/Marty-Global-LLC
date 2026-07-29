@@ -128,7 +128,7 @@ export function SupportConversationItem({
             </p>
           </div>
         ) : (
-          <p className="min-w-0 truncate text-small font-semibold text-warning md:text-caption md:text-[#b45309]">
+          <p className="min-w-0 truncate text-small font-semibold text-warning md:text-caption md:text-[var(--color-status-review-text)]">
             Unassigned
           </p>
         )}

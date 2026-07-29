@@ -98,8 +98,8 @@ export function SupportMessageRow({ message }: SupportMessageRowProps) {
 
   if (kind === 'internal_note') {
     return (
-      <div className="flex w-full shrink-0 flex-col gap-1.5 rounded-input border border-[rgba(245,158,11,0.3)] bg-[#fef3c7] p-3.5 md:gap-1 md:p-2.5 lg:gap-1.5 lg:p-3.5">
-        <p className="text-[0.625rem] font-bold uppercase leading-normal text-[#b45309] md:font-medium lg:font-bold">
+      <div className="flex w-full shrink-0 flex-col gap-1.5 rounded-input border border-[var(--color-status-note-border)] bg-[var(--color-status-note-bg)] p-3.5 md:gap-1 md:p-2.5 lg:gap-1.5 lg:p-3.5">
+        <p className="text-[0.625rem] font-bold uppercase leading-normal text-[var(--color-status-note-text)] md:font-medium lg:font-bold">
           Internal note ·{' '}
           <time dateTime={sentAt}>{formatMessageTime(sentAt)}</time>
         </p>

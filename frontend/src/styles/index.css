@@ -90,6 +90,32 @@
   --color-warning: #f59e0b;
   --color-error: #dc2626;
   --color-info: #0284c7;
+
+  /*
+   * Avatar tints — the soft background + solid initials pairs an initials disc
+   * cycles through. Identity colour only: a person keeps one hue across every
+   * admin screen (see `admin/lib/avatar-tint.ts`), so these never carry meaning
+   * the way the status pairs below do and must not be reused for state.
+   * Utilities: `bg-avatar-blue-bg`, `text-avatar-blue-text`, and so on.
+   */
+  --color-avatar-blue-bg: #dbeafe;
+  --color-avatar-blue-text: #1e40af;
+  --color-avatar-green-bg: #d1fae5;
+  --color-avatar-green-text: #065f46;
+  --color-avatar-red-bg: #fee2e2;
+  --color-avatar-red-text: #991b1b;
+  --color-avatar-amber-bg: #fef3c7;
+  --color-avatar-amber-text: #92400e;
+  --color-avatar-purple-bg: #f3e8ff;
+  --color-avatar-purple-text: #6b21a8;
+  --color-avatar-sky-bg: #e0f2fe;
+  --color-avatar-sky-text: #0369a1;
+  --color-avatar-indigo-bg: #e0e7ff;
+  --color-avatar-indigo-text: #4338ca;
+  --color-avatar-orange-bg: #ffedd5;
+  --color-avatar-orange-text: #c2410c;
+  --color-avatar-pink-bg: #fce7f3;
+  --color-avatar-pink-text: #9d174d;
 }
 
 /*
@@ -368,6 +394,27 @@
   --color-status-processing-text: #0369a1;
   --color-status-completed-bg: #03126d;
   --color-status-completed-text: #ffffff;
+  /*
+   * Informational — the sky pair worn by states that are live but are not a
+   * stage of the filing pipeline: a support thread that is Open, a mail item
+   * that was Downloaded. Same hue as `processing` on purpose (both read "in
+   * motion, nothing owed"), but its own token so the pipeline stages can be
+   * retinted without dragging the support inbox and the mail log along.
+   */
+  --color-status-info-bg: #e0f2fe;
+  --color-status-info-text: #0284c7;
+  /*
+   * Internal note — staff-only content the customer never receives. Its badge
+   * pair is deliberately the same amber as `review`: both mean "not settled,
+   * look here", and an operator scanning a thread reads one amber, not two. It
+   * is a separate token rather than a reuse of `review` because the note also
+   * needs a full block treatment (`surface` + `border`) that no status pill has,
+   * and because the two can diverge without dragging the pipeline states along.
+   */
+  --color-status-note-bg: #fef3c7;
+  --color-status-note-text: #b45309;
+  --color-status-note-surface: #fffbeb;
+  --color-status-note-border: #fde68a;
 }
 
 @layer components {
@@ -488,5 +535,9 @@
   .status-completed {
     background-color: var(--color-status-completed-bg);
     color: var(--color-status-completed-text);
+  }
+  .status-info {
+    background-color: var(--color-status-info-bg);
+    color: var(--color-status-info-text);
   }
 }

@@ -9,8 +9,13 @@ import { z } from 'zod';
  * transport enforced.
  */
 
+// Cursor pagination, the API convention in AGENTS.md — the same `?cursor=&limit=`
+// the admin inbox two modules over takes, so the customer's thread list is not a
+// second, unbounded pagination mode.
 export const listConversationsQuerySchema = z.object({
   search: z.string().trim().max(120).optional(),
+  cursor: z.string().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
 });
 export type ListConversationsQuery = z.infer<typeof listConversationsQuerySchema>;
 

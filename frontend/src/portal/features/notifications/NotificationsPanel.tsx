@@ -90,7 +90,6 @@ export function NotificationsPanel({
         <NotificationPanelContent
           notifications={notifications}
           isLoading={isLoading}
-          variant="sheet"
           settingsHref={SETTINGS_HREF}
           viewAllHref={VIEW_ALL_HREF}
           onSelect={onSelect}

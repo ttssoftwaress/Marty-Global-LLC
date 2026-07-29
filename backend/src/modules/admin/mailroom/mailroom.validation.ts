@@ -64,16 +64,36 @@ export type ScanFileInput = z.infer<typeof scanFileSchema>;
  * a single multi-page PDF. `files` is therefore ordered — position is what
  * becomes the page number — and at least one is required.
  */
-export const uploadScanSchema = z.object({
-  roomId: z.string().min(1).max(60),
-  sender: z.string().trim().min(1).max(160),
-  // A plain calendar date — the day the physical mail arrived. It has no
-  // time-of-day, so it must not be built from a zoneless timestamp
-  // (AGENTS.md, Dates); the service anchors it at midnight UTC.
-  receivedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected yyyy-MM-dd'),
-  files: z.array(scanFileSchema).min(1).max(50),
-  notes: z.string().trim().max(500).optional(),
-});
+export const uploadScanSchema = z
+  .object({
+    roomId: z.string().min(1).max(60),
+    sender: z.string().trim().min(1).max(160),
+    // A plain calendar date — the day the physical mail arrived. It has no
+    // time-of-day, so it must not be built from a zoneless timestamp
+    // (AGENTS.md, Dates); the service anchors it at midnight UTC.
+    receivedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected yyyy-MM-dd'),
+    files: z.array(scanFileSchema).min(1).max(50),
+    notes: z.string().trim().max(500).optional(),
+    /*
+     * The date the customer has to respond by, when this envelope needs
+     * something from them ("Forwarding address required"). Optional — most post
+     * is filed to be read, not answered — and it is what files the item as
+     * ACTION_REQUESTED instead of NEW.
+     *
+     * A calendar date like `receivedOn`, for the same reason: a deadline the
+     * operator reads off a letter has no time-of-day.
+     */
+    responseDueOn: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected yyyy-MM-dd')
+      .optional(),
+  })
+  // A due date with no reason gives the customer a deadline and no way to know
+  // what it is for; the note is what their inbox row prints beside it.
+  .refine((input) => !input.responseDueOn || Boolean(input.notes), {
+    path: ['notes'],
+    message: 'Say what the customer needs to do before setting a response date',
+  });
 export type UploadScanInput = z.infer<typeof uploadScanSchema>;
 
 // The pending queue's filter strip. `all` and `completed` are not request types
@@ -88,8 +108,8 @@ export type MailRequestFilter = z.infer<typeof mailRequestFilter>;
 
 export const listRequestsQuerySchema = z.object({
   filter: mailRequestFilter.default('all'),
-  page: z.coerce.number().int().min(1).max(10_000).default(1),
-  pageSize: z.coerce.number().int().min(1).max(50).default(10),
+  cursor: z.string().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(10),
 });
 export type ListRequestsQuery = z.infer<typeof listRequestsQuerySchema>;
 
@@ -113,7 +133,7 @@ export const listLogQuerySchema = z.object({
   search: z.string().trim().max(120).optional(),
   range: mailLogRange.default('all'),
   action: mailLogAction.default('all'),
-  page: z.coerce.number().int().min(1).max(10_000).default(1),
-  pageSize: z.coerce.number().int().min(1).max(50).default(8),
+  cursor: z.string().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(8),
 });
 export type ListLogQuery = z.infer<typeof listLogQuerySchema>;

@@ -6,7 +6,7 @@ import { Role } from '../../../lib/roles.js';
 import { formatMoneyDisplay } from '../admin.views.js';
 
 const { prisma } = await import('../../../lib/prisma.js');
-const { listLedger, getSummary } = await import('./payments.service.js');
+const { listLedger, getSummary, remindQuote } = await import('./payments.service.js');
 
 /*
  * The money-critical paths this module owns: the ledger's derived status staying
@@ -119,6 +119,100 @@ describe('ledger status', () => {
     const paidRows = await listLedger(admin(), { status: 'paid', limit: 50 });
 
     expect(paidTab?.count).toBe(paidRows.totalResults);
+  });
+});
+
+/*
+ * Chasing an unpaid invoice. The property that matters is the same one the USDT
+ * poller has to hold: run it twice, act once. A reminder is an email to a real
+ * customer, so a double-click that chased them twice would be the same class of
+ * bug as a double credit.
+ */
+describe('payment reminders', () => {
+  const UNPAID_ID = 'pay_test_quote_unpaid';
+
+  async function unpaidQuote(overrides: { validUntil?: Date } = {}) {
+    const now = new Date();
+
+    await prisma.quote.deleteMany({ where: { id: UNPAID_ID } });
+
+    return prisma.quote.create({
+      data: {
+        id: UNPAID_ID,
+        reference: 'QT-PAYTEST-UNPAID',
+        customerId: CUSTOMER_ID,
+        status: QuoteStatus.PENDING,
+        serviceName: 'Test service',
+        subtotal: AMOUNT,
+        total: AMOUNT,
+        currency: 'USD',
+        issuedAt: now,
+        validUntil: overrides.validUntil ?? new Date(now.getTime() + 86_400_000),
+      },
+    });
+  }
+
+  afterAll(async () => {
+    await prisma.quote.deleteMany({ where: { id: UNPAID_ID } });
+    await prisma.feedNotification.deleteMany({ where: { userId: CUSTOMER_ID } });
+    await prisma.notification.deleteMany({ where: { userId: CUSTOMER_ID } });
+  });
+
+  it('sends once and refuses a second chase inside the cooldown', async () => {
+    await unpaidQuote();
+
+    const row = await remindQuote(admin(), UNPAID_ID);
+    expect(row.action.kind).toBe('remind');
+    // The row comes back with the control spent, so the screen cannot offer a
+    // send the endpoint would refuse.
+    expect(row.action.disabledReason).toBeTruthy();
+
+    await expect(remindQuote(admin(), UNPAID_ID)).rejects.toThrow(/24 hours/);
+
+    const after = await prisma.quote.findUniqueOrThrow({
+      where: { id: UNPAID_ID },
+      select: { reminderCount: true, lastRemindedAt: true },
+    });
+
+    expect(after.reminderCount).toBe(1);
+    expect(after.lastRemindedAt).not.toBeNull();
+  });
+
+  it('chases again once the cooldown has elapsed', async () => {
+    // Valid past the second send below, so this asserts the cooldown and not the
+    // validity window.
+    await unpaidQuote({ validUntil: new Date(Date.now() + 30 * 86_400_000) });
+    await remindQuote(admin(), UNPAID_ID);
+
+    // 25 hours after the first send.
+    const later = new Date(Date.now() + 25 * 60 * 60 * 1000);
+    await remindQuote(admin(), UNPAID_ID, later);
+
+    const after = await prisma.quote.findUniqueOrThrow({
+      where: { id: UNPAID_ID },
+      select: { reminderCount: true },
+    });
+
+    expect(after.reminderCount).toBe(2);
+  });
+
+  it('refuses to chase an invoice that has already settled', async () => {
+    await expect(remindQuote(admin(), QUOTE_ID)).rejects.toThrow(
+      /not awaiting payment/,
+    );
+  });
+
+  it('refuses to chase a quote whose validity has lapsed, and drops the action', async () => {
+    await unpaidQuote({ validUntil: new Date(Date.now() - 86_400_000) });
+
+    await expect(remindQuote(admin(), UNPAID_ID)).rejects.toThrow(/no longer live/);
+
+    const ledger = await listLedger(admin(), { status: 'pending_payment', limit: 50 });
+    const row = ledger.rows.find((entry) => entry.id === UNPAID_ID);
+
+    // An offer that has lapsed is re-quoted, not chased — so the row offers the
+    // action that always applies rather than a permanently dead one.
+    expect(row?.action.kind).toBe('view');
   });
 });
 

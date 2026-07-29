@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { AlertCircle, CheckCircle2, Plus, Send, Trash2 } from 'lucide-react';
 
 import { ApiError } from '@/services/api';
@@ -34,6 +34,16 @@ import {
 type DraftLine = { id: string; label: string; amount: string };
 
 const newLine = (id: string): DraftLine => ({ id, label: '', amount: '' });
+
+/*
+ * The copy for a failed write: the backend's own message when it sent one, our
+ * fallback otherwise. Never the raw error — the API returns a code and the
+ * wording is ours (AGENTS.md, API Conventions).
+ */
+function errorText(error: unknown, fallback: string): string | null {
+  if (!error) return null;
+  return error instanceof ApiError ? error.message : fallback;
+}
 
 /*
  * A major-unit string ("1250.50") to integer minor units (125050).
@@ -196,24 +206,92 @@ export function OrderQuoteCard({ orderId }: { orderId: string }) {
   const [message, setMessage] = useState('');
   const [seq, setSeq] = useState(1);
 
+  /*
+   * The draft's arithmetic, above the early returns so it stays a hook.
+   *
+   * Memoised because it is not free: every line is re-parsed on every render, and
+   * a render happens on every keystroke in any field on the card — including the
+   * note textarea, which the totals do not depend on at all. Each line also
+   * re-derives its own `invalid` flag from this same list rather than parsing a
+   * second time below.
+   */
+  const parsedLines = useMemo(
+    () => lines.map((line) => ({ ...line, minor: toMinorUnits(line.amount) })),
+    [lines],
+  );
+
+  const totals = useMemo(() => {
+    const complete = parsedLines.filter(
+      (line) => line.label.trim() !== '' && line.minor !== null,
+    );
+
+    // Integer sums only — the same arithmetic the backend repeats authoritatively.
+    const subtotal = complete.reduce((sum, line) => sum + (line.minor ?? 0), 0);
+    const taxMinor = toMinorUnits(tax) ?? 0;
+    const discountMinor = toMinorUnits(discount) ?? 0;
+
+    return {
+      complete,
+      subtotal,
+      taxMinor,
+      discountMinor,
+      total: subtotal + taxMinor - discountMinor,
+    };
+  }, [parsedLines, tax, discount]);
+
   // A 403 means this member does not hold the `payments` area — the card is not
   // theirs to see, so it renders nothing rather than an error they cannot act on.
   if (quotes.error instanceof ApiError && quotes.error.status === 403) return null;
 
-  const parsedLines = lines.map((line) => ({
-    ...line,
-    minor: toMinorUnits(line.amount),
-  }));
+  /*
+   * Both queries gate the card: the composer is only honest once the existing
+   * quotes are known (an outstanding one blocks Send) and the templates have
+   * settled (a chip appearing under the reviewer's cursor mid-typing is worse
+   * than waiting). Derived from `isPending`, not from absent data, so a failed
+   * load can never read as a still-loading one.
+   */
+  if (quotes.isPending || templates.isPending) {
+    return (
+      <div
+        className="h-[28rem] w-full animate-pulse rounded-card bg-gray-200"
+        aria-hidden="true"
+      />
+    );
+  }
 
-  const complete = parsedLines.filter(
-    (line) => line.label.trim() !== '' && line.minor !== null,
-  );
+  // Anything other than the 403 above is transient. The composer is hidden
+  // rather than shown over an unknown quote list — Send would be offered without
+  // knowing whether an offer is already outstanding.
+  if (quotes.isError) {
+    return (
+      <SectionCard title="Quote">
+        <div role="alert" className="flex flex-col items-start gap-3">
+          <p className="flex items-start gap-2 text-small text-error">
+            <AlertCircle
+              className="mt-px size-4 shrink-0"
+              strokeWidth={1.75}
+              aria-hidden="true"
+            />
+            The quotes on this order couldn&apos;t be loaded, so a new one
+            can&apos;t be sent yet.
+          </p>
 
-  // Integer sums only — the same arithmetic the backend repeats authoritatively.
-  const subtotal = complete.reduce((sum, line) => sum + (line.minor ?? 0), 0);
-  const taxMinor = toMinorUnits(tax) ?? 0;
-  const discountMinor = toMinorUnits(discount) ?? 0;
-  const total = subtotal + taxMinor - discountMinor;
+          <button
+            type="button"
+            onClick={() => {
+              void quotes.refetch();
+              void templates.refetch();
+            }}
+            className="btn btn-secondary h-10 rounded-input px-4 text-small"
+          >
+            Try again
+          </button>
+        </div>
+      </SectionCard>
+    );
+  }
+
+  const { complete, taxMinor, discountMinor, total } = totals;
 
   const days = Number(validForDays);
   const daysValid = Number.isInteger(days) && days >= 1 && days <= 90;
@@ -306,12 +384,11 @@ export function OrderQuoteCard({ orderId }: { orderId: string }) {
     });
   };
 
+  // Withdrawing is a write too — its failure was silent before, which left the
+  // row sitting there as if nothing had been asked of it.
   const errorMessage =
-    create.error instanceof ApiError
-      ? create.error.message
-      : create.error
-        ? 'Could not send this quote. Try again.'
-        : null;
+    errorText(create.error, 'Could not send this quote. Try again.') ??
+    errorText(cancel.error, 'Could not withdraw that quote. Try again.');
 
   return (
     <SectionCard title="Quote">
@@ -341,9 +418,8 @@ export function OrderQuoteCard({ orderId }: { orderId: string }) {
             ) : null}
 
             <div className="flex flex-col gap-2">
-              {lines.map((line, index) => {
-                const invalid =
-                  line.amount.trim() !== '' && toMinorUnits(line.amount) === null;
+              {parsedLines.map((line, index) => {
+                const invalid = line.amount.trim() !== '' && line.minor === null;
 
                 return (
                   <div key={line.id} className="flex items-start gap-2">

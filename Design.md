@@ -56,6 +56,14 @@ useOverlay({ open, onClose, panelRef });
 // panel: role="dialog" aria-modal="true" aria-label=… tabIndex={-1} + outline-none
 ```
 
+In the admin portal the modal *shell* is shared too:
+**`admin/components/FormDialog.tsx`** — the bottom-sheet-on-mobile /
+centred-modal-from-`md` panel with a fixed header, a scrolling body, and a fixed
+footer, in three desktop widths (`size="sm" | "md" | "lg"`). Every admin form and
+confirmation dialog renders inside it; it had been hand-written three times
+(catalog, team, payments) and the copies differed only in width. A dialog whose
+panel is genuinely a different shape still calls `useOverlay` directly.
+
 Do not re-implement any of that per component. It was hand-written 13 times
 before, and the copies drifted: four trapped Tab with a selector that omitted
 `input`/`select`/`textarea`, several never restored focus, and one shipped
@@ -63,8 +71,19 @@ before, and the copies drifted: four trapped Tab with a selector that omitted
 
 **Non-modal** popovers — filter dropdowns, status menus — deliberately do *not*
 use it. They close on Escape and outside click, return focus to their trigger,
-and must leave page scroll and Tab alone. Pattern reference:
-`admin/features/orders/OrderFilterDropdown.tsx`.
+and must leave page scroll and Tab alone. That dismissal behaviour is
+**`admin/hooks/useDismissablePopover.ts`** — the same rule as the overlay hook:
+do not re-implement it per component (it had been hand-written eight times).
+Markup reference: `admin/features/orders/OrderFilterDropdown.tsx`.
+
+```tsx
+const containerRef = useRef<HTMLDivElement>(null); // wraps trigger + panel
+const triggerRef = useRef<HTMLButtonElement>(null);
+useDismissablePopover({ open, onClose: () => setOpen(false), containerRef, triggerRef });
+```
+
+The hook is admin-scoped because that is the only area with this pattern; a
+portal popover gets its own copy rather than an import across the boundary.
 
 ### Why not shadcn/ui
 

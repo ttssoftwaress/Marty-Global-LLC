@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { AdminLayout } from '../components/AdminLayout';
+import { DataErrorState } from '../components/DataErrorState';
 import {
   OrderCardList,
   OrderStatusTabs,
@@ -14,6 +15,7 @@ import {
   useAdminOrdersSummary,
 } from '../features/orders';
 import { useAdminShell } from '../hooks/useAdminShell';
+import { useCursorPageWindow } from '../hooks/useCursorPageWindow';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import type {
   AdminOrderRow,
@@ -83,19 +85,14 @@ export function AdminOrdersQueuePage() {
   const summary = useAdminOrdersSummary();
   const orders = useAdminOrders({ status, search: debouncedSearch, filters });
 
-  // The page window the wider links' pager steps over. Any change to the result
-  // set returns it to the first page, since the old offset means nothing now.
-  const [pageIndex, setPageIndex] = useState(0);
-  useEffect(() => {
-    setPageIndex(0);
-  }, [status, debouncedSearch, filters]);
+  const filterKey = `${status}|${debouncedSearch}|${filters.service}|${filters.region}|${filters.dateRange}`;
 
-  // Selection is per result set too — a row selected under one filter should not
+  // Selection is per result set — a row selected under one filter should not
   // survive into a different list.
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   useEffect(() => {
     setSelectedIds([]);
-  }, [status, debouncedSearch, filters]);
+  }, [filterKey]);
 
   const loadedOrders = useMemo<AdminOrderRow[]>(
     () => orders.data?.pages.flatMap((page) => page.orders) ?? [],
@@ -106,19 +103,22 @@ export function AdminOrdersQueuePage() {
   const totalPages = orders.data?.pages[0]?.totalPages ?? 1;
 
   // The table shows one window; the mobile cards show everything loaded.
-  const windowOrders = useMemo(
-    () => loadedOrders.slice(pageIndex * PAGE_SIZE, (pageIndex + 1) * PAGE_SIZE),
-    [loadedOrders, pageIndex],
-  );
-
-  const goToPage = (nextPage: number) => {
-    const nextIndex = Math.max(0, Math.min(nextPage - 1, totalPages - 1));
-    // Pull the next cursor page in when the window runs past what has loaded.
-    if (nextIndex * PAGE_SIZE >= loadedOrders.length && orders.hasNextPage) {
-      void orders.fetchNextPage();
-    }
-    setPageIndex(nextIndex);
-  };
+  const {
+    page,
+    rows: windowOrders,
+    rangeStart,
+    rangeEnd,
+    goToPage,
+  } = useCursorPageWindow({
+    rows: loadedOrders,
+    totalPages,
+    totalResults,
+    pageSize: PAGE_SIZE,
+    hasNextPage: orders.hasNextPage,
+    isFetchingNextPage: orders.isFetchingNextPage,
+    fetchNextPage: orders.fetchNextPage,
+    resetKey: filterKey,
+  });
 
   const onLoadMore = () => {
     if (orders.hasNextPage) void orders.fetchNextPage();
@@ -151,8 +151,20 @@ export function AdminOrdersQueuePage() {
     filters.region !== DEFAULT_ORDER_FILTERS.region ||
     filters.dateRange !== DEFAULT_ORDER_FILTERS.dateRange;
 
-  const isLoading = summary.isPending || orders.isPending;
-  const isEmpty = !isLoading && loadedOrders.length === 0;
+  /*
+   * A failed query is neither pending nor empty. Without this branch a dropped
+   * queue fetch fell through to the empty state — "You're all caught up" over a
+   * network fault tells a filing agent the pipeline is clear while orders wait
+   * in it.
+   */
+  const isError = summary.isError || orders.isError;
+  const isLoading = !isError && (summary.isPending || orders.isPending);
+  const isEmpty = !isLoading && !isError && loadedOrders.length === 0;
+
+  const retry = () => {
+    if (summary.isError) void summary.refetch();
+    if (orders.isError) void orders.refetch();
+  };
 
   /*
    * Whether this member is looking at the whole pipeline or only the filings
@@ -161,9 +173,6 @@ export function AdminOrdersQueuePage() {
    * unscoped copy — it is the one the header already reads as.
    */
   const scope = summary.data?.scope ?? 'all';
-
-  const rangeStart = totalResults === 0 ? 0 : pageIndex * PAGE_SIZE + 1;
-  const rangeEnd = pageIndex * PAGE_SIZE + windowOrders.length;
 
   return (
     <AdminLayout user={user} onLogout={onLogout}>
@@ -201,6 +210,13 @@ export function AdminOrdersQueuePage() {
 
           {isLoading ? (
             <QueueSkeleton />
+          ) : isError ? (
+            <DataErrorState
+              title="We couldn’t load the orders queue"
+              description="Something went wrong fetching the filings. Try again."
+              onRetry={retry}
+              isRetrying={summary.isFetching || orders.isFetching}
+            />
           ) : (
             <>
               {/* Mobile — cards on the page background, no surrounding frame. */}
@@ -217,7 +233,7 @@ export function AdminOrdersQueuePage() {
                       onToggleAll={toggleAll}
                     />
                     <OrdersPagination
-                      page={pageIndex + 1}
+                      page={page}
                       totalPages={totalPages}
                       totalResults={totalResults}
                       rangeStart={rangeStart}

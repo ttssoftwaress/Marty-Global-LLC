@@ -78,6 +78,22 @@ export async function listUnmatched(
   }
 }
 
+// No body: a reminder chases a quote that already exists, so there is nothing
+// for the client to decide (AGENTS.md, Money — the client never names an amount).
+export async function remindQuote(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    res.json({
+      data: await service.remindQuote(getAuth(req), pathParam(req, 'quoteId')),
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function resolveUnmatched(
   req: Request,
   res: Response,

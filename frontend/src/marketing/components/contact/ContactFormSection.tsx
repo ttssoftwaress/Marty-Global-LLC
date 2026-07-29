@@ -1,7 +1,11 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import { CheckCircle, Loader2 } from 'lucide-react';
 
+import { ApiError } from '@/services/api';
 import { ClockIcon, MailIcon, PhoneIcon } from '../icons';
+import { Turnstile } from '../chat/Turnstile';
+import { useSubmitContactForm } from './queries';
 
 /*
  * Contact page — main content section. Sits below the hero. A two-column
@@ -16,8 +20,8 @@ import { ClockIcon, MailIcon, PhoneIcon } from '../icons';
  *   - desktop (lg, 1024px): px-20 py-20, two columns — intro 1fr, form 480px —
  *     with 64px gutter; the form card is elevated white on the gray page.
  * The mail, phone, and clock glyphs reuse the shared marketing icon set.
- * Fields are static placeholders — this is presentational; wiring the form to
- * the backend lands later.
+ * Posts to the public `/contact` endpoint — rate-limited and Turnstile-verified
+ * server-side (AGENTS.md); the browser never calls a third party directly.
  */
 
 const DETAILS = [
@@ -133,6 +137,47 @@ function DetailRow({ Icon, label, value, href }: DetailRowProps) {
 }
 
 function FormCard() {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [message, setMessage] = useState('');
+  const [turnstileToken, setTurnstileToken] = useState<string>();
+  const [error, setError] = useState<string | null>(null);
+
+  const submitForm = useSubmitContactForm();
+  const canSubmit =
+    name.trim().length > 0 && email.trim().length > 3 && message.trim().length > 0;
+
+  const submit = () => {
+    if (!canSubmit || submitForm.isPending) return;
+    setError(null);
+
+    submitForm.mutate(
+      { name: name.trim(), email: email.trim(), message: message.trim(), turnstileToken },
+      {
+        onError: (cause) =>
+          setError(
+            cause instanceof ApiError
+              ? cause.message
+              : 'Could not send your message. Please try again.',
+          ),
+      },
+    );
+  };
+
+  if (submitForm.isSuccess) {
+    return (
+      <div className="flex w-full flex-col items-center gap-3 rounded-card border border-gray-200 bg-white p-8 text-center shadow-lg-elevation lg:w-[480px] lg:shrink-0">
+        <CheckCircle className="size-10 text-primary" strokeWidth={1.75} aria-hidden="true" />
+        <h3 className="text-[18px] font-semibold text-text md:text-[20px]">
+          Message sent
+        </h3>
+        <p className="text-[13px] leading-[18px] text-text-secondary md:text-[14px] md:leading-normal">
+          Thanks for reaching out — our team will get back to you within 24 hours.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex w-full flex-col items-start gap-5 rounded-card border border-gray-200 bg-white p-5 shadow-lg-elevation md:gap-6 md:p-8 lg:w-[480px] lg:shrink-0">
       <div className="flex flex-col items-start gap-1.5">
@@ -145,24 +190,63 @@ function FormCard() {
       </div>
 
       <div className="flex w-full flex-col items-start gap-4 md:gap-5">
-        <CompactField label="Your Name" placeholder="Jane Cooper" />
-        <CompactField label="Email" placeholder="jane@example.com" />
+        <CompactField
+          label="Your Name"
+          placeholder="Jane Cooper"
+          value={name}
+          onChange={setName}
+          autoComplete="name"
+          maxLength={80}
+        />
+        <CompactField
+          label="Email"
+          placeholder="jane@example.com"
+          type="email"
+          value={email}
+          onChange={setEmail}
+          autoComplete="email"
+          maxLength={200}
+        />
         <div className="flex w-full flex-col items-start gap-1.5 md:gap-2">
-          <label className="text-[13px] font-medium text-text md:text-[14px]">
+          <label
+            htmlFor="contact-message"
+            className="text-[13px] font-medium text-text md:text-[14px]"
+          >
             Message
           </label>
-          <div className="flex h-28 w-full flex-col items-start rounded-[10px] border border-gray-300 bg-white p-4 md:h-32">
-            <span className="text-[13px] font-normal text-gray-400 md:text-[14px]">
-              Tell us how we can help...
-            </span>
-          </div>
+          <textarea
+            id="contact-message"
+            value={message}
+            onChange={(event) => setMessage(event.target.value)}
+            placeholder="Tell us how we can help..."
+            maxLength={2_000}
+            rows={4}
+            className="h-28 w-full resize-none rounded-[10px] border border-gray-300 bg-white p-4 text-[13px] text-text outline-none transition-shadow placeholder:text-gray-400 focus:border-primary focus:shadow-[0_0_0_1px_var(--ring-focus)] md:h-32 md:text-[14px]"
+          />
         </div>
+
+        <Turnstile onToken={setTurnstileToken} />
+
+        {error ? (
+          <p role="alert" className="text-[13px] text-error md:text-[14px]">
+            {error}
+          </p>
+        ) : null}
 
         <button
           type="button"
-          className="flex w-full items-center justify-center rounded-control bg-primary px-6 py-3 text-[15px] font-semibold text-white transition-colors hover:bg-primary-hover md:py-3.5 md:text-[16px]"
+          onClick={submit}
+          disabled={!canSubmit || submitForm.isPending}
+          className={`flex w-full items-center justify-center gap-2 rounded-control px-6 py-3 text-[15px] font-semibold transition-colors md:py-3.5 md:text-[16px] ${
+            canSubmit && !submitForm.isPending
+              ? 'bg-primary text-white hover:bg-primary-hover'
+              : 'cursor-not-allowed bg-gray-200 text-gray-400'
+          }`}
         >
-          Send Message
+          {submitForm.isPending ? (
+            <Loader2 className="size-4 animate-spin" strokeWidth={2} aria-hidden="true" />
+          ) : null}
+          {submitForm.isPending ? 'Sending message…' : 'Send Message'}
         </button>
 
         {/*
@@ -189,19 +273,39 @@ function FormCard() {
 type CompactFieldProps = {
   label: string;
   placeholder: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: string;
+  autoComplete?: string;
+  maxLength?: number;
 };
 
-function CompactField({ label, placeholder }: CompactFieldProps) {
+function CompactField({
+  label,
+  placeholder,
+  value,
+  onChange,
+  type = 'text',
+  autoComplete,
+  maxLength,
+}: CompactFieldProps) {
+  const inputId = `contact-${label.toLowerCase().replace(/\s+/g, '-')}`;
+
   return (
     <div className="flex w-full flex-col items-start gap-1.5 md:gap-2">
-      <label className="text-[13px] font-medium text-text md:text-[14px]">
+      <label htmlFor={inputId} className="text-[13px] font-medium text-text md:text-[14px]">
         {label}
       </label>
-      <div className="flex h-11 w-full items-center rounded-[10px] border border-gray-300 bg-white px-4 md:h-12">
-        <span className="text-[13px] font-normal text-gray-400 md:text-[14px]">
-          {placeholder}
-        </span>
-      </div>
+      <input
+        id={inputId}
+        type={type}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        autoComplete={autoComplete}
+        maxLength={maxLength}
+        className="h-11 w-full rounded-[10px] border border-gray-300 bg-white px-4 text-[13px] text-text outline-none transition-shadow placeholder:text-gray-400 focus:border-primary focus:shadow-[0_0_0_1px_var(--ring-focus)] md:h-12 md:text-[14px]"
+      />
     </div>
   );
 }

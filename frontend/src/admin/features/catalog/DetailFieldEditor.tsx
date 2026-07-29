@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
 
 import { fieldDraft, moveItem } from '../../lib/catalog';
@@ -43,6 +43,7 @@ export function DetailFieldEditor({
   onChange,
 }: DetailFieldEditorProps) {
   const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const addButtonRef = useRef<HTMLButtonElement>(null);
 
   const byKey = useMemo(
     () => new Map(registry.map((definition) => [definition.key, definition])),
@@ -88,10 +89,12 @@ export function DetailFieldEditor({
           setIsPickerOpen(false);
         }}
         onClose={() => setIsPickerOpen(false)}
+        triggerRef={addButtonRef}
       />
 
       {!isPickerOpen && (
         <button
+          ref={addButtonRef}
           type="button"
           onClick={() => setIsPickerOpen(true)}
           className="flex h-10 items-center justify-center gap-2 rounded-control border border-dashed border-gray-300 px-4 text-body font-medium text-primary transition-colors hover:border-primary hover:bg-primary-light focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
