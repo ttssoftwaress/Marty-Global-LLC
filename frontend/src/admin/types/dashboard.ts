@@ -97,8 +97,19 @@ export type AttentionItem = {
   emphasis: AttentionEmphasis;
 };
 
+/*
+ * How much of the business this screen covers. The dashboard carries no
+ * permission of its own — every staff member lands here — so scoping is the only
+ * access control on it, and the backend decides it and sends it down. The page
+ * prints it rather than deriving it from a role: "8 new applications" and "8 new
+ * applications assigned to you" are the same number meaning very different
+ * things (AGENTS.md, Auth).
+ */
+export type DashboardScope = 'all' | 'assigned';
+
 export type AdminDashboardSummary = {
   period: DashboardPeriod;
+  scope: DashboardScope;
   metrics: DashboardMetric[];
   ordersByStatus: OrderStatusCount[];
   recentActivity: DashboardActivity[];

@@ -1,6 +1,6 @@
 import { AlertTriangle } from 'lucide-react';
 
-import { AddStaffDialog } from './AddStaffDialog';
+import { FormDialog } from '../../components/FormDialog';
 
 /*
  * The confirmation an admin passes through before a staff account is deleted.
@@ -17,8 +17,8 @@ import { AddStaffDialog } from './AddStaffDialog';
  * and promising it is reversible would be worse — an admin cannot restore it
  * from here.
  *
- * It reuses the team dialog shell so the sheet/modal behaviour, the focus trap,
- * and the Escape handling are the same as the add-staff form's.
+ * It reuses the shared admin dialog shell so the sheet/modal behaviour, the
+ * focus trap, and the Escape handling are the same as the add-staff form's.
  */
 
 /*
@@ -42,9 +42,10 @@ export function DeleteStaffDialog({
   onConfirm,
 }: DeleteStaffDialogProps) {
   return (
-    <AddStaffDialog
+    <FormDialog
       open={member !== null}
       title="Delete staff account"
+      size="md"
       onClose={isDeleting ? () => {} : onCancel}
       footer={
         <div className="flex items-center justify-end gap-3 md:gap-4">
@@ -97,6 +98,6 @@ export function DeleteStaffDialog({
           </p>
         ) : null}
       </div>
-    </AddStaffDialog>
+    </FormDialog>
   );
 }

@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 
 import { AppError } from '../../lib/app-error.js';
+import { pathParam } from '../../lib/params.js';
 import * as service from './notifications.service.js';
 import {
   listFeedQuerySchema,
@@ -40,13 +41,7 @@ export async function getNotification(
   next: NextFunction,
 ) {
   try {
-    const id = req.params.id;
-
-    if (typeof id !== 'string' || !id) {
-      throw AppError.validation('Notification id is required');
-    }
-
-    const notification = await service.getNotification(id);
+    const notification = await service.getNotification(pathParam(req, 'id'));
 
     // The rendered body and recipient are PII — the status view returns
     // delivery metadata only.
@@ -102,12 +97,7 @@ export async function markAllRead(
 
 export async function markRead(req: Request, res: Response, next: NextFunction) {
   try {
-    const id = req.params.id;
-    if (typeof id !== 'string' || !id) {
-      throw AppError.validation('Notification id is required');
-    }
-
-    const result = await service.markFeedItemRead(req, id);
+    const result = await service.markFeedItemRead(req, pathParam(req, 'id'));
     res.json({ data: result });
   } catch (error) {
     next(error);

@@ -6,13 +6,7 @@ import { Role } from '../lib/roles.js';
 import type { AuthContext } from './auth-context.js';
 import { getAuth } from './auth-context.js';
 import { optionalAuth, requireAuth } from './require-auth.js';
-import {
-  assertCanMutate,
-  assertFound,
-  assertOwner,
-  canAccess,
-  isStaff,
-} from './ownership.js';
+import { assertFound, assertOwner, isStaff } from './ownership.js';
 import { requireIdempotencyKey } from './require-idempotency-key.js';
 import { requireAdmin, requireRole, requireStaff } from './require-role.js';
 import { requireVerifiedEmail } from './require-verified-email.js';
@@ -259,12 +253,8 @@ describe('ownership', () => {
   });
 
   it('lets a customer reach only their own record', () => {
-    expect(canAccess(owner, 'owner_1')).toBe(true);
-    expect(canAccess(owner, 'someone_else')).toBe(false);
-  });
-
-  it('lets staff reach any customer record', () => {
-    expect(canAccess(actor(Role.STAFF), 'owner_1')).toBe(true);
+    expect(() => assertOwner(owner, 'owner_1')).not.toThrow();
+    expect(() => assertOwner(owner, 'someone_else')).toThrow();
   });
 
   it('hides another customer record behind 404, not 403', () => {
@@ -278,10 +268,23 @@ describe('ownership', () => {
     expect((err as AppError).status).toBe(404);
   });
 
-  it('assertCanMutate allows the owner and staff', () => {
-    expect(() => assertCanMutate(owner, 'owner_1')).not.toThrow();
-    expect(() => assertCanMutate(actor(Role.STAFF), 'owner_1')).not.toThrow();
-    expect(() => assertCanMutate(other, 'owner_1')).toThrow();
+  it('does NOT let a staff role stand in for the owner', () => {
+    /*
+     * The regression this file exists to hold. These helpers back the
+     * customer-scoped routers, so a staff bypass here handed any staff account
+     * a stranger's order detail and their identity documents without the admin
+     * module's permission checks or access auditing. Staff go through
+     * /v1/admin.
+     */
+    expect(() => assertOwner(actor(Role.STAFF), 'owner_1')).toThrowError(
+      expect.objectContaining({ status: 404 }),
+    );
+    expect(() => assertOwner(actor(Role.ADMIN), 'owner_1')).toThrowError(
+      expect.objectContaining({ status: 404 }),
+    );
+    expect(() =>
+      assertFound({ userId: 'owner_1' }, actor(Role.STAFF), (r) => r.userId),
+    ).toThrowError(expect.objectContaining({ status: 404 }));
   });
 
   it('assertFound rejects a missing record with 404', () => {

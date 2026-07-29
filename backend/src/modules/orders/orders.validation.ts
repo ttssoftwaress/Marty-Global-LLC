@@ -39,7 +39,14 @@ export const orderDocumentInputSchema = z.object({
   objectKey: z.string().trim().min(1).max(500),
   name: z.string().trim().min(1).max(255),
   contentType: z.string().trim().min(1).max(120),
-  sizeBytes: z.coerce.number().int().min(1).optional(),
+  /*
+   * Required, exactly as on `POST /v1/uploads` — it is the same declaration
+   * about the same file, and a caller that just had it signed into its presigned
+   * PUT cannot have stopped knowing it a moment later. Optional here meant the
+   * document row could land with a null size the UI then had to render around,
+   * for no reason any client actually needs.
+   */
+  sizeBytes: z.coerce.number().int().min(1),
 });
 export type OrderDocumentInput = z.infer<typeof orderDocumentInputSchema>;
 

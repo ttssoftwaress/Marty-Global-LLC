@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 
+import { DataErrorState } from '../../components/DataErrorState';
+
 /*
  * The frame every chart on this screen sits in: the white card, its title and
  * description, an optional legend on the right, and the plot beneath.
@@ -8,6 +10,12 @@ import type { ReactNode } from 'react';
  * radius, border, and header rhythm — so it lives in one place rather than being
  * restated per card. The loading state lives here too, which is what keeps the
  * card's height from collapsing to a skeleton of a different shape.
+ *
+ * So does the failure state, for a sharper reason: every card on this screen has
+ * an empty state reading "No … recorded for this period yet", and a card that
+ * fell through to it on a failed fetch would report a quiet quarter rather than a
+ * broken request. Each card fails on its own, so one dead series doesn't take the
+ * other four charts with it.
  *
  * The header is a row on desktop (titles left, legend right) and stacks below
  * `lg`, matching the links: tablet and mobile put the legend under the
@@ -24,6 +32,11 @@ type ChartCardProps = {
   description: string;
   legend?: ChartLegendItem[];
   isLoading?: boolean;
+  isError?: boolean;
+  isRetrying?: boolean;
+  onRetry?: () => void;
+  /** What did not load, in plain words — "Revenue over time didn't load". */
+  errorTitle?: string;
   /** Sizes the loading block so the card does not jump when the plot lands. */
   skeletonClassName?: string;
   children: ReactNode;
@@ -34,6 +47,10 @@ export function ChartCard({
   description,
   legend,
   isLoading = false,
+  isError = false,
+  isRetrying = false,
+  onRetry,
+  errorTitle,
   skeletonClassName = 'h-[13.75rem]',
   children,
 }: ChartCardProps) {
@@ -71,6 +88,15 @@ export function ChartCard({
         <div
           className={`w-full animate-pulse rounded-input bg-gray-100 ${skeletonClassName}`}
           aria-hidden="true"
+        />
+      ) : isError && onRetry ? (
+        <DataErrorState
+          bare
+          title={errorTitle ?? `Couldn't load ${title.toLowerCase()}`}
+          description="This chart didn't load, so it isn't showing a quiet period — it's showing a failed request. Try again in a moment."
+          onRetry={onRetry}
+          isRetrying={isRetrying}
+          className="justify-center rounded-input bg-gray-50"
         />
       ) : (
         children

@@ -10,6 +10,7 @@ import {
   EmptyThread,
   MessageThread,
   NewConversationDialog,
+  conversationsOf,
   useConversation,
   useConversationSocket,
   useConversations,
@@ -82,8 +83,11 @@ export function SupportPage() {
   const threadQuery = useConversation(conversationId ?? '');
   const chat = useConversationSocket(conversationId ?? '');
 
+  // The cursor stream flattened into the one list the panes render.
+  const conversations = conversationsOf(conversationsQuery.data);
+
   const activeSummary = conversationId
-    ? conversationsQuery.data?.find((item) => item.id === conversationId)
+    ? conversations?.find((item) => item.id === conversationId)
     : undefined;
 
   const backToList = () => navigate('/app/support');
@@ -132,13 +136,16 @@ export function SupportPage() {
 
           <div className="flex min-h-0 flex-1 gap-4 md:gap-5 lg:gap-6">
             <ConversationList
-              conversations={conversationsQuery.data}
+              conversations={conversations}
               isLoading={conversationsQuery.isLoading}
               isError={conversationsQuery.isError}
               onRetry={() => void conversationsQuery.refetch()}
               search={search}
               onSearchChange={setSearch}
               activeId={conversationId}
+              hasNextPage={conversationsQuery.hasNextPage}
+              isFetchingNextPage={conversationsQuery.isFetchingNextPage}
+              onLoadMore={() => void conversationsQuery.fetchNextPage()}
               className={conversationId ? 'hidden md:flex' : 'flex'}
             />
 

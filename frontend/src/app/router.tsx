@@ -548,6 +548,29 @@ export const router = createBrowserRouter([
       },
       {
         /*
+         * The marketing contact form's queue. Its own `leads` area rather than
+         * `support`, because a lead isn't a conversation — there is no reply
+         * thread, only the record and whether someone has followed up. Data
+         * loads from `GET /v1/admin/leads`; the only write is
+         * `PATCH /v1/admin/leads/:id/handled`.
+         */
+        path: 'leads',
+        lazy: async () => {
+          const { AdminLeadsPage } = await import('@/admin/pages/AdminLeadsPage');
+          const { RequirePermission } = await import(
+            '@/admin/components/RequirePermission'
+          );
+          return {
+            Component: () => (
+              <RequirePermission area="leads" title="Leads">
+                <AdminLeadsPage />
+              </RequirePermission>
+            ),
+          };
+        },
+      },
+      {
+        /*
          * One request — its intake answers, its workflow controls, the record it
          * concerns (editable in place), and the order's conversation. Reads
          * `GET /v1/admin/requests/:requestId`; writes are

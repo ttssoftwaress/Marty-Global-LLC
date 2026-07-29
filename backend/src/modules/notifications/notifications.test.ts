@@ -4,7 +4,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 const sendEmail = vi.hoisted(() => vi.fn(async () => 'ses-message-id'));
 const enqueueEmail = vi.hoisted(() => vi.fn(async () => undefined));
 
-vi.mock('../../config/ses.js', () => ({ sendEmail, sesEnabled: true }));
+vi.mock('../../config/ses.js', () => ({ sendEmail }));
 vi.mock('../../jobs/queues.js', () => ({ enqueueEmail }));
 
 const { prisma } = await import('../../lib/prisma.js');

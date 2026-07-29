@@ -32,14 +32,17 @@ const NEUTRAL: BadgeStyle = {
 
 const REQUEST_TYPE_STYLES: Record<MailRequestType, BadgeStyle> = {
   forwarding: { icon: Send, className: 'bg-primary-light text-primary' },
-  shredding: { icon: Trash2, className: 'bg-[#fee2e2] text-[#b91c1c]' },
+  shredding: {
+    icon: Trash2,
+    className:
+      'bg-[var(--color-status-missing-bg)] text-[var(--color-status-missing-text)]',
+  },
 };
 
 /*
  * The status tints reuse the design system's status tokens: pending is the
- * `review` amber pair, completed is the solid navy `completed` pair. Processing
- * has no token of its own, so it takes the info hue the design draws (a sky
- * tint with `--color-info` text).
+ * `review` amber pair, processing the sky `processing` pair the design draws,
+ * completed the solid navy `completed` pair.
  */
 const REQUEST_STATUS_STYLES: Record<MailRequestStatus, BadgeStyle> = {
   pending: {
@@ -47,7 +50,11 @@ const REQUEST_STATUS_STYLES: Record<MailRequestStatus, BadgeStyle> = {
     className:
       'bg-[var(--color-status-review-bg)] text-[var(--color-status-review-text)]',
   },
-  processing: { icon: Loader, className: 'bg-[#e0f2fe] text-info' },
+  processing: {
+    icon: Loader,
+    className:
+      'bg-[var(--color-status-processing-bg)] text-[var(--color-status-processing-text)]',
+  },
   completed: {
     icon: Check,
     className:
@@ -90,7 +97,11 @@ const MAIL_LOG_ACTION_STYLES: Record<MailLogAction, BadgeStyle> = {
       'bg-[var(--color-status-approved-bg)] text-[var(--color-status-approved-text)]',
   },
   shredded: { icon: Trash2, className: 'bg-gray-100 text-gray-600' },
-  downloaded: { icon: Download, className: 'bg-[#e0f2fe] text-info' },
+  downloaded: {
+    icon: Download,
+    className:
+      'bg-[var(--color-status-info-bg)] text-[var(--color-status-info-text)]',
+  },
 };
 
 export function mailLogActionStyle(action: MailLogAction): BadgeStyle {

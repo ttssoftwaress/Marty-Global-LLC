@@ -10,14 +10,13 @@ import * as adminSupport from '../modules/admin/support/support.service.js';
 import { canSeeAll } from '../modules/admin/admin.guards.js';
 import * as guestChat from '../modules/guest/guest.service.js';
 import * as support from '../modules/support/support.service.js';
-import { presignObject } from '../lib/storage.js';
 import {
   customerConversationIds,
   resolveAccess,
   type ConversationAccess,
   type SocketIdentity,
 } from './access.js';
-import { readUnread } from './broadcast.js';
+import { pushUnread } from './broadcast.js';
 import {
   ClientEvent,
   ServerEvent,
@@ -32,7 +31,12 @@ import {
   userRoom,
 } from './events.js';
 import * as presence from './presence.js';
-import { createMessageLimiter, createTypingLimiter } from './socket-rate-limit.js';
+import {
+  checkMessageQuota,
+  checkTypingQuota,
+  createMessageBurstLimiter,
+  createTypingBurstLimiter,
+} from './socket-rate-limit.js';
 
 /*
  * Live chat over Socket.io.
@@ -111,19 +115,6 @@ function emitPresence(
   });
 }
 
-/*
- * Push the viewer's own unread counters to every tab they have open.
- *
- * Scoped to that user's room, never broadcast: an unread count is derived from
- * conversations they own, so sending it anywhere else would be leaking the fact
- * that those conversations exist.
- */
-async function pushUnread(io: Server, userId: string): Promise<void> {
-  // Both counters come from `readUnread` so this push and the REST endpoint the
-  // badge loads from can never report different numbers.
-  io.to(userRoom(userId)).emit(ServerEvent.UNREAD, await readUnread(userId));
-}
-
 // --- Message fan-out -------------------------------------------------------
 /*
  * Deliver a persisted message to everyone entitled to it.
@@ -151,8 +142,14 @@ export function registerChatHandlers(io: Server, socket: Socket): void {
     return;
   }
 
-  const messageLimiter = createMessageLimiter();
-  const typingLimiter = createTypingLimiter();
+  /*
+   * The burst floor only. The limit that actually holds is the Redis-backed
+   * quota keyed by this identity and the conversation, checked below once the
+   * payload has named one — a counter that died with the connection would be
+   * reset by a reconnect (AGENTS.md, Live Chat: rate-limited).
+   */
+  const messageBurst = createMessageBurstLimiter();
+  const typingBurst = createTypingBurstLimiter();
 
   void onConnect(io, socket, identity);
 
@@ -183,11 +180,11 @@ export function registerChatHandlers(io: Server, socket: Socket): void {
   socket.on(
     ClientEvent.SEND,
     guard(socket, ClientEvent.SEND, async (raw) => {
-      if (!messageLimiter.allow()) {
+      if (!messageBurst.allow()) {
         return fail(
           socket,
           ErrorCode.RATE_LIMITED,
-          `Too many messages — try again in ${messageLimiter.retryAfterSeconds()}s`,
+          `Too many messages — try again in ${messageBurst.retryAfterSeconds()}s`,
         );
       }
 
@@ -196,14 +193,35 @@ export function registerChatHandlers(io: Server, socket: Socket): void {
         return fail(socket, ErrorCode.VALIDATION_FAILED, 'Invalid message');
       }
 
-      await handleSend(io, socket, identity, parsed.data);
+      // A guest's thread comes from their token; anything they name is ignored.
+      const conversationId =
+        identity.kind === 'guest'
+          ? identity.guest.conversationId
+          : parsed.data.conversationId;
+
+      if (!conversationId) {
+        return fail(socket, ErrorCode.VALIDATION_FAILED, 'Conversation is required');
+      }
+
+      // Resolved before the database is touched, so a caller over budget costs a
+      // single Redis round trip rather than an access check and a write.
+      const quota = await checkMessageQuota(socket, identity, conversationId);
+      if (!quota.allowed) {
+        return fail(
+          socket,
+          ErrorCode.RATE_LIMITED,
+          `Too many messages — try again in ${quota.retryAfterSeconds}s`,
+        );
+      }
+
+      await handleSend(io, socket, identity, conversationId, parsed.data);
     }),
   );
 
   socket.on(
     ClientEvent.TYPING,
     guard(socket, ClientEvent.TYPING, async (raw) => {
-      if (!typingLimiter.allow()) return;
+      if (!typingBurst.allow()) return;
 
       const parsed = typingPayload.safeParse(raw);
       if (!parsed.success) return;
@@ -214,6 +232,11 @@ export function registerChatHandlers(io: Server, socket: Socket): void {
           : parsed.data.conversationId;
 
       if (!conversationId) return;
+
+      // Dropped silently: an indicator the sender never sees is not worth an
+      // error bubble, and a client that is over budget is already throttling.
+      const quota = await checkTypingQuota(identity, conversationId);
+      if (!quota.allowed) return;
 
       const access = await resolveAccess(identity, conversationId);
       if (!access) return;
@@ -333,7 +356,7 @@ async function onConnect(
   socket.emit(ServerEvent.AVAILABILITY, {
     agentsAvailable: presence.availableAgentCount(),
   });
-  await pushUnread(io, auth.userId);
+  await pushUnread(auth.userId);
 }
 
 async function onDisconnect(io: Server, identity: SocketIdentity): Promise<void> {
@@ -374,6 +397,9 @@ async function handleSend(
   io: Server,
   socket: Socket,
   identity: SocketIdentity,
+  // Resolved by the caller, which needs it to key the rate-limit quota. A guest's
+  // thread comes from their token; anything they name is ignored.
+  conversationId: string,
   payload: {
     conversationId?: string;
     body: string;
@@ -387,14 +413,6 @@ async function handleSend(
     }[];
   },
 ): Promise<void> {
-  // A guest's thread comes from their token; anything they name is ignored.
-  const conversationId =
-    identity.kind === 'guest' ? identity.guest.conversationId : payload.conversationId;
-
-  if (!conversationId) {
-    return fail(socket, ErrorCode.VALIDATION_FAILED, 'Conversation is required');
-  }
-
   const access = await resolveAccess(identity, conversationId);
   if (!access) return fail(socket, ErrorCode.NOT_FOUND, 'Conversation not found');
 
@@ -446,7 +464,7 @@ async function handleSend(
     });
 
     // A reply is what the customer's unread badge counts; a note is not.
-    if (!isNote && access.customerId) await pushUnread(io, access.customerId);
+    if (!isNote && access.customerId) await pushUnread(access.customerId);
     return;
   }
 
@@ -506,25 +524,5 @@ async function handleRead(
     readAt: result.readAt,
   });
 
-  if (access.as !== 'staff') await pushUnread(io, auth.userId);
-}
-
-/*
- * Re-presign a message's attachments for a recipient other than the sender.
- *
- * Exported for the REST path, which returns URLs minted for whoever posted; a
- * link in a broadcast has to be usable by the person who receives it, and these
- * URLs are short-TTL bearer tokens for PII (AGENTS.md, Security & PII).
- */
-export async function presignForRecipient(
-  attachments: { id: string; name: string; sizeBytes: number; objectKey: string }[],
-): Promise<{ id: string; name: string; size: number; href?: string }[]> {
-  return Promise.all(
-    attachments.map(async (attachment) => ({
-      id: attachment.id,
-      name: attachment.name,
-      size: attachment.sizeBytes,
-      href: await presignObject(attachment.objectKey),
-    })),
-  );
+  if (access.as !== 'staff') await pushUnread(auth.userId);
 }

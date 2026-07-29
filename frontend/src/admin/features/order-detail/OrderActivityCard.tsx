@@ -42,7 +42,7 @@ function ActivityItem({ entry }: { entry: AdminOrderActivityEntry }) {
     <li
       className={`flex gap-3 ${
         entry.internal
-          ? 'rounded-input border border-[#fde68a] bg-[#fffbeb] p-3'
+          ? 'rounded-input border border-status-note-border bg-status-note-surface p-3'
           : ''
       }`}
     >
@@ -57,7 +57,7 @@ function ActivityItem({ entry }: { entry: AdminOrderActivityEntry }) {
           <p className="truncate text-body font-semibold text-text">{entry.authorName}</p>
 
           {entry.internal ? (
-            <span className="flex items-center gap-1 rounded bg-[#fef3c7] px-1.5 py-0.5 text-[0.625rem] font-semibold uppercase leading-none text-[#b45309]">
+            <span className="flex items-center gap-1 rounded bg-status-note-bg px-1.5 py-0.5 text-[0.625rem] font-semibold uppercase leading-none text-status-note-text">
               <Lock className="size-2.5" strokeWidth={2.5} aria-hidden="true" />
               Internal note
             </span>

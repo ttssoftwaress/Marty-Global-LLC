@@ -1,3 +1,4 @@
+import pino from 'pino';
 import { z } from 'zod';
 
 // An unset variable and one set to '' mean the same thing in a .env file.
@@ -270,9 +271,21 @@ const envSchema = z.object({
 const parsed = envSchema.safeParse(process.env);
 
 if (!parsed.success) {
-  console.error(
-    'Invalid environment variables:',
-    z.flattenError(parsed.error).fieldErrors,
+  /*
+   * The one log line this file emits, and the only one in the backend that
+   * cannot go through `lib/logger.ts` — that logger is built FROM this module,
+   * so importing it here would be a cycle. A bare pino instance keeps the fatal
+   * boot line on the same transport as everything else instead of falling back
+   * to console (AGENTS.md, Security & PII: no console.log in committed code).
+   *
+   * Synchronous destination on purpose: `process.exit` below does not flush a
+   * buffered stream, and a boot failure that prints nothing is the worst
+   * possible version of this path. Field names only — a validation issue never
+   * carries the value, so a bad secret cannot be logged.
+   */
+  pino({ level: 'fatal' }, pino.destination({ dest: 2, sync: true })).fatal(
+    { fieldErrors: z.flattenError(parsed.error).fieldErrors },
+    'Invalid environment variables',
   );
   process.exit(1);
 }

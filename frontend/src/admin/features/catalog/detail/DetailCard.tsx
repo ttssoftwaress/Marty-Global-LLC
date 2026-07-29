@@ -43,12 +43,16 @@ export function DetailCard({ title, description, children }: DetailCardProps) {
 export function DashedAddButton({
   label,
   onClick,
+  ref,
 }: {
   label: string;
   onClick: () => void;
+  /* Pickers refocus their trigger on Escape — see `ResultFieldPicker`. */
+  ref?: React.Ref<HTMLButtonElement>;
 }) {
   return (
     <button
+      ref={ref}
       type="button"
       onClick={onClick}
       className="flex h-input w-full items-center justify-center gap-2 rounded-control border border-dashed border-gray-300 bg-white text-body font-medium text-primary transition-colors hover:border-primary hover:bg-primary-light focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"

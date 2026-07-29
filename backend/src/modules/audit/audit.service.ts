@@ -43,6 +43,16 @@ export const AuditAction = {
    * is free text a reviewer typed and can name the document's holder.
    */
   ORDER_DOCUMENT_REQUESTED: 'order.document_requested',
+  /*
+   * The customer's side of the same exchange: a file landing on their order,
+   * either answering an outstanding request or arriving unprompted. A document
+   * appearing on an order is a state change on a document, which AGENTS.md
+   * requires a trail for, and it is the other half of the identity-paperwork
+   * story the two actions above tell — who asked, and who opened it, but until
+   * now not who supplied it. Metadata carries ids and a count, never the
+   * filename (the customer's own words, and routinely their name).
+   */
+  ORDER_DOCUMENT_UPLOADED: 'order.document_uploaded',
   QUOTE_SENT: 'billing.quote_sent',
   QUOTE_CANCELLED: 'billing.quote_cancelled',
   SERVICE_CREATED: 'catalog.service_created',
@@ -68,7 +78,14 @@ export const AuditAction = {
   RESULT_FIELD_UPDATED: 'catalog.result_field_updated',
   RESULT_FIELD_DELETED: 'catalog.result_field_deleted',
   RESULT_SCHEMA_UPDATED: 'catalog.result_schema_updated',
-  REQUEST_TYPE_CREATED: 'catalog.request_type_created',
+  /*
+   * The follow-up actions a service offers. One verb for the whole list, not a
+   * created/updated/deleted trio like the two registries above, because the
+   * admin edits them as a batch: a single PUT submits the full list and the
+   * service upserts every entry, so "created" and "updated" happen in the same
+   * write and splitting them would file two rows for one action. Which keys
+   * appeared and which stopped being offered rides in the metadata instead.
+   */
   REQUEST_TYPE_UPDATED: 'catalog.request_type_updated',
   /*
    * Service delivery. A result is a customer-facing record of a filing, so
@@ -102,6 +119,10 @@ export const AuditAction = {
   PAYMENT_CREDITED: 'payment.credited',
   PAYMENT_MISMATCHED: 'payment.mismatched',
   PAYMENT_EXPIRED: 'payment.expired',
+  // Money arrived that matches no payment we are watching. Written once, on the
+  // first sighting — the poller re-reads its overlap window and would otherwise
+  // file the same finding on every sweep.
+  UNMATCHED_TRANSFER_RECORDED: 'payment.unmatched_transfer_recorded',
   // Closing out a transfer that arrived matching no payment. The only write in
   // the reconciliation queue, and the reason the queue can be trusted: what a
   // stray transfer turned out to be is a human's judgement, so it carries who

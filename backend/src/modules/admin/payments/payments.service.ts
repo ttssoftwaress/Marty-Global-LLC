@@ -1,16 +1,22 @@
 import {
+  FeedNotificationCategory,
   PaymentProvider,
   PaymentStatus,
   Prisma,
   QuoteStatus,
 } from '@prisma/client';
 
+import { publicAppUrl } from '../../../config/env.js';
 import type { AuthContext } from '../../../guards/auth-context.js';
 import { AppError } from '../../../lib/app-error.js';
+import { logger } from '../../../lib/logger.js';
 import { formatUsdtRaw } from '../../../lib/money.js';
 import { cursorArgs, takePage, totalPages } from '../../../lib/pagination.js';
 import { prisma } from '../../../lib/prisma.js';
 import { AuditAction, record } from '../../audit/audit.service.js';
+import { createFeedNotification } from '../../notifications/notifications.feed.js';
+import { channelsFor } from '../../notifications/notifications.preferences.js';
+import { queueEmail } from '../../notifications/notifications.service.js';
 import { canSeeAll } from '../admin.guards.js';
 import {
   paymentScope,
@@ -98,13 +104,16 @@ const STATUS_LABEL: Record<LedgerStatus, string> = {
   failed: 'Failed',
 };
 
-// The action a row offers. The backend decides it so the UI never infers an
-// action from a status.
-const STATUS_ACTION: Record<LedgerStatus, { kind: string; label: string }> = {
-  paid: { kind: 'view', label: 'View' },
-  pending_payment: { kind: 'remind', label: 'Send reminder' },
-  failed: { kind: 'view', label: 'View' },
-};
+/*
+ * How long a customer is left alone after a reminder. A chase is a real email to
+ * a real person, so the ledger's own control is what stops us sending three of
+ * them in a morning — the cooldown is enforced as a conditional update on
+ * `lastRemindedAt` (see `remindQuote`), and the row carries the reason so the
+ * button reads as spent rather than 422-ing on click.
+ */
+const REMINDER_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+const VIEW_ACTION = { kind: 'view', label: 'View' } as const;
 
 const LEDGER_SCOPE: Prisma.QuoteWhereInput = {
   deletedAt: null,
@@ -284,7 +293,13 @@ export type BillingLedgerRow = {
   status: LedgerStatus;
   statusLabel: string;
   method: { label: string } | null;
-  action: { kind: string; label: string };
+  /*
+   * What the row offers, decided here so the UI never infers an action from a
+   * status. `disabledReason` is set on a `remind` the endpoint would refuse right
+   * now — the control is drawn disabled with that sentence beside it instead of
+   * looking live and failing on click (Design.md, the states Figma doesn't draw).
+   */
+  action: { kind: string; label: string; disabledReason?: string };
   to: string;
 };
 
@@ -325,6 +340,75 @@ function methodOf(quote: LedgerQuote): BillingLedgerRow['method'] {
   return { label: METHOD_LABEL[settled.provider] };
 }
 
+/*
+ * Whether this quote can still be chased, and why not when it can't. One
+ * function so the row's control and `remindQuote`'s guard can never disagree
+ * about it — a button that offers something the endpoint refuses is the failure
+ * this replaces.
+ *
+ * An expired or withdrawn offer is deliberately not remindable: chasing payment
+ * for a price that no longer stands is not a reminder, it is a new quote.
+ */
+function remindBlockedReason(
+  quote: Pick<LedgerQuote, 'status' | 'validUntil' | 'lastRemindedAt'>,
+  now: Date,
+): string | null {
+  if (quote.status !== QuoteStatus.PENDING || quote.validUntil <= now) {
+    return 'This quote is no longer live, so it can’t be chased. Send a new one instead.';
+  }
+
+  if (
+    quote.lastRemindedAt &&
+    now.getTime() - quote.lastRemindedAt.getTime() < REMINDER_COOLDOWN_MS
+  ) {
+    return 'A reminder for this invoice was already sent in the last 24 hours.';
+  }
+
+  return null;
+}
+
+function actionFor(
+  quote: LedgerQuote,
+  status: LedgerStatus,
+  now: Date,
+): BillingLedgerRow['action'] {
+  if (status !== 'pending_payment') return { ...VIEW_ACTION };
+
+  const blocked = remindBlockedReason(quote, now);
+
+  // An offer that has lapsed cannot be chased at all, so the row falls back to
+  // the action that always applies rather than showing a permanently dead one.
+  if (blocked && quote.status !== QuoteStatus.PENDING) return { ...VIEW_ACTION };
+  if (blocked && quote.validUntil <= now) return { ...VIEW_ACTION };
+
+  return {
+    kind: 'remind',
+    label: 'Send reminder',
+    ...(blocked ? { disabledReason: blocked } : {}),
+  };
+}
+
+function toLedgerRow(quote: LedgerQuote, now: Date): BillingLedgerRow {
+  const status = deriveStatus(quote.payments);
+
+  return {
+    id: quote.id,
+    // The design prints the order reference the customer recognises; a quote
+    // raised without an order falls back to its own.
+    reference: quote.order?.reference ?? quote.reference,
+    customer: { id: quote.customer.id, name: quote.customer.name },
+    service: quote.serviceName,
+    amount: money(quote.total, quote.currency),
+    issuedAt: iso(quote.issuedAt),
+    status,
+    statusLabel: STATUS_LABEL[status],
+    method: methodOf(quote),
+    action: actionFor(quote, status, now),
+    // The reference and the view action point at the same record.
+    to: quote.order ? `/admin/orders/${quote.order.id}` : '/admin/payments',
+  };
+}
+
 export async function listLedger(
   actor: AuthContext,
   query: ListLedgerQuery,
@@ -349,33 +433,153 @@ export async function listLedger(
   ]);
 
   const page = takePage(rows, query.limit);
+  const now = new Date();
 
   return {
-    rows: page.rows.map((quote) => {
-      const status = deriveStatus(quote.payments);
-
-      return {
-        id: quote.id,
-        // The design prints the order reference the customer recognises; a quote
-        // raised without an order falls back to its own.
-        reference: quote.order?.reference ?? quote.reference,
-        customer: { id: quote.customer.id, name: quote.customer.name },
-        service: quote.serviceName,
-        amount: money(quote.total, quote.currency),
-        issuedAt: iso(quote.issuedAt),
-        status,
-        statusLabel: STATUS_LABEL[status],
-        method: methodOf(quote),
-        action: STATUS_ACTION[status],
-        // The reference and the view action point at the same record.
-        to: quote.order ? `/admin/orders/${quote.order.id}` : '/admin/payments',
-      };
-    }),
+    rows: page.rows.map((quote) => toLedgerRow(quote, now)),
     nextCursor: page.nextCursor,
     page: query.cursor ? 0 : 1,
     totalPages: totalPages(totalResults, query.limit),
     totalResults,
   };
+}
+
+// --- Payment reminder ----------------------------------------------------
+/*
+ * Chase an unpaid invoice — the write behind the ledger's "Send reminder".
+ *
+ * It moves no money and changes no amount: the customer is told again about a
+ * price that was already quoted, through the same queued channels every other
+ * customer-facing message uses (AGENTS.md — email always leaves from a job,
+ * never inline in a request handler).
+ *
+ * Retry-safe without an Idempotency-Key, the same way the transfer resolve is:
+ * the cooldown is claimed with a conditional update, so a double-click, a
+ * resent request, or two reviewers working the same row send exactly one email.
+ * The claim is taken before anything is queued, so the losing caller is told
+ * rather than quietly sending a second chase.
+ *
+ * The actor's own quote scope gates it. A member without "All data" for payments
+ * can chase the invoices on their own filings and nothing else — the same
+ * boundary the list they clicked from applies.
+ */
+export async function remindQuote(
+  actor: AuthContext,
+  quoteId: string,
+  now = new Date(),
+): Promise<BillingLedgerRow> {
+  const quote = await prisma.quote.findFirst({
+    where: { ...LEDGER_SCOPE, ...(await quoteScope(actor)), id: quoteId },
+    include: ledgerInclude,
+  });
+
+  if (!quote) throw AppError.notFound('Quote not found');
+
+  if (deriveStatus(quote.payments) !== 'pending_payment') {
+    throw AppError.businessRule(
+      'This invoice is not awaiting payment, so there is nothing to chase.',
+    );
+  }
+
+  const blocked = remindBlockedReason(quote, now);
+  if (blocked) throw AppError.businessRule(blocked);
+
+  /*
+   * What the customer chose to hear about a quote. A reminder is the same
+   * category as the quote it chases (`quoteAlerts`), so a customer who muted
+   * those is not reached by re-sending one under another name. Checked before
+   * the claim below so a refused send does not burn the cooldown.
+   */
+  const alerts = await channelsFor(quote.customerId, 'quoteAlerts');
+
+  if (!alerts.email && !alerts.inApp) {
+    throw AppError.businessRule(
+      'This customer has turned off quote alerts, so a reminder cannot be sent to them.',
+    );
+  }
+
+  const cooldownFrom = new Date(now.getTime() - REMINDER_COOLDOWN_MS);
+
+  const claim = await prisma.quote.updateMany({
+    where: {
+      id: quote.id,
+      status: QuoteStatus.PENDING,
+      validUntil: { gt: now },
+      OR: [{ lastRemindedAt: null }, { lastRemindedAt: { lte: cooldownFrom } }],
+    },
+    data: { lastRemindedAt: now, reminderCount: { increment: 1 } },
+  });
+
+  // Someone else chased this invoice between the read above and the write.
+  if (claim.count === 0) {
+    throw AppError.businessRule(
+      'A reminder for this invoice was already sent in the last 24 hours.',
+    );
+  }
+
+  const amount = formatMoneyDisplay(money(quote.total, quote.currency));
+  const reference = quote.order?.reference ?? quote.reference;
+  const href = quote.order ? `/app/orders/${quote.order.id}` : '/app/billing';
+
+  // `createFeedNotification` writes the row and pushes the new unread count
+  // itself, so nothing else is emitted here.
+  if (alerts.inApp) {
+    await createFeedNotification({
+      userId: quote.customerId,
+      category: FeedNotificationCategory.BILLING,
+      message: `Quote ${quote.reference} for ${amount} on ${reference} is still awaiting payment.`,
+      href: `/app/billing/quotes/${quote.id}`,
+    }).catch((error: unknown) => {
+      logger.error({ err: error, quoteId: quote.id }, 'Failed to write a reminder feed row');
+    });
+  }
+
+  if (alerts.email) {
+    const customer = await prisma.user.findUnique({
+      where: { id: quote.customerId },
+      select: { email: true },
+    });
+
+    if (customer?.email) {
+      // The cooldown is already claimed, so a failure to queue must not fail the
+      // request — the same posture as every other notification in the codebase.
+      await queueEmail({
+        to: customer.email,
+        subject: `Reminder: quote ${quote.reference} is awaiting payment`,
+        template: 'generic',
+        heading: 'A payment is still outstanding',
+        body: `Quote ${quote.reference} for ${amount} on ${reference} hasn't been paid yet. It's valid until ${quote.validUntil.toISOString().slice(0, 10)}.`,
+        actionLabel: 'View quote',
+        actionUrl: `${publicAppUrl}${href}`,
+        userId: quote.customerId,
+      }).catch((error: unknown) => {
+        logger.error({ err: error, quoteId: quote.id }, 'Failed to queue a reminder email');
+      });
+    }
+  }
+
+  void record({
+    actor,
+    action: AuditAction.PAYMENT_REMINDER_SENT,
+    entityType: 'Quote',
+    entityId: quote.id,
+    // A reference, minor units, and which channels went out. No customer name
+    // and no email address (AGENTS.md, Security & PII).
+    metadata: {
+      reference: quote.reference,
+      orderReference: quote.order?.reference ?? null,
+      total: quote.total,
+      currency: quote.currency,
+      channels: { email: alerts.email, inApp: alerts.inApp },
+      reminderCount: quote.reminderCount + 1,
+    },
+  });
+
+  logger.info({ quoteId: quote.id }, 'Payment reminder sent');
+
+  // The row as it now reads: the cooldown this send just started is what makes
+  // the control come back disabled rather than inviting a second chase.
+  return toLedgerRow({ ...quote, lastRemindedAt: now }, now);
 }
 
 // --- Revenue series ------------------------------------------------------

@@ -29,13 +29,30 @@ export const companyKey = () => ['settings', 'company'] as const;
 export const notificationPreferencesKey = () =>
   ['settings', 'notification-preferences'] as const;
 
-// GET /v1/profile — name and email from the account, phone and avatar from the
-// customer's profile record.
+/*
+ * GET /v1/profile — name and email from the account, phone and avatar from the
+ * customer's profile record.
+ *
+ * The portal shell reads this on every `/app/*` screen to draw the sidebar and
+ * top-bar avatar, so it is held rather than refetched per navigation — otherwise
+ * each screen change costs a request and the avatar flickers behind the nav. A
+ * save writes the fresh record straight into this key, so held data never goes
+ * stale behind an edit.
+ *
+ * Kept short because the avatar link it carries is a presigned URL that expires
+ * on its own schedule (R2_PRESIGNED_URL_TTL_SECONDS, up to an hour). If a
+ * deployment sets a TTL under this window the held link can lapse before a
+ * refetch; the img simply fails to load and the next navigation re-mints it —
+ * which is why this stays minutes rather than hours.
+ */
+const FIVE_MINUTES = 5 * 60 * 1000;
+
 export function useProfile() {
   return useQuery({
     queryKey: profileKey(),
     queryFn: () =>
       apiFetch<ApiSuccess<ProfileInfo>>('/profile').then((res) => res.data),
+    staleTime: FIVE_MINUTES,
   });
 }
 

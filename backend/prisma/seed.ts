@@ -969,7 +969,7 @@ async function seedDemoCustomer(): Promise<void> {
       id: 'demo-mail-bank',
       roomId: mailRoom.id,
       sender: 'Unknown Sender',
-      status: MailItemStatus.SCANNED,
+      status: MailItemStatus.NEW,
       receivedAt: daysFromNow(-1),
       storageExpiresAt: daysFromNow(29),
       scanReady: false,

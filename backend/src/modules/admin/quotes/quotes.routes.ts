@@ -1,6 +1,10 @@
 import { Router } from 'express';
 
-import { apiRateLimit, sensitiveRateLimit } from '../../../guards/index.js';
+import {
+  apiRateLimit,
+  requireIdempotencyKey,
+  sensitiveRateLimit,
+} from '../../../guards/index.js';
 import { requirePermission } from '../admin.guards.js';
 import * as controller from './quotes.controller.js';
 
@@ -28,9 +32,18 @@ router.get('/', apiRateLimit, controller.listOrderQuotes);
 // what the composer offers as quick-select lines. A read of policy prices the
 // sender already has the `payments` area for, so no extra guard.
 router.get('/templates', apiRateLimit, controller.listQuoteTemplates);
-// Both writes reach the customer (an email and a feed entry), so they take the
-// same limiter as the order's own customer-visible reply.
-router.post('/', sensitiveRateLimit, controller.createQuote);
+/*
+ * Both writes reach the customer (an email and a feed entry), so they take the
+ * same limiter as the order's own customer-visible reply.
+ *
+ * Only the send takes an Idempotency-Key. Sending raises a new offer every time
+ * it is called, so a retry without a key either duplicates the quote or — once
+ * the "one live quote" rule catches it — hands the caller a 409 for a quote they
+ * did in fact just create. The cancel needs no key: it is conditional on the
+ * quote's own status and returns the already-cancelled row unchanged, which is
+ * the retry-safety AGENTS.md asks for, arrived at without one.
+ */
+router.post('/', sensitiveRateLimit, requireIdempotencyKey, controller.createQuote);
 router.post('/:quoteId/cancel', sensitiveRateLimit, controller.cancelQuote);
 
 export const adminQuotesRouter = router;

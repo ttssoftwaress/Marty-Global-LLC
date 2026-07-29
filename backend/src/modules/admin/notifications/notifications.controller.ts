@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 
 import { AppError } from '../../../lib/app-error.js';
+import { pathParam } from '../../../lib/params.js';
 import * as service from './notifications.service.js';
 import { listAdminFeedQuerySchema } from './notifications.validation.js';
 
@@ -41,12 +42,7 @@ export async function markRead(
   next: NextFunction,
 ) {
   try {
-    const id = req.params.id;
-    if (typeof id !== 'string' || !id) {
-      throw AppError.validation('Notification id is required');
-    }
-
-    res.json({ data: await service.markRead(req, id) });
+    res.json({ data: await service.markRead(req, pathParam(req, 'id')) });
   } catch (error) {
     next(error);
   }

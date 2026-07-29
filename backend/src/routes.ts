@@ -1,7 +1,9 @@
 import { Router } from 'express';
 
+import { requireAuth } from './guards/index.js';
 import { adminRouter } from './modules/admin/admin.routes.js';
 import { billingRouter } from './modules/billing/billing.routes.js';
+import { contactRouter } from './modules/contact/contact.routes.js';
 import { conversationsRouter } from './modules/conversations/conversations.routes.js';
 import { dashboardRouter } from './modules/dashboard/dashboard.routes.js';
 import { documentsRouter } from './modules/documents/documents.routes.js';
@@ -18,6 +20,35 @@ import { supportRouter } from './modules/support/support.routes.js';
 import { uploadsRouter } from './modules/uploads/uploads.routes.js';
 
 const router = Router();
+
+/*
+ * Default-deny, applied before any module router is reached.
+ *
+ * Every module below still attaches its own guards and none of them are being
+ * removed — those are the real boundary, and the role/permission narrowing only
+ * exists there. What this adds is the failure mode: without it, a router that
+ * ships without `requireAuth` is a public endpoint by omission, and nothing in
+ * this file would say so. AGENTS.md is explicit that every endpoint is
+ * authenticated by default and that a public one is *explicitly marked* — this
+ * list is that marking, in one place, next to the mounts.
+ *
+ * Adding a public surface therefore means editing this list, which is the point.
+ */
+const PUBLIC_PREFIXES = ['/health', '/guest-chat', '/contact'] as const;
+
+function isPublic(path: string): boolean {
+  return PUBLIC_PREFIXES.some(
+    (prefix) => path === prefix || path.startsWith(`${prefix}/`),
+  );
+}
+
+router.use((req, res, next) => {
+  if (isPublic(req.path)) {
+    next();
+    return;
+  }
+  void requireAuth(req, res, next);
+});
 
 router.use('/health', healthRouter);
 router.use('/notifications', notificationsRouter);
@@ -58,6 +89,9 @@ router.use('/support', supportRouter);
  * creates still land in the same admin inbox.
  */
 router.use('/guest-chat', guestRouter);
+// PUBLIC — the marketing contact form. Same guards as guest-chat's session
+// creation: Turnstile server-side, per-IP rate limit.
+router.use('/contact', contactRouter);
 router.use('/profile', profileRouter);
 /*
  * Shared by every surface that attaches a file — order documents, mail scans,

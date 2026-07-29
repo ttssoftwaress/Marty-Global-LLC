@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom';
-import { Inbox, MessagesSquare } from 'lucide-react';
+import { Inbox, Loader2, MessagesSquare } from 'lucide-react';
 
 import { AdminLayout } from '../components/AdminLayout';
+import { DataErrorState } from '../components/DataErrorState';
 import { useMyConversations } from '../features/conversations/queries';
 import { useAdminShell } from '../hooks/useAdminShell';
 import { formatActivityTime } from '../lib/format';
@@ -48,7 +49,7 @@ function ConversationRow({ row }: { row: StaffConversationRow }) {
               {row.orderReference}
             </span>
             {row.awaitingReply ? (
-              <span className="shrink-0 rounded bg-[#fef3c7] px-1.5 py-0.5 text-[0.625rem] font-semibold uppercase leading-none text-[#b45309]">
+              <span className="shrink-0 rounded bg-status-review-bg px-1.5 py-0.5 text-[0.625rem] font-semibold uppercase leading-none text-status-review-text">
                 Awaiting reply
               </span>
             ) : null}
@@ -98,10 +99,12 @@ function ListSkeleton() {
 
 export function AdminConversationsPage() {
   const { user, onLogout } = useAdminShell();
-  const { data, isLoading } = useMyConversations();
+  const query = useMyConversations();
 
-  const rows = data?.conversations ?? [];
-  const awaiting = data?.awaitingCount ?? 0;
+  const rows = query.data?.pages.flatMap((page) => page.conversations) ?? [];
+  // From the first page: the count is over the whole queue, so every page
+  // carries the same figure and the newest one is as good as any.
+  const awaiting = query.data?.pages[0]?.awaitingCount ?? 0;
 
   return (
     <AdminLayout user={user} onLogout={onLogout}>
@@ -111,7 +114,7 @@ export function AdminConversationsPage() {
             <div className="flex flex-wrap items-center gap-3">
               <h1 className="text-h4 font-semibold text-text">My conversations</h1>
               {awaiting > 0 ? (
-                <span className="rounded-full bg-[#fef3c7] px-2.5 py-1 text-small font-semibold text-[#b45309]">
+                <span className="rounded-full bg-status-review-bg px-2.5 py-1 text-small font-semibold text-status-review-text">
                   {awaiting} awaiting reply
                 </span>
               ) : null}
@@ -126,16 +129,41 @@ export function AdminConversationsPage() {
             </p>
           </header>
 
-          {isLoading ? (
+          {query.isLoading ? (
             <ListSkeleton />
+          ) : query.isError ? (
+            /* "No conversations yet" over a failed fetch would tell a staff
+               member their queue is clear while a customer waits in it. */
+            <DataErrorState
+              title="We couldn’t load your conversations"
+              description="Something went wrong fetching your threads. Try again."
+              onRetry={() => void query.refetch()}
+              isRetrying={query.isFetching}
+            />
           ) : rows.length === 0 ? (
             <EmptyState />
           ) : (
-            <ul className="flex flex-col gap-3">
-              {rows.map((row) => (
-                <ConversationRow key={row.id} row={row} />
-              ))}
-            </ul>
+            <div className="flex flex-col gap-4">
+              <ul className="flex flex-col gap-3">
+                {rows.map((row) => (
+                  <ConversationRow key={row.id} row={row} />
+                ))}
+              </ul>
+
+              {query.hasNextPage ? (
+                <button
+                  type="button"
+                  onClick={() => void query.fetchNextPage()}
+                  disabled={query.isFetchingNextPage}
+                  className="btn btn-secondary mx-auto inline-flex h-11 items-center gap-2 rounded-input px-6 text-body disabled:opacity-60"
+                >
+                  {query.isFetchingNextPage ? (
+                    <Loader2 className="size-4 animate-spin" strokeWidth={2} aria-hidden="true" />
+                  ) : null}
+                  Load more
+                </button>
+              ) : null}
+            </div>
           )}
         </div>
       </div>

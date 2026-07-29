@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 
+import { FormDialog } from '../../components/FormDialog';
 import {
   deriveLocationCode,
   draftFromLocation,
@@ -14,8 +15,7 @@ import type {
   LocationDraft,
   SettingsFormErrors,
 } from '../../types/settings';
-import { Field, TextInput } from '../catalog/FormControls';
-import { ServiceFormDialog } from '../catalog/ServiceFormDialog';
+import { Field, TextInput } from '../../components/FormControls';
 import { ToggleSwitch } from '../catalog/detail/ToggleSwitch';
 
 /*
@@ -90,7 +90,7 @@ export function LocationFormDialog({
   const previewFlag = draft.flag.trim() || flagForCode(draft.code);
 
   return (
-    <ServiceFormDialog
+    <FormDialog
       open={open}
       title={isEdit ? 'Edit location' : 'Add a location'}
       description={
@@ -204,6 +204,6 @@ export function LocationFormDialog({
           </span>
         </div>
       </div>
-    </ServiceFormDialog>
+    </FormDialog>
   );
 }

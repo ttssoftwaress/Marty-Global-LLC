@@ -9,6 +9,10 @@ import {
 import { publicAppUrl } from '../../../config/env.js';
 import type { AuthContext } from '../../../guards/auth-context.js';
 import { AppError } from '../../../lib/app-error.js';
+import {
+  isIdempotencyKeyCollision,
+  withIdempotency,
+} from '../../../lib/idempotency.js';
 import { logger } from '../../../lib/logger.js';
 import { prisma } from '../../../lib/prisma.js';
 import { emitUnreadChanged } from '../../../sockets/broadcast.js';
@@ -52,6 +56,14 @@ async function createWithUniqueReference<T>(
     try {
       return await create(makeReference());
     } catch (error) {
+      /*
+       * The same insert now carries a second unique column — the caller's
+       * Idempotency-Key — and re-rolling the reference would never clear a
+       * collision on that one. Left to the caller, which answers a duplicate key
+       * with the original quote instead of a fifth attempt and a 409.
+       */
+      if (isIdempotencyKeyCollision(error)) throw error;
+
       // P2002 = unique constraint violation (the reference collided) — retry.
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -285,10 +297,31 @@ export async function listQuoteTemplates(
 }
 
 // --- Write ---------------------------------------------------------------
+
+// The quote carrying a request's Idempotency-Key, if that request already ran.
+function findQuoteByKey(idempotencyKey: string): Promise<QuoteRecord | null> {
+  return prisma.quote.findUnique({
+    where: { idempotencyKey },
+    include: { lineItems: true },
+  });
+}
+
+/*
+ * Send the customer a price.
+ *
+ * Retry-safe by key (AGENTS.md, API Conventions). The "one live quote" rule
+ * below already refused a second send while the first was pending, but that is a
+ * business rule doing retry-safety's job by accident, and it does the wrong
+ * thing: a client retrying a request whose response it never saw got a 409
+ * instead of the quote it had in fact just created — an operator staring at an
+ * error for a quote the customer had already been emailed. The key resolves the
+ * retry to that same quote, and the 409 goes back to meaning what it says.
+ */
 export async function createQuote(
   actor: AuthContext,
   orderId: string,
   input: CreateQuoteInput,
+  idempotencyKey: string,
 ): Promise<AdminQuoteView> {
   /*
    * The scope guards a write here, not just a read. Quoting an order advances it
@@ -309,6 +342,22 @@ export async function createQuote(
   });
 
   if (!order) throw AppError.notFound('Order not found');
+
+  /*
+   * Idempotency, checked after the scope lookup and before every rule below it.
+   * After, so a spent key can never tell a caller anything about an order they
+   * may not reach; before, because a retry has to resolve to the quote it
+   * already created rather than colliding with it in the "one live quote" check
+   * on the next line.
+   */
+  const replayed = await findQuoteByKey(idempotencyKey);
+
+  if (replayed) {
+    if (replayed.orderId !== order.id) {
+      throw AppError.conflict('This Idempotency-Key has already been used');
+    }
+    return toQuoteView(replayed);
+  }
 
   /*
    * A live offer already stands. Two payable quotes on one order would leave the
@@ -388,7 +437,9 @@ export async function createQuote(
   // written for a status change that actually landed.
   let advanced: { from: OrderStatus; to: OrderStatus } | null = null;
 
-  const quote = await createWithUniqueReference((reference) =>
+  // Named rather than inlined at the call below, so the retry-on-collision that
+  // wraps it reads as one step instead of a closure inside a closure in a catch.
+  const writeQuote = (reference: string): Promise<QuoteRecord> =>
     prisma.$transaction(async (tx) => {
       const created = await tx.quote.create({
         data: {
@@ -404,6 +455,7 @@ export async function createQuote(
           currency: input.currency,
           issuedAt: now,
           validUntil,
+          idempotencyKey,
           lineItems: {
             create: input.lineItems.map((line, index) => ({
               label: line.label,
@@ -461,8 +513,27 @@ export async function createQuote(
       });
 
       return created;
-    }),
-  );
+    });
+
+  let quote: QuoteRecord;
+
+  try {
+    quote = await createWithUniqueReference(writeQuote);
+  } catch (error) {
+    if (!isIdempotencyKeyCollision(error)) throw error;
+
+    /*
+     * A genuinely concurrent double-submit — two clicks, or a client retrying
+     * before the first response came back — races on the unique key rather than
+     * on the "one live quote" read above, which both requests can pass before
+     * either of them writes. The loser answers with the winner's quote: one
+     * offer, one email, and no 409 for a caller who asked for exactly this once.
+     */
+    const winner = await findQuoteByKey(idempotencyKey);
+    if (!winner || winner.orderId !== order.id) throw error;
+
+    return toQuoteView(winner, now);
+  }
 
   // The quote is committed, so the customer's unread count is now genuinely
   // higher — safe to tell any tab they have open.

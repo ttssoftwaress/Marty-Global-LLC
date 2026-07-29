@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp, Loader2, Star, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -11,7 +11,7 @@ import {
   type ResultFieldRef,
 } from '../../../types/delivery';
 import { useUpdateResultSchema } from '../queries';
-import { Field, TextInput } from '../FormControls';
+import { Field, TextInput } from '../../../components/FormControls';
 import { DashedAddButton, DetailCard } from './DetailCard';
 import { ResultFieldPicker } from './ResultFieldPicker';
 
@@ -177,6 +177,7 @@ export function ResultSchemaCard({
   const [pageTitle, setPageTitle] = useState(resultPageTitle ?? '');
   const [noun, setNoun] = useState(resultNoun ?? '');
   const [pickerOpen, setPickerOpen] = useState(false);
+  const addFactRef = useRef<HTMLButtonElement>(null);
 
   // Re-seed when the service loads or is saved elsewhere on the page.
   useEffect(() => {
@@ -266,10 +267,15 @@ export function ResultSchemaCard({
           setPickerOpen(false);
         }}
         onClose={() => setPickerOpen(false)}
+        triggerRef={addFactRef}
       />
 
       {!pickerOpen ? (
-        <DashedAddButton label="Add a delivered fact" onClick={() => setPickerOpen(true)} />
+        <DashedAddButton
+          ref={addFactRef}
+          label="Add a delivered fact"
+          onClick={() => setPickerOpen(true)}
+        />
       ) : null}
 
       <p className="text-caption text-gray-500">

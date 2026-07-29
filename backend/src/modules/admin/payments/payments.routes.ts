@@ -12,9 +12,9 @@ import * as controller from './payments.controller.js';
  * Mounted under the admin router (requireAuth + requireStaff), narrowed to staff
  * granted the `payments` area.
  *
- * Every route here reads. The one write is closing out a stray transfer, which
- * is an annotation rather than a movement of money — nothing in this module
- * sends funds anywhere.
+ * Two writes, neither of which moves money: chasing an unpaid invoice, and
+ * closing out a stray transfer with a note. Nothing in this module sends funds
+ * anywhere.
  */
 
 const router = Router();
@@ -24,6 +24,22 @@ router.use(requirePermission('payments'));
 router.get('/summary', apiRateLimit, controller.getSummary);
 router.get('/revenue', apiRateLimit, controller.getRevenue);
 router.get('/ledger', apiRateLimit, controller.listLedger);
+
+/*
+ * Chasing an unpaid invoice. Anyone holding the `payments` area may send one,
+ * scoped to the invoices their own ledger already shows them — this is the work
+ * that area exists for, not an administrator's judgement call.
+ *
+ * No Idempotency-Key: the 24-hour cooldown is claimed with a conditional update
+ * before anything is queued, so a replay finds the claim taken and sends
+ * nothing. `sensitiveRateLimit` because the side effect is an email to a
+ * customer.
+ */
+router.post(
+  '/ledger/:quoteId/remind',
+  sensitiveRateLimit,
+  controller.remindQuote,
+);
 
 /*
  * The unattributed-transfer queue: USDT that arrived matching no payment.

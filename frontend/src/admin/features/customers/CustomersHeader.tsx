@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 
 import { formatCount } from '../../lib/format';
+import type { CustomersScope } from '../../types/customers';
 
 /*
  * The customers screen's page header — breadcrumb, title block, and the total
@@ -15,16 +16,30 @@ import { formatCount } from '../../lib/format';
  * coming from the summary — nothing here is a fixed number. Mobile's link
  * shortens it to "128 total", but the desktop link is the copy source across the
  * three (Design.md), so the full wording is what renders at every width.
+ *
+ * No total, no pill: while the summary is loading or after it failed there is no
+ * figure to print, and defaulting to zero would state "0 total customers" as
+ * though it were the answer.
+ *
+ * Both the pill and the subtitle follow the viewer's scope, which the backend
+ * resolves alongside the count. A member who only sees the customers they deal
+ * with gets the same figure said differently — "128 total customers" would
+ * present their book as the whole business's.
  */
 
 type CustomersHeaderProps = {
-  totalCustomers: number;
+  totalCustomers: number | undefined;
+  scope: CustomersScope | undefined;
 };
 
-export function CustomersHeader({ totalCustomers }: CustomersHeaderProps) {
-  const pill = (
+export function CustomersHeader({ totalCustomers, scope }: CustomersHeaderProps) {
+  const assigned = scope === 'assigned';
+
+  const pill = totalCustomers === undefined ? null : (
     <span className="shrink-0 rounded-pill bg-gray-100 px-3 py-1.5 text-small font-medium text-text-secondary lg:px-4 lg:py-2 lg:text-gray-600">
-      {formatCount(totalCustomers)} total customers
+      {assigned
+        ? `${formatCount(totalCustomers)} customers assigned to you`
+        : `${formatCount(totalCustomers)} total customers`}
     </span>
   );
 
@@ -59,7 +74,9 @@ export function CustomersHeader({ totalCustomers }: CustomersHeaderProps) {
           </div>
 
           <p className="text-body text-text-secondary">
-            View and manage every customer account.
+            {assigned
+              ? 'View and manage the customer accounts assigned to you.'
+              : 'View and manage every customer account.'}
           </p>
         </div>
 

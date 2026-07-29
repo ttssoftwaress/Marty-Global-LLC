@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 
 import { AppError } from '../../lib/app-error.js';
+import { pathParam } from '../../lib/params.js';
 import * as service from './mailroom.service.js';
 import {
   createMailRequestSchema,
@@ -26,7 +27,7 @@ export async function getOverview(
 
 export async function getRoom(req: Request, res: Response, next: NextFunction) {
   try {
-    const roomId = requireParam(req.params.roomId, 'Mail room id is required');
+    const roomId = pathParam(req, 'roomId');
     const room = await service.getRoomDetail(req, roomId);
     res.json({ data: room });
   } catch (error) {
@@ -40,7 +41,7 @@ export async function listItems(
   next: NextFunction,
 ) {
   try {
-    const roomId = requireParam(req.params.roomId, 'Mail room id is required');
+    const roomId = pathParam(req, 'roomId');
 
     const parsed = listMailItemsQuerySchema.safeParse(req.query);
     if (!parsed.success) {
@@ -56,8 +57,8 @@ export async function listItems(
 
 export async function getItem(req: Request, res: Response, next: NextFunction) {
   try {
-    const roomId = requireParam(req.params.roomId, 'Mail room id is required');
-    const itemId = requireParam(req.params.itemId, 'Mail item id is required');
+    const roomId = pathParam(req, 'roomId');
+    const itemId = pathParam(req, 'itemId');
 
     const item = await service.getItem(req, roomId, itemId);
     res.json({ data: item });
@@ -72,8 +73,8 @@ export async function createRequest(
   next: NextFunction,
 ) {
   try {
-    const roomId = requireParam(req.params.roomId, 'Mail room id is required');
-    const itemId = requireParam(req.params.itemId, 'Mail item id is required');
+    const roomId = pathParam(req, 'roomId');
+    const itemId = pathParam(req, 'itemId');
 
     const parsed = createMailRequestSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -93,21 +94,12 @@ export async function recordDownload(
   next: NextFunction,
 ) {
   try {
-    const roomId = requireParam(req.params.roomId, 'Mail room id is required');
-    const itemId = requireParam(req.params.itemId, 'Mail item id is required');
+    const roomId = pathParam(req, 'roomId');
+    const itemId = pathParam(req, 'itemId');
 
     const result = await service.recordDownload(req, roomId, itemId);
     res.json({ data: result });
   } catch (error) {
     next(error);
   }
-}
-
-// Express types a route param as string | string[]; only a single segment is ever
-// valid here, so an array is a malformed path rather than something to join.
-function requireParam(value: unknown, message: string): string {
-  if (typeof value !== 'string' || !value) {
-    throw AppError.validation(message);
-  }
-  return value;
 }

@@ -52,6 +52,21 @@ export function useAdminSupportSocket(conversationId: string, currentUserId?: st
   const typingTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTypingSent = useRef(0);
 
+  /*
+   * Typing and presence belong to the conversation, not to the desk. This hook
+   * lives on the page, which stays mounted while the agent clicks from one
+   * thread to the next, so the previous customer's dots have to be dropped as
+   * the id changes. Done during render rather than in an effect: the thread pane
+   * remounts on the same render, and an effect would clear them one frame after
+   * it had already drawn "…is typing" for a customer who never touched it.
+   */
+  const [presenceOf, setPresenceOf] = useState(conversationId);
+  if (presenceOf !== conversationId) {
+    setPresenceOf(conversationId);
+    setCustomerTyping(false);
+    setCustomerOnline(false);
+  }
+
   const toMessage = useCallback(
     (payload: SocketMessage): SupportMessage => ({
       id: payload.id,
@@ -130,11 +145,32 @@ export function useAdminSupportSocket(conversationId: string, currentUserId?: st
     setCustomerOnline(payload.customerOnline);
   });
 
+  /*
+   * Typing and presence are told to us by the server and only by the server, so
+   * a dropped socket does not mean "still online" — it means we have stopped
+   * being told. Held state would otherwise freeze on whatever the last event
+   * said and sit there through the whole outage.
+   */
+  useEffect(() => {
+    if (connected) return;
+    setCustomerTyping(false);
+    setCustomerOnline(false);
+    lastTypingSent.current = 0;
+  }, [connected]);
+
+  // Keyed on the conversation, not on mount: a timer scheduled for the thread
+  // the agent just left has no business firing against the one they opened.
+  // The throttle stamp goes with it, so the first keystroke in the new thread
+  // emits instead of falling inside the window opened by the previous one.
   useEffect(
     () => () => {
-      if (typingTimeout.current) clearTimeout(typingTimeout.current);
+      if (typingTimeout.current) {
+        clearTimeout(typingTimeout.current);
+        typingTimeout.current = null;
+      }
+      lastTypingSent.current = 0;
     },
-    [],
+    [conversationId],
   );
 
   const notifyTyping = useCallback(

@@ -172,8 +172,10 @@ export function TermsOfServicePage() {
             />
             <p>
               We may decline an order. We will say so and will not charge you.
-              Prices shown on our marketing pages are indicative; the quote in
-              your portal is the price that binds.
+              Our marketing pages do not quote prices — an amount depends on the
+              service, the jurisdiction, and that jurisdiction&rsquo;s government
+              fees — so the itemised quote in your portal is the only figure that
+              binds.
             </p>
           </LegalSection>
 

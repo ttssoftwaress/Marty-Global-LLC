@@ -3,6 +3,7 @@ import { AlertCircle, Lock, MessageSquare, Send, Users } from 'lucide-react';
 
 import { useScrollAfterItems } from '@/hooks/useScrollAfterItems';
 import { ApiError } from '@/services/api';
+import { DataErrorState } from '../../components/DataErrorState';
 import { formatActivityTime } from '../../lib/format';
 import type {
   AdminOrderConversation,
@@ -82,13 +83,13 @@ function MessageRow({
 
   if (isNote) {
     return (
-      <li className="flex flex-col gap-1.5 rounded-input border border-[#fde68a] bg-[#fffbeb] p-3">
+      <li className="flex flex-col gap-1.5 rounded-input border border-status-note-border bg-status-note-surface p-3">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <p className="truncate text-body font-semibold text-text">
             {message.authorName}
           </p>
 
-          <span className="flex items-center gap-1 rounded bg-[#fef3c7] px-1.5 py-0.5 text-[0.625rem] font-semibold uppercase leading-none text-[#b45309]">
+          <span className="flex items-center gap-1 rounded bg-status-note-bg px-1.5 py-0.5 text-[0.625rem] font-semibold uppercase leading-none text-status-note-text">
             <Lock className="size-2.5" strokeWidth={2.5} aria-hidden="true" />
             Internal note
           </span>
@@ -269,7 +270,8 @@ type OrderConversationCardProps = {
 };
 
 export function OrderConversationCard({ orderId }: OrderConversationCardProps) {
-  const { data, isLoading } = useAdminOrderConversation(orderId);
+  const conversationQuery = useAdminOrderConversation(orderId);
+  const { data, isLoading } = conversationQuery;
 
   const count = data?.messages.length ?? 0;
   const { ref, maxHeight } = useScrollAfterItems<HTMLUListElement>(
@@ -289,6 +291,22 @@ export function OrderConversationCard({ orderId }: OrderConversationCardProps) {
       <div
         className="h-[20rem] w-full animate-pulse rounded-card bg-gray-200"
         aria-hidden="true"
+      />
+    );
+  }
+
+  /*
+   * A failed fetch used to render nothing at all, so the card simply vanished
+   * from the order screen — indistinguishable from an order that has no thread.
+   * The assignee has to know the difference: a customer may be waiting in it.
+   */
+  if (conversationQuery.isError) {
+    return (
+      <DataErrorState
+        title="We couldn’t load this conversation"
+        description="Something went wrong fetching the thread. Try again."
+        onRetry={() => void conversationQuery.refetch()}
+        isRetrying={conversationQuery.isFetching}
       />
     );
   }
@@ -315,7 +333,7 @@ export function OrderConversationCard({ orderId }: OrderConversationCardProps) {
             </span>
           </span>
         ) : (
-          <span className="shrink-0 rounded bg-[#fef3c7] px-2 py-0.5 text-[0.625rem] font-semibold uppercase leading-none text-[#b45309]">
+          <span className="shrink-0 rounded bg-status-review-bg px-2 py-0.5 text-[0.625rem] font-semibold uppercase leading-none text-status-review-text">
             Unassigned
           </span>
         )

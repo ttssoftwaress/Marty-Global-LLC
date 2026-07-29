@@ -1,11 +1,13 @@
 import { z } from 'zod';
 
-import { fieldKeySchema, fieldRefsSchema } from '../services/services.validation.js';
+import { fieldKeySchema } from '../services/services.validation.js';
 
 /*
  * Service delivery's wire contract — what a service RETURNS, and what the
  * customer may ask for afterwards (AGENTS.md: Zod schemas are the source of
- * truth). Mirrored by `frontend/src/types/results.ts`.
+ * truth). Mirrored by `frontend/src/portal/types/my-services.ts` (the customer's
+ * side) and `frontend/src/admin/types/delivery.ts` (the staff form that writes
+ * the values).
  *
  * The mirror image of `services.validation.ts`. That file describes the
  * questions a service ASKS; this one describes the facts it DELIVERS. The
@@ -118,7 +120,7 @@ const resolvedResultBase = z.object({
   showInList: z.boolean().optional(),
 });
 
-export const resultFieldSchema = z.discriminatedUnion('type', [
+const resultFieldSchema = z.discriminatedUnion('type', [
   resolvedResultBase.extend({ type: z.literal('text') }),
   resolvedResultBase.extend({
     type: z.literal('textarea'),
@@ -176,9 +178,10 @@ export const resultFieldRefsSchema = z.array(resultFieldRefSchema);
 // --- Request types --------------------------------------------------------
 
 /*
- * A follow-up action, as the customer's result page renders it. `fields` are
- * references into the REQUEST registry (the same one the order form uses), so an
- * intake form on a request reuses questions that already exist.
+ * A follow-up action's key — how the customer's result page identifies the
+ * button it renders. Owned here because this module defines what a request type
+ * IS; the admin catalog imports it for the write path so both sides accept
+ * exactly the same set of keys.
  */
 export const requestTypeKeySchema = z
   .string()
@@ -189,18 +192,6 @@ export const requestTypeKeySchema = z
     /^[a-z][a-z0-9_-]*$/,
     'Must be lowercase, start with a letter, and contain only letters, numbers, hyphens, or underscores',
   );
-
-export const requestTypeSchema = z.object({
-  id: z.string().min(1),
-  key: requestTypeKeySchema,
-  label: z.string().min(1),
-  description: z.string().optional(),
-  iconKey: z.string().optional(),
-  turnaround: z.string().optional(),
-  fields: z.array(z.unknown()).optional(),
-});
-
-export const requestTypeFieldsSchema = fieldRefsSchema;
 
 // --- Values ---------------------------------------------------------------
 
@@ -225,8 +216,6 @@ export const resultValueInputSchema = z.object({
   sizeBytes: z.number().int().min(0).optional(),
 });
 export type ResultValueInput = z.infer<typeof resultValueInputSchema>;
-
-export const resultValuesSchema = z.array(resultValueInputSchema).max(200);
 
 // --- Customer-facing queries ---------------------------------------------
 

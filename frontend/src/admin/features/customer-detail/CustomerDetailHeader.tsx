@@ -39,7 +39,7 @@ const MESSAGE_LABEL = 'Message customer';
 
 function StatusPill({ label }: { label: string }) {
   return (
-    <span className="flex shrink-0 items-center gap-1 rounded-pill bg-[var(--color-status-approved-bg)] px-2.5 py-1 text-caption font-semibold text-[#15803d]">
+    <span className="flex shrink-0 items-center gap-1 rounded-pill bg-[var(--color-status-approved-bg)] px-2.5 py-1 text-caption font-semibold text-[var(--color-status-approved-text)]">
       <Check className="size-2.5 shrink-0" strokeWidth={3} aria-hidden="true" />
       {label}
     </span>

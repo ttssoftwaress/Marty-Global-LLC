@@ -62,6 +62,13 @@ export type LedgerActionKind = 'remind' | 'view' | 'none';
 export type LedgerAction = {
   kind: LedgerActionKind;
   label: string;
+  /*
+   * Set on a `remind` the endpoint would refuse right now — the customer was
+   * already chased inside the cooldown. The control renders disabled with this
+   * sentence rather than looking live and failing on click, and the wording is
+   * the backend's for the same reason `label` is.
+   */
+  disabledReason?: string;
 };
 
 /*

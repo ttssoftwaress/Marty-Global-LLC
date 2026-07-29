@@ -2,7 +2,7 @@ import { format } from 'date-fns';
 import { Download } from 'lucide-react';
 
 import { REPORT_PERIODS } from '../../types/reports';
-import type { ReportPeriod } from '../../types/reports';
+import type { ReportPeriod, ReportsScope } from '../../types/reports';
 
 /*
  * The screen's header: the breadcrumb, the title block, the period pill strip,
@@ -22,10 +22,17 @@ import type { ReportPeriod } from '../../types/reports';
  * Copy is the desktop link's throughout: tablet titles its pills "7 days / 30
  * days / 90 days / 12 months" and mobile abbreviates them, but desktop is the
  * source of truth for wording across viewports (Design.md).
+ *
+ * The description follows the viewer's scope, which the backend resolves and
+ * sends down with the KPIs. A member who only sees their own filings is reading
+ * charts about their own work, and the unscoped line would present them as the
+ * whole business's performance. It renders at every width, so the statement is
+ * never dropped by a breakpoint.
  */
 
 type ReportsHeaderProps = {
   period: ReportPeriod;
+  scope: ReportsScope | undefined;
   onPeriodChange: (period: ReportPeriod) => void;
   customFrom: string;
   customTo: string;
@@ -37,6 +44,7 @@ type ReportsHeaderProps = {
 
 export function ReportsHeader({
   period,
+  scope,
   onPeriodChange,
   customFrom,
   customTo,
@@ -61,8 +69,9 @@ export function ReportsHeader({
             Reports &amp; analytics
           </h1>
           <p className="text-small text-gray-500 md:text-body">
-            A complete view of business performance across services, regions, and
-            time.
+            {scope === 'assigned'
+              ? 'Performance across the filings assigned to you, by service, region, and time.'
+              : 'A complete view of business performance across services, regions, and time.'}
           </p>
         </div>
 

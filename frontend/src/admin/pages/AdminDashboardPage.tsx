@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { AdminLayout } from '../components/AdminLayout';
+import { DataErrorState } from '../components/DataErrorState';
 import {
   KpiCards,
   NeedsAttention,
@@ -74,6 +75,23 @@ export function AdminDashboardPage(props: AdminDashboardPageProps = {}) {
   const summary = props.summary ?? query.data;
   const isLoading = props.summary ? Boolean(props.isLoading) : query.isPending;
 
+  /*
+   * The failure state, derived from the query's own flag (Design.md). Rendering
+   * the skeleton whenever the summary is absent is what made a failed fetch
+   * indistinguishable from a slow one: `isPending` goes false, no data arrives,
+   * and the page animates a placeholder forever with no way out.
+   */
+  const isError = !props.summary && query.isError;
+
+  /*
+   * Whether this actor is reading their own filings or the whole org. The
+   * backend decides it — this screen carries no permission of its own, so
+   * scoping is its only access control — and the header prints the answer rather
+   * than inferring it from a role. Absent a summary there is no claim to make,
+   * so the header falls back to the org-wide copy it already reads as.
+   */
+  const isScoped = summary?.scope === 'assigned';
+
   return (
     <AdminLayout user={user} onLogout={onLogout}>
       <div className="w-full p-4 md:p-6 lg:p-content">
@@ -86,18 +104,41 @@ export function AdminDashboardPage(props: AdminDashboardPageProps = {}) {
            */}
           <div className="flex w-full flex-col gap-3 md:gap-4 lg:flex-row lg:items-center lg:justify-between lg:gap-6">
             <div className="flex min-w-0 flex-col gap-1">
-              <h1 className="text-[1.5rem] font-semibold leading-8 text-text lg:text-[2rem] lg:leading-10">
-                Dashboard
-              </h1>
+              <div className="flex flex-wrap items-center gap-3">
+                <h1 className="text-[1.5rem] font-semibold leading-8 text-text lg:text-[2rem] lg:leading-10">
+                  Dashboard
+                </h1>
+
+                {/*
+                 * A scoped viewer is told so at every width. The subtitle below
+                 * says it too, but it is desktop-only in the design, and a
+                 * mobile reader would otherwise read one person's workload as
+                 * the whole business's.
+                 */}
+                {isScoped ? (
+                  <span className="shrink-0 rounded-pill bg-gray-100 px-3 py-1.5 text-small font-medium text-gray-600">
+                    Your assigned work
+                  </span>
+                ) : null}
+              </div>
               <p className="hidden text-[0.875rem] leading-5 text-gray-500 lg:block">
-                Here&rsquo;s what&rsquo;s happening across Marty Global LLC today.
+                {isScoped
+                  ? 'Here’s what’s happening across the work assigned to you today.'
+                  : 'Here’s what’s happening across Marty Global LLC today.'}
               </p>
             </div>
 
             <PeriodFilter value={period} onChange={setPeriod} />
           </div>
 
-          {isLoading || !summary ? (
+          {isError ? (
+            <DataErrorState
+              title="Couldn't load the dashboard"
+              description="None of today's figures loaded, so this is not a quiet day — it's a failed request. Try again in a moment."
+              onRetry={() => void query.refetch()}
+              isRetrying={query.isFetching}
+            />
+          ) : isLoading || !summary ? (
             <DashboardSkeleton />
           ) : (
             <>

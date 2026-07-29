@@ -6,7 +6,7 @@ import { logger } from '../lib/logger.js';
 import { prisma } from '../lib/prisma.js';
 import { auditAuthHook } from '../modules/audit/audit.auth-hook.js';
 import { queueEmail } from '../modules/notifications/notifications.service.js';
-import { env } from './env.js';
+import { env, isProduction } from './env.js';
 
 // Better Auth owns all session and password handling (AGENTS.md "Auth"). We only
 // configure it here — the handler is mounted in app.ts and the backend guards
@@ -36,17 +36,27 @@ export const auth = betterAuth({
     requireEmailVerification: false,
     autoSignIn: false,
 
-    // Password reset. Better Auth mints the token and hands us the ready-built
-    // link (the frontend's /reset-password/new screen with ?token=…); we queue
-    // the email through the notifications pipeline like every other outbound
-    // message (AGENTS.md "Security & PII" — never send inline). AWS credentials
-    // aren't set yet, so the SES transport skips the actual send; we also log the
-    // link to the backend console so the flow is testable end-to-end without SES.
+    /*
+     * Password reset. Better Auth mints the token and hands us the ready-built
+     * link (the frontend's /reset-password/new screen with ?token=…); we queue
+     * the email through the notifications pipeline like every other outbound
+     * message (AGENTS.md "Security & PII" — never send inline).
+     *
+     * The link is a bearer credential: anyone holding it can take the account.
+     * So it is never written to the log in production — only the user id is
+     * (AGENTS.md: log record ids, never secrets). Outside production the SES
+     * transport has no AWS credentials and skips the send, so the link is
+     * printed there to keep the flow testable end to end without SES.
+     */
     sendResetPassword: async ({ user, url }) => {
-      logger.info(
-        { userId: user.id, resetUrl: url },
-        'Password reset link (SES not configured — copy this link to continue)',
-      );
+      if (isProduction) {
+        logger.info({ userId: user.id }, 'Password reset link queued');
+      } else {
+        logger.info(
+          { userId: user.id, resetUrl: url },
+          'Password reset link (non-production only — copy this link to continue)',
+        );
+      }
 
       await queueEmail({
         to: user.email,

@@ -292,25 +292,13 @@ export async function sendMessage(
 
   // The routing safety net, then the inbox refresh — both for the same reason as
   // the customer path (modules/support/support.service.ts).
-  const assigneeId = await ensureAssignedOwner(guest.conversationId);
+  // `ensureAssigned` answers with the thread's owner whether or not this call is
+  // the one that routed it, which is what the broadcast needs: it has to name
+  // whichever agent's inbox refreshes.
+  const assigneeId = await ensureAssigned(guest.conversationId);
   emitConversationChanged({ conversationId: guest.conversationId, assigneeId });
 
   return toGuestView({ ...message, authorName: message.authorName });
-}
-
-// `ensureAssigned` is a no-op on a thread that already has an owner, but it
-// answers with null either way — so the current owner is read back for the
-// broadcast, which has to name whichever agent's inbox needs refreshing.
-async function ensureAssignedOwner(conversationId: string): Promise<string | null> {
-  const assigned = await ensureAssigned(conversationId);
-  if (assigned) return assigned;
-
-  const conversation = await prisma.conversation.findUnique({
-    where: { id: conversationId },
-    select: { assigneeId: true },
-  });
-
-  return conversation?.assigneeId ?? null;
 }
 
 /*

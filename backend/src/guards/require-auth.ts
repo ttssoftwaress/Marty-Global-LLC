@@ -56,6 +56,15 @@ export async function requireAuth(
   _res: Response,
   next: NextFunction,
 ) {
+  // The /v1 router resolves the session once for every non-public path
+  // (routes.ts, default-deny), and each module then attaches this again as its
+  // own guard. Both stay — but the session is looked up once per request, not
+  // once per layer.
+  if (req.auth) {
+    next();
+    return;
+  }
+
   try {
     const context = await resolveSession(req);
     if (!context) {

@@ -24,9 +24,11 @@ import { PaymentStatusChip } from './PaymentStatusChip';
 type LedgerCardListProps = {
   rows: BillingLedgerRow[];
   onAction: (row: BillingLedgerRow) => void;
+  /** The row whose reminder is in flight, if any — one chase at a time. */
+  sendingId?: string | null;
 };
 
-export function LedgerCardList({ rows, onAction }: LedgerCardListProps) {
+export function LedgerCardList({ rows, onAction, sendingId }: LedgerCardListProps) {
   return (
     <ul className="flex w-full flex-col gap-3 md:hidden">
       {rows.map((row) => (
@@ -58,7 +60,13 @@ export function LedgerCardList({ rows, onAction }: LedgerCardListProps) {
           {row.action.kind === 'none' ? null : (
             <>
               <hr className="border-t border-gray-200" />
-              <LedgerRowAction row={row} onAction={onAction} fullWidth />
+              <LedgerRowAction
+                row={row}
+                onAction={onAction}
+                fullWidth
+                isSending={sendingId === row.id}
+                isBusy={Boolean(sendingId)}
+              />
             </>
           )}
         </li>

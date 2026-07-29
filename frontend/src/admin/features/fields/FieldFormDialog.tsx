@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 
+import { deriveKey } from '../../lib/field-registry';
 import {
   createPayloadFromDraft,
-  deriveKey,
   draftFromField,
   newFieldDraft,
   updatePayloadFromDraft,
@@ -14,8 +14,8 @@ import type {
   FieldFormErrors,
 } from '../../types/fields';
 import { FIELD_TYPE_OPTIONS, FILE_ACCEPT_OPTIONS } from '../../types/fields';
-import { ServiceFormDialog } from '../catalog/ServiceFormDialog';
-import { Field, SelectInput, TextArea, TextInput } from '../catalog/FormControls';
+import { FormDialog } from '../../components/FormDialog';
+import { Field, SelectInput, TextArea, TextInput } from '../../components/FormControls';
 
 /*
  * Register a field, or edit a registered one.
@@ -102,7 +102,7 @@ export function FieldFormDialog({
     });
 
   return (
-    <ServiceFormDialog
+    <FormDialog
       open={open}
       title={isEdit ? 'Edit field' : 'Register a field'}
       description={
@@ -345,6 +345,6 @@ export function FieldFormDialog({
           </label>
         )}
       </div>
-    </ServiceFormDialog>
+    </FormDialog>
   );
 }

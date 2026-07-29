@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Plus, Search, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
+import { groupByCategory } from '../../../lib/field-registry';
 import {
   resultFieldTypeLabel,
   type ResultFieldDefinition,
@@ -10,12 +11,18 @@ import {
 /*
  * Add a delivered fact to a service — by picking from the result registry.
  *
- * The mirror of `FieldPicker`, and it follows the same rules for the same
- * reasons: facts already picked are shown but disabled rather than hidden (so it
+ * The mirror of `FieldPicker`, down to sharing its `groupByCategory` — the two
+ * pickers had a copy each, so an uncategorised fact could have sorted into a
+ * different place than an uncategorised question. It follows the same rules for
+ * the same reasons: facts already picked are shown but disabled rather than hidden (so it
  * is obvious the fact exists and is already returned), and a fact the registry
  * doesn't have yet is registered on the Form fields screen rather than inline.
  * Allowing inline authoring here is exactly how per-service drift would creep
  * back in.
+ *
+ * Dismissal matches `FieldPicker` too: an inline panel, so no `useOverlay`
+ * (Design.md), but Escape closes it from the panel itself — not from `document`,
+ * so it only fires while focus is inside and never reaches an overlay above it.
  */
 
 type ResultFieldPickerProps = {
@@ -25,26 +32,9 @@ type ResultFieldPickerProps = {
   pickedKeys: string[];
   onPick: (field: ResultFieldDefinition) => void;
   onClose: () => void;
+  /* The trigger to refocus after Escape — see `FieldPicker`. */
+  triggerRef?: React.RefObject<HTMLButtonElement | null>;
 };
-
-const UNCATEGORIZED = 'Other';
-
-function groupByCategory(fields: ResultFieldDefinition[]) {
-  const groups = new Map<string, ResultFieldDefinition[]>();
-
-  for (const field of fields) {
-    const key = field.category?.trim() || UNCATEGORIZED;
-    groups.set(key, [...(groups.get(key) ?? []), field]);
-  }
-
-  return [...groups.entries()]
-    .map(([category, items]) => ({ category, fields: items }))
-    .sort((a, b) => {
-      if (a.category === UNCATEGORIZED) return 1;
-      if (b.category === UNCATEGORIZED) return -1;
-      return a.category.localeCompare(b.category);
-    });
-}
 
 export function ResultFieldPicker({
   open,
@@ -53,8 +43,16 @@ export function ResultFieldPicker({
   pickedKeys,
   onPick,
   onClose,
+  triggerRef,
 }: ResultFieldPickerProps) {
   const [search, setSearch] = useState('');
+  const restoreFocus = useRef(false);
+
+  useEffect(() => {
+    if (open || !restoreFocus.current) return;
+    restoreFocus.current = false;
+    triggerRef?.current?.focus();
+  }, [open, triggerRef]);
 
   const picked = useMemo(() => new Set(pickedKeys), [pickedKeys]);
 
@@ -73,8 +71,18 @@ export function ResultFieldPicker({
 
   if (!open) return null;
 
+  const closeOnEscape = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Escape') return;
+    event.stopPropagation();
+    restoreFocus.current = true;
+    onClose();
+  };
+
   return (
-    <div className="flex flex-col gap-3 rounded-card border border-primary/30 bg-primary-light/30 p-3 md:p-4">
+    <div
+      onKeyDown={closeOnEscape}
+      className="flex flex-col gap-3 rounded-card border border-primary/30 bg-primary-light/30 p-3 md:p-4"
+    >
       <div className="flex items-center justify-between gap-3">
         <span className="text-caption font-medium uppercase tracking-[0.4px] text-gray-600">
           Add a delivered fact
@@ -101,6 +109,10 @@ export function ResultFieldPicker({
           onChange={(event) => setSearch(event.target.value)}
           placeholder="Search result fields"
           aria-label="Search result fields"
+          // The trigger unmounts while this is open, so without this the
+          // keyboard would be left on a dead node and Escape would never
+          // reach the panel.
+          autoFocus
           className="h-input w-full rounded-input border border-gray-300 bg-white pl-9 pr-3 text-body text-text placeholder:text-gray-400 focus-visible:outline-2 focus-visible:outline-offset-[-1px] focus-visible:outline-primary"
         />
       </div>

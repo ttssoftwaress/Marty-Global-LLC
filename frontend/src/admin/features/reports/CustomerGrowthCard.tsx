@@ -35,9 +35,18 @@ const TICK_COUNT = 4;
 type CustomerGrowthCardProps = {
   growth: GrowthSeries | undefined;
   isLoading: boolean;
+  isError?: boolean;
+  isRetrying?: boolean;
+  onRetry?: () => void;
 };
 
-export function CustomerGrowthCard({ growth, isLoading }: CustomerGrowthCardProps) {
+export function CustomerGrowthCard({
+  growth,
+  isLoading,
+  isError,
+  isRetrying,
+  onRetry,
+}: CustomerGrowthCardProps) {
   return (
     <ChartCard
       title="Customer growth"
@@ -47,6 +56,10 @@ export function CustomerGrowthCard({ growth, isLoading }: CustomerGrowthCardProp
         { label: 'Cumulative total', color: 'var(--color-primary)' },
       ]}
       isLoading={isLoading}
+      isError={isError}
+      isRetrying={isRetrying}
+      onRetry={onRetry}
+      errorTitle="Couldn't load customer growth"
       skeletonClassName="h-[15rem] md:h-[17.5rem] lg:h-[18.75rem]"
     >
       {growth && growth.points.length > 0 ? (

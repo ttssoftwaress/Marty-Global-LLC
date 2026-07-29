@@ -4,7 +4,6 @@ export { CatalogHeader } from './CatalogHeader';
 export { CatalogTable } from './CatalogTable';
 export { RegionChip, RegionChipList } from './RegionChip';
 export { ServiceForm } from './ServiceForm';
-export { ServiceFormDialog } from './ServiceFormDialog';
 export {
   IncludedItemsCard,
   PricingTemplatesCard,

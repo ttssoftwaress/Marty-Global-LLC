@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { ApiError } from '@/services/api';
 import { AdminLayout } from '../components/AdminLayout';
+import { DataErrorState } from '../components/DataErrorState';
+import { FormDialog } from '../components/FormDialog';
 import {
-  AddStaffDialog,
   AddStaffForm,
   DeleteStaffDialog,
   TeamCardList,
@@ -24,6 +25,7 @@ import {
   useUpdateTeamMember,
 } from '../features/team';
 import { useAdminShell } from '../hooks/useAdminShell';
+import { useCursorPageWindow } from '../hooks/useCursorPageWindow';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import {
   emptyCreateDraft,
@@ -110,13 +112,6 @@ export function AdminTeamStaffPage() {
   const summary = useAdminTeamSummary();
   const team = useAdminTeam({ status, role, search: debouncedSearch });
 
-  // The page window the wider links' pager steps over. Any change to the result
-  // set returns it to the first page, since the old offset means nothing now.
-  const [pageIndex, setPageIndex] = useState(0);
-  useEffect(() => {
-    setPageIndex(0);
-  }, [status, role, debouncedSearch]);
-
   const loadedMembers = useMemo<AdminTeamMemberRow[]>(
     () => team.data?.pages.flatMap((page) => page.members) ?? [],
     [team.data],
@@ -126,19 +121,22 @@ export function AdminTeamStaffPage() {
   const totalPages = team.data?.pages[0]?.totalPages ?? 1;
 
   // The table shows one window; the mobile cards show everything loaded.
-  const windowMembers = useMemo(
-    () => loadedMembers.slice(pageIndex * PAGE_SIZE, (pageIndex + 1) * PAGE_SIZE),
-    [loadedMembers, pageIndex],
-  );
-
-  const goToPage = (nextPage: number) => {
-    const nextIndex = Math.max(0, Math.min(nextPage - 1, totalPages - 1));
-    // Pull the next cursor page in when the window runs past what has loaded.
-    if (nextIndex * PAGE_SIZE >= loadedMembers.length && team.hasNextPage) {
-      void team.fetchNextPage();
-    }
-    setPageIndex(nextIndex);
-  };
+  const {
+    page,
+    rows: windowMembers,
+    rangeStart,
+    rangeEnd,
+    goToPage,
+  } = useCursorPageWindow({
+    rows: loadedMembers,
+    totalPages,
+    totalResults,
+    pageSize: PAGE_SIZE,
+    hasNextPage: team.hasNextPage,
+    isFetchingNextPage: team.isFetchingNextPage,
+    fetchNextPage: team.fetchNextPage,
+    resetKey: `${status}|${role}|${debouncedSearch}`,
+  });
 
   const onLoadMore = () => {
     if (team.hasNextPage) void team.fetchNextPage();
@@ -277,11 +275,20 @@ export function AdminTeamStaffPage() {
   const isFiltered =
     status !== 'all' || role !== ALL_ROLES || Boolean(debouncedSearch.trim());
 
-  const isLoading = summary.isPending || team.isPending;
-  const isEmpty = !isLoading && loadedMembers.length === 0;
+  /*
+   * A failed query is neither pending nor empty. Without this branch a dropped
+   * team-list fetch fell through to "No team members yet" — an empty roster is a
+   * fact about the company, and reporting one for a network fault is a lie.
+   */
+  const isError = summary.isError || team.isError;
+  const isLoading = !isError && (summary.isPending || team.isPending);
+  const isEmpty = !isLoading && !isError && loadedMembers.length === 0;
 
-  const rangeStart = totalResults === 0 ? 0 : pageIndex * PAGE_SIZE + 1;
-  const rangeEnd = pageIndex * PAGE_SIZE + windowMembers.length;
+  const retry = () => {
+    if (summary.isError) void summary.refetch();
+    if (team.isError) void team.refetch();
+  };
+
 
   return (
     <AdminLayout user={user} onLogout={onLogout}>
@@ -357,6 +364,13 @@ export function AdminTeamStaffPage() {
 
           {isLoading ? (
             <TeamSkeleton />
+          ) : isError ? (
+            <DataErrorState
+              title="We couldn’t load your team"
+              description="Something went wrong fetching the team list. Try again."
+              onRetry={retry}
+              isRetrying={summary.isFetching || team.isFetching}
+            />
           ) : (
             <>
               {/* Mobile — cards on the page background, no surrounding frame. */}
@@ -397,7 +411,7 @@ export function AdminTeamStaffPage() {
                 <>
                   {/* The pager sits under the table card, not inside it. */}
                   <TeamPagination
-                    page={pageIndex + 1}
+                    page={page}
                     totalPages={totalPages}
                     totalResults={totalResults}
                     rangeStart={rangeStart}
@@ -421,10 +435,11 @@ export function AdminTeamStaffPage() {
 
       {/* The dialog's own draft is what keeps it mounted, so the sheet animates
           and its focus trap tears down cleanly on close. */}
-      <AddStaffDialog
+      <FormDialog
         open={addDraft !== null}
         title="Add staff member"
         description="Create a login for a colleague and choose what they can access."
+        size="md"
         onClose={closeAddDialog}
         footer={
           <div className="flex items-center justify-end gap-3 md:gap-4">
@@ -477,7 +492,7 @@ export function AdminTeamStaffPage() {
             ) : null}
           </div>
         ) : null}
-      </AddStaffDialog>
+      </FormDialog>
 
       <DeleteStaffDialog
         member={pendingDelete}

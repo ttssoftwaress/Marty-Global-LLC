@@ -11,7 +11,7 @@ import type {
   ServiceFormErrors,
   ServiceRegion,
 } from '../../../types/catalog';
-import { Field, SelectInput, TextInput } from '../FormControls';
+import { Field, SelectInput, TextInput } from '../../../components/FormControls';
 import { DashedAddButton, DetailCard } from './DetailCard';
 
 /*

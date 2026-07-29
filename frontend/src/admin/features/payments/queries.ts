@@ -9,6 +9,7 @@ import { apiFetch } from '@/services/api';
 import type { ApiSuccess } from '@/types/api';
 import type {
   BillingLedgerPage,
+  BillingLedgerRow,
   PaymentStatusFilter,
   PaymentsSummary,
   RevenuePeriod,
@@ -26,6 +27,7 @@ import type {
  *     shapes both work over one cursor stream (AGENTS.md, cursor pagination):
  *     mobile's "Load more" appends a page, the wider links' numbered pager
  *     steps a window
+ *   - the reminder a row's "Send reminder" sends
  *   - the unattributed-transfer queue and the write that closes one out
  *
  * The status filter is a query param the backend resolves — the UI never
@@ -95,6 +97,34 @@ export function useAdminBillingLedger(status: PaymentStatusFilter) {
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.nextCursor,
     placeholderData: (previous) => previous,
+  });
+}
+
+/*
+ * POST /v1/admin/payments/ledger/:quoteId/remind — chase an unpaid invoice.
+ *
+ * It moves no money and decides no amount: the customer is told again about a
+ * price already quoted. The backend enforces a 24-hour cooldown by claiming it
+ * before anything is queued, so a double-click sends one email — there is no
+ * client-side guard standing in for that.
+ *
+ * Every filter's ledger is invalidated: the row that was just chased comes back
+ * with its action spent, and it appears under `all` as well as its own tab.
+ */
+export function useSendPaymentReminder() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (quoteId: string) =>
+      apiFetch<ApiSuccess<BillingLedgerRow>>(
+        `/admin/payments/ledger/${quoteId}/remind`,
+        { method: 'POST' },
+      ).then((res) => res.data),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ['admin', 'payments', 'ledger'],
+      });
+    },
   });
 }
 

@@ -51,10 +51,13 @@ export async function createQuote(
       throw AppError.validation('Invalid quote', parsed.error.issues);
     }
 
+    // `requireIdempotencyKey` runs ahead of this handler and 400s without one,
+    // so the key is present here; the assertion is the guard's contract.
     const quote = await service.createQuote(
       getAuth(req),
       pathParam(req, 'orderId'),
       parsed.data,
+      req.idempotencyKey as string,
     );
     res.status(201).json({ data: quote });
   } catch (error) {

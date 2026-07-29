@@ -85,11 +85,20 @@ export type AdminCustomersPage = {
 };
 
 /*
+ * Whether these counts cover the whole book or only the customers this actor
+ * deals with. The backend scopes the list and the tab counts together and sends
+ * the answer down, so the header says which figure it is printing instead of
+ * deriving it from a role (AGENTS.md, Auth).
+ */
+export type CustomersScope = 'all' | 'assigned';
+
+/*
  * The screen's header figure and filter chrome — one call, so the header pill,
  * the tabs, and the region options agree with each other and with the list.
  */
 export type AdminCustomersSummary = {
   totalCustomers: number;
+  scope: CustomersScope;
   tabs: CustomerSegmentTab[];
   regions: CustomerRegionOption[];
 };

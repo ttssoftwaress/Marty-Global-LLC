@@ -22,6 +22,17 @@ export type BillingKpis = {
 /*
  * A quote awaiting payment. `status` drives the chip: the design shows
  * `pending`, and `expired` covers a quote whose validity window has lapsed.
+ *
+ * Two of the backend enum's five, and narrower than the order screen's four:
+ * this list is "what you still owe", so `billing.service.ts` queries only
+ * PENDING and EXPIRED and then re-reads a lapsed PENDING as `expired` on the
+ * render. A paid, cancelled, or draft quote never reaches this list — the
+ * server-side filter is what makes the narrowing safe, not this type.
+ *
+ * Deliberately not shared with `orders.ts`'s `QuoteStatus` (four values) or
+ * `payments.ts`'s `CheckoutQuoteStatus` (all five): each mirrors what its own
+ * endpoint returns, and merging them would widen every chip to statuses its
+ * screen can never be handed.
  */
 export type QuoteStatus = 'pending' | 'expired';
 
@@ -55,10 +66,13 @@ export type PaymentRecord = {
  * Cursor pagination, mirroring the API envelope (AGENTS.md, API Conventions).
  * Desktop and tablet render the page counter + Previous/Next; mobile renders
  * "Load more payments" over the same cursor.
+ *
+ * There is no `page` here because a cursor stream has no offset to report — the
+ * screen owns which window it is showing, and the backend supplies only the
+ * "of Y" half of the counter.
  */
 export type PaymentHistoryPage = {
   payments: PaymentRecord[];
-  page: number;
   totalPages: number;
   totalCount: number;
   // Cursor for the next page; null when the history is exhausted.

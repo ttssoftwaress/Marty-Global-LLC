@@ -1,4 +1,5 @@
 import { MailOpsCustomerAvatar } from './MailOpsCustomerAvatar';
+import { DataErrorState } from '../../components/DataErrorState';
 import { formatActivityTimeShort } from '../../lib/format';
 import type { MailOpsRecentUpload } from '../../types/mailroom';
 
@@ -26,6 +27,14 @@ import type { MailOpsRecentUpload } from '../../types/mailroom';
 type MailOpsRecentUploadsProps = {
   uploads: MailOpsRecentUpload[];
   isLoading: boolean;
+  /*
+   * A failed feed is not an empty one. "Nothing uploaded yet" over a dropped
+   * fetch reads as the operator's last filing having gone missing, which is the
+   * one thing this rail exists to confirm — so the failure says so instead.
+   */
+  isError?: boolean;
+  isRetrying?: boolean;
+  onRetry?: () => void;
   hasMore: boolean;
   isLoadingMore: boolean;
   onLoadMore: () => void;
@@ -46,6 +55,9 @@ function RecentRowSkeleton() {
 export function MailOpsRecentUploads({
   uploads,
   isLoading,
+  isError,
+  isRetrying,
+  onRetry,
   hasMore,
   isLoadingMore,
   onLoadMore,
@@ -60,6 +72,16 @@ export function MailOpsRecentUploads({
             <RecentRowSkeleton key={index} />
           ))}
         </div>
+      ) : isError ? (
+        // `bare` — this rail is already a card, so the alert must not draw a
+        // second border inside it.
+        <DataErrorState
+          bare
+          title="Recent uploads unavailable"
+          description="Something went wrong fetching the feed. Filing a scan still works."
+          onRetry={() => onRetry?.()}
+          isRetrying={isRetrying}
+        />
       ) : uploads.length === 0 ? (
         <p className="py-2 text-body text-gray-400">
           Nothing uploaded yet. Scans you file appear here.

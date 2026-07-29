@@ -18,4 +18,5 @@ export {
   useAdminRevenueSeries,
   useAdminUnmatchedTransfers,
   useResolveUnmatchedTransfer,
+  useSendPaymentReminder,
 } from './queries';

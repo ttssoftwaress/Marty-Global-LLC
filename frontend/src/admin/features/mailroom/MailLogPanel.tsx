@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Archive } from 'lucide-react';
 
+import { useCursorPageWindow } from '../../hooks/useCursorPageWindow';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import type {
   MailLogActionFilter,
@@ -33,6 +34,10 @@ import { useAdminMailLog } from './queries';
  */
 
 const SEARCH_DEBOUNCE_MS = 300;
+
+// Matches the endpoint's default `limit`, so a fetched cursor page fills exactly
+// one printed page of the footer's strip.
+const PAGE_SIZE = 8;
 
 type MailLogPanelProps = {
   onView: (entry: MailLogRow) => void;
@@ -88,7 +93,6 @@ export function MailLogPanel({ onView }: MailLogPanelProps) {
   const [search, setSearch] = useState('');
   const [range, setRange] = useState<MailLogDateRange>('all');
   const [action, setAction] = useState<MailLogActionFilter>('all');
-  const [page, setPage] = useState(1);
 
   const debouncedSearch = useDebouncedValue(search, SEARCH_DEBOUNCE_MS);
 
@@ -97,29 +101,37 @@ export function MailLogPanel({ onView }: MailLogPanelProps) {
     [debouncedSearch, range, action],
   );
 
-  const log = useAdminMailLog(filters, page);
+  const log = useAdminMailLog(filters);
 
-  // A narrower filter has fewer pages; page 4 may not exist under it.
-  const onSearchChange = (next: string) => {
-    setSearch(next);
-    setPage(1);
-  };
+  const loadedEntries = useMemo<MailLogRow[]>(
+    () => log.data?.pages.flatMap((page) => page.entries) ?? [],
+    [log.data],
+  );
 
-  const onRangeChange = (next: MailLogDateRange) => {
-    setRange(next);
-    setPage(1);
-  };
+  const totalResults = log.data?.pages[0]?.totalResults ?? 0;
+  const totalPages = log.data?.pages[0]?.totalPages ?? 1;
 
-  const onActionChange = (next: MailLogActionFilter) => {
-    setAction(next);
-    setPage(1);
-  };
+  // The strip prints one window over the loaded stream. A narrower filter has
+  // fewer pages — page 4 may not exist under it — so the filters key the window.
+  const {
+    page,
+    rows: entries,
+    goToPage,
+  } = useCursorPageWindow({
+    rows: loadedEntries,
+    totalPages,
+    totalResults,
+    pageSize: PAGE_SIZE,
+    hasNextPage: log.hasNextPage,
+    isFetchingNextPage: log.isFetchingNextPage,
+    fetchNextPage: log.fetchNextPage,
+    resetKey: `${search}|${range}|${action}`,
+  });
 
   const clearFilters = () => {
     setSearch('');
     setRange('all');
     setAction('all');
-    setPage(1);
   };
 
   const isFiltered =
@@ -128,11 +140,11 @@ export function MailLogPanel({ onView }: MailLogPanelProps) {
   const filterStrip = (
     <MailLogFilters
       search={search}
-      onSearchChange={onSearchChange}
+      onSearchChange={setSearch}
       range={range}
-      onRangeChange={onRangeChange}
+      onRangeChange={setRange}
       action={action}
-      onActionChange={onActionChange}
+      onActionChange={setAction}
     />
   );
 
@@ -150,7 +162,10 @@ export function MailLogPanel({ onView }: MailLogPanelProps) {
       <div className="flex w-full flex-col gap-4">
         {filterStrip}
 
-        <div className="flex w-full flex-col items-center gap-3 rounded-card border border-gray-200 bg-white px-6 py-12 text-center shadow-sm-elevation">
+        <div
+          role="alert"
+          className="flex w-full flex-col items-center gap-3 rounded-card border border-gray-200 bg-white px-6 py-12 text-center shadow-sm-elevation"
+        >
           <p className="text-body-lg font-semibold text-text">
             The mail log could not be loaded
           </p>
@@ -169,8 +184,7 @@ export function MailLogPanel({ onView }: MailLogPanelProps) {
     );
   }
 
-  const { entries, pageSize, totalResults, totalPages } = log.data;
-  const isEmpty = entries.length === 0;
+  const isEmpty = loadedEntries.length === 0;
 
   return (
     <div className="flex w-full flex-col gap-4">
@@ -204,10 +218,10 @@ export function MailLogPanel({ onView }: MailLogPanelProps) {
              */}
             <MailLogPagination
               page={page}
-              pageSize={pageSize}
+              pageSize={PAGE_SIZE}
               totalResults={totalResults}
               totalPages={totalPages}
-              onPageChange={setPage}
+              onPageChange={goToPage}
             />
           </>
         )}

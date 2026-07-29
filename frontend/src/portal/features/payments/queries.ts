@@ -117,10 +117,10 @@ export function useCreatePaymentIntent() {
  * matched, which is why the confirmation in front of this asks the one question
  * that matters: have you already sent it?
  *
- * No `Idempotency-Key`: cancelling is guarded by the payment's own status rather
- * than by a key, so a repeat lands on an already-cancelled row and changes
- * nothing (AGENTS.md, API Conventions — mutating payment endpoints are
- * retry-safe).
+ * Sends an `Idempotency-Key` like the intent does — the endpoint requires one on
+ * every mutating payment call (AGENTS.md, API Conventions). What actually makes
+ * a repeat safe is the payment's own status: it lands on an already-cancelled
+ * row and changes nothing.
  */
 export function useCancelPayment() {
   const queryClient = useQueryClient();
@@ -129,6 +129,7 @@ export function useCancelPayment() {
     mutationFn: (paymentId: string) =>
       apiFetch<ApiSuccess<Payment>>(`/payments/${paymentId}/cancel`, {
         method: 'POST',
+        headers: { 'Idempotency-Key': newIdempotencyKey() },
       }).then((res) => res.data),
 
     onSuccess: (payment) => {

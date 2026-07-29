@@ -42,7 +42,7 @@ export function AgentAvailabilityToggle({
       }
       className={`inline-flex h-9 shrink-0 items-center gap-2 rounded-pill border px-3 text-small font-semibold transition-colors ${
         online
-          ? 'border-[rgba(16,185,129,0.3)] bg-[#ecfdf5] text-[#047857] hover:bg-[#d1fae5]'
+          ? 'border-success/30 bg-[var(--color-status-approved-bg)] text-[var(--color-status-approved-text)] hover:bg-success/20'
           : 'border-gray-200 bg-gray-100 text-gray-500 hover:bg-gray-200'
       }`}
     >

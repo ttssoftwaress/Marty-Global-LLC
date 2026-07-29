@@ -259,8 +259,9 @@ export async function createIntent(
   idempotencyKey: string,
 ): Promise<PaymentView> {
   const auth = getAuth(req);
+  const depositAddress = tronConfig.depositAddress;
 
-  if (!tronConfig.depositAddress) {
+  if (!depositAddress) {
     // A misconfiguration, not the customer's fault — but we must not hand out a
     // screen with no address on it.
     logger.error('USDT payment requested but TRON_DEPOSIT_ADDRESS is not set');
@@ -358,6 +359,7 @@ export async function createIntent(
 
   const created = await createWithUniqueAmount(
     baseRaw,
+    depositAddress,
     (expectedRaw) =>
       prisma.payment.create({
         data: {
@@ -367,7 +369,7 @@ export async function createIntent(
           status: PaymentStatus.PENDING,
           amount: quote.total,
           currency: quote.currency,
-          depositAddress: tronConfig.depositAddress,
+          depositAddress,
           usdtExpectedRaw: new Prisma.Decimal(expectedRaw.toString()),
           usdtDecimals: USDT_DECIMALS,
           lockedRateMinor: rateMinor,
@@ -380,6 +382,34 @@ export async function createIntent(
         include: PAYMENT_INCLUDE,
       }),
   );
+
+  /*
+   * Opening a payment window is a payment state change, so it carries a trail
+   * like every other one (AGENTS.md, Backend). It is also the entry the rest of
+   * the payment's history hangs off: without it, a credit or a mismatch appears
+   * in the log with no record of who asked for the window or what rate was
+   * locked when they did.
+   *
+   * Only the row that was actually inserted reaches here — a replayed
+   * Idempotency-Key and a resumed live payment both returned above, and neither
+   * changed anything to record.
+   */
+  await record({
+    actor: auth,
+    action: AuditAction.PAYMENT_INTENT_CREATED,
+    entityType: 'Payment',
+    entityId: created.id,
+    // Ids, minor units, and the locked rate — never an address (AGENTS.md, PII).
+    metadata: {
+      quoteId: quote.id,
+      reference: quote.reference,
+      amount: quote.total,
+      currency: quote.currency,
+      provider: 'usdt_trc20',
+      lockedRateMinor: rateMinor,
+      rateExpiresAt: rateExpiresAt.toISOString(),
+    },
+  });
 
   logger.info(
     { paymentId: created.id, quoteId: quote.id, provider: 'usdt_trc20' },
@@ -397,11 +427,53 @@ export async function createIntent(
  */
 async function createWithUniqueAmount<T>(
   baseRaw: bigint,
+  depositAddress: string,
   create: (expectedRaw: bigint) => Promise<T>,
 ): Promise<T> {
-  for (let nudge = 0; nudge < MAX_AMOUNT_NUDGES; nudge += 1) {
+  // The uncontended path, which is very nearly every request: one insert, no
+  // extra read.
+  try {
+    return await create(baseRaw);
+  } catch (error) {
+    if (!isUniqueViolation(error)) throw error;
+  }
+
+  /*
+   * Contended. Read the band that is already spoken for in one query instead of
+   * probing it with up to fifty failed inserts — the version without this walked
+   * the whole range a round trip at a time, which turns a rare collision into a
+   * latency cliff for the customer who hit it.
+   *
+   * The read is a shortcut, never the guarantee: a concurrent request can still
+   * claim a value between this query and our insert, so the loop below keeps the
+   * P2002 retry that makes the database the arbiter (the whole reason this
+   * function does not pre-flight a SELECT in the common case).
+   */
+  const claimed = await prisma.payment.findMany({
+    where: {
+      deletedAt: null,
+      provider: PaymentProvider.USDT_TRC20,
+      depositAddress,
+      status: { in: LIVE_STATUSES },
+      usdtExpectedRaw: {
+        gte: new Prisma.Decimal(baseRaw.toString()),
+        lt: new Prisma.Decimal((baseRaw + BigInt(MAX_AMOUNT_NUDGES)).toString()),
+      },
+    },
+    select: { usdtExpectedRaw: true },
+  });
+
+  // `.toFixed(0)` on a Decimal is exact integer formatting, not float math.
+  const taken = new Set(
+    claimed.map((row) => row.usdtExpectedRaw?.toFixed(0)).filter(Boolean),
+  );
+
+  for (let nudge = 1; nudge < MAX_AMOUNT_NUDGES; nudge += 1) {
+    const expectedRaw = baseRaw + BigInt(nudge);
+    if (taken.has(expectedRaw.toString())) continue;
+
     try {
-      return await create(baseRaw + BigInt(nudge));
+      return await create(expectedRaw);
     } catch (error) {
       if (isUniqueViolation(error)) continue;
       throw error;
@@ -595,7 +667,7 @@ export async function cancelPayment(
   await record({
     actor: auth,
     action: AuditAction.PAYMENT_CANCELLED,
-    entityType: 'payment',
+    entityType: 'Payment',
     entityId: payment.id,
     // Ids and minor units only — never a name or an address (AGENTS.md, PII).
     metadata: {
@@ -633,11 +705,70 @@ export type SettlementInput = {
   confirmations: number;
 };
 
+/*
+ * Everything the poller needs to announce a settled or mismatched payment —
+ * audit metadata, the customer to tell, and the quote to name.
+ *
+ * It travels on the outcome because the settlement transaction has already
+ * loaded the row it describes. The processor used to re-read the same payment by
+ * id the instant that transaction committed, once per credit and once per
+ * mismatch, purely to reach fields the money path was already holding. Bounded
+ * by transfers-per-sweep rather than unbounded, so never a real N+1 — but a
+ * round trip for data we had.
+ *
+ * A snapshot, not a live row: every field on it is one the settlement writes
+ * leave untouched (amounts, owner, quote link), so the pre-update read is the
+ * same value a re-read would have returned.
+ */
+export type PaymentNotice = {
+  id: string;
+  amount: number;
+  currency: string;
+  customerId: string;
+  quoteId: string | null;
+  customerEmail: string;
+  quoteReference: string | null;
+  quoteServiceName: string | null;
+  /** The locked expected amount as an exact integer string, if one was set. */
+  expectedUsdtRaw: string | null;
+};
+
+const NOTICE_INCLUDE = {
+  customer: { select: { email: true } },
+  quote: { select: { reference: true, serviceName: true } },
+} as const;
+
+type NoticeRow = {
+  id: string;
+  amount: number;
+  currency: string;
+  customerId: string;
+  quoteId: string | null;
+  usdtExpectedRaw: Prisma.Decimal | null;
+  customer: { email: string };
+  quote: { reference: string; serviceName: string } | null;
+};
+
+function toPaymentNotice(row: NoticeRow): PaymentNotice {
+  return {
+    id: row.id,
+    amount: row.amount,
+    currency: row.currency,
+    customerId: row.customerId,
+    quoteId: row.quoteId,
+    customerEmail: row.customer.email,
+    quoteReference: row.quote?.reference ?? null,
+    quoteServiceName: row.quote?.serviceName ?? null,
+    // `.toFixed(0)` on a Decimal is exact integer formatting, not float math.
+    expectedUsdtRaw: row.usdtExpectedRaw?.toFixed(0) ?? null,
+  };
+}
+
 export type SettlementOutcome =
-  | { result: 'credited'; paymentId: string }
+  | { result: 'credited'; paymentId: string; notice: PaymentNotice }
   | { result: 'confirming'; paymentId: string; confirmations: number }
-  | { result: 'underpaid'; paymentId: string }
-  | { result: 'overpaid'; paymentId: string }
+  | { result: 'underpaid'; paymentId: string; notice: PaymentNotice }
+  | { result: 'overpaid'; paymentId: string; notice: PaymentNotice }
   | { result: 'duplicate'; paymentId: string }
   /*
    * Unattributable money, now recorded rather than only logged. `firstSighting`
@@ -687,22 +818,60 @@ export type SettlementOutcome =
  * `advanceOrderStatus` only moves forward, so a payment confirming after a
  * reviewer already pushed the filing to Processing leaves it alone.
  */
+type OrderAdvance = {
+  orderId: string;
+  reference: string;
+  from: OrderStatus;
+  to: OrderStatus;
+};
+
 async function creditQuote(
   tx: Prisma.TransactionClient,
   quoteId: string,
   paidAt: Date,
-): Promise<void> {
+): Promise<OrderAdvance | null> {
   const quote = await tx.quote.update({
     where: { id: quoteId },
     data: { status: QuoteStatus.PAID, paidAt },
     select: { orderId: true, reference: true },
   });
 
-  if (!quote.orderId) return;
+  if (!quote.orderId) return null;
 
-  await advanceOrderStatus(tx, quote.orderId, OrderStatus.PAID, {
+  const advanced = await advanceOrderStatus(tx, quote.orderId, OrderStatus.PAID, {
     authorName: 'Marty Global',
     message: `Payment received — quote ${quote.reference} settled in full.`,
+  });
+
+  // Handed back rather than audited here: this runs inside the caller's
+  // transaction, and `record` writes on its own connection — an entry written in
+  // here would survive a rollback and claim a credit that never happened. The
+  // callers audit it once the transaction has committed.
+  return advanced ? { orderId: quote.orderId, ...advanced } : null;
+}
+
+/*
+ * The order moved because money settled, so the trail says so.
+ *
+ * A payment credit is audited against the Payment (the poller's `onCredited`),
+ * but the order carried to PAID is a state change on the order itself and
+ * AGENTS.md wants an entry for it — the same pair the quote-approval path writes
+ * (admin/quotes). Null actor: no person clicked, a job did. Fire-and-forget for
+ * the reason every audit call is — the money is already reconciled, and a failed
+ * log line must not undo it.
+ */
+function auditOrderAdvance(advance: OrderAdvance): void {
+  void record({
+    actor: null,
+    action: AuditAction.ORDER_STATUS_CHANGED,
+    entityType: 'Order',
+    entityId: advance.orderId,
+    metadata: {
+      from: advance.from,
+      to: advance.to,
+      reference: advance.reference,
+      via: 'payment_credited',
+    },
   });
 }
 
@@ -727,8 +896,12 @@ async function applyTransfer(input: SettlementInput): Promise<ApplyOutcome> {
     return { result: 'duplicate', paymentId: already.id };
   }
 
+  // Carried out of the transaction so the order's status entry is only written
+  // once the credit that caused it has actually committed.
+  let advanced: OrderAdvance | null = null;
+
   try {
-    return await prisma.$transaction(async (tx) => {
+    const outcome: ApplyOutcome = await prisma.$transaction(async (tx) => {
       /*
        * Match on (address, expected amount) among live payments only. The
        * partial unique index guarantees this is at most one row, so there is no
@@ -741,6 +914,11 @@ async function applyTransfer(input: SettlementInput): Promise<ApplyOutcome> {
           depositAddress: input.toAddress,
           status: { in: LIVE_STATUSES },
         },
+        // The customer and quote come along so the outcome can carry everything
+        // the poller announces without going back for the same row. Live
+        // payments at one deposit address are a handful of rows, so the two
+        // joins cost far less than the round trip they remove.
+        include: NOTICE_INCLUDE,
         orderBy: { createdAt: 'asc' },
       });
 
@@ -797,12 +975,67 @@ async function applyTransfer(input: SettlementInput): Promise<ApplyOutcome> {
       );
 
       const common = {
-        // Claiming the hash: unique, so this is the double-credit guard.
+        // Claiming the hash on the payment row.
         providerRef: input.transactionHash,
         usdtAmountRaw: new Prisma.Decimal(input.amountRaw.toString()),
         usdtDecimals: USDT_DECIMALS,
         confirmations: input.confirmations,
         chainConfirmedAt: blockAt,
+      };
+
+      /*
+       * THE double-credit guard, and the reason none of the writes below is a
+       * plain `update`.
+       *
+       * The unique index on `providerRef` stops two DIFFERENT payments claiming
+       * one hash — but two workers racing on the SAME transfer both match the
+       * same row and both write the same hash to it, which the index cannot
+       * object to. Without a predicate, the loser blocks on the row lock, wakes
+       * up after the winner commits, and credits the quote a second time.
+       *
+       * `updateMany` carries the predicate into the write: under READ COMMITTED
+       * Postgres re-evaluates the WHERE against the row as the winner left it,
+       * so a claimed payment matches nothing, `count` is 0, and the loser
+       * reports a duplicate without touching the quote. Every branch claims the
+       * same way, because a mismatch and a confirming match are equally
+       * unrepeatable.
+       */
+      const claim = async (
+        data: Prisma.PaymentUpdateManyMutationInput,
+      ): Promise<boolean> => {
+        const { count } = await tx.payment.updateMany({
+          where: {
+            id: payment.id,
+            providerRef: null,
+            status: { in: LIVE_STATUSES },
+          },
+          data,
+        });
+        return count > 0;
+      };
+
+      /*
+       * What a failed claim actually means, which is not always "we lost a race
+       * on this transfer". Two cases reach here:
+       *
+       *   - A concurrent worker settled THIS transfer first. Our hash is on a
+       *     row, so this is a duplicate and there is nothing more to do.
+       *   - The only candidate was already claimed by a DIFFERENT transfer. Our
+       *     money is then unattributable, and saying "duplicate" would drop it
+       *     silently instead of filing it in the reconciliation queue — the one
+       *     thing AGENTS.md does not allow money to do.
+       *
+       * The hash decides which, exactly as it does in the no-candidate branch.
+       */
+      const claimLost = async (): Promise<ApplyOutcome> => {
+        const winner = await tx.payment.findUnique({
+          where: { providerRef: input.transactionHash },
+          select: { id: true },
+        });
+
+        return winner
+          ? { result: 'duplicate', paymentId: winner.id }
+          : { result: 'unmatched' };
       };
 
       if (comparison === 'underpaid' || comparison === 'overpaid') {
@@ -811,39 +1044,45 @@ async function applyTransfer(input: SettlementInput): Promise<ApplyOutcome> {
             ? PaymentStatus.UNDERPAID
             : PaymentStatus.OVERPAID;
 
-        await tx.payment.update({
-          where: { id: payment.id },
-          data: {
-            ...common,
-            status,
-            failureReason: `Chain settled ${formatUsdtRaw(input.amountRaw)} USDT against an expected ${formatUsdtRaw(expectedRaw)} USDT`,
-          },
+        const claimed = await claim({
+          ...common,
+          status,
+          failureReason: `Chain settled ${formatUsdtRaw(input.amountRaw)} USDT against an expected ${formatUsdtRaw(expectedRaw)} USDT`,
         });
 
+        if (!claimed) return claimLost();
+
         // The quote stays unpaid: a mismatched amount has not settled the debt.
-        return { result: comparison, paymentId: payment.id };
+        return {
+          result: comparison,
+          paymentId: payment.id,
+          notice: toPaymentNotice(payment),
+        };
       }
 
       if (rateStale) {
-        await tx.payment.update({
-          where: { id: payment.id },
-          data: {
-            ...common,
-            status: PaymentStatus.UNDERPAID,
-            failureReason:
-              'Transfer arrived after the locked rate expired; needs manual review',
-          },
+        const claimed = await claim({
+          ...common,
+          status: PaymentStatus.UNDERPAID,
+          failureReason:
+            'Transfer arrived after the locked rate expired; needs manual review',
         });
-        return { result: 'underpaid', paymentId: payment.id };
+
+        if (!claimed) return claimLost();
+
+        return {
+          result: 'underpaid',
+          paymentId: payment.id,
+          notice: toPaymentNotice(payment),
+        };
       }
 
       if (input.confirmations < tronConfig.minConfirmations) {
         // Matched but not yet final. The hash is still claimed here, so the next
         // sweep updates this row instead of matching the transfer again.
-        await tx.payment.update({
-          where: { id: payment.id },
-          data: { ...common, status: PaymentStatus.PROCESSING },
-        });
+        if (!(await claim({ ...common, status: PaymentStatus.PROCESSING }))) {
+          return claimLost();
+        }
 
         return {
           result: 'confirming',
@@ -853,17 +1092,28 @@ async function applyTransfer(input: SettlementInput): Promise<ApplyOutcome> {
       }
 
       // Deep enough, exact amount, rate still valid: credit.
-      await tx.payment.update({
-        where: { id: payment.id },
-        data: { ...common, status: PaymentStatus.SUCCEEDED, paidAt: blockAt },
+      const claimed = await claim({
+        ...common,
+        status: PaymentStatus.SUCCEEDED,
+        paidAt: blockAt,
       });
 
+      if (!claimed) return claimLost();
+
       if (payment.quoteId) {
-        await creditQuote(tx, payment.quoteId, blockAt);
+        advanced = await creditQuote(tx, payment.quoteId, blockAt);
       }
 
-      return { result: 'credited', paymentId: payment.id };
+      return {
+        result: 'credited',
+        paymentId: payment.id,
+        notice: toPaymentNotice(payment),
+      };
     });
+
+    if (advanced) auditOrderAdvance(advanced);
+
+    return outcome;
   } catch (error) {
     /*
      * A unique violation here means a concurrent worker claimed the same hash
@@ -930,6 +1180,28 @@ async function recordUnmatchedTransfer(
         lastSeenAt: now,
       },
       select: { id: true },
+    });
+
+    /*
+     * Audited on the first sighting only, for the same reason the warning is:
+     * money arrived that we cannot attribute to anyone, and that is a finding an
+     * admin has to act on — not a system note. Only resolving it was audited
+     * before, which left the trail showing the answer with no record of the
+     * question. Later sweeps re-see the same transfer and must not write the
+     * entry again.
+     */
+    await record({
+      actor: SYSTEM_ACTOR,
+      action: AuditAction.UNMATCHED_TRANSFER_RECORDED,
+      entityType: 'UnmatchedTransfer',
+      entityId: created.id,
+      // Ids and the raw amount as a string. The sender address stays out of the
+      // trail the same way it stays out of the logs (AGENTS.md, Security & PII).
+      metadata: {
+        txHash: input.transactionHash,
+        amountRaw: input.amountRaw.toString(),
+        decimals: USDT_DECIMALS,
+      },
     });
 
     return { transferId: created.id, firstSighting: true };
@@ -1012,7 +1284,7 @@ function nearestCandidate<
 export async function creditConfirmedPayments(
   now: Date,
   confirmationsFor: (chainConfirmedAt: Date) => number,
-): Promise<string[]> {
+): Promise<PaymentNotice[]> {
   const confirming = await prisma.payment.findMany({
     where: {
       deletedAt: null,
@@ -1021,15 +1293,23 @@ export async function creditConfirmedPayments(
       chainConfirmedAt: { not: null },
       providerRef: { not: null },
     },
+    // The notice fields ride along for the same reason they do in the settlement
+    // path: this is the other place a credit is announced, and re-reading the row
+    // by id right after crediting it is a round trip for data already in hand.
     select: {
       id: true,
       quoteId: true,
       chainConfirmedAt: true,
       rateExpiresAt: true,
+      amount: true,
+      currency: true,
+      customerId: true,
+      usdtExpectedRaw: true,
+      ...NOTICE_INCLUDE,
     },
   });
 
-  const credited: string[] = [];
+  const credited: PaymentNotice[] = [];
 
   for (const payment of confirming) {
     if (!payment.chainConfirmedAt) continue;
@@ -1050,6 +1330,8 @@ export async function creditConfirmedPayments(
      * worker credited this row since the read, this updates zero rows and the
      * quote is not touched a second time.
      */
+    let advanced: OrderAdvance | null = null;
+
     const result = await prisma.$transaction(async (tx) => {
       const updated = await tx.payment.updateMany({
         where: { id: payment.id, status: PaymentStatus.PROCESSING },
@@ -1063,13 +1345,16 @@ export async function creditConfirmedPayments(
       if (updated.count === 0) return false;
 
       if (payment.quoteId && payment.chainConfirmedAt) {
-        await creditQuote(tx, payment.quoteId, payment.chainConfirmedAt);
+        advanced = await creditQuote(tx, payment.quoteId, payment.chainConfirmedAt);
       }
 
       return true;
     });
 
-    if (result) credited.push(payment.id);
+    // Same as the settlement path: audited after the commit, never inside it.
+    if (advanced) auditOrderAdvance(advanced);
+
+    if (result) credited.push(toPaymentNotice(payment));
   }
 
   return credited;
@@ -1079,9 +1364,16 @@ export async function creditConfirmedPayments(
  * Close out payments whose window has passed without a transfer. Only rows that
  * never matched anything are touched — `providerRef: null` — so a payment that
  * is mid-confirmation can never be expired out from under a real transfer.
+ *
+ * Read-then-update rather than one bulk `updateMany`, because this is an audited
+ * state change and the trail has to name the rows that actually moved. A bulk
+ * update reports a count, not ids, so auditing from the candidate list would
+ * write an "expired" entry for a payment a transfer rescued between the read and
+ * the write. Each update repeats the full guard, so the row still only flips if
+ * it is untouched at that moment, and a loser writes nothing.
  */
 export async function expireStalePayments(now: Date): Promise<number> {
-  const { count } = await prisma.payment.updateMany({
+  const stale = await prisma.payment.findMany({
     where: {
       deletedAt: null,
       provider: PaymentProvider.USDT_TRC20,
@@ -1089,13 +1381,44 @@ export async function expireStalePayments(now: Date): Promise<number> {
       providerRef: null,
       expiresAt: { lte: now },
     },
-    data: {
-      status: PaymentStatus.FAILED,
-      failureReason: 'Payment window expired with no transfer received',
-    },
+    select: { id: true, quoteId: true, amount: true, currency: true },
   });
 
-  return count;
+  let expired = 0;
+
+  for (const payment of stale) {
+    const { count } = await prisma.payment.updateMany({
+      where: {
+        id: payment.id,
+        status: { in: [PaymentStatus.PENDING, PaymentStatus.REQUIRES_ACTION] },
+        providerRef: null,
+      },
+      data: {
+        status: PaymentStatus.FAILED,
+        failureReason: 'Payment window expired with no transfer received',
+      },
+    });
+
+    if (count === 0) continue;
+
+    expired += 1;
+
+    // A job write: no human actor, which the audit schema allows.
+    await record({
+      actor: SYSTEM_ACTOR,
+      action: AuditAction.PAYMENT_EXPIRED,
+      entityType: 'Payment',
+      entityId: payment.id,
+      metadata: {
+        quoteId: payment.quoteId,
+        amount: payment.amount,
+        currency: payment.currency,
+        provider: 'usdt_trc20',
+      },
+    });
+  }
+
+  return expired;
 }
 
 // The audit actor for a job-driven credit: there is no human actor, which the

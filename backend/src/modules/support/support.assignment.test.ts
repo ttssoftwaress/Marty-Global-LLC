@@ -373,12 +373,47 @@ describe('ensureAssigned', () => {
       assignedAt: at('2026-07-01T10:00:00Z'),
     });
 
-    expect(await assignment.ensureAssigned(conversation.id)).toBeNull();
+    // The existing owner comes back rather than null: callers broadcast this as
+    // the conversation's assignee, so "I did not route it" must not read as
+    // "nobody owns it".
+    expect(await assignment.ensureAssigned(conversation.id)).toBe(AGENT_B);
 
     const row = await prisma.conversation.findUnique({
       where: { id: conversation.id },
       select: { assigneeId: true },
     });
     expect(row?.assigneeId).toBe(AGENT_B);
+  });
+
+  /*
+   * Two messages landing on the same ownerless thread at once: one wins the
+   * compare-and-set, the other loses it. The loser must still report the owner
+   * the thread now has — reporting null would broadcast a thread as unassigned
+   * moments after it was routed.
+   */
+  it('reports the winner when it loses the compare-and-set', async () => {
+    const conversation = await prisma.conversation.create({
+      data: {
+        customerId: CUSTOMER,
+        kind: ConversationKind.SUPPORT,
+        subject: 'Two messages at once',
+        status: ConversationStatus.OPEN,
+        lastMessageAt: new Date(),
+      },
+    });
+
+    const [first, second] = await Promise.all([
+      assignment.ensureAssigned(conversation.id),
+      assignment.ensureAssigned(conversation.id),
+    ]);
+
+    const row = await prisma.conversation.findUnique({
+      where: { id: conversation.id },
+      select: { assigneeId: true },
+    });
+
+    expect(row?.assigneeId).not.toBeNull();
+    expect(first).toBe(row?.assigneeId);
+    expect(second).toBe(row?.assigneeId);
   });
 });

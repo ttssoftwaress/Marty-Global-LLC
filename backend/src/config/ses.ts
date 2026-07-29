@@ -75,5 +75,3 @@ export async function sendEmail(input: SendEmailInput): Promise<string> {
 
   return result.MessageId;
 }
-
-export const sesEnabled = hasCredentials;

@@ -1,11 +1,10 @@
 import { useRef, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 
-import { useOverlay } from '../../../hooks/useOverlay';
+import { useOverlay } from '../../hooks/useOverlay';
 
 /*
- * The dialog shell the team screen's forms render inside — the add-staff form
- * and the delete confirmation both use it, so the two read as the same control.
+ * The dialog shell every admin form and confirmation renders inside.
  *
  * One component, two presentations: a bottom sheet that rises from the bottom
  * edge on mobile, and a centred modal from `md` up. Both are the same element —
@@ -16,33 +15,51 @@ import { useOverlay } from '../../../hooks/useOverlay';
  * The header and footer are fixed and the body between them scrolls, which is
  * what keeps a long form usable inside a sheet capped at 92dvh.
  *
- * Standard dialog behaviour, none of which the design covers (Design.md, filling
- * in states the design did not cover): the backdrop closes it, and `useOverlay`
- * owns the rest — Escape, the body scroll lock, focus moving into the panel on
- * open and back to whatever opened it on close, and the Tab trap while it is up.
+ * It lives here rather than in a feature because it had been hand-written three
+ * times — `catalog/ServiceFormDialog`, `team/AddStaffDialog`, and
+ * `payments/ResolveTransferDialog` — with two of them already imported across
+ * feature folders. The copies had drifted only in their desktop width, which is
+ * now the `size` prop. Duplication inside one area is what Design.md asks to be
+ * extracted; the rule those copies cited (areas never import from each other)
+ * is about marketing/portal/admin, not about features within admin.
  *
- * This mirrors `catalog/ServiceFormDialog`. The two are not shared because the
- * areas never import from each other's features — the same rule the rest of the
- * admin portal follows.
+ * Standard dialog behaviour, none of which the design covers (Design.md —
+ * filling in states the design left out): the backdrop closes it, and
+ * `useOverlay` owns the rest — Escape, the body scroll lock, focus moving into
+ * the panel on open and back to whatever opened it on close, and the Tab trap
+ * while it is up.
  */
 
-type AddStaffDialogProps = {
+/*
+ * Desktop width only — every size is the same full-bleed sheet on mobile.
+ * `sm` is a confirmation or a single-field note; `md` a short form; `lg` the
+ * multi-section forms (service, field, location, carrier) that need the room.
+ */
+const SIZE_STYLES = {
+  sm: 'md:max-w-[35rem]',
+  md: 'md:max-w-[42.5rem] lg:max-w-[45rem]',
+  lg: 'md:max-w-[42.5rem] lg:max-w-[47.5rem]',
+} as const;
+
+type FormDialogProps = {
   open: boolean;
   title: string;
   description?: string;
   footer: ReactNode;
+  size?: keyof typeof SIZE_STYLES;
   onClose: () => void;
   children: ReactNode;
 };
 
-export function AddStaffDialog({
+export function FormDialog({
   open,
   title,
   description,
   footer,
+  size = 'lg',
   onClose,
   children,
-}: AddStaffDialogProps) {
+}: FormDialogProps) {
   const panelRef = useRef<HTMLDivElement>(null);
 
   useOverlay({ open, onClose, panelRef });
@@ -64,7 +81,7 @@ export function AddStaffDialog({
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
-        className="relative flex max-h-[92dvh] w-full flex-col rounded-t-modal bg-white shadow-lg-elevation outline-none md:max-h-[86dvh] md:max-w-[42.5rem] md:rounded-modal lg:max-w-[45rem]"
+        className={`relative flex max-h-[92dvh] w-full flex-col rounded-t-modal bg-white shadow-lg-elevation outline-none md:max-h-[86dvh] md:rounded-modal ${SIZE_STYLES[size]}`}
       >
         {/* The grabber reads as "drag me down", so it is mobile-only. */}
         <div className="flex justify-center pb-1 pt-3 md:hidden">

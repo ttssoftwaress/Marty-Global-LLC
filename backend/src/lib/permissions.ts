@@ -54,6 +54,12 @@ export const PERMISSION_AREAS = [
    */
   { key: 'support.assign', label: 'Assign chats to staff' },
   { key: 'reports', label: 'Reports & analytics' },
+  /*
+   * The marketing contact form's submissions (`/admin/leads`). Org-wide with no
+   * owner to scope it to — a lead isn't assigned to anyone until someone acts on
+   * it — so it carries no `.all` companion, the same shape as `catalog`.
+   */
+  { key: 'leads', label: 'Contact form leads' },
   { key: 'team', label: 'Team & staff management' },
   /*
    * Business settings — the reference data every other section picks FROM: the
@@ -238,7 +244,7 @@ export const STAFF_ROLES: readonly StaffRoleDefinition[] = [
     authRole: Role.STAFF,
     // After-sales requests are this role's core work, which is the reason the
     // area is separate from `orders` at all.
-    defaults: ['support', 'requests', 'customers', 'orders'],
+    defaults: ['support', 'requests', 'customers', 'orders', 'leads'],
     locked: [],
   },
   {

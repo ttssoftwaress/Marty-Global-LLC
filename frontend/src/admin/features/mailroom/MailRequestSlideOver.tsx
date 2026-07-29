@@ -270,7 +270,12 @@ export function MailRequestSlideOver({
                 strokeWidth={1.75}
                 aria-hidden="true"
               />
-              <p className="min-w-0 flex-1 text-[0.8125rem] leading-[1.125rem] text-[#7f1d1d]">
+              {/*
+                Body copy is neutral, not red: the design's #7f1d1d has no
+                token, and the system's red-on-`missing-bg` pair lands at 4.0:1
+                — under AA for 13px. The red border and icon carry the alarm.
+              */}
+              <p className="min-w-0 flex-1 text-[0.8125rem] leading-[1.125rem] text-text">
                 This mail item will be marked as securely destroyed. This action
                 is irreversible.
               </p>

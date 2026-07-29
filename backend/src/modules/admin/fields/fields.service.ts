@@ -60,9 +60,10 @@ export type FieldDefinitionView = {
   usageCount: number;
   /*
    * Whether removing this field outright is available at all. False the moment
-   * any service form or request type references the key; `deleteField` runs the
-   * fuller check — stored answers included — because a field dropped from a form
-   * after orders were placed has a usage count of zero and answers behind it.
+   * any service form or request type references the key (`isDeletable`);
+   * `deleteField` runs that same check plus stored answers, because a field
+   * dropped from a form after orders were placed has a usage count of zero and
+   * answers behind it.
    */
   canDelete: boolean;
 };
@@ -95,6 +96,20 @@ function toView(
     usageCount,
     canDelete,
   };
+}
+
+/*
+ * The one expression of the cheap half of rule 3 — "removing this outright is
+ * still on offer" as the list and the update response can answer it.
+ *
+ * Written once because the same predicate spelled out at each call site is the
+ * drift that lets a visible button meet a refused call. `deleteField` adds the
+ * stored-answer check on top: a field dropped from every form after orders were
+ * placed has a usage count of zero and answers behind it, and only the delete
+ * path pays for that query.
+ */
+function isDeletable(usageCount: number, inRequestType: boolean): boolean {
+  return usageCount === 0 && !inRequestType;
 }
 
 /*
@@ -238,11 +253,7 @@ export async function listFields(
   return {
     fields: page.rows.map((row) => {
       const usageCount = usage.get(row.key) ?? 0;
-      return toView(
-        row,
-        usageCount,
-        usageCount === 0 && !requestKeys.has(row.key),
-      );
+      return toView(row, usageCount, isDeletable(usageCount, requestKeys.has(row.key)));
     }),
     nextCursor: page.nextCursor,
     totalResults,
@@ -364,7 +375,7 @@ export async function updateField(
   return toView(
     definition,
     usageCount,
-    usageCount === 0 && !requestKeys.has(definition.key),
+    isDeletable(usageCount, requestKeys.has(definition.key)),
   );
 }
 
@@ -400,7 +411,7 @@ export async function deleteField(
   const usageCount = usage.get(existing.key) ?? 0;
   const inRequestType = requestKeys.has(existing.key);
 
-  if (usageCount > 0 || inRequestType || hasAnswers) {
+  if (!isDeletable(usageCount, inRequestType) || hasAnswers) {
     const reason = hasAnswers
       ? 'customers have already answered it'
       : usageCount > 0

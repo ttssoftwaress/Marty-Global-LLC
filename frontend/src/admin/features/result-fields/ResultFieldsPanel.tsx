@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Plus, Search } from 'lucide-react';
 
 import { ApiError } from '@/services/api';
+import { DataErrorState } from '../../components/DataErrorState';
 import { RESULT_FIELD_TYPE_OPTIONS, type ResultFieldDefinition } from '../../types/delivery';
 import { useAdminResultFields, useDeleteResultField } from './queries';
 import { ResultFieldDialog } from './ResultFieldDialog';
@@ -136,6 +137,15 @@ export function ResultFieldsPanel() {
             />
           ))}
         </div>
+      ) : fields.isError ? (
+        /* A failed fetch is not an empty registry — see the request panel beside
+           this one: the empty copy would report data loss for a network fault. */
+        <DataErrorState
+          title="We couldn’t load the result registry"
+          description="Something went wrong fetching the registered result fields. Try again."
+          onRetry={() => void fields.refetch()}
+          isRetrying={fields.isFetching}
+        />
       ) : rows.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-gray-300 px-6 py-12 text-center">
           <p className="text-body-lg font-medium text-text">

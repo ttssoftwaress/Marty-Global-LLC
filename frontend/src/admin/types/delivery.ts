@@ -201,11 +201,15 @@ export type AdminOrderItemDelivery = {
   result: AdminResult | null;
 };
 
-// What the form submits. Every value is a string; the backend parses it against
-// the field's own type, which is the only layer that knows the schema.
+// What the form submits — mirrors `resultValueInputSchema` in the backend's
+// `results.validation.ts`. Every scalar is a string; the backend parses it
+// against the field's own type, which is the only layer that knows the schema.
 export type ResultValueInput = {
   fieldKey: string;
   value?: string | null;
+  // Multi-value shapes (a file list) the scalar can't carry — the write-side
+  // counterpart of `ResultValue.valueJson` above.
+  valueJson?: unknown;
   objectKey?: string;
   contentType?: string;
   sizeBytes?: number;

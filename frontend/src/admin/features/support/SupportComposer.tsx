@@ -133,7 +133,7 @@ export function SupportComposer({
         <div
           className={`flex min-w-0 flex-1 items-end gap-2.5 rounded-card border px-3.5 py-3 transition-colors focus-within:border-primary md:gap-1.5 md:rounded-lg md:px-2.5 md:py-2 lg:gap-2.5 lg:rounded-input lg:px-3.5 lg:py-3 ${
             mode === 'note'
-              ? 'border-[rgba(245,158,11,0.5)] bg-[#fffbeb]'
+              ? 'border-[var(--color-status-note-border)] bg-[var(--color-status-note-surface)]'
               : 'border-gray-200 bg-white'
           }`}
         >

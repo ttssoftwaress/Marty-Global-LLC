@@ -181,6 +181,32 @@ async function intentFor(quoteId: string) {
 }
 
 async function cleanup() {
+  /*
+   * Audit rows carry no foreign key to what they describe — that is the point of
+   * them, a trail outlives the record — so the ids have to be collected before
+   * the rows they name are deleted.
+   */
+  const audited = [
+    ...(
+      await prisma.unmatchedTransfer.findMany({
+        where: {
+          toAddress: { in: [DEPOSIT_ADDRESS, 'TSomeoneElsesAddress99999999999999'] },
+        },
+        select: { id: true },
+      })
+    ).map((row) => row.id),
+    ...(
+      await prisma.payment.findMany({
+        where: { customerId: { in: USER_IDS } },
+        select: { id: true },
+      })
+    ).map((row) => row.id),
+  ];
+
+  if (audited.length) {
+    await prisma.auditLog.deleteMany({ where: { entityId: { in: audited } } });
+  }
+
   await prisma.unmatchedTransfer.deleteMany({
     where: { toAddress: { in: [DEPOSIT_ADDRESS, 'TSomeoneElsesAddress99999999999999'] } },
   });
@@ -520,7 +546,7 @@ describe('settleTransfer', () => {
       new Date(),
       () => MIN_CONFIRMATIONS,
     );
-    expect(credited).toContain(intent.id);
+    expect(credited.map((payment) => payment.id)).toContain(intent.id);
 
     row = await prisma.payment.findUniqueOrThrow({ where: { id: intent.id } });
     expect(row.status).toBe(PaymentStatus.SUCCEEDED);
@@ -543,7 +569,7 @@ describe('settleTransfer', () => {
     const first = await creditConfirmedPayments(new Date(), () => MIN_CONFIRMATIONS);
     const second = await creditConfirmedPayments(new Date(), () => MIN_CONFIRMATIONS);
 
-    expect(first).toEqual([intent.id]);
+    expect(first.map((payment) => payment.id)).toEqual([intent.id]);
     // Already SUCCEEDED, so the second sweep finds nothing to do.
     expect(second).toEqual([]);
   });
@@ -1074,5 +1100,108 @@ describe('the partial unique index', () => {
     });
 
     expect(reused.id).toBeTruthy();
+  });
+});
+
+// --- The audit trail -----------------------------------------------------
+
+/*
+ * AGENTS.md, Backend: every state change on a payment writes an entry through
+ * the `audit` module. The guarantee is not "something was logged" — it is that
+ * an admin can find the entry later, which is a property of two fields together:
+ * the action verb the viewer filters on, and the `entityType` the row is filed
+ * under. A window opened with no entry and an entry filed as `payment` instead
+ * of `Payment` are the same defect from that screen, and neither shows up in any
+ * test that only checks statuses and money.
+ */
+const auditFor = (entityId: string) =>
+  prisma.auditLog.findMany({ where: { entityId }, orderBy: { createdAt: 'asc' } });
+
+describe('the audit trail', () => {
+  it('records the window opening, with the locked rate and no address', async () => {
+    const quote = await createQuote();
+    const intent = await intentFor(quote.id);
+
+    const entries = await auditFor(intent.id);
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.action).toBe('payment.intent_created');
+    // The model name, matching every other payment entry — the trail is only
+    // queryable by entity if the spelling is one spelling.
+    expect(entries[0]?.entityType).toBe('Payment');
+    expect(entries[0]?.actorId).toBe(CUSTOMER_ID);
+
+    const metadata = entries[0]?.metadata as Record<string, unknown>;
+    expect(metadata.quoteId).toBe(quote.id);
+    expect(metadata.amount).toBe(QUOTE_TOTAL);
+    expect(metadata.currency).toBe('USD');
+    expect(typeof metadata.lockedRateMinor).toBe('number');
+    // AGENTS.md, Security & PII: an address never reaches the trail.
+    expect(JSON.stringify(metadata)).not.toContain(DEPOSIT_ADDRESS);
+  });
+
+  it('writes one entry for a replayed Idempotency-Key, not two', async () => {
+    // The retry resolves to the same payment, so it changed nothing there is a
+    // second thing to record.
+    const quote = await createQuote();
+    const key = nextKey();
+
+    const first = await createIntent(
+      reqAs(auth(CUSTOMER_ID)),
+      { quoteId: quote.id, method: 'usdt_trc20' },
+      key,
+    );
+    await createIntent(
+      reqAs(auth(CUSTOMER_ID)),
+      { quoteId: quote.id, method: 'usdt_trc20' },
+      key,
+    );
+
+    expect(await auditFor(first.id)).toHaveLength(1);
+  });
+
+  it('records the window expiring, as a system write', async () => {
+    const quote = await createQuote();
+    const intent = await intentFor(quote.id);
+
+    await expireStalePayments(new Date(Date.now() + 24 * 60 * 60 * 1000));
+
+    const expired = (await auditFor(intent.id)).find(
+      (row) => row.action === 'payment.expired',
+    );
+
+    expect(expired?.entityType).toBe('Payment');
+    expect(expired?.actorId).toBeNull(); // A job closed it, not a person.
+    expect((expired?.metadata as Record<string, unknown>).quoteId).toBe(quote.id);
+  });
+
+  it('does not record an expiry for a payment a transfer rescued', async () => {
+    // The entry names the rows that actually moved, so a payment mid-
+    // confirmation must leave no "expired" trace behind it.
+    const quote = await createQuote();
+    const intent = await intentFor(quote.id);
+
+    await settleTransfer(
+      transfer({ amountRaw: BigInt(intent.usdt!.amountRaw), confirmations: 1 }),
+    );
+    await expireStalePayments(new Date(Date.now() + 24 * 60 * 60 * 1000));
+
+    const entries = await auditFor(intent.id);
+    expect(entries.map((row) => row.action)).not.toContain('payment.expired');
+  });
+
+  it('records a customer cancelling their own window', async () => {
+    const quote = await createQuote();
+    const intent = await intentFor(quote.id);
+
+    await cancelPayment(reqAs(auth(CUSTOMER_ID)), intent.id);
+
+    const cancelled = (await auditFor(intent.id)).find(
+      (row) => row.action === 'payment.cancelled',
+    );
+
+    expect(cancelled?.entityType).toBe('Payment');
+    expect(cancelled?.actorId).toBe(CUSTOMER_ID);
+    expect(cancelled?.actorRole).toBe(Role.CUSTOMER);
   });
 });

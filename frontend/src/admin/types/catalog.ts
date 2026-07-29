@@ -342,12 +342,15 @@ export type ServiceWritePayload = {
   footer: ServiceFooter;
   detailFields: ServiceFieldRef[];
   regionCodes: string[];
+  // Same tier shape the backend's `pricingTier` schema accepts on both create
+  // and update — including `description`, so the two payloads stay identical.
   pricingTiers: {
     id?: string;
     name: string;
     price: Money;
     regionCode: string | null;
     turnaround?: string;
+    description?: string;
   }[];
   active: boolean;
 };

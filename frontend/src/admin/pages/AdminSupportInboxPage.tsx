@@ -151,6 +151,9 @@ export function AdminSupportInboxPage() {
             <SupportConversationList
               conversations={conversations}
               isLoading={conversationsQuery.isPending}
+              isError={conversationsQuery.isError}
+              isRetrying={conversationsQuery.isFetching}
+              onRetry={() => void conversationsQuery.refetch()}
               filters={firstPage?.filters ?? SUPPORT_FILTERS_FALLBACK}
               filter={filter}
               onFilterChange={setFilter}

@@ -20,8 +20,21 @@ const message = {
   },
 };
 
+/*
+ * The per-caller bucket key.
+ *
+ * `req.ip` is undefined whenever Express cannot resolve one — a misconfigured
+ * `trust proxy`, or a socket already destroyed by the time the limiter runs.
+ * Passing '' straight through would hash every such caller to the SAME bucket,
+ * which is the worst of both worlds: one attacker exhausts the window for
+ * everyone, and everyone else's attempts count against the attacker. So fall
+ * back to the raw socket address first, and only then to an explicit shared
+ * bucket — an unknown caller is rate-limited alongside other unknown callers,
+ * never mistaken for a real address.
+ */
 function ipKey(req: Request): string {
-  return ipKeyGenerator(req.ip ?? '');
+  const address = req.ip ?? req.socket.remoteAddress;
+  return address ? ipKeyGenerator(address) : 'unresolved-ip';
 }
 
 // `name` namespaces this tier's counters in Redis. The tiers must not share a

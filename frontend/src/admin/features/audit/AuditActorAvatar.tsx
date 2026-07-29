@@ -1,5 +1,6 @@
 import { Cog, HelpCircle } from 'lucide-react';
 
+import { InitialsAvatar } from '../../components/InitialsAvatar';
 import type { AdminAuditActor } from '../../types/audit';
 
 /*
@@ -19,28 +20,11 @@ import type { AdminAuditActor } from '../../types/audit';
  * name: the service decides which of the two an actorless row is, and this only
  * draws the answer.
  *
- * For a real account the tint is picked with a hash of the actor id, so one
- * person keeps one colour down the whole trail rather than shifting with their
- * position in it. Same rule as every other avatar in the admin portal.
+ * For a real account it is the shared `InitialsAvatar`, whose tint is hashed off
+ * the actor id — so one person keeps one colour down the whole trail rather than
+ * shifting with their position in it. Same rule as every other avatar in the
+ * admin portal.
  */
-
-const TINTS = [
-  'bg-[#e0e7ff] text-[#4338ca]',
-  'bg-[#ffedd5] text-[#c2410c]',
-  'bg-[#d1fae5] text-[#065f46]',
-  'bg-[#f3e8ff] text-[#6b21a8]',
-  'bg-[#fce7f3] text-[#9d174d]',
-  'bg-[#e0f2fe] text-[#0369a1]',
-  'bg-[#fef3c7] text-[#92400e]',
-];
-
-function tintFor(seed: string) {
-  let hash = 0;
-  for (let index = 0; index < seed.length; index += 1) {
-    hash = (hash * 31 + seed.charCodeAt(index)) >>> 0;
-  }
-  return TINTS[hash % TINTS.length];
-}
 
 type AuditActorAvatarProps = {
   actor: AdminAuditActor;
@@ -73,11 +57,10 @@ export function AuditActorAvatar({ actor, className }: AuditActorAvatarProps) {
   }
 
   return (
-    <span
-      aria-hidden="true"
-      className={`flex shrink-0 items-center justify-center rounded-full text-small font-semibold ${tintFor(actor.id ?? actor.name)} ${size}`}
-    >
-      {actor.initials}
-    </span>
+    <InitialsAvatar
+      seed={actor.id ?? actor.name}
+      initials={actor.initials}
+      className={size}
+    />
   );
 }

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { formatOrderDate } from '../../lib/format';
 import type { CustomerOrderRow } from '../../types/customer-detail';
 import { OrderStatusChip } from '../orders/OrderStatusChip';
-import { stopRowClick, useOpenOrderRow } from '../orders/rowNavigation';
+import { ROW_FOCUS_CLASS, stopRowClick, useOrderRowProps } from '../orders/rowNavigation';
 
 /*
  * The customer's orders as a table — the tablet and desktop presentation (mobile
@@ -24,6 +24,8 @@ import { stopRowClick, useOpenOrderRow } from '../orders/rowNavigation';
  * The whole row opens the order, the same as the main queue's — the two tables
  * list the same records, so they must not disagree about whether a row is
  * clickable. The action link stops the click itself so it is not handled twice.
+ * The row carries the shared row props, so it is a tab stop that Enter/Space
+ * opens as well.
  */
 
 type CustomerOrdersTableProps = {
@@ -34,7 +36,7 @@ const HEAD_CELL =
   'px-0 py-0 text-left text-caption font-semibold uppercase tracking-[0.6px] text-gray-400 lg:text-gray-500';
 
 export function CustomerOrdersTable({ orders }: CustomerOrdersTableProps) {
-  const openOrderRow = useOpenOrderRow();
+  const rowProps = useOrderRowProps();
 
   return (
     <div className="hidden w-full overflow-x-auto md:block">
@@ -69,8 +71,8 @@ export function CustomerOrdersTable({ orders }: CustomerOrdersTableProps) {
           {orders.map((order) => (
             <tr
               key={order.id}
-              onClick={() => openOrderRow(order.to)}
-              className="cursor-pointer border-b border-gray-200 transition-colors last:border-b-0 hover:bg-gray-50"
+              {...rowProps(order.to)}
+              className={`cursor-pointer border-b border-gray-200 transition-colors last:border-b-0 hover:bg-gray-50 ${ROW_FOCUS_CLASS}`}
             >
               <td className="h-16 py-3 pl-5 pr-4 align-middle lg:h-table-row lg:pl-card">
                 <span className="block truncate text-body font-medium text-text">

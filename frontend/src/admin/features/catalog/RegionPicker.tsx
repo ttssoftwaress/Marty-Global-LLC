@@ -22,6 +22,10 @@ type RegionPickerProps = {
   onChange: (codes: string[]) => void;
   error?: string;
   isLoading?: boolean;
+  /** The region list failed to load — distinct from there being none yet. */
+  isError?: boolean;
+  isRetrying?: boolean;
+  onRetry?: () => void;
 };
 
 export function RegionPicker({
@@ -30,6 +34,9 @@ export function RegionPicker({
   onChange,
   error,
   isLoading,
+  isError = false,
+  isRetrying = false,
+  onRetry,
 }: RegionPickerProps) {
   const toggle = (code: string) => {
     onChange(
@@ -56,6 +63,34 @@ export function RegionPicker({
             />
           ))}
         </div>
+
+        {error ? <p className="text-caption text-error">{error}</p> : null}
+      </div>
+    );
+  }
+
+  /*
+   * A failed load, said as one. It has to come before the empty branch below:
+   * a failed fetch also leaves the list empty, and the empty copy would send the
+   * admin to Admin settings to add jurisdictions that are already there.
+   */
+  if (isError) {
+    return (
+      <div className="flex flex-col items-start gap-2">
+        <p role="alert" className="text-body text-error">
+          The list of locations didn&rsquo;t load, so none can be chosen here yet.
+        </p>
+
+        {onRetry ? (
+          <button
+            type="button"
+            onClick={onRetry}
+            disabled={isRetrying}
+            className="flex h-9 items-center justify-center rounded-control border border-primary px-3 text-small font-semibold text-primary transition-colors hover:bg-primary-light disabled:cursor-not-allowed disabled:border-gray-200 disabled:text-gray-400 disabled:hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          >
+            {isRetrying ? 'Retrying…' : 'Try again'}
+          </button>
+        ) : null}
 
         {error ? <p className="text-caption text-error">{error}</p> : null}
       </div>

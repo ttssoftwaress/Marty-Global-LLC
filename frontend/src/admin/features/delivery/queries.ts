@@ -279,7 +279,11 @@ export function useSaveAdminRequestResult(requestId: string) {
       ).then((res) => res.data),
     onSuccess: (data) => {
       queryClient.setQueryData(adminRequestResultKey(requestId), data);
-      void queryClient.invalidateQueries({ queryKey: adminRequestKey(requestId) });
+      // The record's primary field is the queue row's own title, so amending it
+      // restates the list as well as this request. Invalidate the whole branch —
+      // it covers the detail and every filter key the member could have arrived
+      // through, the same reason the status/assignee mutation does.
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'requests'] });
     },
   });
 }

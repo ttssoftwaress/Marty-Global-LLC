@@ -685,6 +685,11 @@ model OrderDocument {
   contentType String?
   // Bytes. Int is ample: uploads are capped far below 2 GB.
   sizeBytes   Int?
+  // The Idempotency-Key that created this row, set only on a placeholder raised
+  // by "request a document" — that write emails the customer, so a retry must
+  // resolve to this row instead of asking them twice (AGENTS.md, API). Null on
+  // every row the team or an upload created.
+  idempotencyKey String? @unique
   createdAt   DateTime  @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
   deletedAt   DateTime? @db.Timestamptz(3)
@@ -717,6 +722,11 @@ model OrderActivity {
   // feed is for. The flag lives on the row rather than being inferred from the
   // author, because the team writes both kinds.
   internal     Boolean             @default(false)
+  // The Idempotency-Key the admin write accepted. A customer-visible reply emails
+  // the customer, and an email cannot be un-sent — so a retried request has to
+  // land on this same row rather than write a second one (AGENTS.md, API).
+  // Nullable: every entry written by a job or by an older request has no key.
+  idempotencyKey String?           @unique
   occurredAt   DateTime            @default(now()) @db.Timestamptz(3)
   createdAt    DateTime            @default(now()) @db.Timestamptz(3)
   updatedAt    DateTime            @updatedAt @db.Timestamptz(3)
@@ -1163,10 +1173,14 @@ model MailRoom {
 // processes — the inbox renders a "Scanning" preview and no pages exist yet.
 // `storageExpiresAt` is the shred date; the inbox flags an item approaching it so
 // the customer can request forwarding in time.
+//
+// The status is the item's lifecycle, not whether a scan exists — that is
+// `scanReady`, and a SCANNED value alongside it was a second answer to the same
+// question that nothing could write without making the lifecycle ambiguous (an
+// item is scanned *and* unread). Dropped July 2026; those rows became NEW.
 enum MailItemStatus {
   NEW
   VIEWED
-  SCANNED
   FORWARDED
   ACTION_REQUESTED
   ARCHIVED
@@ -1181,7 +1195,10 @@ model MailItem {
   receivedAt       DateTime  @db.Timestamptz(3)
   storageExpiresAt DateTime  @db.Timestamptz(3)
   scanReady        Boolean   @default(false)
-  // Why an item needs action ("Forwarding address required") and by when.
+  // Why an item needs action ("Forwarding address required") and by when. Both
+  // are set by the operator when they file the scan: a due date is what puts the
+  // item in ACTION_REQUESTED with nothing the customer has asked for yet, which
+  // is the one state that means "we are waiting on you" (mailroom.service.ts).
   note             String?
   responseDueAt    DateTime? @db.Timestamptz(3)
   // R2 object key for the combined PDF, once the scan finishes. Served only as a
@@ -1613,6 +1630,17 @@ model Quote {
   issuedAt   DateTime  @db.Timestamptz(3)
   validUntil DateTime  @db.Timestamptz(3)
   paidAt     DateTime? @db.Timestamptz(3)
+  // The last payment reminder staff sent from the billing ledger, and how many
+  // have gone out. Stored on the quote rather than derived from the notification
+  // ledger because it is the throttle: the cooldown is enforced as a conditional
+  // update on this column, so a double-click chases the customer once.
+  lastRemindedAt DateTime? @db.Timestamptz(3)
+  reminderCount  Int       @default(0)
+  // The Idempotency-Key the send accepted. Sending a quote emails the customer
+  // and advances the order, so a retried request resolves to this same offer
+  // rather than raising a second one (AGENTS.md, API). Null on a quote written
+  // before the key existed, and on any future non-request writer.
+  idempotencyKey String?   @unique
   createdAt  DateTime  @default(now()) @db.Timestamptz(3)
   updatedAt  DateTime  @updatedAt @db.Timestamptz(3)
   deletedAt  DateTime? @db.Timestamptz(3)

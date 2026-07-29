@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { formatOrderDate } from '../../lib/format';
 import type { AdminOrderRow } from '../../types/orders';
 import { OrderStatusChip } from './OrderStatusChip';
-import { stopRowClick, useOpenOrderRow } from './rowNavigation';
+import { ROW_FOCUS_CLASS, stopRowClick, useOrderRowProps } from './rowNavigation';
 
 /*
  * The queue table — the desktop and tablet presentation (mobile renders cards
@@ -28,10 +28,13 @@ import { stopRowClick, useOpenOrderRow } from './rowNavigation';
  * The whole row opens the order. The link only draws the trailing button, but a
  * queue whose rows are inert is one staff click at and nothing happens, and a
  * reviewer works this list all day. The reference stays a real anchor, so the
- * destination is keyboard-reachable and can be opened in a new tab; the row
- * handler is the convenience layer over it. The select checkbox and the two
- * links stop the click themselves, so selecting a row never navigates away from
- * the selection.
+ * destination can be opened in a new tab; the row is the convenience layer over
+ * it. The select checkbox and the two links stop the click themselves, so
+ * selecting a row never navigates away from the selection.
+ *
+ * The row carries the row props rather than a bare `onClick`, so it is a tab
+ * stop that Enter/Space opens as well — the enlarged target is not pointer-only.
+ * It keeps its native `row` role (see rowNavigation for why no `role="button"`).
  */
 
 type OrdersTableProps = {
@@ -52,7 +55,7 @@ export function OrdersTable({
 }: OrdersTableProps) {
   const allSelected = orders.length > 0 && selectedIds.length === orders.length;
   const someSelected = selectedIds.length > 0 && !allSelected;
-  const openOrderRow = useOpenOrderRow();
+  const rowProps = useOrderRowProps();
 
   return (
     <div className="hidden w-full overflow-x-auto md:block">
@@ -105,8 +108,8 @@ export function OrdersTable({
             return (
               <tr
                 key={order.id}
-                onClick={() => openOrderRow(order.to)}
-                className={`cursor-pointer border-b border-gray-200 transition-colors last:border-b-0 ${
+                {...rowProps(order.to)}
+                className={`cursor-pointer border-b border-gray-200 transition-colors last:border-b-0 ${ROW_FOCUS_CLASS} ${
                   isSelected ? 'bg-primary-light/40' : 'hover:bg-gray-50'
                 }`}
               >

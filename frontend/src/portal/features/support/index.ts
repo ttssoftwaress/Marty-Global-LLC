@@ -7,6 +7,7 @@ export { EmptyThread } from './EmptyThread';
 export { NewConversationDialog } from './NewConversationDialog';
 export { TypingIndicator } from './TypingIndicator';
 export {
+  conversationsOf,
   useConversations,
   useConversation,
   useCreateConversation,

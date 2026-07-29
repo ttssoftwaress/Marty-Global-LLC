@@ -651,4 +651,118 @@ export async function getGrowth(
   };
 }
 
+// --- Export --------------------------------------------------------------
+
+/*
+ * The header's "Export report" control. The file is produced here rather than
+ * serialized in the browser so it carries the same figures the screen does —
+ * resolved by the same functions, under the same period, and narrowed by the
+ * same scope. A client-side export would only ever hold what that browser had
+ * cached, and would hand a scoped reviewer a file the API never agreed to.
+ *
+ * Every section calls the function the matching card calls, so the file cannot
+ * drift from the screen: a change to how revenue buckets changes both at once.
+ * That costs a few repeated reads per export, which is the right trade for a
+ * control an admin presses occasionally.
+ *
+ * MONEY: money columns carry the stored integer minor units alongside the
+ * display string, so a spreadsheet can total the column without re-parsing a
+ * formatted amount (AGENTS.md, Money — no float arithmetic anywhere).
+ */
+
+// One CSV cell. Anything containing a comma, quote, or newline is quoted, and
+// inner quotes are doubled — the whole of RFC 4180 that matters here.
+function csvCell(value: string | number): string {
+  const text = String(value);
+  return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+}
+
+const csvRow = (cells: (string | number)[]): string => cells.map(csvCell).join(',');
+
+const isoDay = (date: Date): string => date.toISOString().slice(0, 10);
+
+export type ReportExport = { filename: string; csv: string };
+
+export async function exportCsv(
+  actor: AuthContext,
+  range: ReportRange,
+): Promise<ReportExport> {
+  const resolved = resolveRange(range, new Date());
+
+  const [summary, revenue, byService, byRegion, funnel, growth] = await Promise.all([
+    getSummary(actor, range),
+    getRevenue(actor, range),
+    getBreakdown(actor, 'service', range),
+    getBreakdown(actor, 'region', range),
+    getFunnel(actor, range),
+    getGrowth(actor, range),
+  ]);
+
+  // The window's last included day. `end` is exclusive, so printing it would
+  // claim a day the figures do not cover.
+  const lastDay = new Date(resolved.end.getTime() - 1);
+  const currency = revenue.currency ?? DEFAULT_CURRENCY;
+
+  const lines: string[] = [
+    csvRow(['Marty Global LLC — Reports & analytics']),
+    csvRow(['Period', range.period]),
+    csvRow(['From', isoDay(resolved.start)]),
+    csvRow(['To', isoDay(lastDay)]),
+    // What the figures below cover. Without it a scoped reviewer's export is
+    // indistinguishable from an org-wide one once it leaves the screen.
+    csvRow(['Scope', summary.scope === 'all' ? 'All filings' : 'Assigned to you']),
+    '',
+    csvRow(['Summary']),
+    csvRow(['Metric', 'Value', 'Change', 'Direction']),
+    ...summary.kpis.map((kpi) =>
+      csvRow([kpi.label, kpi.value, kpi.trend.label, kpi.trend.direction]),
+    ),
+    '',
+    csvRow(['Revenue over time']),
+    csvRow(['Period', `Amount (${currency} minor units)`, 'Currency', 'Amount']),
+    ...revenue.points.map((point) =>
+      csvRow([
+        point.label,
+        point.value,
+        currency,
+        formatMoneyDisplay(money(point.value, currency)),
+      ]),
+    ),
+    '',
+    csvRow(['Orders by service']),
+    csvRow(['Service', 'Orders', 'Share %']),
+    ...byService.slices.map((slice) =>
+      csvRow([slice.label, slice.count, slice.percentage]),
+    ),
+    csvRow([byService.totalLabel, byService.total, 100]),
+    '',
+    csvRow(['Orders by region']),
+    csvRow(['Region', 'Orders', 'Share %']),
+    ...byRegion.slices.map((slice) =>
+      csvRow([slice.label, slice.count, slice.percentage]),
+    ),
+    csvRow([byRegion.totalLabel, byRegion.total, 100]),
+    '',
+    csvRow(['Conversion funnel']),
+    csvRow(['Stage', 'Count', 'Conversion from previous stage']),
+    ...funnel.map((stage) => csvRow([stage.label, stage.value, stage.percentage])),
+    '',
+    csvRow(['Customer growth']),
+    csvRow(['Period', 'New customers', 'Cumulative total']),
+    ...growth.points.map((point) =>
+      csvRow([point.label, point.newCustomers, point.cumulative]),
+    ),
+  ];
+
+  return {
+    filename: `marty-reports-${isoDay(resolved.start)}-to-${isoDay(lastDay)}.csv`,
+    /*
+     * CRLF and a BOM: Excel opens a bare UTF-8 CSV in the local ANSI codepage,
+     * which turns a region label's accented characters into mojibake. Every
+     * other spreadsheet ignores both.
+     */
+    csv: `﻿${lines.join('\r\n')}\r\n`,
+  };
+}
+
 export { OrderStatus };

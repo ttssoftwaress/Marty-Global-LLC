@@ -1,4 +1,3 @@
-export { AddStaffDialog } from './AddStaffDialog';
 export { AddStaffForm } from './AddStaffForm';
 export { DeleteStaffDialog } from './DeleteStaffDialog';
 export { TeamCardList } from './TeamCardList';

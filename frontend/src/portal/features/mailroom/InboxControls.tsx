@@ -24,24 +24,30 @@ import { InboxViewTabs } from './InboxViewTabs';
  * empty state matches; the placeholder copy follows the desktop link.
  */
 
-// Full list — the desktop dropdown and the mobile sheet. `all` reads as "All
-// statuses" here (the pills shorten it to "All").
+/*
+ * Full list — the desktop dropdown and the mobile sheet. `all` reads as "All
+ * statuses" here (the pills shorten it to "All").
+ *
+ * The links list a "Scanned" option in both sets; it is dropped because no item
+ * can carry that status (portal/types/mailroom.ts) and a filter that always
+ * returns nothing reads as a broken inbox rather than an empty one.
+ */
 const STATUS_OPTIONS: { value: MailStatusFilter; label: string }[] = [
   { value: 'all', label: 'All statuses' },
   { value: 'new', label: 'New' },
   { value: 'viewed', label: 'Viewed' },
-  { value: 'scanned', label: 'Scanned' },
   { value: 'forwarded', label: 'Forwarded' },
   { value: 'action_requested', label: 'Action requested' },
   { value: 'archived', label: 'Archived' },
 ];
 
-// The quick set surfaced as mobile pills (matches the mobile link's six chips).
+// The quick set surfaced as mobile pills (the mobile link's chips, less
+// "Scanned" — same reason as above).
 const PILL_OPTIONS: { value: MailStatusFilter; label: string }[] = [
   { value: 'all', label: 'All' },
   { value: 'new', label: 'New' },
   { value: 'viewed', label: 'Viewed' },
-  { value: 'scanned', label: 'Scanned' },
+  { value: 'action_requested', label: 'Action requested' },
   { value: 'forwarded', label: 'Forwarded' },
   { value: 'archived', label: 'Archived' },
 ];

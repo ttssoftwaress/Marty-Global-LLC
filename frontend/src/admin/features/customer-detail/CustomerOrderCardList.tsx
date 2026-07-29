@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { formatOrderDate } from '../../lib/format';
 import type { CustomerOrderRow } from '../../types/customer-detail';
 import { OrderStatusChip } from '../orders/OrderStatusChip';
-import { stopRowClick, useOpenOrderRow } from '../orders/rowNavigation';
+import { ROW_FOCUS_CLASS, stopRowClick, useOrderRowProps } from '../orders/rowNavigation';
 
 /*
  * The mobile presentation of the customer's orders — one card per order,
@@ -17,7 +17,8 @@ import { stopRowClick, useOpenOrderRow } from '../orders/rowNavigation';
  * The whole card opens the order, matching the table it replaces. It is not
  * wrapped in a link — the button is a link of its own and anchors cannot nest,
  * and a card-sized anchor would make the reference unselectable — so the card
- * navigates on tap and the button stops the tap itself.
+ * navigates on tap and the button stops the tap itself. It carries the shared
+ * row props, so it is a tab stop that Enter/Space opens as well.
  */
 
 type CustomerOrderCardListProps = {
@@ -25,15 +26,15 @@ type CustomerOrderCardListProps = {
 };
 
 export function CustomerOrderCardList({ orders }: CustomerOrderCardListProps) {
-  const openOrderRow = useOpenOrderRow();
+  const rowProps = useOrderRowProps();
 
   return (
     <ul className="flex w-full flex-col gap-3 md:hidden">
       {orders.map((order) => (
         <li
           key={order.id}
-          onClick={() => openOrderRow(order.to)}
-          className="flex cursor-pointer flex-col gap-3.5 rounded-card border border-gray-200 bg-white p-4 shadow-sm-elevation transition-colors active:bg-gray-50"
+          {...rowProps(order.to)}
+          className={`flex cursor-pointer flex-col gap-3.5 rounded-card border border-gray-200 bg-white p-4 shadow-sm-elevation transition-colors active:bg-gray-50 ${ROW_FOCUS_CLASS}`}
         >
           <div className="flex items-start justify-between gap-3">
             <span className="min-w-0 flex-1 truncate text-body font-semibold text-text">

@@ -13,27 +13,49 @@ import type { BillingLedgerRow } from '../../types/payments';
  * the dash.
  *
  * `fullWidth` is what the mobile cards pass, where the control spans the card.
+ *
+ * A reminder is an email to a customer, so the button owes the two states the
+ * design doesn't draw (Design.md): it says "Sending…" and cannot be pressed
+ * again while its mutation is in flight, and it renders disabled with the
+ * backend's own reason when a chase has already gone out inside the cooldown.
+ * The reason is a `title` as well as an `aria-describedby` target on the page,
+ * so it is not pointer-only.
  */
 
 type LedgerRowActionProps = {
   row: BillingLedgerRow;
   onAction: (row: BillingLedgerRow) => void;
   fullWidth?: boolean;
+  /** This row's reminder is in flight. */
+  isSending?: boolean;
+  /** Any row's reminder is in flight — one chase at a time. */
+  isBusy?: boolean;
 };
 
-export function LedgerRowAction({ row, onAction, fullWidth }: LedgerRowActionProps) {
-  const { kind, label } = row.action;
+export function LedgerRowAction({
+  row,
+  onAction,
+  fullWidth,
+  isSending,
+  isBusy,
+}: LedgerRowActionProps) {
+  const { kind, label, disabledReason } = row.action;
 
   if (kind === 'remind') {
+    const disabled = Boolean(disabledReason) || Boolean(isBusy);
+
     return (
       <button
         type="button"
         onClick={() => onAction(row)}
-        className={`items-center justify-center whitespace-nowrap rounded-control border border-primary bg-white px-3 text-[0.8125rem] font-semibold text-primary transition-colors hover:bg-primary-light ${
+        disabled={disabled}
+        title={disabledReason}
+        aria-label={disabledReason ? `${label} — ${disabledReason}` : undefined}
+        className={`items-center justify-center whitespace-nowrap rounded-control border border-primary bg-white px-3 text-[0.8125rem] font-semibold text-primary transition-colors hover:bg-primary-light disabled:cursor-not-allowed disabled:border-gray-300 disabled:bg-white disabled:text-gray-400 ${
           fullWidth ? 'flex h-9 w-full' : 'inline-flex h-9'
         }`}
       >
-        {label}
+        {isSending ? 'Sending…' : label}
       </button>
     );
   }

@@ -36,6 +36,9 @@ type BreakdownDonutCardProps = {
   description: string;
   breakdown: ReportBreakdown | undefined;
   isLoading: boolean;
+  isError?: boolean;
+  isRetrying?: boolean;
+  onRetry?: () => void;
 };
 
 export function BreakdownDonutCard({
@@ -43,12 +46,18 @@ export function BreakdownDonutCard({
   description,
   breakdown,
   isLoading,
+  isError,
+  isRetrying,
+  onRetry,
 }: BreakdownDonutCardProps) {
   return (
     <ChartCard
       title={title}
       description={description}
       isLoading={isLoading}
+      isError={isError}
+      isRetrying={isRetrying}
+      onRetry={onRetry}
       skeletonClassName="h-[18.75rem]"
     >
       {breakdown && breakdown.slices.length > 0 ? (
@@ -144,7 +153,7 @@ function Donut({ breakdown }: { breakdown: ReportBreakdown }) {
           >
             <div className="flex min-w-0 items-center gap-2">
               <span
-                className="size-2.5 shrink-0 rounded-[2px]"
+                className="size-2.5 shrink-0 rounded-[0.125rem]"
                 style={{ backgroundColor: color }}
                 aria-hidden="true"
               />

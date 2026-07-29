@@ -18,6 +18,7 @@ export {
   useAdminReportsGrowth,
   useAdminReportsRevenue,
   useAdminReportsSummary,
+  useExportReport,
 } from './queries';
 
 export type { ChartLegendItem } from './ChartCard';

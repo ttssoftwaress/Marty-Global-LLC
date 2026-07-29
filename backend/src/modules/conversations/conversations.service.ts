@@ -11,6 +11,7 @@ import { AppError } from '../../lib/app-error.js';
 import { toInitials } from '../../lib/initials.js';
 import { prisma } from '../../lib/prisma.js';
 import { Role } from '../../lib/roles.js';
+import { AuditAction, record } from '../audit/audit.service.js';
 
 /*
  * Order conversations — the thread on an order's detail screen, and the one layer
@@ -333,6 +334,15 @@ export async function sendMessage(
   const authorName = sender?.name ?? (staff ? 'Marty Global team' : order.customer.name);
   const sentAt = new Date();
 
+  /*
+   * Replying to an unclaimed thread claims it — of the order and of the
+   * conversation, which can be unassigned independently. Both are decided here
+   * rather than read back afterwards, so the audit entries below describe the
+   * transition the transaction actually performed.
+   */
+  const claimsOrder = staff && !isNote && order.assigneeId === null;
+  const claimsConversation = staff && !isNote && conversation.assigneeId === null;
+
   const message = await prisma.$transaction(async (tx) => {
     const created = await tx.message.create({
       data: {
@@ -362,13 +372,11 @@ export async function sendMessage(
           ...(staff ? {} : { customerReadAt: sentAt }),
           // Replying to an unclaimed order's thread claims it, so the next
           // message has a definite owner and the lock has something to hold.
-          ...(staff && conversation.assigneeId === null
-            ? { assigneeId: actor.userId }
-            : {}),
+          ...(claimsConversation ? { assigneeId: actor.userId } : {}),
         },
       });
 
-      if (staff && order.assigneeId === null) {
+      if (claimsOrder) {
         await tx.order.update({
           where: { id: order.id },
           data: { assigneeId: actor.userId },
@@ -378,6 +386,42 @@ export async function sendMessage(
 
     return created;
   });
+
+  /*
+   * A claim is an assignment, and an assignment is audited wherever it happens.
+   * The admin orders service records ORDER_ASSIGNED when a reviewer moves an
+   * order by hand; this path moves the same field by replying, so it writes the
+   * same entry rather than letting an order change hands with no trail.
+   *
+   * After the commit and never awaited, the posture the audit module asks for: a
+   * trail is evidence, not a precondition, and a reply must not fail because the
+   * log row could not be written.
+   */
+  if (claimsOrder) {
+    void record({
+      actor,
+      action: AuditAction.ORDER_ASSIGNED,
+      entityType: 'Order',
+      entityId: order.id,
+      metadata: {
+        from: null,
+        to: actor.userId,
+        reference: order.reference,
+        // What distinguishes this from a reviewer using the assignee control.
+        via: 'conversation_reply',
+      },
+    });
+  }
+
+  if (claimsConversation) {
+    void record({
+      actor,
+      action: AuditAction.CONVERSATION_ASSIGNED,
+      entityType: 'Conversation',
+      entityId: conversation.id,
+      metadata: { from: null, to: actor.userId, via: 'conversation_reply' },
+    });
+  }
 
   return {
     id: message.id,
@@ -430,52 +474,35 @@ async function ensureConversation(order: {
  * Accepts a transaction client so the reassignment and this update commit
  * together — an order whose assignee disagreed with its thread's would hand the
  * conversation to someone who no longer has the filing.
+ *
+ * Returns the threads that actually changed hands, so the caller can write their
+ * CONVERSATION_ASSIGNED entries once the transaction has committed. A thread
+ * already pointing at the new assignee is not a state change and gets no entry.
  */
 export async function syncAssignee(
   tx: Prisma.TransactionClient,
   orderId: string,
   assigneeId: string | null,
-): Promise<void> {
-  await tx.conversation.updateMany({
+): Promise<{ id: string; from: string | null }[]> {
+  const conversations = await tx.conversation.findMany({
     where: { orderId, kind: ConversationKind.ORDER, deletedAt: null },
+    select: { id: true, assigneeId: true },
+  });
+
+  const moved = conversations.filter(
+    (conversation) => conversation.assigneeId !== assigneeId,
+  );
+
+  if (moved.length === 0) return [];
+
+  await tx.conversation.updateMany({
+    where: { id: { in: moved.map((conversation) => conversation.id) } },
     data: { assigneeId },
   });
+
+  return moved.map((conversation) => ({
+    id: conversation.id,
+    from: conversation.assigneeId,
+  }));
 }
 
-// The count of order threads waiting on this staff member — messages whose last
-// word came from the customer on an order they hold. Drives the admin nav badge.
-export async function countAwaitingStaff(userId: string): Promise<number> {
-  const conversations = await prisma.conversation.findMany({
-    where: {
-      kind: ConversationKind.ORDER,
-      deletedAt: null,
-      assigneeId: userId,
-      status: { not: ConversationStatus.RESOLVED },
-    },
-    select: { id: true },
-  });
-
-  if (conversations.length === 0) return 0;
-
-  // "Waiting on us" is the same rule the support inbox uses: the newest message
-  // in the thread came from the customer.
-  const newest = await prisma.message.findMany({
-    where: {
-      conversationId: { in: conversations.map((c) => c.id) },
-      deletedAt: null,
-      author: { in: [MessageAuthor.CUSTOMER, MessageAuthor.AGENT] },
-    },
-    orderBy: { sentAt: 'desc' },
-    select: { conversationId: true, author: true },
-  });
-
-  const latest = new Map<string, MessageAuthor>();
-  for (const message of newest) {
-    if (!latest.has(message.conversationId)) {
-      latest.set(message.conversationId, message.author);
-    }
-  }
-
-  return [...latest.values()].filter((author) => author === MessageAuthor.CUSTOMER)
-    .length;
-}

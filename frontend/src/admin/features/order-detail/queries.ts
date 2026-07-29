@@ -30,9 +30,24 @@ import type { AdminOrderRow } from '../../types/orders';
  * queue's tabs and changes the counts beside them, so the queue this admin came
  * from has to be refetched anyway — and the server's version of the record is
  * the only one that reflects which statuses are now reachable.
+ *
+ * Two of the writes send an `Idempotency-Key` and the PATCH does not, mirroring
+ * what the backend requires of each. Requesting a document and sending a quote
+ * both create a row and email the customer every time they are called, and
+ * TanStack Query retries on its own — so a key is what keeps a retried request
+ * from asking the customer twice. The PATCH compares against the order's current
+ * state and does nothing when it already matches.
  */
 
 const ORDERS_SCOPE = ['admin', 'orders'] as const;
+
+// A fresh key per submission. What it buys is safety on the wire: a request the
+// browser, a proxy, or a retry resends resolves to the write that already
+// happened instead of making a second one. A deliberate second click is a new
+// submission with a new key, which is the new write the reviewer asked for.
+function newIdempotencyKey(): string {
+  return crypto.randomUUID();
+}
 
 export const adminOrderKey = (orderId: string) =>
   [...ORDERS_SCOPE, 'detail', orderId] as const;
@@ -107,7 +122,11 @@ export function useRequestAdminOrderDocument(orderId: string) {
     mutationFn: (name: string) =>
       apiFetch<ApiSuccess<AdminOrderDocument>>(
         `/admin/orders/${orderId}/documents/request`,
-        { method: 'POST', body: JSON.stringify({ name }) },
+        {
+          method: 'POST',
+          headers: { 'Idempotency-Key': newIdempotencyKey() },
+          body: JSON.stringify({ name }),
+        },
       ).then((res) => res.data),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ORDERS_SCOPE });
@@ -179,6 +198,7 @@ export function useCreateAdminQuote(orderId: string) {
     mutationFn: (input: CreateQuoteInput) =>
       apiFetch<ApiSuccess<AdminQuote>>(`/admin/orders/${orderId}/quotes`, {
         method: 'POST',
+        headers: { 'Idempotency-Key': newIdempotencyKey() },
         body: JSON.stringify(input),
       }).then((res) => res.data),
     onSuccess: () => {

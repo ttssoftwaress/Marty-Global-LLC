@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { requestTypeKeySchema } from '../../results/results.validation.js';
 import { fieldKeySchema as fieldKey } from '../../services/services.validation.js';
 
 /*
@@ -86,12 +87,7 @@ const resultFieldRef = z.object({
  */
 const serviceRequestType = z.object({
   id: z.string().min(1).optional(),
-  key: z
-    .string()
-    .trim()
-    .min(1)
-    .max(60)
-    .regex(/^[a-z][a-z0-9_-]*$/, 'Must be a lowercase slug'),
+  key: requestTypeKeySchema,
   label: z.string().trim().min(1).max(120),
   description: z.string().trim().max(400).optional(),
   iconKey: z.string().trim().max(60).optional(),
