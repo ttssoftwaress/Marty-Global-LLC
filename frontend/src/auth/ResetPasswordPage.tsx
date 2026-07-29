@@ -1,14 +1,17 @@
-import { Link } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 
-import logoWhite from '@/assets/Marty-Logo-White.png';
 import logoColor from '@/assets/Marty-Logo-Color.PNG';
-import {
-  ArrowLeftIcon,
-  ShieldAlertIcon,
-  StarIcon,
-} from './components/icons';
+import { authClient } from '@/auth/client';
+import { useCompactScale } from '@/hooks/useCompactScale';
+import { LeftPanel, SecureTrust } from './components/auth-brand';
+import { ArrowLeftIcon } from './components/icons';
 
 const LOGIN_ROUTE = '/login';
+const CHECK_EMAIL_ROUTE = '/check-your-email';
+// Better Auth emails a backend callback link that validates the token, then
+// redirects here with the token appended — SetNewPasswordPage reads it.
+const RESET_REDIRECT_PATH = '/reset-password/new';
 
 /*
  * Password reset — step 1 ("Request a reset link"). The user enters their email
@@ -17,81 +20,15 @@ const LOGIN_ROUTE = '/login';
  * renders across all breakpoints; only the surrounding chrome changes.
  */
 export function ResetPasswordPage() {
+  useCompactScale();
+
   return (
     <div className="flex min-h-screen w-full flex-col items-stretch bg-white lg:flex-row">
-      <LeftPanel />
+      <LeftPanel
+        title="Pick Up Right Where You Left Off"
+        subtitle="Need to access your ongoing international filings? Securely reset your password credentials here."
+      />
       <RightPanel />
-    </div>
-  );
-}
-
-function LeftPanel() {
-  return (
-    <div className="relative hidden flex-col justify-between overflow-hidden bg-primary p-16 lg:flex lg:w-1/2 lg:shrink-0 xl:w-[648px]">
-      <DotPattern />
-
-      <div className="relative flex flex-col gap-20">
-        <img
-          src={logoWhite}
-          alt="Marty Global LLC"
-          className="h-[50px] w-[182px] object-contain object-left"
-        />
-        <div className="flex flex-col gap-4 text-white">
-          <h1 className="text-marketing-h2">Pick Up Right Where You Left Off</h1>
-          <p className="text-body-lg leading-[26px] opacity-80">
-            Need to access your ongoing international filings? Securely reset
-            your password credentials here.
-          </p>
-        </div>
-      </div>
-
-      <TrustCard />
-    </div>
-  );
-}
-
-function DotPattern() {
-  return (
-    <div
-      aria-hidden="true"
-      className="pointer-events-none absolute left-0 top-[150px] flex h-[600px] w-[648px] flex-col justify-between opacity-[0.12]"
-    >
-      {Array.from({ length: 13 }).map((_, row) => (
-        <div key={row} className="flex justify-between">
-          {Array.from({ length: 16 }).map((_, col) => (
-            <span key={col} className="size-[2px] rounded-[1px] bg-white" />
-          ))}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function TrustCard() {
-  return (
-    <div className="relative flex flex-col gap-4 rounded-card border border-white/15 bg-white/[0.08] p-6">
-      <div className="flex gap-1">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <StarIcon key={i} className="size-4 text-warning" />
-        ))}
-      </div>
-
-      <p className="text-body italic leading-[22px] text-white">
-        &quot;Setting up our US entity through Marty Global was incredibly seamless.
-        Their dashboard makes compliance and international trade simple.&quot;
-      </p>
-
-      <div className="h-px w-full bg-white/15" />
-
-      <div className="flex items-center justify-between">
-        <div className="flex flex-col gap-0.5 text-white">
-          <p className="text-body font-semibold">10,000+ Businesses</p>
-          <p className="text-small opacity-60">Managed globally across USA, UK &amp; EU</p>
-        </div>
-        <span className="rounded-pill bg-success px-2.5 py-1 text-caption font-semibold text-white">
-          SECURE
-        </span>
-      </div>
     </div>
   );
 }
@@ -106,7 +43,7 @@ function MobileHeader() {
       <img
         src={logoColor}
         alt="Marty Global LLC"
-        className="h-[60px] w-[180px] object-contain"
+        className="h-[3.75rem] w-[11.25rem] object-contain"
       />
     </div>
   );
@@ -114,7 +51,7 @@ function MobileHeader() {
 
 function RightPanel() {
   return (
-    <div className="flex flex-1 flex-col bg-white lg:items-center lg:justify-center lg:px-24 lg:py-24 xl:w-[792px] xl:flex-none xl:shrink-0">
+    <div className="flex flex-1 flex-col bg-white lg:items-center lg:justify-center lg:px-24 lg:py-24 xl:w-[49.5rem] xl:flex-none xl:shrink-0">
       <MobileHeader />
 
       {/*
@@ -126,18 +63,24 @@ function RightPanel() {
           <img
             src={logoColor}
             alt="Marty Global LLC"
-            className="mb-[52px] hidden h-20 w-[200px] object-contain md:block lg:hidden"
+            className="mb-[3.25rem] hidden h-20 w-[12.5rem] object-contain md:block lg:hidden"
           />
 
-          <div className="flex w-full max-w-[480px] flex-col gap-7 md:gap-8 lg:w-[480px] lg:max-w-none">
+          <div className="flex w-full max-w-[30rem] flex-col gap-7 md:gap-8 lg:w-[30rem] lg:max-w-none">
             <RequestResetForm />
           </div>
         </div>
 
-        <SecureTrust className="mt-10 md:mt-0 lg:hidden" />
+        <SecureTrust
+          className="mt-10 md:mt-0 lg:hidden"
+          textClassName="text-[0.8125rem] leading-none text-text-secondary md:text-small"
+        />
       </div>
 
-      <SecureTrust className="hidden lg:flex" />
+      <SecureTrust
+        className="hidden lg:flex"
+        textClassName="text-[0.8125rem] leading-none text-text-secondary md:text-small"
+      />
     </div>
   );
 }
@@ -147,16 +90,52 @@ function RightPanel() {
  * Header is left-aligned on desktop and centered below (mobile & tablet).
  */
 function RequestResetForm() {
+  const navigate = useNavigate();
+
+  const [email, setEmail] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (submitting) return;
+
+    setError(null);
+    const trimmed = email.trim();
+    if (!trimmed) {
+      setError('Email address is required');
+      return;
+    }
+
+    setSubmitting(true);
+    // Better Auth always replies success-shaped (even for an unknown email) to
+    // avoid leaking which addresses exist, so any error here is a transport or
+    // server fault, not "no such account".
+    const { error: resetError } = await authClient.requestPasswordReset({
+      email: trimmed,
+      redirectTo: `${window.location.origin}${RESET_REDIRECT_PATH}`,
+    });
+
+    if (resetError) {
+      setSubmitting(false);
+      setError(
+        resetError.message ??
+          'We could not send the reset link. Please try again.',
+      );
+      return;
+    }
+
+    // Carry the address forward so the confirmation screen can name it.
+    navigate(CHECK_EMAIL_ROUTE, { state: { email: trimmed } });
+  }
+
   return (
-    <form
-      className="flex w-full flex-col gap-8"
-      onSubmit={(e) => e.preventDefault()}
-    >
+    <form className="flex w-full flex-col gap-8" onSubmit={handleSubmit}>
       <div className="flex flex-col gap-2 text-center lg:text-left">
-        <h2 className="text-[28px] font-semibold leading-none text-text">
+        <h2 className="text-[1.75rem] font-semibold leading-none text-text">
           Reset Your Password
         </h2>
-        <p className="text-body leading-[22px] text-text-secondary">
+        <p className="text-body leading-[1.375rem] text-text-secondary">
           Enter your email and we&apos;ll send you a link to reset your password.
         </p>
       </div>
@@ -168,16 +147,28 @@ function RequestResetForm() {
         <input
           id="reset-email"
           type="email"
+          autoComplete="email"
           placeholder="enter your email address"
+          value={email}
+          onChange={(e) => {
+            setEmail(e.target.value);
+            if (error) setError(null);
+          }}
           className="input-field"
         />
+        {error && (
+          <p role="alert" className="text-[0.8125rem] leading-[1.3] text-error">
+            {error}
+          </p>
+        )}
       </div>
 
       <button
         type="submit"
-        className="btn btn-primary h-12 w-full rounded-input text-button"
+        disabled={submitting}
+        className="btn btn-primary h-12 w-full rounded-input text-button disabled:cursor-not-allowed disabled:opacity-50"
       >
-        Send Reset Link
+        {submitting ? 'Sending…' : 'Send Reset Link'}
       </button>
 
       <BackToLogIn />
@@ -194,18 +185,5 @@ function BackToLogIn() {
       <ArrowLeftIcon className="size-4" />
       Back to Log In
     </Link>
-  );
-}
-
-type SecureTrustProps = { className?: string };
-
-function SecureTrust({ className }: SecureTrustProps) {
-  return (
-    <div className={`flex items-center justify-center gap-2 ${className ?? ''}`}>
-      <ShieldAlertIcon className="size-4 shrink-0 text-text-secondary" />
-      <p className="text-[13px] leading-none text-text-secondary md:text-small">
-        Your information is encrypted and secure.
-      </p>
-    </div>
   );
 }

@@ -2,7 +2,10 @@ import { betterAuth } from 'better-auth';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
 import { admin } from 'better-auth/plugins';
 
+import { logger } from '../lib/logger.js';
 import { prisma } from '../lib/prisma.js';
+import { auditAuthHook } from '../modules/audit/audit.auth-hook.js';
+import { queueEmail } from '../modules/notifications/notifications.service.js';
 import { env } from './env.js';
 
 // Better Auth owns all session and password handling (AGENTS.md "Auth"). We only
@@ -11,7 +14,7 @@ import { env } from './env.js';
 export const auth = betterAuth({
   baseURL: env.BETTER_AUTH_URL,
   secret: env.BETTER_AUTH_SECRET,
-  trustedOrigins: [env.FRONTEND_ORIGIN],
+  trustedOrigins: [...env.FRONTEND_ORIGIN],
 
   database: prismaAdapter(prisma, { provider: 'postgresql' }),
 
@@ -30,10 +33,32 @@ export const auth = betterAuth({
     enabled: true,
     minPasswordLength: 8,
     maxPasswordLength: 128,
-    // Registration only for now — email verification and password reset land
-    // with the login work.
     requireEmailVerification: false,
     autoSignIn: false,
+
+    // Password reset. Better Auth mints the token and hands us the ready-built
+    // link (the frontend's /reset-password/new screen with ?token=…); we queue
+    // the email through the notifications pipeline like every other outbound
+    // message (AGENTS.md "Security & PII" — never send inline). AWS credentials
+    // aren't set yet, so the SES transport skips the actual send; we also log the
+    // link to the backend console so the flow is testable end-to-end without SES.
+    sendResetPassword: async ({ user, url }) => {
+      logger.info(
+        { userId: user.id, resetUrl: url },
+        'Password reset link (SES not configured — copy this link to continue)',
+      );
+
+      await queueEmail({
+        to: user.email,
+        subject: 'Reset your Marty Global password',
+        template: 'generic',
+        heading: 'Reset your password',
+        body: 'We received a request to reset the password for your Marty Global account. Click the button below to choose a new password. This link expires in 1 hour. If you didn\'t request this, you can safely ignore this email.',
+        actionLabel: 'Reset Password',
+        actionUrl: url,
+        userId: user.id,
+      });
+    },
   },
 
   user: {
@@ -46,6 +71,18 @@ export const auth = betterAuth({
         input: true,
       },
     },
+  },
+
+  /*
+   * The audit trail for authentication (modules/audit/audit.auth-hook.ts).
+   *
+   * Better Auth owns this whole subtree, so there is no service of ours to put a
+   * `record` call in — this hook is that layer. It runs after every auth
+   * endpoint, including the ones that threw, which is what makes a failed
+   * sign-in auditable. It never modifies the response and never throws.
+   */
+  hooks: {
+    after: auditAuthHook,
   },
 
   plugins: [

@@ -19,7 +19,7 @@ type LeftPanelProps = {
 export function LeftPanel({ title, subtitle, className }: LeftPanelProps) {
   return (
     <div
-      className={`relative hidden flex-col justify-between overflow-hidden bg-primary p-16 lg:flex lg:w-1/2 lg:shrink-0 xl:w-[648px] ${className ?? ''}`}
+      className={`relative hidden flex-col justify-between overflow-hidden bg-primary p-16 lg:flex lg:w-1/2 lg:shrink-0 xl:w-[40.5rem] ${className ?? ''}`}
     >
       <DotPattern />
 
@@ -27,11 +27,14 @@ export function LeftPanel({ title, subtitle, className }: LeftPanelProps) {
         <img
           src={logoWhite}
           alt="Marty Global LLC"
-          className="h-[50px] w-[182px] object-contain object-left"
+          className="h-[3.125rem] w-[11.375rem] object-contain object-left"
         />
         <div className="flex flex-col gap-4 text-white">
+          {/* Accent keyline over the heading — the brand magenta's one moment
+           * on this panel (accent-visibility pass; logged as a deviation). */}
+          <span aria-hidden="true" className="h-1 w-12 rounded-pill bg-accent" />
           <h1 className="text-marketing-h2">{title}</h1>
-          <p className="text-body-lg leading-[26px] opacity-80">{subtitle}</p>
+          <p className="text-body-lg leading-[1.625rem] opacity-80">{subtitle}</p>
         </div>
       </div>
 
@@ -44,7 +47,7 @@ export function DotPattern() {
   return (
     <div
       aria-hidden="true"
-      className="pointer-events-none absolute left-0 top-[150px] flex h-[600px] w-[648px] flex-col justify-between opacity-[0.12]"
+      className="pointer-events-none absolute left-0 top-[9.375rem] flex h-[37.5rem] w-[40.5rem] flex-col justify-between opacity-[0.12]"
     >
       {Array.from({ length: 13 }).map((_, row) => (
         <div key={row} className="flex justify-between">
@@ -66,7 +69,7 @@ export function TrustCard() {
         ))}
       </div>
 
-      <p className="text-body italic leading-[22px] text-white">
+      <p className="text-body italic leading-[1.375rem] text-white">
         &quot;Setting up our US entity through Marty Global was incredibly seamless.
         Their dashboard makes compliance and international trade simple.&quot;
       </p>
@@ -96,7 +99,7 @@ type SecureTrustProps = {
 
 export function SecureTrust({
   className,
-  textClassName = 'text-[13px] leading-none text-text-secondary',
+  textClassName = 'text-[0.8125rem] leading-none text-text-secondary',
 }: SecureTrustProps) {
   return (
     <div className={`flex items-center justify-center gap-2 ${className ?? ''}`}>

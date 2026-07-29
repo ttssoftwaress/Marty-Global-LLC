@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 
 import { ChevronDownIcon } from '../icons';
 
@@ -14,6 +15,11 @@ import { ChevronDownIcon } from '../icons';
  * Every item is open by default (matching the Figma frames); clicking a question
  * toggles it and rotates the chevron. Copy is passed per page — the home page
  * keeps the defaults, services passes its own questions.
+ *
+ * Each page shows only the handful of questions relevant to it, so the section
+ * closes with a link to `/faq` — the full library, grouped by topic. Pass
+ * `showAllLink={false}` on the FAQ page itself if this section is ever reused
+ * there.
  */
 
 export type Faq = {
@@ -48,9 +54,9 @@ const HOME_FAQS: Faq[] = [
       'Yes, states in the US require a physical agent on standby to receive official state notices and compliance updates during business hours.',
   },
   {
-    question: 'What is your refund policy?',
+    question: 'How do I pay for a service?',
     answer:
-      'We offer a 100% money-back guarantee before government filings are officially processed. Once state fees are paid, those become non-refundable.',
+      'Once we review your application we issue a quote in your portal. You settle it in USDT (TRC-20) from the billing page, and we start work as soon as the transfer confirms on-chain.',
   },
 ];
 
@@ -58,12 +64,14 @@ type FaqSectionProps = {
   heading?: string;
   subheading?: string;
   faqs?: Faq[];
+  showAllLink?: boolean;
 };
 
 export function FaqSection({
   heading = 'Frequently Asked Questions',
   subheading = 'Get clear, reliable answers on our international services, filing jurisdictions, and timelines.',
   faqs = HOME_FAQS,
+  showAllLink = true,
 }: FaqSectionProps = {}) {
   const [openItems, setOpenItems] = useState<Set<number>>(
     () => new Set(faqs.map((_, index) => index)),
@@ -82,7 +90,12 @@ export function FaqSection({
   };
 
   return (
-    <section className="flex w-full flex-col items-center gap-8 bg-gray-50 px-4 py-16 md:gap-12 md:px-10 md:py-20 lg:gap-16 lg:px-20 lg:py-24">
+    // `id` keeps the in-page anchor working for links that target the FAQ block
+    // of the page they are already on; the full library lives at `/faq`.
+    <section
+      id="faq"
+      className="flex w-full scroll-mt-8 flex-col items-center gap-8 bg-gray-50 px-4 py-16 md:gap-12 md:px-10 md:py-20 lg:gap-16 lg:px-20 lg:py-24"
+    >
       <div className="flex w-full flex-col items-center gap-2.5 text-center md:gap-3">
         <h2 className="w-full font-marketing text-[28px] font-bold leading-[1.2] text-text md:text-[32px] lg:text-[40px]">
           {heading}
@@ -102,6 +115,15 @@ export function FaqSection({
           />
         ))}
       </div>
+
+      {showAllLink && (
+        <Link
+          to="/faq"
+          className="text-[14px] font-semibold text-primary hover:underline lg:text-[15px]"
+        >
+          See all questions &rarr;
+        </Link>
+      )}
     </section>
   );
 }

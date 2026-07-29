@@ -3,6 +3,48 @@
 @import 'tailwindcss';
 
 /*
+ * The portal and admin shells size themselves to `h-dvh` and scroll only their
+ * own `<main>`. That contract holds only if every ancestor is height-bound:
+ * Preflight resets `body` margin but leaves `html`/`body`/`#root` auto-height,
+ * so the document stays a scroll container behind the shell. On mobile that is
+ * visible — `100dvh` grows as the URL bar retracts, the document scrolls to fit
+ * the taller root, and the fixed sidebar rides up leaving blank space beneath.
+ *
+ * Chaining the height down to `#root` and pinning overflow at the document
+ * makes the shell's `<main>` the only thing that scrolls. Marketing pages are
+ * unaffected: they scroll inside `#root`, which is why `overflow` is clipped on
+ * `html`/`body` but left `auto` on the root node.
+ */
+@layer base {
+  html,
+  body {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  #root {
+    height: 100%;
+    overflow: auto;
+  }
+
+  /*
+   * Compact density — the product surfaces (portal, admin, auth) render at 80%
+   * scale; marketing stays at 100%. The whole system is rem-based (type tokens,
+   * spacing utilities, radii, layout sizes), so shrinking the root font-size
+   * scales every screen uniformly — the same geometry Chrome shows at 80% page
+   * zoom. `useCompactScale()` toggles this class from the portal/admin/auth
+   * shells; because it sits on <html>, portaled overlays scale too. Percentage
+   * (not px) so a user's browser font-size preference still applies.
+   * Breakpoints are unaffected: media queries resolve rem against the initial
+   * font size, never this override.
+   */
+  html.app-compact {
+    font-size: 80%;
+  }
+}
+
+/*
  * Marty Global LLC — Color System
  *
  * The single source of truth for brand color. Every token here becomes a
@@ -230,32 +272,37 @@
  */
 @theme {
   /* Spacing scale — 8-point grid. Mirrors Tailwind's numeric utilities;
-   * reference by name in raw CSS via `var(--space-*)`. */
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 20px;
-  --space-6: 24px;
-  --space-8: 32px;
-  --space-10: 40px;
-  --space-12: 48px;
-  --space-16: 64px;
-  --space-20: 80px;
-  --space-24: 96px;
+   * reference by name in raw CSS via `var(--space-*)`. Rem so the compact
+   * density (`html.app-compact`) scales them; 1rem = 16px at default zoom. */
+  --space-1: 0.25rem; /* 4px */
+  --space-2: 0.5rem; /* 8px */
+  --space-3: 0.75rem; /* 12px */
+  --space-4: 1rem; /* 16px */
+  --space-5: 1.25rem; /* 20px */
+  --space-6: 1.5rem; /* 24px */
+  --space-8: 2rem; /* 32px */
+  --space-10: 2.5rem; /* 40px */
+  --space-12: 3rem; /* 48px */
+  --space-16: 4rem; /* 64px */
+  --space-20: 5rem; /* 80px */
+  --space-24: 6rem; /* 96px */
 
   /* Border radius — role-named → `rounded-input`, `rounded-card`,
    * `rounded-modal`, `rounded-pill`. */
-  --radius-input: 10px; /* form inputs & fields */
-  --radius-card: 16px; /* cards & content containers */
-  --radius-modal: 20px; /* modals & overlay dialogs */
+  --radius-input: 0.625rem; /* 10px — form inputs & fields */
+  --radius-card: 1rem; /* 16px — cards & content containers */
+  --radius-modal: 1.25rem; /* 20px — modals & overlay dialogs */
   --radius-pill: 999px; /* tags, badges & pill buttons */
 
   /* Elevation — layered shadows → `shadow-sm-elevation`,
-   * `shadow-md-elevation`, `shadow-lg-elevation`. */
+   * `shadow-md-elevation`, `shadow-lg-elevation`. Directional variants for
+   * overlay chrome: `shadow-slide-over` (panel entering from the right),
+   * `shadow-footer-raised` (sticky footer above scrolling content). */
   --shadow-sm-elevation: 0 1px 2px rgba(0, 0, 0, 0.06);
   --shadow-md-elevation: 0 4px 12px rgba(0, 0, 0, 0.08);
   --shadow-lg-elevation: 0 10px 30px rgba(0, 0, 0, 0.1);
+  --shadow-slide-over: -10px 0 30px rgba(0, 0, 0, 0.1);
+  --shadow-footer-raised: 0 -4px 6px rgba(0, 0, 0, 0.1);
 }
 
 /*
@@ -278,17 +325,18 @@
  */
 @theme {
   /* Radii → `rounded-control`, `rounded-table` */
-  --radius-control: 10px; /* buttons, inputs */
-  --radius-table: 16px; /* data tables */
+  --radius-control: 0.625rem; /* 10px — buttons, inputs */
+  --radius-table: 1rem; /* 16px — data tables */
 
   /* Dashboard layout sizes → `w-sidebar`, `h-navbar`, `p-content`, `p-card`,
-   * `h-input`, `h-table-row` (spacing namespace, so also gap/margin/etc.) */
-  --spacing-input: 48px; /* input & button height */
-  --spacing-sidebar: 280px; /* sidebar width */
-  --spacing-navbar: 72px; /* top navbar height */
-  --spacing-content: 32px; /* content padding */
-  --spacing-card: 24px; /* card padding */
-  --spacing-table-row: 56px; /* table row height */
+   * `h-input`, `h-table-row` (spacing namespace, so also gap/margin/etc.)
+   * Rem so the compact density (`html.app-compact`) scales the whole shell. */
+  --spacing-input: 3rem; /* 48px — input & button height */
+  --spacing-sidebar: 17.5rem; /* 280px — sidebar width */
+  --spacing-navbar: 4.5rem; /* 72px — top navbar height */
+  --spacing-content: 2rem; /* 32px — content padding */
+  --spacing-card: 1.5rem; /* 24px — card padding */
+  --spacing-table-row: 3.5rem; /* 56px — table row height */
 
   /* Non-utility component values — reference via var() */
   --border-input: #d1d5db; /* input default border (Gray 300) */
@@ -307,6 +355,17 @@
   --color-status-missing-text: #dc2626;
   --color-status-approved-bg: #dcfce7;
   --color-status-approved-text: #16a34a;
+  /*
+   * The two stages between approval and completion. `paid` is teal rather than
+   * another green: it sits directly beside `approved` in the pipeline, and two
+   * greens two steps apart are the pair an operator scanning a queue would read
+   * as the same state. `processing` is sky blue — work in motion, distinct from
+   * the amber `review` states where the ball is not with us.
+   */
+  --color-status-paid-bg: #ccfbf1;
+  --color-status-paid-text: #0f766e;
+  --color-status-processing-bg: #e0f2fe;
+  --color-status-processing-text: #0369a1;
   --color-status-completed-bg: #03126d;
   --color-status-completed-text: #ffffff;
 }
@@ -417,6 +476,14 @@
   .status-approved {
     background-color: var(--color-status-approved-bg);
     color: var(--color-status-approved-text);
+  }
+  .status-paid {
+    background-color: var(--color-status-paid-bg);
+    color: var(--color-status-paid-text);
+  }
+  .status-processing {
+    background-color: var(--color-status-processing-bg);
+    color: var(--color-status-processing-text);
   }
   .status-completed {
     background-color: var(--color-status-completed-bg);

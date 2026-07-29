@@ -34,9 +34,9 @@ const SERVICES: FooterLink[] = [
 
 const COMPANY: FooterLink[] = [
   { label: 'About Us', href: '/about' },
+  { label: 'How It Works', href: '/how-it-works' },
+  { label: 'FAQ', href: '/faq' },
   { label: 'Our Markets', href: '/about' },
-  { label: 'Partner Program', href: '/about' },
-  { label: 'Careers', href: '/about' },
   { label: 'Contact Center', href: '/contact' },
 ];
 
@@ -99,8 +99,35 @@ export function Footer() {
 
       <div className="h-px w-full bg-gray-800" />
 
+      <Disclaimer />
+
       <BottomBar />
     </footer>
+  );
+}
+
+/*
+ * The not-a-law-firm notice. Marty Global is a filing service provider, and
+ * AGENTS.md requires this stay in the footer — a visitor reading marketing copy
+ * about company formation must not infer attorney representation. It sits above
+ * the copyright line rather than inside it so it reads as a statement, not fine
+ * print, and it carries the one link to the terms that qualify it.
+ */
+function Disclaimer() {
+  return (
+    <p className="text-[11px] leading-[18px] text-gray-500 md:text-[12px] md:leading-[19px] lg:text-[12px] lg:leading-5">
+      Marty Global LLC is a filing service provider, not a law firm, and does
+      not provide legal, tax, or financial advice. Using our services does not
+      create an attorney&ndash;client relationship. Formation timelines depend on
+      government processing and are not guaranteed. See our{' '}
+      <Link
+        to="/legal/terms"
+        className="font-medium text-gray-400 underline underline-offset-2 transition-colors hover:text-white"
+      >
+        Terms of Service
+      </Link>{' '}
+      for full details.
+    </p>
   );
 }
 
@@ -194,14 +221,18 @@ function BottomBar() {
         © 2026 Marty Global LLC. All rights reserved. Registered across major
         global financial nodes.
       </p>
-      <nav className="flex items-center gap-4 whitespace-nowrap text-[12px] md:justify-center md:gap-5 lg:gap-6 lg:text-[13px]">
-        {LEGAL.map((link, i) => (
+      {/*
+       * All three links show at every breakpoint. The mobile frame dropped
+       * "Cookie Settings" to fit one row, but that is the only route to the
+       * consent controls — a visitor on a phone must be able to withdraw
+       * consent as easily as one on a desktop. The row wraps instead.
+       */}
+      <nav className="flex flex-wrap items-center gap-x-4 gap-y-2 whitespace-nowrap text-[12px] md:justify-center md:gap-x-5 lg:gap-x-6 lg:text-[13px]">
+        {LEGAL.map((link) => (
           <Link
             key={link.label}
             to={link.href}
-            className={`transition-colors hover:text-white ${
-              i === LEGAL.length - 1 ? 'hidden md:inline' : ''
-            }`}
+            className="transition-colors hover:text-white"
           >
             {link.label}
           </Link>

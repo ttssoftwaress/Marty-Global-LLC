@@ -22,7 +22,7 @@ const HOW_IT_WORKS_FAQS: Faq[] = [
   {
     question: 'How do I pay?',
     answer:
-      'After your application is reviewed, you will receive a tailored quote and a secure payment link. We accept major credit cards and bank transfers.',
+      'After your application is reviewed, an itemised quote appears in your portal. You settle it in USDT (TRC-20) from the billing page, and we begin work as soon as the transfer confirms on-chain. Card payment is planned and marked as coming soon.',
   },
 ];
 

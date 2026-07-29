@@ -4,13 +4,21 @@ You are an expert full-stack TypeScript engineer building **Marty Global LLC**,
 a corporate filing service provider. Clean, simple, maintainable code — clarity
 over abstraction. Think like a senior engineer on a production SaaS.
 
+Design, styling, and the UI build workflow live in **Design.md** (the
+companion to this file). Everything else — architecture, backend, data, money,
+auth, security — lives here.
+
 ---
 
 ## Project
 
 Customers form and manage companies, file registrations, receive scanned mail,
-get support, and pay — by card (Stripe) or USDT (TRC-20). Live chat, email/SMS
-notifications, audit logging.
+get support, and pay in USDT (TRC-20). Live chat, email/SMS notifications, audit
+logging.
+
+**Card payments are deferred to a later deployment.** There is no card code in
+either app — no provider SDK, no models, no env, no checkout — and none is to be
+added until that deployment is scoped. The portal shows cards as "coming soon".
 
 Three surfaces, two apps:
 
@@ -26,6 +34,7 @@ Three surfaces, two apps:
 ```
 corporate-filing-system/
 ├── AGENTS.md
+├── Design.md            # design system, Figma handling, UI build workflow
 ├── frontend/            # React + Vite SPA
 ├── backend/             # Express API + jobs + Dockerfile
 ├── docker-compose.yml   # local Postgres + Redis
@@ -53,8 +62,8 @@ corporate-filing-system/
 | --- | --- |
 | Core | **PERN** — PostgreSQL, Express, React, Node (all TypeScript, npm) |
 | Frontend | React + Vite + React Router |
-| UI | Tailwind + shadcn/ui |
-| State | TanStack Query (server) + Zustand (client-only) |
+| UI | Tailwind (first-party design system — **not** shadcn/ui; see Design.md) |
+| State | TanStack Query (server). No client-state library — see below. |
 | SEO | react-helmet-async (marketing meta tags) |
 | Dates | date-fns — the only date library |
 | ORM / DB | Prisma / PostgreSQL |
@@ -62,7 +71,7 @@ corporate-filing-system/
 | Auth | Better Auth |
 | Live chat | Socket.io |
 | Email / SMS | Amazon SES (React Email) / Twilio |
-| Payments | Stripe (Elements + Intents) · USDT TRC-20 via TronGrid |
+| Payments | USDT TRC-20 via TronGrid (cards deferred — see Payments) |
 | Bot protection | Cloudflare Turnstile (public forms) |
 | Storage | Cloudflare R2 |
 | Monitoring / Analytics | Sentry / PostHog |
@@ -71,6 +80,14 @@ corporate-filing-system/
 
 This list is the budget. Never add a library without asking first.
 
+**Client state:** Zustand was in this table but was never imported anywhere, so
+it was uninstalled (July 2026). Server state is TanStack Query's; everything
+else has been local `useState` or props, and no genuinely global client state
+has appeared yet. If one does, ask before adding a store library — a React
+context is usually enough. The same applies to the UI row: shadcn/ui was
+specified here and never installed, and the first-party system that exists
+instead is now the one of record (Design.md, *Why not shadcn*).
+
 ---
 
 ## Workflow
@@ -78,9 +95,9 @@ This list is the budget. Never add a library without asking first.
 Every task ends with a **short summary: what was built, what changed, how to
 test it.**
 
-- **UI task:** analyze the attached design images or Figma MCP context first →
-  replicate the design exactly (layout, spacing, type hierarchy, colors,
-  radius, shadows — no approximating, no simplifying) → build → summary. Make sure to use the setup Deisgn System before trying any custom css or tailwind ok.
+- **UI / design / responsive tasks:** see **Design.md** — it owns the
+  design system, Figma MCP handling, the UI build workflow, and the styling
+  rules. The design-deviation logging rule there is part of the summary.
 - **Backend / logic task:** understand the prompt → read this file and follow
   it strictly → build → summary.
 - No plan-approval step — build directly. If something is unclear or a better
@@ -95,31 +112,44 @@ test it.**
 ```
 frontend/src/
 ├── app/          # router.tsx, providers.tsx, layouts/
-├── marketing/    # public pages: home, services, pricing, about, contact, faq, legal
+├── marketing/    # public pages: home, services, how-it-works, faq, about, contact, legal
 ├── portal/       # customer portal: pages/ + features/
 ├── admin/        # admin portal: pages/ + features/
 ├── auth/         # sign-in/up screens + auth client (used by portal & admin)
-├── components/   # cross-area UI; shadcn base in components/ui
-├── services/     # api.ts, socket.ts, upload.ts, stripe.ts (publishable key only)
-├── constants/    # local mirror: roles, statuses, plan catalog (backend = source of truth)
+├── services/     # api.ts, socket.ts, upload.ts
+├── constants/    # local mirror: roles, statuses (backend = source of truth)
 ├── types/        # local mirror of API shapes
-├── hooks/  stores/  lib/  styles/
-├── assets/ 
+├── hooks/        # cross-area hooks — useOverlay (all modals), useCompactScale, useSocket
+├── lib/  styles/  assets/
 ```
+
+- There is no top-level `components/` directory. Shared styling lives in the
+  token + `@layer components` layer in `styles/index.css`, and UI components
+  live inside the area that owns them (`portal/features/*`, `admin/features/*`,
+  `marketing/components/*`) — areas never import from each other, so a pattern
+  two areas need is implemented in each. Design.md owns the full rationale.
+- No `stores/` — see the client-state note under Tech Stack.
 
 - Route groups: `/` marketing (public) · `/app/*` portal (authenticated) ·
   `/admin/*` admin (staff/admin roles). Each area lazy-loads at the router;
   areas never import from each other.
 - `pages/` = route screens that compose; `features/` = per-area domain logic
   (queries/mutations, feature components). `portal/features/payments` owns the
-  branded checkout: Stripe Elements wrapper, saved cards, USDT screen.
+  branded checkout: the USDT screen, and the coming-soon card option beside it.
 - Marketing is **simple pages, no blog** — copy written directly in the page
-  components; prices render from `constants/` only. A shared `<Seo>` component
-  sets title/description/canonical/OG per page; sitemap + robots at build.
+  components. A shared `<Seo>` component sets title/description/canonical/OG
+  per page; sitemap + robots at build.
+- **Marketing never quotes a price.** There is no pricing page and no price
+  copy: an amount depends on the service, the jurisdiction, and that
+  jurisdiction's government fees, and the binding figure is the itemised quote
+  issued in the customer's portal after review. Services are priced from the
+  admin-managed catalog (`/admin/catalog`), never from a frontend constant, so
+  marketing points at the quote instead of naming a number it would be wrong
+  about. Money questions on `/faq` say exactly this.
 - Marty Global is a filing service provider, **not a law firm** — never write
   legal advice or imply attorney representation; keep the footer disclaimer.
   Never invent statistics, testimonials, or guarantees.
-- The contact form POSTs to the backend `leads` module — public, rate-limited,
+- The contact form POSTs to a public backend endpoint — rate-limited and
   Turnstile-verified server-side. The browser never calls a third party
   directly.
 
@@ -137,7 +167,7 @@ backend/
     ├── routes.ts    # mounts module routers — nothing else
     ├── config/      # env.ts (Zod, fail fast) + one file per external service
     ├── modules/     # auth users companies registrations documents mailroom
-    │                # support leads notifications billing payments audit
+    │                # support notifications billing payments audit
     ├── jobs/        # queues.ts (definitions + producers) · processors/
     ├── sockets/     # live chat
     ├── middlewares/  guards/  lib/
@@ -158,8 +188,8 @@ modules/companies/
 - Jobs run **in-process**: the API enqueues via `jobs/queues.ts`; processors
   import module services, so logic lives once. Every processor is idempotent
   and retry-safe. Split into a separate process only when load demands it.
-- The Stripe webhook is the one raw-body route — mount it before the JSON
-  parser so signatures verify.
+- Better Auth is the one raw-body route — mount it before the JSON parser. Any
+  future provider webhook follows the same rule so signatures verify.
 - CORS: exactly the frontend origin, from env. No wildcards.
 - Every state change on companies, registrations, billing, payments, and
   documents writes an audit entry through the `audit` module.
@@ -182,7 +212,8 @@ modules/companies/
   Mutating payment endpoints accept an `Idempotency-Key` header and are
   retry-safe.
 - Every endpoint is authenticated and role-guarded **by default**. Public
-  endpoints (leads, webhooks, health) are explicitly marked and rate-limited.
+  endpoints (contact form, webhooks, health) are explicitly marked and
+  rate-limited.
 
 ---
 
@@ -218,18 +249,18 @@ modules/companies/
 ## Payments
 
 `billing/` owns what is owed; `payments/` owns collecting it. A `Payment` row
-is the source of truth, storing the provider reference (PaymentIntent id /
-Tron tx hash). Charging, webhooks, and reconciliation run in job processors,
-never in request handlers; every state change is audited.
+is the source of truth, storing the provider reference (the Tron tx hash).
+Reconciliation runs in job processors, never in request handlers; every state
+change is audited.
 
-- **Card:** our branded checkout; Stripe Elements tokenizes client-side. Save
-  via `SetupIntent`, attach to a Stripe `Customer`, persist brand/last4/expiry
-  only. Charge off-session from a job (`off_session: true, confirm: true`),
-  handling `requires_action`. Webhooks verify the raw-body signature and
-  dedupe on the Stripe event id (unique constraint).
+- **Card — DEFERRED, do not build.** No provider SDK, no `StripeCustomer` /
+  `PaymentMethod` / `WebhookEvent` models, no `STRIPE` provider value, no card
+  columns, no env vars, no checkout. The portal renders a disabled "coming soon"
+  option and nothing behind it. Do not scaffold any of it "ready for later" —
+  the last attempt left empty tables that read as a working feature and a
+  billing screen querying a table with no writer.
 - **Never store a PAN or CVC** — no column, log, or endpoint, ever (PCI DSS;
-  keeps us in SAQ A scope). If a task seems to need raw card data, stop — the
-  answer is a Stripe token.
+  keeps us in SAQ A scope). If a task seems to need raw card data, stop.
 - **USDT:** a repeatable job polls TronGrid, verifies the real USDT contract
   address (fake tokens reuse the name), matches a pending `Payment` by
   address + amount, and credits only after required confirmations. Unique
@@ -247,6 +278,43 @@ convenience.
 
 ---
 
+## Live Chat
+
+Real-time customer support over Socket.io, owned by the `support` module.
+Sockets are **transport only** — every message and conversation is persisted
+through the `support` service (the one layer touching Prisma), so history
+survives reconnects and process restarts. Never treat an in-memory socket as
+the source of truth.
+
+- **Auth on connect:** every socket authenticates with the same Better Auth
+  session as the REST API; reject unauthenticated connections. Live chat is a
+  portal + admin feature — customers connect to their own conversations, staff
+  and admin can join any. Guards are enforced server-side, exactly like the API.
+- **Rooms:** one room per support conversation. A customer is scoped to their
+  own conversation(s); staff/admin join by conversation id after an ownership/
+  role check in the service layer.
+- **Persist then emit:** the socket handler validates the payload (Zod, same as
+  every other wire contract), calls the `support` service to store the message,
+  then emits to the room. Presence and typing indicators are ephemeral socket
+  events — never persisted.
+- **Offline handoff:** when no staff is connected, enqueue an email/SMS
+  notification via `jobs/` (never inline) so the customer still gets a reply —
+  same queued path as the rest of `notifications`.
+- **Rate-limited:** quotas are keyed by the **authenticated user (or session)
+  and conversation**, with IP-based limits where a caller is not yet
+  authenticated — a client can open several authenticated sockets, so a
+  per-connection quota alone is trivially evaded by reconnecting. Keep the
+  per-connection limit as an additional burst guard, not as the limit.
+- **One process:** sockets run in the same Express process as the API and jobs.
+  If we ever scale sockets across processes we'll need the Socket.io Redis
+  adapter — **ask before adding it** (budget rule).
+- **PII:** never log message content — log conversation and message ids only.
+- **Frontend:** the customer chat widget lives in `portal/features/support` and
+  the staff view in `admin/features/support`; both use the shared
+  `services/socket.ts` client, and message rendering follows Design.md.
+
+---
+
 ## Code Style
 
 - TypeScript strict, no `any`. The backend infers types from its Zod schemas;
@@ -255,10 +323,9 @@ convenience.
   (money and crypto edge cases qualify).
 - Naming: `PascalCase.tsx` components, `useThing.ts` hooks,
   `thing.service.ts` module files, kebab-case folders.
-- Tailwind utilities with `cn()` and CVA variants; design tokens live in the
-  Tailwind config — no hardcoded hex. shadcn is the base; never hand-roll what
-  it provides.
-- Card entry is always Stripe Elements — never a hand-rolled card input.
+
+(Tailwind, design tokens, the component-class layer, and the overlay hook live
+in **Design.md**.)
 
 ---
 
@@ -275,22 +342,20 @@ convenience.
 
 Critical paths only — do not chase coverage.
 
-- **Payments:** off-session charge flow, webhook dedupe, USDT matching +
-  under/overpayment, money helpers, and a "runs twice, credits once"
-  idempotency test.
+- **Payments:** USDT matching + under/overpayment, money helpers, and a "runs
+  twice, credits once" idempotency test.
 - **Auth:** guard checks per protected route group.
-- Vitest colocated as `*.test.ts`; Playwright for the checkout e2e. Stripe
-  test mode + Tron Nile testnet only; tests use a disposable docker-compose
-  Postgres, never a real database.
+- Vitest colocated as `*.test.ts`; Playwright for the checkout e2e. Tron Nile
+  testnet only; tests use a disposable docker-compose Postgres, never a real
+  database.
 
 ---
 
 ## Security & PII
 
-- Secrets never reach the browser — the frontend gets only `VITE_` vars
-  (Stripe publishable key). All secrets live in server env, validated in
-  `config/env.ts` on boot; all external services are called from the backend
-  only.
+- Secrets never reach the browser — the frontend gets only `VITE_` vars. All
+  secrets live in server env, validated in `config/env.ts` on boot; all external
+  services are called from the backend only.
 - Identity documents, addresses, tax IDs: R2 buckets are private; files are
   served only via short-TTL presigned URLs after an auth + ownership check in
   the **service layer**.
@@ -309,7 +374,9 @@ Critical paths only — do not chase coverage.
 - The backend defines the contract; the frontend mirrors it; both updated in
   the same task.
 - Business logic lives in services; controllers and processors are adapters.
-- Stripe holds the card, we hold the token. Never invent marketing claims or
-  legal advice.
+- Card payments are deferred — build nothing for them. Never invent marketing
+  claims or legal advice.
+- Design lives in **Design.md** — the Figma context is the pathway, not
+  the spec; improve where warranted and log every deviation in the summary.
 - End every task with the summary: what was built, what changed, how to test.
 - You always need to kill any server that you start for yourself ok.

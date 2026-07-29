@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 
 import { ClockIcon, MailIcon, PhoneIcon } from '../icons';
 
@@ -15,8 +16,8 @@ import { ClockIcon, MailIcon, PhoneIcon } from '../icons';
  *   - desktop (lg, 1024px): px-20 py-20, two columns — intro 1fr, form 480px —
  *     with 64px gutter; the form card is elevated white on the gray page.
  * The mail, phone, and clock glyphs reuse the shared marketing icon set.
- * Fields are static placeholders — this is presentational; the wired lead form
- * lands later against the backend `leads` module.
+ * Fields are static placeholders — this is presentational; wiring the form to
+ * the backend lands later.
  */
 
 const DETAILS = [
@@ -80,13 +81,17 @@ function IntroColumn() {
         ))}
       </div>
 
+      {/*
+       * These were dead `#` anchors. Both now point at real routes — the FAQ
+       * has its own page, so this no longer reaches it by hash into /services.
+       */}
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3 pt-1 text-[14px] font-semibold text-primary">
-        <a href="#" className="inline-flex items-center gap-1 hover:underline">
+        <Link to="/services" className="inline-flex items-center gap-1 hover:underline">
           Browse Services →
-        </a>
-        <a href="#" className="inline-flex items-center gap-1 hover:underline">
+        </Link>
+        <Link to="/faq" className="inline-flex items-center gap-1 hover:underline">
           View FAQ →
-        </a>
+        </Link>
       </div>
     </div>
   );
@@ -159,6 +164,23 @@ function FormCard() {
         >
           Send Message
         </button>
+
+        {/*
+         * The form collects a name, an email, and free-text that often carries
+         * business details, so the privacy notice belongs at the point of
+         * submission — not only in the footer. Placed under the button because
+         * that is where a reader looks before sending.
+         */}
+        <p className="text-[12px] leading-[18px] text-text-secondary">
+          By sending this message you agree to our{' '}
+          <Link
+            to="/legal/privacy"
+            className="font-medium text-primary underline underline-offset-2"
+          >
+            Privacy Policy
+          </Link>
+          . We use your details only to reply — never to sell or share.
+        </p>
       </div>
     </div>
   );

@@ -1,8 +1,10 @@
 # Marty Global LLC
 
 Corporate filing service provider. Customers form and manage companies, file
-registrations, receive scanned mail, get support, and pay by card (Stripe) or
-USDT (TRC-20).
+registrations, receive scanned mail, get support, and pay in USDT (TRC-20).
+
+Card payments are a later deployment — the portal shows them as coming soon and
+there is no card code in either app.
 
 Marty Global is a filing service provider, not a law firm.
 
@@ -42,7 +44,7 @@ endpoint or the catalog changes, both apps are updated in the same task.
 | Auth | Better Auth |
 | Live chat | Socket.io |
 | Email / SMS | Amazon SES (React Email) / Twilio |
-| Payments | Stripe (Elements + Intents) · USDT TRC-20 via TronGrid |
+| Payments | USDT TRC-20 via TronGrid (cards: later deployment) |
 | Storage | Cloudflare R2 |
 | Monitoring | Sentry / PostHog |
 | Testing | Vitest + Playwright |
@@ -77,7 +79,7 @@ Frontend — second terminal:
 ```bash
 cd frontend
 npm install
-cp .env.example .env      # VITE_ vars only (e.g. Stripe publishable key)
+cp .env.example .env      # VITE_ vars only — no secrets
 npm run dev
 ```
 
@@ -114,15 +116,14 @@ Frontend:
 
 All secrets live in the backend, validated in `backend/src/config/env.ts` on
 boot — the app fails fast if one is missing. The browser only ever receives
-`VITE_` variables (the Stripe publishable key); every external service is
-called from the backend.
+`VITE_` variables; every external service is called from the backend.
 
 ## Testing
 
-Critical paths only. Payments (off-session charge, webhook dedupe, USDT
-matching and under/overpayment, money helpers, "runs twice, credits once") and
-auth guards per protected route group. Stripe test mode and Tron Nile testnet
-only; tests use a disposable docker-compose Postgres, never a real database.
+Critical paths only. Payments (USDT matching and under/overpayment, money
+helpers, "runs twice, credits once") and auth guards per protected route group.
+Tron Nile testnet only; tests use a disposable docker-compose Postgres, never a
+real database.
 
 ## Deploy
 
