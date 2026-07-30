@@ -158,6 +158,15 @@ export function initSentry() {
   Sentry.init({
     dsn: env.SENTRY_DSN,
     environment: env.SENTRY_ENVIRONMENT ?? env.NODE_ENV,
+    /*
+     * Ties an error to the image that produced it, so a regression points at a
+     * deploy instead of at the whole history. Supplied by the deploy (the image
+     * tag it is starting), not baked into the build — the SDK would also read a
+     * bare SENTRY_RELEASE on its own, but every variable this process reads goes
+     * through config/env.ts, so it is passed explicitly like sendDefaultPii
+     * below.
+     */
+    release: env.SENTRY_RELEASE,
     tracesSampleRate: env.SENTRY_TRACES_SAMPLE_RATE,
 
     /*
