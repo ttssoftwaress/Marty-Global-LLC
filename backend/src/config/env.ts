@@ -115,6 +115,15 @@ const envSchema = z.object({
   // default follows NODE_ENV, which is right for all three of ours.
   SENTRY_ENVIRONMENT: optionalString,
   /*
+   * The deployed version an event belongs to — the image tag / commit SHA the
+   * deploy exports, not a value baked into the image.
+   *
+   * Optional: local dev and the test suite have no deploy to name, and a
+   * missing release only costs Sentry some grouping quality, so it is not worth
+   * refusing to boot over (unlike the production credential refines below).
+   */
+  SENTRY_RELEASE: optionalString,
+  /*
    * Share of transactions sampled for performance tracing, 0–1. Off by default:
    * tracing is a paid quota and this API's throughput would burn it on health
    * checks. Raise deliberately (0.1 is a common production starting point).
