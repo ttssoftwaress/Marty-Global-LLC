@@ -14,7 +14,8 @@ type TopBarTabletProps = {
   user: TopBarUser;
   notificationCount?: number;
   onOpenNotifications?: () => void;
-  onOpenUserMenu?: () => void;
+  onOpenUserMenu: () => void;
+  accountMenuOpen?: boolean;
   className?: string;
 };
 
@@ -23,6 +24,7 @@ export function TopBarTablet({
   notificationCount,
   onOpenNotifications,
   onOpenUserMenu,
+  accountMenuOpen,
   className,
 }: TopBarTabletProps) {
   return (
@@ -48,6 +50,7 @@ export function TopBarTablet({
         <TopBarUserMenu
           user={user}
           onOpenUserMenu={onOpenUserMenu}
+          accountMenuOpen={accountMenuOpen}
           chevronSize={20}
         />
       </div>

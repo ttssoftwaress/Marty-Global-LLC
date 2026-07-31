@@ -6,12 +6,7 @@ import { signUp } from '@/auth/client';
 import { useCompactScale } from '@/hooks/useCompactScale';
 import { markAccountOnDevice } from '@/lib/device-account';
 import { LeftPanel } from './components/auth-brand';
-import {
-  ChevronDownIcon,
-  CheckIcon,
-  EyeIcon,
-  ShieldCheckIcon,
-} from './components/icons';
+import { CheckIcon, EyeIcon, ShieldCheckIcon } from './components/icons';
 
 // The real published documents. Opened in a new tab so reading them does not
 // discard a part-filled signup form.
@@ -82,7 +77,6 @@ type FieldErrors = {
   email?: string;
   password?: string;
   confirmPassword?: string;
-  country?: string;
 };
 
 type FormValues = {
@@ -90,7 +84,6 @@ type FormValues = {
   email: string;
   password: string;
   confirmPassword: string;
-  country: string;
 };
 
 // Client-side checks mirror the backend's rules (Better Auth min password length,
@@ -112,8 +105,6 @@ function validate(values: FormValues): FieldErrors {
     errors.confirmPassword = 'Passwords do not match';
   }
 
-  if (!values.country) errors.country = 'Please select your country or region';
-
   return errors;
 }
 
@@ -125,7 +116,6 @@ function SignUpForm() {
     email: '',
     password: '',
     confirmPassword: '',
-    country: '',
   });
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -158,7 +148,6 @@ function SignUpForm() {
       name: values.fullName.trim(),
       email: values.email.trim(),
       password: values.password,
-      country: values.country,
     });
 
     if (error) {
@@ -227,32 +216,6 @@ function SignUpForm() {
             visible={showConfirm}
             onToggle={() => setShowConfirm((v) => !v)}
           />
-        </Field>
-
-        <Field
-          label="Country / Region of Incorporation"
-          htmlFor="country"
-          error={errors.country}
-        >
-          <div className="relative">
-            <select
-              id="country"
-              value={values.country}
-              onChange={(e) => setField('country', e.target.value)}
-              className={`input-field w-full appearance-none pr-11 md:h-11 lg:h-12 ${
-                values.country ? 'text-text' : 'text-gray-400'
-              }`}
-            >
-              <option value="" disabled hidden>
-                Select your country or region
-              </option>
-              <option value="us">United States</option>
-              <option value="uk">United Kingdom</option>
-              <option value="ca">Canada</option>
-              <option value="eu">Europe</option>
-            </select>
-            <ChevronDownIcon className="pointer-events-none absolute right-4 top-1/2 size-5 -translate-y-1/2 text-gray-400" />
-          </div>
         </Field>
       </div>
 

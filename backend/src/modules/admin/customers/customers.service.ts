@@ -62,15 +62,13 @@ function activeCutoff(now: Date): Date {
 }
 
 /*
- * A customer's region is their own country when Better Auth captured one, and
- * their company's otherwise. The filter below mirrors this exactly — if the two
- * disagreed, the list would show rows the filter did not select.
+ * A customer's region is their company's country — signup no longer asks for one,
+ * so the company record is the only place a jurisdiction is stated. The filter
+ * below mirrors this exactly — if the two disagreed, the list would show rows the
+ * filter did not select.
  */
 const regionWhere = (code: string): Prisma.UserWhereInput => ({
-  OR: [
-    { country: code },
-    { AND: [{ country: null }, { company: { is: { country: code } } }] },
-  ],
+  company: { is: { country: code } },
 });
 
 function segmentWhere(
@@ -295,7 +293,7 @@ export async function listCustomers(
   const page = takePage(rows, query.limit);
 
   const codes = page.rows
-    .map((user) => user.country ?? user.company?.country)
+    .map((user) => user.company?.country)
     .filter((code): code is string => Boolean(code));
 
   const [spend, regions] = await Promise.all([
@@ -305,7 +303,7 @@ export async function listCustomers(
 
   return {
     customers: page.rows.map((user) => {
-      const code = user.country ?? user.company?.country ?? null;
+      const code = user.company?.country ?? null;
 
       return {
         id: user.id,
@@ -383,7 +381,7 @@ export async function getCustomer(
 
   if (!user) throw AppError.notFound('Customer not found');
 
-  const code = user.country ?? user.company?.country ?? null;
+  const code = user.company?.country ?? null;
 
   /*
    * Reaching the record does not mean reading all of it. Every figure below

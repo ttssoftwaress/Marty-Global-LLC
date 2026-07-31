@@ -31,6 +31,12 @@ type AdminSidebarMobileDrawerProps = {
   user: AdminSidebarUser;
   items: AdminNavItem[];
   badges?: AdminNavBadges;
+  /*
+   * The shell closes the drawer before opening the account sheet, so the two
+   * overlays are never stacked: nesting them would mean two `aria-modal` dialogs
+   * at once and an Escape that dismisses both.
+   */
+  onOpenAccountMenu?: () => void;
   onLogout?: () => void;
 };
 
@@ -40,6 +46,7 @@ export function AdminSidebarMobileDrawer({
   user,
   items,
   badges,
+  onOpenAccountMenu,
   onLogout,
 }: AdminSidebarMobileDrawerProps) {
   const { pathname } = useLocation();
@@ -130,7 +137,10 @@ export function AdminSidebarMobileDrawer({
         <div className="flex w-full shrink-0 flex-col gap-4 pt-6">
           <hr className="w-full border-0 border-t border-white/15" />
 
-          <AdminSidebarUserBlock user={user} />
+          <AdminSidebarUserBlock
+            user={user}
+            onOpenAccountMenu={onOpenAccountMenu}
+          />
 
           <button
             type="button"

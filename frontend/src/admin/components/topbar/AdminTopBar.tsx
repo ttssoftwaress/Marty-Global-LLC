@@ -27,7 +27,8 @@ type AdminTopBarProps = {
   onOpenMenu?: () => void;
   onOpenSearch?: () => void;
   onOpenNotifications?: () => void;
-  onOpenUserMenu?: () => void;
+  onOpenUserMenu: () => void;
+  accountMenuOpen?: boolean;
 };
 
 export function AdminTopBar({
@@ -38,6 +39,7 @@ export function AdminTopBar({
   onOpenSearch,
   onOpenNotifications,
   onOpenUserMenu,
+  accountMenuOpen,
 }: AdminTopBarProps) {
   return (
     <>
@@ -49,6 +51,7 @@ export function AdminTopBar({
         onOpenSearch={onOpenSearch}
         onOpenNotifications={onOpenNotifications}
         onOpenUserMenu={onOpenUserMenu}
+        accountMenuOpen={accountMenuOpen}
       />
       <AdminTopBarTablet
         className="hidden md:flex lg:hidden"
@@ -57,6 +60,7 @@ export function AdminTopBar({
         onOpenSearch={onOpenSearch}
         onOpenNotifications={onOpenNotifications}
         onOpenUserMenu={onOpenUserMenu}
+        accountMenuOpen={accountMenuOpen}
       />
       <AdminTopBarDesktop
         className="hidden lg:flex"
@@ -65,6 +69,7 @@ export function AdminTopBar({
         onSearch={onSearch}
         onOpenNotifications={onOpenNotifications}
         onOpenUserMenu={onOpenUserMenu}
+        accountMenuOpen={accountMenuOpen}
       />
     </>
   );

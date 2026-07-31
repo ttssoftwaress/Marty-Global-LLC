@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
 import logoColor from '@/assets/Marty-Logo-Color.PNG';
@@ -42,9 +42,53 @@ function isActive(href: string, pathname: string) {
 export function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const { pathname } = useLocation();
+  // Wraps the trigger and the panel, so a press on either is not an outside press.
+  const headerRef = useRef<HTMLElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  /*
+   * The mobile sheet is a non-modal popover (Design.md): it dismisses on an
+   * outside press and on Escape and leaves page scroll and Tab alone — no scrim,
+   * no focus trap. Marketing keeps its own copy of the behaviour rather than
+   * importing the admin hook; areas never import across the boundary.
+   *
+   * Scroll dismisses it too, which a popover anchored to a scrolled-away trigger
+   * needs and the admin hook has no reason to do: this panel hangs off a static
+   * header, so scrolling carries it off-screen while `menuOpen` stays true and
+   * the hamburger keeps reporting `aria-expanded="true"` for a menu nobody can
+   * see. Captured rather than bubbled — scroll events do not bubble, so a
+   * listener on `document` only sees them on the way down.
+   */
+  useEffect(() => {
+    if (!menuOpen) return;
+
+    const close = () => setMenuOpen(false);
+
+    const onPointerDown = (event: PointerEvent) => {
+      if (!headerRef.current?.contains(event.target as Node)) close();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      close();
+      triggerRef.current?.focus();
+    };
+
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('scroll', close, { capture: true, passive: true });
+
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('scroll', close, { capture: true });
+    };
+  }, [menuOpen]);
 
   return (
-    <header className="relative flex h-[72px] w-full items-center justify-between border-b border-gray-200 bg-white px-5 md:h-[88px] md:px-10 lg:px-20">
+    <header
+      ref={headerRef}
+      className="relative flex h-[72px] w-full items-center justify-between border-b border-gray-200 bg-white px-5 md:h-[88px] md:px-10 lg:px-20"
+    >
       <Link to="/" className="shrink-0" aria-label="Marty Global LLC — Home">
         <img
           src={logoColor}
@@ -67,6 +111,7 @@ export function Navbar() {
       </Link>
 
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setMenuOpen((v) => !v)}
         aria-label={menuOpen ? 'Close menu' : 'Open menu'}

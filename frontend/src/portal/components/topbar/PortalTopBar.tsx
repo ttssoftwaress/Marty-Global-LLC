@@ -20,7 +20,8 @@ type PortalTopBarProps = {
   notificationCount?: number;
   onOpenMenu?: () => void;
   onOpenNotifications?: () => void;
-  onOpenUserMenu?: () => void;
+  onOpenUserMenu: () => void;
+  accountMenuOpen?: boolean;
 };
 
 export function PortalTopBar({
@@ -29,6 +30,7 @@ export function PortalTopBar({
   onOpenMenu,
   onOpenNotifications,
   onOpenUserMenu,
+  accountMenuOpen,
 }: PortalTopBarProps) {
   return (
     <>
@@ -39,6 +41,7 @@ export function PortalTopBar({
         onOpenMenu={onOpenMenu}
         onOpenNotifications={onOpenNotifications}
         onOpenUserMenu={onOpenUserMenu}
+        accountMenuOpen={accountMenuOpen}
       />
       <TopBarTablet
         className="hidden md:flex lg:hidden"
@@ -46,6 +49,7 @@ export function PortalTopBar({
         notificationCount={notificationCount}
         onOpenNotifications={onOpenNotifications}
         onOpenUserMenu={onOpenUserMenu}
+        accountMenuOpen={accountMenuOpen}
       />
       <TopBarDesktop
         className="hidden lg:flex"
@@ -53,6 +57,7 @@ export function PortalTopBar({
         notificationCount={notificationCount}
         onOpenNotifications={onOpenNotifications}
         onOpenUserMenu={onOpenUserMenu}
+        accountMenuOpen={accountMenuOpen}
       />
     </>
   );

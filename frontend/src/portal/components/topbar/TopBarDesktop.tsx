@@ -11,7 +11,8 @@ type TopBarDesktopProps = {
   user: TopBarUser;
   notificationCount?: number;
   onOpenNotifications?: () => void;
-  onOpenUserMenu?: () => void;
+  onOpenUserMenu: () => void;
+  accountMenuOpen?: boolean;
   className?: string;
 };
 
@@ -20,6 +21,7 @@ export function TopBarDesktop({
   notificationCount,
   onOpenNotifications,
   onOpenUserMenu,
+  accountMenuOpen,
   className,
 }: TopBarDesktopProps) {
   return (
@@ -41,6 +43,7 @@ export function TopBarDesktop({
         <TopBarUserMenu
           user={user}
           onOpenUserMenu={onOpenUserMenu}
+          accountMenuOpen={accountMenuOpen}
           chevronSize={16}
         />
       </div>

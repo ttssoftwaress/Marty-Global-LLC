@@ -21,6 +21,8 @@ import { isServiceNavItemActive, useServiceNavItems } from './useServiceNavItems
 type SidebarDesktopProps = {
   user: SidebarUser;
   badges?: PortalNavBadges;
+  onOpenAccountMenu?: () => void;
+  accountMenuOpen?: boolean;
   onLogout?: () => void;
   className?: string;
 };
@@ -28,6 +30,8 @@ type SidebarDesktopProps = {
 export function SidebarDesktop({
   user,
   badges,
+  onOpenAccountMenu,
+  accountMenuOpen,
   onLogout,
   className,
 }: SidebarDesktopProps) {
@@ -126,7 +130,11 @@ export function SidebarDesktop({
       </div>
 
       <div className="flex w-full flex-col gap-6">
-        <SidebarUserBlock user={user} />
+        <SidebarUserBlock
+          user={user}
+          onOpenAccountMenu={onOpenAccountMenu}
+          accountMenuOpen={accountMenuOpen}
+        />
 
         <div className="flex w-full flex-col gap-3">
           <button

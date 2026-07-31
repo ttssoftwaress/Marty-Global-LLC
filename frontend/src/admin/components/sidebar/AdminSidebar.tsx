@@ -32,6 +32,9 @@ type AdminSidebarProps = {
   badges?: AdminNavBadges;
   mobileOpen: boolean;
   onMobileClose: () => void;
+  /* Opens the shell's account menu from the rail avatar or the user block. */
+  onOpenAccountMenu?: () => void;
+  accountMenuOpen?: boolean;
   onLogout?: () => void;
 };
 
@@ -41,6 +44,8 @@ export function AdminSidebar({
   badges,
   mobileOpen,
   onMobileClose,
+  onOpenAccountMenu,
+  accountMenuOpen,
   onLogout,
 }: AdminSidebarProps) {
   const items = useMemo(() => visibleAdminNavItems(permissions), [permissions]);
@@ -51,6 +56,8 @@ export function AdminSidebar({
         user={user}
         items={items}
         badges={badges}
+        onOpenAccountMenu={onOpenAccountMenu}
+        accountMenuOpen={accountMenuOpen}
         onLogout={onLogout}
         className="hidden md:flex lg:hidden"
       />
@@ -58,6 +65,8 @@ export function AdminSidebar({
         user={user}
         items={items}
         badges={badges}
+        onOpenAccountMenu={onOpenAccountMenu}
+        accountMenuOpen={accountMenuOpen}
         onLogout={onLogout}
         className="hidden lg:flex"
       />
@@ -67,6 +76,7 @@ export function AdminSidebar({
         user={user}
         items={items}
         badges={badges}
+        onOpenAccountMenu={onOpenAccountMenu}
         onLogout={onLogout}
       />
     </>

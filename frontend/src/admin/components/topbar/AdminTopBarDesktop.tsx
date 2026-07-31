@@ -13,7 +13,8 @@ type AdminTopBarDesktopProps = {
   notificationCount?: number;
   onSearch?: (query: string) => void;
   onOpenNotifications?: () => void;
-  onOpenUserMenu?: () => void;
+  onOpenUserMenu: () => void;
+  accountMenuOpen?: boolean;
   className?: string;
 };
 
@@ -23,6 +24,7 @@ export function AdminTopBarDesktop({
   onSearch,
   onOpenNotifications,
   onOpenUserMenu,
+  accountMenuOpen,
   className,
 }: AdminTopBarDesktopProps) {
   return (
@@ -37,7 +39,11 @@ export function AdminTopBarDesktop({
           onOpenNotifications={onOpenNotifications}
         />
 
-        <AdminTopBarUserMenu user={user} onOpenUserMenu={onOpenUserMenu} />
+        <AdminTopBarUserMenu
+          user={user}
+          onOpenUserMenu={onOpenUserMenu}
+          accountMenuOpen={accountMenuOpen}
+        />
       </div>
     </header>
   );

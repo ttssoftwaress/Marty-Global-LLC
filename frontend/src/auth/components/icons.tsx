@@ -1,7 +1,6 @@
 import {
   ArrowLeft,
   Check,
-  ChevronDown,
   Eye,
   EyeOff,
   Key,
@@ -22,10 +21,6 @@ export function EyeIcon(props: LucideProps) {
 
 export function EyeOffIcon(props: LucideProps) {
   return <EyeOff strokeWidth={1.75} aria-hidden="true" {...props} />;
-}
-
-export function ChevronDownIcon(props: LucideProps) {
-  return <ChevronDown strokeWidth={1.75} aria-hidden="true" {...props} />;
 }
 
 export function CheckIcon(props: LucideProps) {

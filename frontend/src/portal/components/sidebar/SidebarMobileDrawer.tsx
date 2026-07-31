@@ -29,6 +29,12 @@ type SidebarMobileDrawerProps = {
   onClose: () => void;
   user: SidebarUser;
   badges?: PortalNavBadges;
+  /*
+   * The shell closes the drawer before opening the account sheet, so the two
+   * overlays are never stacked: nesting them would mean two `aria-modal` dialogs
+   * at once and an Escape that dismisses both.
+   */
+  onOpenAccountMenu?: () => void;
   onLogout?: () => void;
 };
 
@@ -37,6 +43,7 @@ export function SidebarMobileDrawer({
   onClose,
   user,
   badges,
+  onOpenAccountMenu,
   onLogout,
 }: SidebarMobileDrawerProps) {
   const { pathname } = useLocation();
@@ -197,7 +204,7 @@ export function SidebarMobileDrawer({
 
           <hr className="w-full border-0 border-t border-white/15" />
 
-          <SidebarUserBlock user={user} />
+          <SidebarUserBlock user={user} onOpenAccountMenu={onOpenAccountMenu} />
         </div>
       </aside>
     </div>

@@ -71,18 +71,6 @@ export const auth = betterAuth({
     },
   },
 
-  user: {
-    additionalFields: {
-      // Country / region of incorporation, captured at signup for later use in
-      // filing jurisdiction. Optional so admin-created users aren't forced to set it.
-      country: {
-        type: 'string',
-        required: false,
-        input: true,
-      },
-    },
-  },
-
   /*
    * The audit trail for authentication (modules/audit/audit.auth-hook.ts).
    *

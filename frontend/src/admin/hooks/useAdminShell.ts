@@ -60,6 +60,10 @@ export function useAdminShell(): {
     user: {
       name: session?.user.name ?? '',
       role: roleLabel(session?.user.role),
+      // Stands in until `/admin/me` lands, which the layout prefers over this —
+      // the record is what an edit writes to, the session copy refreshes on its
+      // own schedule.
+      email: session?.user.email,
     },
     userId: session?.user.id,
     onLogout,
