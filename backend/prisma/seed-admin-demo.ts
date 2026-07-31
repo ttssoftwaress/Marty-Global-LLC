@@ -127,6 +127,8 @@ type SeedCustomer = {
   id: string;
   name: string;
   email: string;
+  // The company's jurisdiction — the only place a customer's region is stated
+  // now that signup no longer asks. A customer with no company has no region.
   country: string;
   createdDaysAgo: number;
   company?: { businessName: string; industry: string; address: string };
@@ -628,10 +630,9 @@ export async function seedAdminDemo(prisma: PrismaClient): Promise<void> {
         email: customer.email,
         emailVerified: true,
         role: 'customer',
-        country: customer.country,
         createdAt: daysFromNow(-customer.createdDaysAgo),
       },
-      update: { name: customer.name, country: customer.country },
+      update: { name: customer.name },
     });
 
     if (customer.company) {

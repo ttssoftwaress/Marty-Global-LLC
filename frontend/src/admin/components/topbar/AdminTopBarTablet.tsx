@@ -14,7 +14,8 @@ type AdminTopBarTabletProps = {
   notificationCount?: number;
   onOpenSearch?: () => void;
   onOpenNotifications?: () => void;
-  onOpenUserMenu?: () => void;
+  onOpenUserMenu: () => void;
+  accountMenuOpen?: boolean;
   className?: string;
 };
 
@@ -24,6 +25,7 @@ export function AdminTopBarTablet({
   onOpenSearch,
   onOpenNotifications,
   onOpenUserMenu,
+  accountMenuOpen,
   className,
 }: AdminTopBarTabletProps) {
   return (
@@ -38,7 +40,12 @@ export function AdminTopBarTablet({
           onOpenNotifications={onOpenNotifications}
         />
 
-        <AdminTopBarUserMenu user={user} onOpenUserMenu={onOpenUserMenu} compact />
+        <AdminTopBarUserMenu
+          user={user}
+          onOpenUserMenu={onOpenUserMenu}
+          accountMenuOpen={accountMenuOpen}
+          compact
+        />
       </div>
     </header>
   );

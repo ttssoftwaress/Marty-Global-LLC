@@ -12,6 +12,7 @@ import { useAdminMe } from '@/admin/queries/admin-me';
 import { useCompactScale } from '@/hooks/useCompactScale';
 import { useUnreadCounts } from '@/hooks/useUnreadCounts';
 import type { AdminNotification } from '@/admin/types/notifications';
+import { AdminAccountMenu, type AdminAccountMenuAnchor } from './account-menu';
 import { AdminSidebar, type AdminSidebarUser } from './sidebar';
 import { AdminTopBar } from './topbar';
 
@@ -38,15 +39,20 @@ import { AdminTopBar } from './topbar';
  * on the team screen is what actually decides, and the backend's
  * `requirePermission` reads the same row, so the nav and the API agree.
  *
- * Search and the account menu are still passed straight through — those panels
- * can land later without touching this file.
+ * The account menu is owned here too, and kept as one overlay rather than one per
+ * trigger: the avatar appears in the top bar at every width, in the sidebar's
+ * user block, and again on the tablet rail, and mounted copies would drift.
+ * `accountMenu` holds which control opened it, because the panel anchors under
+ * the bar for one and beside the sidebar for the others.
+ *
+ * Search is still passed straight through — that panel can land later without
+ * touching this file.
  */
 
 type AdminLayoutProps = {
   user: AdminSidebarUser;
   onSearch?: (query: string) => void;
   onOpenSearch?: () => void;
-  onOpenUserMenu?: () => void;
   onLogout?: () => void;
   children: ReactNode;
 };
@@ -55,7 +61,6 @@ export function AdminLayout({
   user,
   onSearch,
   onOpenSearch,
-  onOpenUserMenu,
   onLogout,
   children,
 }: AdminLayoutProps) {
@@ -63,6 +68,9 @@ export function AdminLayout({
 
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [accountMenu, setAccountMenu] = useState<AdminAccountMenuAnchor | null>(
+    null,
+  );
 
   const navigate = useNavigate();
   const me = useAdminMe();
@@ -84,7 +92,12 @@ export function AdminLayout({
   const sidebarUser = useMemo<AdminSidebarUser>(
     () =>
       me.data
-        ? { ...user, role: me.data.roleLabel, avatarUrl: me.data.avatarUrl }
+        ? {
+            ...user,
+            role: me.data.roleLabel,
+            email: me.data.email,
+            avatarUrl: me.data.avatarUrl,
+          }
         : user,
     [user, me.data],
   );
@@ -120,6 +133,14 @@ export function AdminLayout({
         badges={{ notifications: unreadCount, support: unread.messages }}
         mobileOpen={mobileNavOpen}
         onMobileClose={() => setMobileNavOpen(false)}
+        /* On mobile the user block lives inside the drawer, which is itself a
+         * modal overlay — so the drawer closes as the menu opens rather than the
+         * two stacking. On tablet and desktop there is no drawer to close. */
+        onOpenAccountMenu={() => {
+          setMobileNavOpen(false);
+          setAccountMenu('sidebar');
+        }}
+        accountMenuOpen={accountMenu === 'sidebar'}
         onLogout={onLogout}
       />
 
@@ -131,7 +152,8 @@ export function AdminLayout({
           onOpenMenu={() => setMobileNavOpen(true)}
           onOpenSearch={onOpenSearch}
           onOpenNotifications={() => setNotificationsOpen(true)}
-          onOpenUserMenu={onOpenUserMenu}
+          onOpenUserMenu={() => setAccountMenu('topbar')}
+          accountMenuOpen={accountMenu === 'topbar'}
         />
 
         <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
@@ -147,6 +169,15 @@ export function AdminLayout({
         onRetry={() => void panel.refetch()}
         onSelect={onSelectNotification}
         onMarkAllRead={() => markAllRead.mutate()}
+      />
+
+      <AdminAccountMenu
+        open={accountMenu !== null}
+        onClose={() => setAccountMenu(null)}
+        anchor={accountMenu ?? 'topbar'}
+        user={sidebarUser}
+        permissions={me.data?.permissions}
+        onLogout={onLogout}
       />
     </div>
   );

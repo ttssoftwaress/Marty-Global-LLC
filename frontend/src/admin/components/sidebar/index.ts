@@ -5,6 +5,7 @@ export { AdminSidebarMobileDrawer } from './AdminSidebarMobileDrawer';
 export {
   AdminSidebarUserBlock,
   AdminSidebarAvatar,
+  AdminSidebarAvatarButton,
   adminUserInitials,
   type AdminSidebarUser,
 } from './AdminSidebarUserBlock';

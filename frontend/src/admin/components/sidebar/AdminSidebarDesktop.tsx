@@ -27,6 +27,8 @@ type AdminSidebarDesktopProps = {
   user: AdminSidebarUser;
   items: AdminNavItem[];
   badges?: AdminNavBadges;
+  onOpenAccountMenu?: () => void;
+  accountMenuOpen?: boolean;
   onLogout?: () => void;
   className?: string;
 };
@@ -35,6 +37,8 @@ export function AdminSidebarDesktop({
   user,
   items,
   badges,
+  onOpenAccountMenu,
+  accountMenuOpen,
   onLogout,
   className,
 }: AdminSidebarDesktopProps) {
@@ -85,7 +89,11 @@ export function AdminSidebarDesktop({
       </div>
 
       <div className="flex w-full shrink-0 flex-col gap-4 pt-6">
-        <AdminSidebarUserBlock user={user} />
+        <AdminSidebarUserBlock
+          user={user}
+          onOpenAccountMenu={onOpenAccountMenu}
+          accountMenuOpen={accountMenuOpen}
+        />
 
         <button
           type="button"

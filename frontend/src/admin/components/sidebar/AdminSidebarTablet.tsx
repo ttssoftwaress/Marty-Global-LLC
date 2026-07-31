@@ -2,7 +2,10 @@ import { LogOut } from 'lucide-react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 
 import { AdminNavBadge } from './AdminNavBadge';
-import { AdminSidebarAvatar, type AdminSidebarUser } from './AdminSidebarUserBlock';
+import {
+  AdminSidebarAvatarButton,
+  type AdminSidebarUser,
+} from './AdminSidebarUserBlock';
 import {
   isAdminNavItemActive,
   type AdminNavBadges,
@@ -28,6 +31,8 @@ type AdminSidebarTabletProps = {
   user: AdminSidebarUser;
   items: AdminNavItem[];
   badges?: AdminNavBadges;
+  onOpenAccountMenu?: () => void;
+  accountMenuOpen?: boolean;
   onLogout?: () => void;
   className?: string;
 };
@@ -36,6 +41,8 @@ export function AdminSidebarTablet({
   user,
   items,
   badges,
+  onOpenAccountMenu,
+  accountMenuOpen,
   onLogout,
   className,
 }: AdminSidebarTabletProps) {
@@ -94,7 +101,11 @@ export function AdminSidebarTablet({
       </div>
 
       <div className="flex w-full shrink-0 flex-col items-center gap-5 pt-5">
-        <AdminSidebarAvatar user={user} />
+        <AdminSidebarAvatarButton
+          user={user}
+          onOpenAccountMenu={onOpenAccountMenu}
+          accountMenuOpen={accountMenuOpen}
+        />
 
         <button
           type="button"

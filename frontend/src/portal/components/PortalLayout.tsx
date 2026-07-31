@@ -12,6 +12,7 @@ import {
 } from '../features/notifications';
 import { SupportWidget } from '../features/support';
 import type { Notification } from '../types/notifications';
+import { AccountMenu, type AccountMenuAnchor } from './account-menu';
 import { PortalSidebar, type SidebarUser } from './sidebar';
 import { PortalTopBar } from './topbar';
 
@@ -30,6 +31,12 @@ import { PortalTopBar } from './topbar';
  * and fifteen of the seventeen did, which is what this fixes. One query in the
  * shell is also one cache entry shared across navigation rather than a refetch
  * per page; the notifications screen reads the same key and hits that cache.
+ *
+ * The account menu is owned here for the same reason and kept as one overlay
+ * rather than one per trigger: the avatar appears in the top bar at every width
+ * and again in the sidebar's user block, and two mounted copies would drift.
+ * `accountMenu` holds which control opened it, because the panel anchors under
+ * the bar for one and beside the sidebar for the other.
  */
 
 type PortalLayoutProps = {
@@ -43,6 +50,7 @@ export function PortalLayout({ user, onLogout, children }: PortalLayoutProps) {
 
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [accountMenu, setAccountMenu] = useState<AccountMenuAnchor | null>(null);
 
   const navigate = useNavigate();
   const panel = useNotificationPanel();
@@ -76,6 +84,14 @@ export function PortalLayout({ user, onLogout, children }: PortalLayoutProps) {
         badges={{ notifications: unread.notifications, support: unread.messages }}
         mobileOpen={mobileNavOpen}
         onMobileClose={() => setMobileNavOpen(false)}
+        /* On mobile the user block lives inside the drawer, which is itself a
+         * modal overlay — so the drawer closes as the menu opens rather than the
+         * two stacking. On desktop there is no drawer to close. */
+        onOpenAccountMenu={() => {
+          setMobileNavOpen(false);
+          setAccountMenu('sidebar');
+        }}
+        accountMenuOpen={accountMenu === 'sidebar'}
         onLogout={onLogout}
       />
 
@@ -85,6 +101,8 @@ export function PortalLayout({ user, onLogout, children }: PortalLayoutProps) {
           notificationCount={unread.notifications}
           onOpenMenu={() => setMobileNavOpen(true)}
           onOpenNotifications={() => setNotificationsOpen(true)}
+          onOpenUserMenu={() => setAccountMenu('topbar')}
+          accountMenuOpen={accountMenu === 'topbar'}
         />
 
         <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
@@ -97,6 +115,14 @@ export function PortalLayout({ user, onLogout, children }: PortalLayoutProps) {
         isLoading={panel.isLoading}
         onSelect={onSelectNotification}
         onMarkAllRead={() => markAllRead.mutate()}
+      />
+
+      <AccountMenu
+        open={accountMenu !== null}
+        onClose={() => setAccountMenu(null)}
+        anchor={accountMenu ?? 'topbar'}
+        user={user}
+        onLogout={onLogout}
       />
 
       {/* Live chat, on every portal screen. It hides itself on /app/support,
