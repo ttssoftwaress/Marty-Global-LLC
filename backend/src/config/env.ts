@@ -259,20 +259,40 @@ const envSchema = z.object({
     },
   )
   /*
-   * SES credentials are a complete pair in production. A half-filled or empty
-   * block would boot cleanly and then skip every send (config/ses.ts), so a
-   * deploy that never delivers a verification email or a payment receipt would
-   * look healthy. Dev and test keep them optional.
+   * Credentials that are optional everywhere else and mandatory in production,
+   * because in each case an absent value degrades silently rather than loudly.
+   * Dev and test keep them optional so neither needs an account.
    */
   .superRefine((value, ctx) => {
     if (value.NODE_ENV !== 'production') return;
 
+    /*
+     * SES credentials are a complete pair in production. A half-filled or empty
+     * block would boot cleanly and then skip every send (config/ses.ts), so a
+     * deploy that never delivers a verification email or a payment receipt would
+     * look healthy.
+     */
     if (!value.AWS_ACCESS_KEY_ID || !value.AWS_SECRET_ACCESS_KEY) {
       ctx.addIssue({
         code: 'custom',
         path: ['AWS_SECRET_ACCESS_KEY'],
         message:
           'NODE_ENV=production requires both AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY',
+      });
+    }
+
+    /*
+     * Without the secret, config/turnstile.ts warns once and then returns true
+     * for every challenge — so the two endpoints an unauthenticated visitor can
+     * write to (/v1/guest-chat, /v1/contact) ship with their bot protection
+     * reporting success and enforcing nothing. Refusing the boot is the only
+     * failure mode here that anyone would notice.
+     */
+    if (!value.TURNSTILE_SECRET_KEY) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['TURNSTILE_SECRET_KEY'],
+        message: 'NODE_ENV=production requires TURNSTILE_SECRET_KEY',
       });
     }
   });

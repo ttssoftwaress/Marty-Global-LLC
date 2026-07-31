@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The public marketing routes, mirroring app/router.tsx. Everything else in the
+  router is behind an auth guard or an auth screen, and is excluded in
+  robots.txt. When a marketing route is added, add it here in the same task —
+  a sitemap that names a 404 is worse than no sitemap.
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://martygloballlc.com/</loc></url>
+  <url><loc>https://martygloballlc.com/services</loc></url>
+  <url><loc>https://martygloballlc.com/how-it-works</loc></url>
+  <url><loc>https://martygloballlc.com/about</loc></url>
+  <url><loc>https://martygloballlc.com/contact</loc></url>
+  <url><loc>https://martygloballlc.com/faq</loc></url>
+  <url><loc>https://martygloballlc.com/legal/privacy</loc></url>
+  <url><loc>https://martygloballlc.com/legal/terms</loc></url>
+  <url><loc>https://martygloballlc.com/legal/cookies</loc></url>
+</urlset>

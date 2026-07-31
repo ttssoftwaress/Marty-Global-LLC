@@ -1,0 +1,28 @@
+# Keeps `COPY . .` in the build stage from baking the local environment into an
+# image layer. The production stage never copies .env forward, but a layer is not
+# a copy — anyone who can pull the image can read it, so this file is the only
+# thing standing between `docker build` and publishing the Better Auth secret,
+# the database password, and the AWS and R2 keys.
+
+.env
+.env.*
+
+node_modules
+dist
+coverage
+*.tsbuildinfo
+
+npm-debug.log*
+*.log
+
+.git
+.gitignore
+.dockerignore
+Dockerfile
+
+# Local SQLite artefacts from prisma dev tooling — never part of a build.
+prisma/*.db
+prisma/*.db-journal
+
+.vscode
+.idea
