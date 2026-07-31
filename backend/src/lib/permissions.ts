@@ -40,6 +40,20 @@ export const PERMISSION_AREAS = [
   { key: 'requests', label: 'Service requests' },
   { key: 'catalog', label: 'Service catalog & pricing' },
   { key: 'payments', label: 'Quotes & payments' },
+  /*
+   * Confirming that money we cannot see arrived — marking a wire transfer paid.
+   *
+   * Its own area rather than part of `payments`, and the most consequential
+   * grant in this list: a USDT payment is credited by the chain, but a wire has
+   * no poller behind it, so this switch is the only thing standing between a
+   * staff member and settling an invoice nobody paid. Working the ledger and
+   * deciding money landed are different jobs.
+   *
+   * A write grant, not a section, so it carries no `.all` companion — the same
+   * shape as `orders.assign` and `support.assign`. Default on for super-admin
+   * and operations-manager only; every other role is granted it per member.
+   */
+  { key: 'payments.settle', label: 'Confirm wire payments received' },
   { key: 'mailroom', label: 'Virtual mail operations' },
   { key: 'support', label: 'Support inbox' },
   /*
@@ -108,10 +122,11 @@ export type PermissionAreaKey = (typeof PERMISSION_AREAS)[number]['key'];
  * themselves, which is why this needed no migration and why `hasPermission`
  * answers both kinds of question without knowing the difference.
  *
- * `orders.assign` and `support.assign` are deliberately NOT derived from this:
- * they grant a *write* (choosing who owns a filing or a chat), not a view, so
- * each stays its own area with its own row. Both do still widen their queue —
- * distributing work you cannot see is impossible — which `canSeeAll` folds in.
+ * `orders.assign`, `support.assign`, and `payments.settle` are deliberately NOT
+ * derived from this: they grant a *write* (choosing who owns a filing or a chat,
+ * or declaring that money arrived), not a view, so each stays its own area with
+ * its own row. The two assign grants do still widen their queue — distributing
+ * work you cannot see is impossible — which `canSeeAll` folds in.
  */
 const SCOPE_SUFFIX = '.all';
 
@@ -119,8 +134,9 @@ const SCOPE_SUFFIX = '.all';
  * Areas whose data belongs to somebody. `catalog`, `team`, and `settings` are
  * absent on purpose — a service's price, the staff directory, and the location
  * list are org-wide records with no owner to scope them to, so an "All data"
- * switch there would be a control that changes nothing. `orders.assign` and
- * `support.assign` are absent because they are write grants, not sections.
+ * switch there would be a control that changes nothing. `orders.assign`,
+ * `support.assign`, and `payments.settle` are absent because they are write
+ * grants, not sections.
  */
 export const SCOPED_AREAS = [
   'orders',
@@ -205,6 +221,9 @@ export const STAFF_ROLES: readonly StaffRoleDefinition[] = [
       'requests',
       'catalog',
       'payments',
+      // Reconciling what customers wired is this role's work, not an
+      // administrator's — the money has to be confirmed the day it lands.
+      'payments.settle',
       'mailroom',
       'support',
       // Overriding the chat router — the same rota decision as `orders.assign`.

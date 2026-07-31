@@ -2,8 +2,8 @@ import * as Sentry from '@sentry/node';
 import { Worker, type Job } from 'bullmq';
 
 import { createRedisConnection } from '../config/redis.js';
-import { tronConfig } from '../config/tron.js';
 import { logger } from '../lib/logger.js';
+import { getUsdtConfig } from '../modules/payments/payment-settings.service.js';
 import { markFailed } from '../modules/notifications/notifications.service.js';
 import { notificationsProcessor } from './processors/notifications.processor.js';
 import { paymentsProcessor } from './processors/payments.processor.js';
@@ -145,11 +145,20 @@ export function registerWorkers() {
 
   workers.push(support);
 
-  // Idempotent: BullMQ keys the scheduler by id, so re-running on every boot
-  // updates the same schedule rather than stacking another.
-  void scheduleUsdtPoll(tronConfig.pollIntervalSeconds).catch((err: unknown) => {
-    logger.error({ err }, 'Failed to schedule the USDT poll');
-  });
+  /*
+   * Idempotent: BullMQ keys the scheduler by id, so re-running on every boot
+   * updates the same schedule rather than stacking another.
+   *
+   * The interval is an admin setting, so it is read here rather than imported.
+   * Changing it re-registers the same scheduler — `rescheduleUsdtPoll` is called
+   * from the settings write, so a new interval takes effect immediately instead
+   * of at the next boot.
+   */
+  void getUsdtConfig()
+    .then((usdt) => scheduleUsdtPoll(usdt.pollIntervalSeconds))
+    .catch((err: unknown) => {
+      logger.error({ err }, 'Failed to schedule the USDT poll');
+    });
 
   logger.info(
     { queues: [QueueName.NOTIFICATIONS, QueueName.PAYMENTS, QueueName.SUPPORT] },

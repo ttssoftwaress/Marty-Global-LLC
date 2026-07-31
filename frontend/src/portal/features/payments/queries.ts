@@ -2,7 +2,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { apiFetch } from '@/services/api';
 import type { ApiSuccess } from '@/types/api';
-import type { CheckoutQuote, Payment } from '../../types/payments';
+import type {
+  CheckoutQuote,
+  Payment,
+  PaymentMethodKind,
+  PaymentMethodOption,
+} from '../../types/payments';
 import { billingOverviewKey } from '../billing/queries';
 
 /*
@@ -26,6 +31,30 @@ export const checkoutQuoteKey = (quoteId: string) =>
 
 export const paymentKey = (paymentId: string) =>
   ['payments', 'payment', paymentId] as const;
+
+export const paymentMethodsKey = () => ['payments', 'methods'] as const;
+
+/*
+ * GET /v1/payments/methods — what this deployment actually offers.
+ *
+ * Not a constant in this app, deliberately. Whether we take crypto, whether we
+ * take bank transfers, and which bank accounts are live are all admin settings,
+ * so a hardcoded list here would offer a method the backend then refuses — and
+ * would keep offering it after someone switched it off.
+ *
+ * Cached for a few minutes: it changes when an admin changes it, which is rare,
+ * and every checkout arrival would otherwise refetch a list of two.
+ */
+export function usePaymentMethods() {
+  return useQuery({
+    queryKey: paymentMethodsKey(),
+    queryFn: () =>
+      apiFetch<ApiSuccess<{ methods: PaymentMethodOption[] }>>(
+        '/payments/methods',
+      ).then((res) => res.data.methods),
+    staleTime: 5 * 60 * 1000,
+  });
+}
 
 // GET /v1/payments/quotes/:quoteId — the quote being paid, with its line items.
 export function useCheckoutQuote(quoteId: string | undefined) {
@@ -92,7 +121,13 @@ export function useCreatePaymentIntent() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (input: { quoteId: string; method: 'usdt_trc20' }) =>
+    mutationFn: (input: {
+      quoteId: string;
+      method: PaymentMethodKind;
+      // Wire only: which registered bank account to send to. Omitted takes the
+      // first active one, which is the whole flow when only one exists.
+      bankAccountId?: string;
+    }) =>
       apiFetch<ApiSuccess<Payment>>('/payments/intents', {
         method: 'POST',
         headers: { 'Idempotency-Key': newIdempotencyKey() },
@@ -143,6 +178,35 @@ export function useCancelPayment() {
       }
 
       void queryClient.invalidateQueries({ queryKey: billingOverviewKey() });
+    },
+  });
+}
+
+/*
+ * POST /v1/payments/:paymentId/mark-sent — "I've sent the transfer."
+ *
+ * A claim, not a settlement: it credits nothing and moves no status. All it does
+ * is put the payment at the top of the team's queue, which is the difference
+ * between a bank statement someone checks eventually and one they check today.
+ * Only offered for payments a person actually settles — every wire, and USDT
+ * while an admin has automatic verification switched off.
+ *
+ * Sends an `Idempotency-Key` because the endpoint requires one on every mutating
+ * payment call (AGENTS.md). What makes a repeat safe is the row's own stamp: a
+ * second call returns the payment with its first timestamp intact.
+ */
+export function useMarkPaymentSent() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (paymentId: string) =>
+      apiFetch<ApiSuccess<Payment>>(`/payments/${paymentId}/mark-sent`, {
+        method: 'POST',
+        headers: { 'Idempotency-Key': newIdempotencyKey() },
+      }).then((res) => res.data),
+
+    onSuccess: (payment) => {
+      queryClient.setQueryData(paymentKey(payment.id), payment);
     },
   });
 }

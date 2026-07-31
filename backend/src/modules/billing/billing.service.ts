@@ -25,10 +25,11 @@ export type Money = { amount: number; currency: string };
 
 const DEFAULT_CURRENCY = 'USD';
 
-// How the money arrived, as the history row prints it. One provider today; the
-// map is what a second one extends rather than a string literal at the callsite.
+// How the money arrived, as the history row prints it. The map is what a further
+// provider extends rather than a string literal at the callsite.
 const METHOD_LABEL: Record<PaymentProvider, string> = {
   [PaymentProvider.USDT_TRC20]: 'USDT (TRC-20)',
+  [PaymentProvider.WIRE_TRANSFER]: 'Bank transfer',
 };
 
 /*

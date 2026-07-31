@@ -102,12 +102,19 @@ export async function enqueueEmail(payload: SendEmailJob) {
 }
 
 /*
- * Register the repeating chain sweep. BullMQ keys a repeatable job by its name +
- * pattern, so calling this on every boot re-registers the same schedule rather
- * than stacking a second one — which matters because every boot runs it.
+ * Register the repeating chain sweep. BullMQ keys a repeatable job by its
+ * scheduler id, so calling this on every boot re-registers the same schedule
+ * rather than stacking a second one — which matters because every boot runs it.
+ *
+ * That same property is what lets the interval be an admin setting: the settings
+ * write calls this with the new value and the existing scheduler is updated in
+ * place, so a change takes effect on the next tick instead of at the next
+ * deploy.
  *
  * The sweep is idempotent (the tx hash is unique and settlement is
- * transactional), so an overlapping or duplicated run can never double-credit.
+ * transactional), so an overlapping or duplicated run can never double-credit —
+ * including across a reschedule, where an in-flight sweep may overlap the first
+ * run of the new cadence.
  */
 export async function scheduleUsdtPoll(everySeconds: number) {
   return paymentsQueue.upsertJobScheduler(

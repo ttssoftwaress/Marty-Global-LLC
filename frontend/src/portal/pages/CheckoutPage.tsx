@@ -14,9 +14,13 @@ import {
   useCheckoutQuote,
   useCountdown,
   useCreatePaymentIntent,
+  useMarkPaymentSent,
   useNavigationHold,
   usePayment,
+  usePaymentMethods,
+  WirePaymentPanel,
 } from '../features/payments';
+import type { PaymentMethodKind } from '../types/payments';
 import { usePortalShell } from '../hooks/usePortalShell';
 
 /*
@@ -31,13 +35,13 @@ import { usePortalShell } from '../hooks/usePortalShell';
  * poller is what actually advances the payment — nothing here can move it, which
  * is why there is no "I've paid" button to press.
  *
- * ── The open window is not allowed to disappear ─────────────────────────────
+ * ── The open USDT window is not allowed to disappear ────────────────────────
  *
- * While a payment window is open we are watching one exact amount at one address
- * for a fixed span of time, and the customer is looking at the only screen that
- * says what that amount is. A tab that quietly loses it — a reload, a stray
- * sidebar click — leaves a live window nobody can see, and money can still be
- * sent into it. So:
+ * While a USDT payment window is open we are watching one exact amount at one
+ * address for a fixed span of time, and the customer is looking at the only
+ * screen that says what that amount is. A tab that quietly loses it — a reload,
+ * a stray sidebar click — leaves a live window nobody can see, and money can
+ * still be sent into it. So:
  *
  *   · It survives a reload. The window is a database row, and the quote read
  *     carries it back (`activePayment`), so the page resumes mid-countdown.
@@ -46,6 +50,19 @@ import { usePortalShell } from '../hooks/usePortalShell';
  *   · There are exactly two ways out: cancelling the transfer, which closes the
  *     window server-side and returns to billing, or the countdown running out,
  *     which closes it on its own and releases the page.
+ *
+ * None of that applies to a bank transfer, and the page deliberately does not
+ * hold one. A wire has no countdown, no watched amount, and no rate to go stale;
+ * the details persist until it is settled or closed. Trapping a customer on a
+ * page they can come back to any time would be a safeguard against nothing.
+ *
+ * ── Which methods exist is not this file's decision ─────────────────────────
+ *
+ * The options come from `GET /v1/payments/methods`, because whether we take
+ * crypto, whether we take wires, which bank accounts are live, and whether
+ * crypto verifies itself are all admin settings. A list hardcoded here would
+ * offer a method the backend refuses and keep offering it after it was switched
+ * off.
  *
  * Layout: a two-column split from desktop (payment left, summary right rail),
  * stacked on tablet and mobile with the summary first so the customer reads what
@@ -98,6 +115,8 @@ function CheckoutHeader({ quoteId, locked }: { quoteId?: string; locked: boolean
         Complete your payment
       </h1>
       <p className="text-[0.8125rem] text-text-secondary md:text-body md:text-gray-500">
+        {/* `locked` is the USDT hold — a wire never sets it, so this never
+            asks a bank-transfer customer to sit on a page for days. */}
         {locked
           ? 'Keep this page open until your transfer is on its way.'
           : quoteId
@@ -141,8 +160,10 @@ export function CheckoutPage() {
   const navigate = useNavigate();
 
   const quote = useCheckoutQuote(quoteId);
+  const methods = usePaymentMethods();
   const createIntent = useCreatePaymentIntent();
   const cancel = useCancelPayment();
+  const markSent = useMarkPaymentSent();
 
   // The payment being collected. Held in state rather than derived, so the page
   // keeps showing it after the mutation settles.
@@ -174,19 +195,39 @@ export function CheckoutPage() {
   const remaining = useCountdown(activePayment?.usdt?.expiresAt);
 
   /*
-   * The window is open only while the payment is pre-transfer AND the clock has
-   * time on it. Once it moves to confirming, the customer has already sent the
-   * money and the confirming screen says plainly that they can leave — holding
-   * them there with no cancel available would be a trap, not a safeguard.
+   * Whether the chain credits a USDT payment on its own. An admin can switch
+   * automatic verification off, and when they do the panel must not promise a
+   * confirmation nobody is watching for — and the customer gets an "I've sent
+   * it" control instead, exactly as a wire does.
    */
-  const windowOpen = activePayment?.status === 'awaiting_payment' && remaining > 0;
+  const usdtAutoVerified =
+    methods.data?.find((method) => method.kind === 'usdt_trc20')?.autoVerified ?? true;
+
+  /*
+   * The hold applies to USDT alone. It is open only while the payment is
+   * pre-transfer AND the clock has time on it: once it moves to confirming, the
+   * customer has already sent the money and the confirming screen says plainly
+   * that they can leave — holding them there with no cancel available would be a
+   * trap, not a safeguard.
+   */
+  const windowOpen =
+    activePayment?.provider === 'usdt_trc20' &&
+    activePayment.status === 'awaiting_payment' &&
+    remaining > 0;
 
   const { blocker, release } = useNavigationHold(windowOpen);
 
-  // The countdown reaching zero is the server's cue too — it recomputes a lapsed
-  // window as expired on read, so one refetch swaps the panel to that face
-  // instead of leaving a dead 0:00 on screen.
-  const windowLapsed = activePayment?.status === 'awaiting_payment' && remaining <= 0;
+  /*
+   * The countdown reaching zero is the server's cue too — it recomputes a lapsed
+   * window as expired on read, so one refetch swaps the panel to that face
+   * instead of leaving a dead 0:00 on screen. USDT only: a wire carries no
+   * `expiresAt`, so `remaining` is 0 for one from the moment it renders and this
+   * would refetch it forever.
+   */
+  const windowLapsed =
+    activePayment?.provider === 'usdt_trc20' &&
+    activePayment.status === 'awaiting_payment' &&
+    remaining <= 0;
 
   const refetchPayment = payment.refetch;
 
@@ -194,9 +235,14 @@ export function CheckoutPage() {
     if (windowLapsed) void refetchPayment();
   }, [windowLapsed, refetchPayment]);
 
-  const startUsdt = () => {
+  const startPayment = (method: PaymentMethodKind, bankAccountId?: string) => {
     if (!quoteId || createIntent.isPending) return;
-    createIntent.mutate({ quoteId, method: 'usdt_trc20' });
+    createIntent.mutate({ quoteId, method, ...(bankAccountId ? { bankAccountId } : {}) });
+  };
+
+  const confirmSent = () => {
+    if (!activePayment || markSent.isPending) return;
+    markSent.mutate(activePayment.id);
   };
 
   /*
@@ -288,17 +334,61 @@ export function CheckoutPage() {
 
         <div className="flex w-full min-w-0 flex-col gap-5 lg:order-1">
           {activePayment ? (
-            <UsdtPaymentPanel
-              payment={activePayment}
-              remaining={remaining}
-              onCancel={() => setCancelPrompt('explicit')}
-              isCancelling={cancel.isPending}
-            />
-          ) : (
+            activePayment.provider === 'wire_transfer' ? (
+              <WirePaymentPanel
+                payment={activePayment}
+                onMarkSent={confirmSent}
+                isMarkingSent={markSent.isPending}
+                onCancel={() => setCancelPrompt('explicit')}
+                isCancelling={cancel.isPending}
+              />
+            ) : (
+              <UsdtPaymentPanel
+                payment={activePayment}
+                remaining={remaining}
+                autoVerified={usdtAutoVerified}
+                onMarkSent={confirmSent}
+                isMarkingSent={markSent.isPending}
+                onCancel={() => setCancelPrompt('explicit')}
+                isCancelling={cancel.isPending}
+              />
+            )
+          ) : null}
+
+          {/*
+            "I've sent it" failing is worth saying out loud: the customer has
+            parted with money and the one signal they tried to give us did not
+            land. Beside the panel rather than inside it, so it survives the
+            panel re-rendering on the next poll.
+          */}
+          {activePayment && markSent.isError ? (
+            <p
+              className="flex items-start gap-2 rounded-card border border-[var(--color-status-missing-text)]/20 bg-[var(--color-status-missing-bg)] p-3.5 text-body text-error"
+              role="alert"
+            >
+              <AlertTriangle
+                className="mt-0.5 size-4 shrink-0"
+                strokeWidth={2}
+                aria-hidden="true"
+              />
+              {markSent.error instanceof ApiError
+                ? markSent.error.message
+                : "We couldn't record that just now. Your payment is still open — try again, or get in touch."}
+            </p>
+          ) : null}
+
+          {activePayment ? null : (
             <>
               <PaymentMethodChoice
-                onSelectUsdt={startUsdt}
-                isStarting={createIntent.isPending}
+                methods={methods.data ?? []}
+                isLoading={methods.isPending}
+                isError={methods.isError}
+                startingKind={
+                  createIntent.isPending
+                    ? (createIntent.variables?.method ?? null)
+                    : null
+                }
+                onSelect={startPayment}
               />
 
               {createIntent.isError ? (
@@ -335,6 +425,7 @@ export function CheckoutPage() {
       <CancelTransferDialog
         open={cancelPrompt === 'explicit' || blocker.state === 'blocked'}
         reason={blocker.state === 'blocked' ? 'navigation' : 'explicit'}
+        provider={activePayment?.provider ?? 'usdt_trc20'}
         remainingLabel={remaining > 0 ? formatCountdown(remaining) : null}
         isSubmitting={cancel.isPending}
         error={cancel.error}

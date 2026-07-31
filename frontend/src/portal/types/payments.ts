@@ -14,10 +14,17 @@
 
 import type { Money } from './dashboard';
 
-// The methods a customer can actually pay with. Cards are a later deployment —
-// the checkout shows them as coming soon rather than offering a value the
-// backend would reject.
-export type PaymentMethodKind = 'usdt_trc20';
+/*
+ * The methods a customer can pay with. Cards are a later deployment — the
+ * checkout shows them as coming soon rather than offering a value the backend
+ * would reject.
+ *
+ * Which of these is actually offered is NOT a frontend decision: whether we take
+ * crypto, whether we take wires, and which bank accounts are live are admin
+ * settings, so the checkout renders `GET /v1/payments/methods` (see
+ * `PaymentMethodOption`) rather than a constant in this app.
+ */
+export type PaymentMethodKind = 'usdt_trc20' | 'wire_transfer';
 
 /*
  * Where a payment is. `awaiting_payment` is pre-transfer, `confirming` means a
@@ -57,6 +64,42 @@ export type UsdtPaymentInstructions = {
   confirmations: number;
 };
 
+/*
+ * One labelled line on a bank-transfer card, exactly as an admin entered it at
+ * `/admin/settings`.
+ *
+ * The whole wire feature turns on this shape being open rather than a fixed set
+ * of `iban` / `swift` / `sortCode` fields: banking details are not the same in
+ * two countries, so the labels are data and this app renders whatever it is
+ * given, in the order it is given.
+ */
+export type WireInstructionField = {
+  label: string;
+  value: string;
+  /** Render with a copy button — on for anything a customer must reproduce. */
+  copyable: boolean;
+  /** Render larger and monospaced — the one or two lines that matter most. */
+  emphasis: boolean;
+};
+
+/*
+ * What a customer wiring money is shown. Every line is frozen onto the payment
+ * when it is created, so an admin correcting a typo on the account later never
+ * rewrites instructions somebody is already acting on.
+ */
+export type WirePaymentInstructions = {
+  accountId: string | null;
+  accountLabel: string;
+  description: string | null;
+  currency: string;
+  fields: WireInstructionField[];
+  /**
+   * What to put in the transfer's reference field — the quote's own reference.
+   * A wire carries free text, so unlike TRC-20 the amount need not be unique.
+   */
+  reference: string | null;
+};
+
 export type Payment = {
   id: string;
   quoteId: string | null;
@@ -65,13 +108,56 @@ export type Payment = {
   provider: PaymentMethodKind;
   status: PaymentStatusView;
   amount: Money;
-  /** The Tron tx hash, once a transfer has matched. */
+  /** The Tron tx hash, or the bank's reference once one has been recorded. */
   transactionHash: string | null;
   usdt: UsdtPaymentInstructions | null;
+  wire: WirePaymentInstructions | null;
+  /**
+   * When the customer said the transfer was on its way — a claim that reorders
+   * the team's queue, never a settlement. Applies to any payment a person has to
+   * settle, including USDT while automatic verification is switched off.
+   */
+  markedSentAt: string | null;
   /** What actually landed on-chain, when it didn't match what was asked for. */
   settledAmountDisplay: string | null;
   paidAt: string | null;
   createdAt: string;
+};
+
+/*
+ * A bank account the customer may send to, as the method picker lists them.
+ * Admin-registered — there is no such thing as a default account in this app.
+ */
+export type WireAccount = {
+  id: string;
+  code: string;
+  label: string;
+  description: string | null;
+  currency: string;
+  fields: WireInstructionField[];
+};
+
+/*
+ * What this deployment offers, resolved by the backend.
+ *
+ * `unavailableReason` is why a method can be present and disabled: an admin who
+ * has switched crypto on but not finished configuring it should produce an
+ * option that says so, rather than one that silently disappears and reads as
+ * "they stopped taking crypto".
+ */
+export type PaymentMethodOption = {
+  kind: PaymentMethodKind;
+  available: boolean;
+  unavailableReason: string | null;
+  /**
+   * Whether the method settles on its own. False for a wire always, and for
+   * USDT while an admin has switched automatic verification off — the copy turns
+   * on it, because promising "confirms in a minute" while a person is in the
+   * loop is a support ticket per payment.
+   */
+  autoVerified: boolean;
+  /** Wire only: the accounts the customer chooses between. */
+  accounts: WireAccount[];
 };
 
 /*

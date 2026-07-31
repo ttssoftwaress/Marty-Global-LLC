@@ -33,12 +33,30 @@ import {
   type Money,
   sumMinor,
 } from '../admin.views.js';
+import { readWireInstructions } from '../../payments/payment-settings.service.js';
+/*
+ * The settlement writes live in the payments module, not here. This module is
+ * the staff-side VIEW over money; the money path — crediting a quote, carrying
+ * its order to PAID, the conditional write that makes two settlers credit once —
+ * belongs beside the poller that shares it, so a manually-settled invoice and a
+ * chain-credited one cannot diverge (AGENTS.md: business logic lives in
+ * services, once).
+ */
+import {
+  manualProviders,
+  rejectPayment as rejectPaymentInService,
+  settlePaymentManually,
+} from '../../payments/payments.service.js';
 import type {
   ListLedgerQuery,
+  ListSettlementsQuery,
   ListUnmatchedQuery,
   PaymentStatusFilter,
+  RejectPaymentInput,
   ResolveUnmatchedInput,
   RevenuePeriod,
+  SettlementFilter,
+  SettlePaymentInput,
   UnmatchedTransferFilter,
 } from './payments.validation.js';
 
@@ -326,11 +344,11 @@ const ledgerInclude = {
 
 type LedgerQuote = Prisma.QuoteGetPayload<{ include: typeof ledgerInclude }>;
 
-// How the money arrived, as the row prints it. One provider today; a row that
-// has not been paid yet has no method at all, which the ledger prints as an em
-// dash.
+// How the money arrived, as the row prints it. A row that has not been paid yet
+// has no method at all, which the ledger prints as an em dash.
 const METHOD_LABEL: Record<PaymentProvider, string> = {
   [PaymentProvider.USDT_TRC20]: 'USDT (TRC-20)',
+  [PaymentProvider.WIRE_TRANSFER]: 'Bank transfer',
 };
 
 function methodOf(quote: LedgerQuote): BillingLedgerRow['method'] {
@@ -867,4 +885,303 @@ export async function resolveUnmatchedTransfer(
     resolvedBy: resolved.resolvedByName,
     resolutionNote: resolved.resolutionNote,
   };
+}
+
+/*
+ * --- Manual settlement queue ---------------------------------------------
+ *
+ * Payments only a person can close. Every wire is one — nothing in this codebase
+ * reads a bank feed — and so is every USDT payment while automatic verification
+ * is switched off in payment settings.
+ *
+ * Which providers qualify is asked of the payments module rather than decided
+ * here, so the queue and the write it feeds cannot disagree about what a settler
+ * is allowed to touch (`manualProviders` / `assertManuallySettleable`).
+ *
+ * Scoped like the ledger: a reviewer without `payments.all` sees the payments
+ * against filings they are assigned, and an operations manager sees the org's.
+ */
+export type SettlementRow = {
+  id: string;
+  provider: 'usdt_trc20' | 'wire_transfer';
+  status: 'awaiting' | 'settled' | 'closed';
+  amount: Money;
+  amountDisplay: string;
+  quoteId: string | null;
+  reference: string | null;
+  serviceName: string | null;
+  customerName: string;
+  customerEmail: string;
+  /** Which bank account the customer was told to send to, for a wire. */
+  accountLabel: string | null;
+  /*
+   * The bank details as the customer saw them, so a settler can check the
+   * statement against the account the money was meant to land in without
+   * opening the settings screen.
+   */
+  instructions: { label: string; value: string }[];
+  /** When the customer said they had sent it. Null means they have not. */
+  markedSentAt: string | null;
+  /** The bank's reference or the tx hash, once one has been recorded. */
+  providerRef: string | null;
+  settledAt: string | null;
+  settledBy: string | null;
+  settlementNote: string | null;
+  createdAt: string;
+};
+
+export type SettlementPage = {
+  rows: SettlementRow[];
+  nextCursor: string | null;
+  /** Open items across the whole queue, not just this page — the header count. */
+  openCount: number;
+};
+
+const SETTLEMENT_STATUS_WHERE: Record<SettlementFilter, Prisma.PaymentWhereInput> = {
+  open: { status: { in: [PaymentStatus.PENDING, PaymentStatus.REQUIRES_ACTION] } },
+  settled: { status: PaymentStatus.SUCCEEDED },
+  all: {},
+};
+
+function settlementStatus(status: PaymentStatus): SettlementRow['status'] {
+  if (status === PaymentStatus.SUCCEEDED) return 'settled';
+  if (status === PaymentStatus.PENDING || status === PaymentStatus.REQUIRES_ACTION) {
+    return 'awaiting';
+  }
+  return 'closed';
+}
+
+const SETTLEMENT_INCLUDE = {
+  quote: { select: { serviceName: true, reference: true } },
+  customer: { select: { name: true, email: true } },
+} as const;
+
+type SettlementRecord = Prisma.PaymentGetPayload<{
+  include: typeof SETTLEMENT_INCLUDE;
+}>;
+
+function toSettlementRow(payment: SettlementRecord): SettlementRow {
+  const snapshot = readWireInstructions(payment.wireInstructions);
+
+  return {
+    id: payment.id,
+    provider:
+      payment.provider === PaymentProvider.WIRE_TRANSFER
+        ? 'wire_transfer'
+        : 'usdt_trc20',
+    status: settlementStatus(payment.status),
+    amount: money(payment.amount, payment.currency),
+    amountDisplay: formatMoneyDisplay({
+      amount: payment.amount,
+      currency: payment.currency,
+    }),
+    quoteId: payment.quoteId,
+    reference: payment.quote?.reference ?? null,
+    serviceName: payment.quote?.serviceName ?? null,
+    customerName: payment.customer.name,
+    customerEmail: payment.customer.email,
+    accountLabel: snapshot?.accountLabel || payment.bankAccountLabel || null,
+    // Label and value only — the copy flags are a checkout concern, and this is
+    // a reconciler reading a bank statement.
+    instructions: (snapshot?.fields ?? []).map((field) => ({
+      label: field.label,
+      value: field.value,
+    })),
+    markedSentAt: isoOrNull(payment.customerMarkedSentAt),
+    providerRef: payment.providerRef,
+    settledAt: isoOrNull(payment.paidAt),
+    settledBy: payment.settledByName,
+    settlementNote: payment.settlementNote,
+    createdAt: iso(payment.createdAt),
+  };
+}
+
+export async function listSettlements(
+  actor: AuthContext,
+  query: ListSettlementsQuery,
+): Promise<SettlementPage> {
+  const providers = await manualProviders();
+  const scope = await paymentScope(actor);
+
+  const base: Prisma.PaymentWhereInput = {
+    deletedAt: null,
+    provider: { in: providers },
+    ...scope,
+  };
+
+  const [rows, openCount] = await Promise.all([
+    prisma.payment.findMany({
+      where: { ...base, ...SETTLEMENT_STATUS_WHERE[query.status] },
+      /*
+       * The ones the customer says they have sent, first — that is the whole
+       * point of the claim, and it is the difference between "somewhere in a
+       * list" and "check the statement for this one today". Nulls sort last, then
+       * oldest first within each group, because an open payment that has been
+       * waiting longest is the one most overdue a decision.
+       */
+      orderBy: [
+        { customerMarkedSentAt: { sort: 'desc', nulls: 'last' } },
+        { createdAt: 'asc' },
+        { id: 'asc' },
+      ],
+      include: SETTLEMENT_INCLUDE,
+      ...cursorArgs(query.cursor, query.limit),
+    }),
+    prisma.payment.count({ where: { ...base, ...SETTLEMENT_STATUS_WHERE.open } }),
+  ]);
+
+  const page = takePage(rows, query.limit);
+
+  return {
+    rows: page.rows.map(toSettlementRow),
+    nextCursor: page.nextCursor,
+    openCount,
+  };
+}
+
+/*
+ * Confirm the money arrived.
+ *
+ * Everything that matters happens in `settlePaymentManually` — the provider
+ * check, the conditional write that makes two settlers credit once, and the
+ * single credit path shared with the poller. What this adds is the two things
+ * the money path deliberately does not do: scope the payment to what this staff
+ * member may see, and tell the customer.
+ *
+ * The scope check is why it is here and not in the payments module: `paymentScope`
+ * is an admin concept, and a reviewer holding `payments.settle` without
+ * `payments.all` must not be able to settle an invoice on someone else's filing
+ * by guessing an id.
+ */
+export async function settlePayment(
+  actor: AuthContext,
+  paymentId: string,
+  input: SettlePaymentInput,
+): Promise<SettlementRow> {
+  await assertInScope(actor, paymentId);
+
+  const { notice } = await settlePaymentManually(actor, {
+    paymentId,
+    reference: input.reference,
+    note: input.note,
+    paidAt: input.paidAt ? new Date(input.paidAt) : undefined,
+  });
+
+  /*
+   * The receipt. Deliberately the same two channels a chain credit sends —
+   * an in-app feed entry gated on the customer's `statusUpdates` preference, and
+   * an email through the queue (never inline, AGENTS.md) — because a settled
+   * invoice is a settled invoice however the money reached us, and a customer
+   * who wired should not hear less than one who sent USDT.
+   *
+   * Every one of these swallows its own failure: the credit is committed and
+   * audited already, and a bounced email must not undo it.
+   */
+  await announceManualSettlement(notice);
+
+  return readSettlementRow(paymentId);
+}
+
+/*
+ * The same decision the other way: close the payment out without settling it.
+ * The quote goes back to unpaid, which is the point — the customer is usually
+ * about to try again.
+ */
+export async function rejectSettlement(
+  actor: AuthContext,
+  paymentId: string,
+  input: RejectPaymentInput,
+): Promise<SettlementRow> {
+  await assertInScope(actor, paymentId);
+  await rejectPaymentInService(actor, paymentId, input.reason);
+
+  return readSettlementRow(paymentId);
+}
+
+/*
+ * A 404 rather than a 403 for a payment outside this member's scope — whether
+ * some other reviewer's invoice exists is not this caller's business, and a 403
+ * would confirm the id is real. The same rule the customer-facing reads use.
+ */
+async function assertInScope(actor: AuthContext, paymentId: string): Promise<void> {
+  const scope = await paymentScope(actor);
+
+  const found = await prisma.payment.findFirst({
+    where: { id: paymentId, deletedAt: null, ...scope },
+    select: { id: true },
+  });
+
+  if (!found) throw AppError.notFound('Payment not found');
+}
+
+// Re-read through the list's own mapper so the response and the queue agree on
+// every field, rather than assembling a second shape by hand.
+async function readSettlementRow(paymentId: string): Promise<SettlementRow> {
+  const payment = await prisma.payment.findFirst({
+    where: { id: paymentId, deletedAt: null },
+    include: SETTLEMENT_INCLUDE,
+  });
+
+  if (!payment) throw AppError.notFound('Payment not found');
+
+  return toSettlementRow(payment);
+}
+
+/*
+ * Tell the customer their payment landed — the manual mirror of the poller's
+ * `onCredited`.
+ *
+ * Split out rather than inlined because it is the half that must never be able
+ * to fail the settlement: the credit is committed and audited by the time this
+ * runs, so each channel swallows its own error and the money stays reconciled
+ * either way.
+ */
+async function announceManualSettlement(notice: {
+  id: string;
+  customerId: string;
+  customerEmail: string;
+  amount: number;
+  currency: string;
+  quoteReference: string | null;
+  quoteServiceName: string | null;
+}): Promise<void> {
+  const amount = formatMoneyDisplay({
+    amount: notice.amount,
+    currency: notice.currency,
+  });
+
+  try {
+    // Gated on `statusUpdates`, the category the settings screen files a payment
+    // event under — the same promise the chain credit honours.
+    const channels = await channelsFor(notice.customerId, 'statusUpdates');
+
+    await createFeedNotification({
+      userId: notice.customerId,
+      category: FeedNotificationCategory.PAYMENT,
+      message: `Payment of ${amount} received${
+        notice.quoteReference ? ` for quote ${notice.quoteReference}` : ''
+      }. Thank you!`,
+      href: '/app/billing',
+    });
+
+    if (!channels.email) return;
+
+    await queueEmail({
+      to: notice.customerEmail,
+      subject: `Payment received — ${amount}`,
+      template: 'generic',
+      heading: 'We received your payment',
+      body: `Your payment of ${amount}${
+        notice.quoteServiceName ? ` for ${notice.quoteServiceName}` : ''
+      } has been confirmed by our team. Your order will continue processing.`,
+      actionLabel: 'View billing',
+      actionUrl: `${publicAppUrl}/app/billing`,
+      userId: notice.customerId,
+    });
+  } catch (error) {
+    logger.error(
+      { err: error, paymentId: notice.id },
+      'Failed to announce a manually settled payment',
+    );
+  }
 }

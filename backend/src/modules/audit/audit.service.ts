@@ -119,6 +119,35 @@ export const AuditAction = {
   PAYMENT_CREDITED: 'payment.credited',
   PAYMENT_MISMATCHED: 'payment.mismatched',
   PAYMENT_EXPIRED: 'payment.expired',
+  /*
+   * Wire transfers. Nothing watches a bank account, so these three are the whole
+   * trail a manually-settled payment leaves — which makes them the most
+   * important entries in this table.
+   *
+   * MARKED_SENT is the customer's claim, not a settlement: it only moves the
+   * payment up the team's queue. SETTLED_MANUALLY is a person declaring that
+   * money we cannot see arrived, and is the one payment credit in the system
+   * with a human actor rather than a job — so it carries who, when, and the note
+   * they left. REJECTED is the same decision the other way.
+   */
+  PAYMENT_MARKED_SENT: 'payment.marked_sent',
+  PAYMENT_SETTLED_MANUALLY: 'payment.settled_manually',
+  PAYMENT_SETTLEMENT_REJECTED: 'payment.settlement_rejected',
+  /*
+   * Payment configuration — the deposit address, the USD→USDT rate, the
+   * confirmation depth, and the bank accounts customers wire to.
+   *
+   * Audited with the same weight as a role change, because that is what these
+   * are: changing the receiving address decides where every future payment
+   * lands, and changing a bank account's IBAN decides it for wires. The metadata
+   * names WHICH fields changed and never their values — an account number is not
+   * going in the trail (AGENTS.md, Security & PII).
+   */
+  PAYMENT_SETTINGS_UPDATED: 'settings.payment_settings_updated',
+  BANK_ACCOUNT_CREATED: 'settings.bank_account_created',
+  BANK_ACCOUNT_UPDATED: 'settings.bank_account_updated',
+  BANK_ACCOUNT_DELETED: 'settings.bank_account_deleted',
+  BANK_ACCOUNTS_REORDERED: 'settings.bank_accounts_reordered',
   // Money arrived that matches no payment we are watching. Written once, on the
   // first sighting — the poller re-reads its overlap window and would otherwise
   // file the same finding on every sweep.

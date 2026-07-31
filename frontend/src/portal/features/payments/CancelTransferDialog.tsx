@@ -3,6 +3,7 @@ import { AlertTriangle } from 'lucide-react';
 
 import { ApiError } from '@/services/api';
 import { useOverlay } from '../../../hooks/useOverlay';
+import type { PaymentMethodKind } from '../../types/payments';
 
 /*
  * The one question worth interrupting for: have you already sent it?
@@ -27,6 +28,12 @@ import { useOverlay } from '../../../hooks/useOverlay';
 type CancelTransferDialogProps = {
   open: boolean;
   reason: 'explicit' | 'navigation';
+  /**
+   * Which payment is being cancelled. Only the copy changes: "we'd stop watching
+   * for it" is true of a watched on-chain amount and false of a bank transfer,
+   * where the risk is a wire already in flight against a payment we have closed.
+   */
+  provider: PaymentMethodKind;
   /** "4:12" while the window is still running, so the copy can name it. */
   remainingLabel: string | null;
   isSubmitting: boolean;
@@ -38,6 +45,7 @@ type CancelTransferDialogProps = {
 export function CancelTransferDialog({
   open,
   reason,
+  provider,
   remainingLabel,
   isSubmitting,
   error,
@@ -50,11 +58,17 @@ export function CancelTransferDialog({
 
   if (!open) return null;
 
-  const title =
-    reason === 'navigation' ? 'Your payment window is still open' : 'Cancel this transfer?';
+  const isWire = provider === 'wire_transfer';
 
-  const lead =
-    reason === 'navigation'
+  const title = isWire
+    ? 'Cancel this payment?'
+    : reason === 'navigation'
+      ? 'Your payment window is still open'
+      : 'Cancel this transfer?';
+
+  const lead = isWire
+    ? "Cancelling closes this payment and puts the bank details away. We won't be expecting your transfer any more."
+    : reason === 'navigation'
       ? remainingLabel
         ? `You have ${remainingLabel} left to send this payment. Leaving won't close the window on its own — we'd still be watching for your transfer.`
         : "Leaving won't close the payment window on its own — we'd still be watching for your transfer."
@@ -107,14 +121,15 @@ export function CancelTransferDialog({
 
           {/*
             The load-bearing sentence. Everything else on this screen is
-            reversible; sending USDT against a window nobody is watching is not.
+            reversible; money sent against a payment nobody is expecting is not.
           */}
           <p className="rounded-card border border-[var(--color-status-missing-text)]/20 bg-[var(--color-status-missing-bg)] p-3.5 text-small leading-5 text-error">
             <strong className="font-semibold">
               Only cancel if you haven&apos;t sent anything yet.
             </strong>{' '}
-            If you&apos;ve already sent USDT to this address, keep the window open
-            — we&apos;ll match your transfer as soon as it appears on-chain.
+            {isWire
+              ? "If your bank transfer is already on its way, keep this payment open — our team will match it when it arrives."
+              : "If you've already sent USDT to this address, keep the window open — we'll match your transfer as soon as it appears on-chain."}
           </p>
 
           <p className="text-small leading-5 text-text-secondary">
@@ -148,9 +163,11 @@ export function CancelTransferDialog({
           >
             {isSubmitting
               ? 'Cancelling…'
-              : reason === 'navigation'
-                ? 'Cancel transfer and leave'
-                : 'Cancel transfer'}
+              : isWire
+                ? 'Cancel payment'
+                : reason === 'navigation'
+                  ? 'Cancel transfer and leave'
+                  : 'Cancel transfer'}
           </button>
         </div>
       </div>

@@ -13,7 +13,12 @@ import { z } from 'zod';
 // The providers a customer can start a payment with. Cards are deliberately
 // absent — that vertical is a later deployment, and accepting a card value here
 // would mean advertising a method that cannot complete.
-export const paymentMethodKind = z.enum(['usdt_trc20']);
+//
+// Whether either of these is actually offered is an admin setting, not a
+// constant: the schema says what the wire may carry, and the service refuses a
+// method that is switched off (GET /v1/payments/methods is what the checkout
+// renders from).
+export const paymentMethodKind = z.enum(['usdt_trc20', 'wire_transfer']);
 export type PaymentMethodKind = z.infer<typeof paymentMethodKind>;
 
 // POST /v1/payments/intents — start (or resume) collecting on a quote.
@@ -23,6 +28,14 @@ export const createIntentSchema = z
   .object({
     quoteId: z.string().min(1),
     method: paymentMethodKind.default('usdt_trc20'),
+    /*
+     * Wire only: which of the registered bank accounts to send to. Optional —
+     * omitting it takes the first active account, which is the whole flow when
+     * only one is registered. The id is re-resolved server-side against the
+     * "active, has fields" rule, so naming a retired account fails rather than
+     * printing one.
+     */
+    bankAccountId: z.string().min(1).optional(),
   })
   .strict();
 export type CreateIntentInput = z.infer<typeof createIntentSchema>;

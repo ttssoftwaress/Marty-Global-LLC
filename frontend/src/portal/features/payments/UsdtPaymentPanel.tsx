@@ -269,16 +269,24 @@ function ProblemState({ payment }: { payment: Payment }) {
 function AwaitingState({
   payment,
   remaining,
+  autoVerified,
+  onMarkSent,
+  isMarkingSent,
   onCancel,
   isCancelling,
 }: {
   payment: Payment;
   remaining: number;
+  autoVerified: boolean;
+  onMarkSent: () => void;
+  isMarkingSent: boolean;
   onCancel: () => void;
   isCancelling: boolean;
 }) {
   const usdt = payment.usdt;
   if (!usdt) return null;
+
+  const markedSent = Boolean(payment.markedSentAt);
 
   return (
     <div className="flex flex-col gap-5 p-4 md:p-5 lg:p-card">
@@ -320,12 +328,50 @@ function AwaitingState({
           customer who has wandered off can still send it to a screen they can no
           longer see. The page now holds them here until the window closes — by
           the countdown, or by the button below.
+
+          With automatic verification switched off there is no poller to see it,
+          so the promise changes: a person checks the chain instead, and saying
+          "this page updates on its own" would be a promise nothing keeps.
         */}
         <p className="text-small leading-5 text-text-secondary">
-          Waiting for your transfer. This page updates on its own once we see it
-          on-chain — keep it open until then, and we&apos;ll take it from there.
+          {autoVerified
+            ? "Waiting for your transfer. This page updates on its own once we see it on-chain — keep it open until then, and we'll take it from there."
+            : 'Waiting for your transfer. Our team verifies it on-chain and confirms your payment — keep this page open until you have sent it.'}
         </p>
       </div>
+
+      {/*
+        Only shown when a person is the one settling this. With the poller
+        running the chain says so first, and a button that changed nothing would
+        read as a step the customer had to complete.
+      */}
+      {!autoVerified &&
+        (markedSent ? (
+          <p
+            className="flex items-start gap-2 rounded-card border border-[var(--color-status-submitted-text)]/20 bg-[var(--color-status-submitted-bg)] p-3.5 text-body text-[var(--color-status-submitted-text)]"
+            role="status"
+          >
+            <Timer className="mt-0.5 size-4 shrink-0" strokeWidth={2} aria-hidden="true" />
+            Thanks — we know your transfer is on its way. Our team will confirm it
+            once it appears on-chain.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-3 border-t border-gray-200 pt-4 md:flex-row md:items-center md:justify-between md:gap-6">
+            <p className="text-small leading-5 text-text-secondary">
+              Already sent it? Letting us know helps us look out for it — it
+              doesn&apos;t complete the payment on its own.
+            </p>
+
+            <button
+              type="button"
+              onClick={onMarkSent}
+              disabled={isMarkingSent}
+              className="btn btn-primary h-11 w-full shrink-0 rounded-control px-5 text-body font-semibold disabled:cursor-not-allowed disabled:opacity-50 md:w-auto"
+            >
+              {isMarkingSent ? 'Letting us know…' : "I've sent the transfer"}
+            </button>
+          </div>
+        ))}
 
       <div className="flex flex-col gap-3 border-t border-gray-200 pt-4 md:flex-row md:items-center md:justify-between md:gap-6">
         <p className="text-small leading-5 text-text-secondary">
@@ -358,6 +404,14 @@ type UsdtPaymentPanelProps = {
   payment: Payment;
   /** Milliseconds left in the window, from the checkout screen's clock. */
   remaining: number;
+  /**
+   * Whether the chain sweep credits this on its own. An admin can switch
+   * automatic verification off, and when they do a person confirms the transfer
+   * instead — which changes what this panel is allowed to promise.
+   */
+  autoVerified: boolean;
+  onMarkSent: () => void;
+  isMarkingSent: boolean;
   onCancel: () => void;
   isCancelling: boolean;
 };
@@ -365,6 +419,9 @@ type UsdtPaymentPanelProps = {
 export function UsdtPaymentPanel({
   payment,
   remaining,
+  autoVerified,
+  onMarkSent,
+  isMarkingSent,
   onCancel,
   isCancelling,
 }: UsdtPaymentPanelProps) {
@@ -381,6 +438,9 @@ export function UsdtPaymentPanel({
         <AwaitingState
           payment={payment}
           remaining={remaining}
+          autoVerified={autoVerified}
+          onMarkSent={onMarkSent}
+          isMarkingSent={isMarkingSent}
           onCancel={onCancel}
           isCancelling={isCancelling}
         />
