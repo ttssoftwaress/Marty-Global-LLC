@@ -62,6 +62,10 @@ function RequestTypeRow({
 
   const fields = type.fields ?? [];
 
+  // Several rows render at once, so the control ids are per-row: a duplicated
+  // id would point every label at the first row's input.
+  const rowId = `request-type-${type.id ?? `new-${index}`}`;
+
   return (
     <div className="flex flex-col gap-3 rounded-card border border-gray-200 bg-white p-3 md:p-4">
       <div className="flex items-start justify-between gap-3">
@@ -92,35 +96,48 @@ function RequestTypeRow({
       </div>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        <Field label="Button label">
+        <Field label="Button label" htmlFor={`${rowId}-label`}>
           <TextInput
+            id={`${rowId}-label`}
             value={type.label}
-            onChange={(label) =>
+            onChange={(event) => {
+              const label = event.target.value;
+
               onChange({
                 label,
                 // The key identifies the action within the service and is what a
                 // raised request records. Derived while it is new, then frozen —
                 // changing it on a live type would orphan its history.
                 ...(type.id ? {} : { key: deriveKey(label).replace(/_/g, '-') }),
-              })
-            }
+              });
+            }}
             placeholder="Request a certified copy"
           />
         </Field>
 
-        <Field label="Turnaround" hint="Free text, shown beside the button.">
+        <Field
+          label="Turnaround"
+          htmlFor={`${rowId}-turnaround`}
+          hint="Free text, shown beside the button."
+        >
           <TextInput
+            id={`${rowId}-turnaround`}
             value={type.turnaround ?? ''}
-            onChange={(turnaround) => onChange({ turnaround })}
+            onChange={(event) => onChange({ turnaround: event.target.value })}
             placeholder="Typically 3–5 business days"
           />
         </Field>
       </div>
 
-      <Field label="Description" hint="One line explaining what the customer gets.">
+      <Field
+        label="Description"
+        htmlFor={`${rowId}-description`}
+        hint="One line explaining what the customer gets."
+      >
         <TextInput
+          id={`${rowId}-description`}
           value={type.description ?? ''}
-          onChange={(description) => onChange({ description })}
+          onChange={(event) => onChange({ description: event.target.value })}
           placeholder="A stamped copy of your formation certificate."
         />
       </Field>

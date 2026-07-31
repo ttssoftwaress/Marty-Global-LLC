@@ -62,13 +62,16 @@ export type TeamMemberEditDraft = {
 };
 
 /*
- * The PATCH body. Same shape as the draft, minus the blank password: a PATCH
- * applies only what it carries, so omitting the key is what leaves the existing
- * credential alone.
+ * The PATCH body. Every field is optional, mirroring `updateTeamMemberSchema` —
+ * a PATCH applies only what it carries, so omitting a key is what leaves that
+ * value alone. Two callers rely on it: the edit form sends the whole draft,
+ * while the list row's status action sends `isActive` on its own (the rows do
+ * not carry a role or a permission grid to resend).
+ *
+ * A blank password is dropped rather than sent: it is write-only, and an empty
+ * string would fail the backend's length check instead of meaning "unchanged".
  */
-export type TeamMemberWritePayload = Omit<TeamMemberEditDraft, 'password'> & {
-  password?: string;
-};
+export type TeamMemberWritePayload = Partial<TeamMemberEditDraft>;
 
 /*
  * The "Add staff member" form. The same fields as the editor, except the
@@ -77,8 +80,15 @@ export type TeamMemberWritePayload = Omit<TeamMemberEditDraft, 'password'> & {
  */
 export type TeamMemberCreateDraft = TeamMemberEditDraft;
 
-export type TeamMemberCreatePayload = Omit<TeamMemberEditDraft, 'password'> & {
+export type TeamMemberCreatePayload = Omit<
+  TeamMemberEditDraft,
+  'password' | 'permissions'
+> & {
   password: string;
+  // Optional, as in `createTeamMemberSchema`: omitted, the backend applies the
+  // role's defaults, which is what the form sends when the admin never touched
+  // the grid.
+  permissions?: Record<string, boolean>;
 };
 
 /*
