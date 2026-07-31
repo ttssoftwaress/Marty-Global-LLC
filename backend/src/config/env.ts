@@ -171,59 +171,44 @@ const envSchema = z.object({
    */
   TURNSTILE_SECRET_KEY: optionalString,
 
-  // --- USDT (TRC-20) via TronGrid ----------------------------------------
-  // We only ever WATCH the chain: no private key, no seed phrase, no signing
-  // (AGENTS.md, Payments). Everything below is public data or a read-only key.
-  //
+  /*
+   * --- USDT (TRC-20) via TronGrid ----------------------------------------
+   *
+   * Only two values remain here, and each is here for a reason that does not
+   * apply to the rest. Everything else that used to live in this block — the
+   * deposit address, the USD→USDT rate, the rate TTL, the confirmation depth,
+   * the poll interval — is now admin-managed data in `PaymentSettings` and is
+   * changed at `/admin/settings` without a redeploy. Do not add a payment
+   * amount, address, or threshold back into this file.
+   *
+   * We only ever WATCH the chain: no private key, no seed phrase, no signing
+   * (AGENTS.md, Payments).
+   */
   // Nile is the testnet; tests and local dev must never point at mainnet.
+  //
+  // Env, not settings: this pins which hardcoded USDT contract address a
+  // transfer is verified against (config/tron.ts). An admin flipping it in a
+  // form would change which chain real invoices are credited from and orphan the
+  // sync cursor — a deployment decision, not an operational one.
   TRON_NETWORK: z.enum(['mainnet', 'nile']).default('nile'),
   // Read-only TronGrid key (trongrid.io → Dashboard → API Keys). Optional so the
-  // app boots without an account — the poller idles instead of failing.
+  // app boots without an account — the poller idles instead of failing. Env, not
+  // settings, because it is a credential and secrets stay in server env
+  // (AGENTS.md, Security & PII).
   TRONGRID_API_KEY: optionalString,
-  /*
-   * The address customers send USDT to. Public receiving address only, base58
-   * ('T' + 33 chars). We never hold the key for it.
-   *
-   * One shared address plus a per-payment amount is deliberate: TRC-20 has no
-   * memo/tag field, so the amount IS the discriminator. The service makes each
-   * pending amount unique (see payments.service.ts) so a transfer can only ever
-   * match one payment.
-   */
-  TRON_DEPOSIT_ADDRESS: optionalString.pipe(
-    z
-      .string()
-      .regex(/^T[1-9A-HJ-NP-Za-km-z]{33}$/, 'Must be a base58 TRON address')
-      .optional(),
-  ),
-  // Confirmations before we credit. Tron blocks are ~3s and irreversible after
-  // ~19 (one SR round), so 19 is the safe floor rather than a guess.
-  TRON_MIN_CONFIRMATIONS: z.coerce.number().int().min(1).max(100).default(19),
-  // How often the poller sweeps TronGrid, in seconds.
-  TRON_POLL_INTERVAL_SECONDS: z.coerce.number().int().min(10).max(3600).default(30),
-  /*
-   * USD → USDT rate as an integer numerator over 1_000_000 (USDT's own scale) —
-   * never a float (AGENTS.md, Money). 1_000_000 means 1.000000 USDT per USD.
-   * A spread is expressed by raising this (e.g. 1_010_000 = +1%).
-   */
-  USDT_USD_RATE_MINOR: z.coerce.number().int().positive().default(1_000_000),
-  // How long a quoted USDT amount + rate stays valid, in minutes. After this the
-  // customer must re-quote; a transfer arriving late is held, never auto-credited
-  // at a stale rate (AGENTS.md, Money).
-  USDT_RATE_TTL_MINUTES: z.coerce.number().int().min(5).max(1440).default(30),
 })
   /*
-   * Mainnet is real money. A deployment that points at mainnet without both a
-   * receiving address and an API key would poll nothing and silently never
-   * credit anyone — fail on boot instead.
+   * Mainnet is real money, and reading it needs a key: TronGrid rate-limits
+   * anonymous callers hard enough that a production sweep would be throttled
+   * into missing transfers. The deposit address is no longer checked here —
+   * it lives in `PaymentSettings` now, and the payments service refuses to issue
+   * a USDT intent without one rather than failing the whole boot.
    */
   .refine(
-    (value) =>
-      value.TRON_NETWORK !== 'mainnet' ||
-      Boolean(value.TRON_DEPOSIT_ADDRESS && value.TRONGRID_API_KEY),
+    (value) => value.TRON_NETWORK !== 'mainnet' || Boolean(value.TRONGRID_API_KEY),
     {
-      path: ['TRON_DEPOSIT_ADDRESS'],
-      message:
-        'TRON_NETWORK=mainnet requires both TRON_DEPOSIT_ADDRESS and TRONGRID_API_KEY',
+      path: ['TRONGRID_API_KEY'],
+      message: 'TRON_NETWORK=mainnet requires TRONGRID_API_KEY',
     },
   )
   /*

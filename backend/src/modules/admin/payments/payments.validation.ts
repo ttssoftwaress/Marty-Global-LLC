@@ -51,6 +51,63 @@ export const resolveUnmatchedSchema = z.object({
 });
 export type ResolveUnmatchedInput = z.infer<typeof resolveUnmatchedSchema>;
 
+/*
+ * --- Manual settlement ---------------------------------------------------
+ *
+ * The queue of payments a person has to confirm: every wire, plus USDT while
+ * automatic verification is switched off. `open` is the working view; `settled`
+ * is the record of who confirmed what.
+ */
+export const settlementFilter = z.enum(['open', 'settled', 'all']);
+export type SettlementFilter = z.infer<typeof settlementFilter>;
+
+export const listSettlementsQuerySchema = z.object({
+  status: settlementFilter.default('open'),
+  cursor: z.string().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+export type ListSettlementsQuery = z.infer<typeof listSettlementsQuerySchema>;
+
+/*
+ * Confirming that money we cannot see arrived.
+ *
+ * Note the shape: no amount and no currency. The figure is the quote's, resolved
+ * server-side — a client-supplied amount is exactly what AGENTS.md forbids, and
+ * a settlement is "this invoice was paid in full", not "credit this much".
+ * A part payment is not representable here on purpose; it is a conversation with
+ * the customer, not a form field.
+ *
+ * `reference` is what the provider calls the movement — the bank's reference for
+ * a wire, the tx hash for a hand-verified USDT payment. Optional, because a
+ * settler may genuinely not have one, and unique in the schema, so the same
+ * reference cannot be pasted onto two invoices.
+ */
+export const settlePaymentSchema = z
+  .object({
+    reference: z.string().trim().min(1).max(120).optional(),
+    note: z.string().trim().max(280).optional(),
+    /*
+     * When the money landed, per the bank statement — not when the form was
+     * submitted. A wire confirmed on Monday for a Friday credit should date to
+     * Friday, because that is what the quote was paid on. Defaults to now.
+     */
+    paidAt: z.iso.datetime().optional(),
+  })
+  .strict();
+export type SettlePaymentInput = z.infer<typeof settlePaymentSchema>;
+
+// Closing one out without settling: the money never arrived, or arrived as
+// something else. The reason is required — this reopens the quote for payment,
+// and "why" is the only thing the customer will ask.
+export const rejectPaymentSchema = z
+  .object({ reason: z.string().trim().min(1).max(280) })
+  .strict();
+export type RejectPaymentInput = z.infer<typeof rejectPaymentSchema>;
+
+export const paymentIdParamSchema = z.object({
+  paymentId: z.string().min(1),
+});
+
 export const revenuePeriod = z.enum(['7d', '30d', '12m']);
 export type RevenuePeriod = z.infer<typeof revenuePeriod>;
 

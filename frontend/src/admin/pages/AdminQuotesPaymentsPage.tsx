@@ -14,16 +14,23 @@ import {
   PaymentsEmptyState,
   PaymentsHeader,
   PaymentsKpiCards,
+  RejectSettlementDialog,
   ResolveTransferDialog,
   RevenueChartCard,
+  SettlementCardList,
+  SettlementTable,
+  SettlePaymentDialog,
   UnmatchedTransferCardList,
   UnmatchedTransferTable,
   useAdminBillingLedger,
   useAdminPaymentsSummary,
   useAdminRevenueSeries,
+  useAdminSettlements,
   useAdminUnmatchedTransfers,
+  useRejectSettlement,
   useResolveUnmatchedTransfer,
   useSendPaymentReminder,
+  useSettlePayment,
 } from '../features/payments';
 import { useAdminShell } from '../hooks/useAdminShell';
 import { useCursorPageWindow } from '../hooks/useCursorPageWindow';
@@ -31,6 +38,8 @@ import type {
   BillingLedgerRow,
   PaymentStatusFilter,
   RevenuePeriod,
+  SettlementFilter,
+  SettlementRow,
   UnmatchedTransferFilter,
   UnmatchedTransferRow,
 } from '../types/payments';
@@ -104,6 +113,58 @@ export function AdminQuotesPaymentsPage() {
    */
   const me = useAdminMe();
   const canResolveTransfers = me.data?.role === Role.ADMIN;
+
+  /*
+   * The manual settlement queue — payments only a person can close: every bank
+   * transfer, plus USDT while automatic verification is switched off in payment
+   * settings. Which providers appear is the backend's answer, not a filter
+   * applied here.
+   *
+   * Confirming one is gated on `payments.settle`, its own grantable permission
+   * rather than the `payments` area this whole screen sits behind. That split is
+   * the point: working the ledger and declaring that money we cannot see arrived
+   * are different jobs, and nothing downstream will ever contradict the second.
+   * This check only decides whether to offer a control that would 403.
+   */
+  const canSettle = Boolean(me.data?.permissions.includes('payments.settle'));
+
+  const [settlementFilter, setSettlementFilter] =
+    useState<SettlementFilter>('open');
+  const [settling, setSettling] = useState<SettlementRow | null>(null);
+  const [rejecting, setRejecting] = useState<SettlementRow | null>(null);
+
+  const settlements = useAdminSettlements(settlementFilter);
+  const settlePayment = useSettlePayment();
+  const rejectSettlement = useRejectSettlement();
+
+  const settlementRows = useMemo(
+    () => settlements.data?.pages.flatMap((page) => page.rows) ?? [],
+    [settlements.data],
+  );
+
+  const openSettlements = settlements.data?.pages[0]?.openCount ?? 0;
+
+  const onSettleSubmit = (input: {
+    reference?: string;
+    note?: string;
+    paidAt?: string;
+  }) => {
+    if (!settling) return;
+
+    settlePayment.mutate(
+      { paymentId: settling.id, ...input },
+      { onSuccess: () => setSettling(null) },
+    );
+  };
+
+  const onRejectSubmit = (reason: string) => {
+    if (!rejecting) return;
+
+    rejectSettlement.mutate(
+      { paymentId: rejecting.id, reason },
+      { onSuccess: () => setRejecting(null) },
+    );
+  };
 
   const [transferFilter, setTransferFilter] =
     useState<UnmatchedTransferFilter>('open');
@@ -342,6 +403,164 @@ export function AdminQuotesPaymentsPage() {
           </section>
 
           {/*
+            * Awaiting confirmation — the manual settlement queue.
+            *
+            * Sits above the unattributed transfers and below the ledger, which
+            * is where it belongs in a settler's day: the ledger says what is
+            * owed, this says what is claimed to have been paid and needs a human
+            * to agree, and the section below it is the money that arrived
+            * without an invoice to attach to.
+            *
+            * Rendered only once the queue has ever held something. An operation
+            * that only takes crypto with automatic verification on genuinely has
+            * no manual settlements, and a permanently empty panel explaining a
+            * workflow they do not use is noise.
+            */}
+          {settlements.isPending ||
+          (settlementRows.length === 0 && openSettlements === 0) ? null : (
+            <section className="flex w-full flex-col gap-4">
+              <div className="flex w-full flex-col gap-3 lg:flex-row lg:items-center lg:justify-between lg:gap-6">
+                <div className="flex min-w-0 flex-col gap-1">
+                  <h2 className="text-h5 font-semibold text-text md:text-h6 lg:text-h4">
+                    Awaiting confirmation
+                  </h2>
+                  <p className="text-caption text-gray-500 md:text-small">
+                    {openSettlements > 0
+                      ? `${openSettlements} ${
+                          openSettlements === 1 ? 'payment' : 'payments'
+                        } waiting for someone to confirm the money arrived.`
+                      : 'Nothing outstanding — every payment has been confirmed or closed.'}
+                  </p>
+                </div>
+
+                <div
+                  role="tablist"
+                  aria-label="Filter payments awaiting confirmation"
+                  className="flex shrink-0 items-center gap-2"
+                >
+                  {(
+                    [
+                      { value: 'open', label: 'Awaiting' },
+                      { value: 'settled', label: 'Confirmed' },
+                      { value: 'all', label: 'All' },
+                    ] as const
+                  ).map((tab) => {
+                    const isActive = tab.value === settlementFilter;
+
+                    return (
+                      <button
+                        key={tab.value}
+                        type="button"
+                        role="tab"
+                        aria-selected={isActive}
+                        onClick={() => setSettlementFilter(tab.value)}
+                        className={`flex shrink-0 items-center whitespace-nowrap rounded-pill px-3 py-1.5 text-small transition-colors md:px-4 md:py-2 lg:text-body ${
+                          isActive
+                            ? 'bg-primary font-semibold text-white'
+                            : 'border border-gray-300 bg-white font-medium text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* A member without `payments.settle` sees the queue and no
+                  controls, rather than wondering whether the screen failed. */}
+              {me.isSuccess && !canSettle ? (
+                <p className="flex items-start gap-2 rounded-card border border-gray-200 bg-gray-50 px-4 py-3 text-small text-text-secondary">
+                  <AlertCircle
+                    className="mt-px size-4 shrink-0 text-gray-400"
+                    strokeWidth={1.75}
+                    aria-hidden="true"
+                  />
+                  You can see this queue but not confirm payments — that takes the
+                  “Confirm wire payments received” permission.
+                </p>
+              ) : null}
+
+              {settlementRows.length === 0 ? null : (
+                <SettlementCardList
+                  rows={settlementRows}
+                  canSettle={canSettle}
+                  busyId={
+                    settlePayment.isPending
+                      ? (settling?.id ?? null)
+                      : rejectSettlement.isPending
+                        ? (rejecting?.id ?? null)
+                        : null
+                  }
+                  onSettle={setSettling}
+                  onReject={setRejecting}
+                />
+              )}
+
+              <div className="hidden w-full flex-col overflow-hidden rounded-table border border-gray-200 bg-white shadow-sm-elevation md:flex">
+                {settlementRows.length === 0 ? (
+                  <PaymentsEmptyState
+                    icon={CheckCircle2}
+                    title={
+                      settlementFilter === 'settled'
+                        ? 'Nothing confirmed yet'
+                        : 'Nothing awaiting confirmation'
+                    }
+                    description={
+                      settlementFilter === 'settled'
+                        ? 'Payments your team confirms will be logged here with who confirmed them.'
+                        : 'Bank transfers, and crypto payments while automatic verification is off, appear here for someone to confirm.'
+                    }
+                  />
+                ) : (
+                  <SettlementTable
+                    rows={settlementRows}
+                    canSettle={canSettle}
+                    busyId={
+                      settlePayment.isPending
+                        ? (settling?.id ?? null)
+                        : rejectSettlement.isPending
+                          ? (rejecting?.id ?? null)
+                          : null
+                    }
+                    onSettle={setSettling}
+                    onReject={setRejecting}
+                  />
+                )}
+              </div>
+
+              {settlementRows.length === 0 ? (
+                <div className="rounded-card border border-gray-200 bg-white md:hidden">
+                  <PaymentsEmptyState
+                    icon={CheckCircle2}
+                    title={
+                      settlementFilter === 'settled'
+                        ? 'Nothing confirmed yet'
+                        : 'Nothing awaiting confirmation'
+                    }
+                    description={
+                      settlementFilter === 'settled'
+                        ? 'Payments your team confirms will be logged here with who confirmed them.'
+                        : 'Bank transfers, and crypto payments while automatic verification is off, appear here for someone to confirm.'
+                    }
+                  />
+                </div>
+              ) : null}
+
+              {settlements.hasNextPage ? (
+                <button
+                  type="button"
+                  onClick={() => void settlements.fetchNextPage()}
+                  disabled={settlements.isFetchingNextPage}
+                  className="flex h-10 w-full items-center justify-center rounded-control border border-primary bg-white px-4 text-body font-semibold text-primary transition-colors hover:bg-primary-light disabled:cursor-default disabled:border-gray-200 disabled:text-gray-400 md:w-fit md:self-center md:px-6"
+                >
+                  {settlements.isFetchingNextPage ? 'Loading…' : 'Load more'}
+                </button>
+              ) : null}
+            </section>
+          )}
+
+          {/*
             * Unattributed transfers — USDT that arrived matching no payment.
             *
             * Rendered only once the queue has ever held something. An operation
@@ -471,6 +690,28 @@ export function AdminQuotesPaymentsPage() {
           )}
         </div>
       </div>
+
+      <SettlePaymentDialog
+        payment={settling}
+        isSubmitting={settlePayment.isPending}
+        error={settlePayment.error}
+        onSubmit={onSettleSubmit}
+        onClose={() => {
+          setSettling(null);
+          settlePayment.reset();
+        }}
+      />
+
+      <RejectSettlementDialog
+        payment={rejecting}
+        isSubmitting={rejectSettlement.isPending}
+        error={rejectSettlement.error}
+        onSubmit={onRejectSubmit}
+        onClose={() => {
+          setRejecting(null);
+          rejectSettlement.reset();
+        }}
+      />
 
       <ResolveTransferDialog
         transfer={resolving}

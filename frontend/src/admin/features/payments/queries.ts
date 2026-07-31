@@ -14,6 +14,9 @@ import type {
   PaymentsSummary,
   RevenuePeriod,
   RevenueSeries,
+  SettlementFilter,
+  SettlementPage,
+  SettlementRow,
   UnmatchedTransferFilter,
   UnmatchedTransferPage,
   UnmatchedTransferRow,
@@ -186,5 +189,108 @@ export function useResolveUnmatchedTransfer() {
         queryKey: ['admin', 'payments', 'unmatched'],
       });
     },
+  });
+}
+
+/*
+ * --- Manual settlement queue ---------------------------------------------
+ *
+ * Payments only a person can close: every bank transfer, plus USDT while an
+ * admin has automatic verification switched off. The backend decides which
+ * providers qualify, so this app never filters by provider itself — the queue
+ * and the write it feeds cannot disagree about what a settler may touch.
+ */
+export const adminSettlementsKey = (status: SettlementFilter) =>
+  ['admin', 'payments', 'settlements', status] as const;
+
+/*
+ * Refreshed on a timer, like the unattributed queue: a customer pressing "I've
+ * sent it" is the signal a settler is waiting for, and a queue that only moved
+ * on reload would be checked by reloading.
+ */
+const SETTLEMENT_REFRESH_MS = 2 * 60 * 1000;
+
+export function useAdminSettlements(status: SettlementFilter) {
+  return useInfiniteQuery({
+    queryKey: adminSettlementsKey(status),
+    queryFn: ({ pageParam }) => {
+      const query = new URLSearchParams({ status });
+      if (pageParam) query.set('cursor', pageParam);
+
+      return apiFetch<ApiSuccess<SettlementPage>>(
+        `/admin/payments/settlements?${query.toString()}`,
+      ).then((res) => res.data);
+    },
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+    refetchInterval: SETTLEMENT_REFRESH_MS,
+    placeholderData: (previous) => previous,
+  });
+}
+
+/*
+ * The caches a settlement decision reaches. Marking a payment received credits
+ * the quote and carries its order to PAID, so the ledger, the KPI figures, and
+ * the orders queue are all stale the moment it lands — not just this queue.
+ */
+function invalidateAfterSettlement(
+  queryClient: ReturnType<typeof useQueryClient>,
+) {
+  void queryClient.invalidateQueries({
+    queryKey: ['admin', 'payments', 'settlements'],
+  });
+  void queryClient.invalidateQueries({ queryKey: ['admin', 'payments', 'ledger'] });
+  void queryClient.invalidateQueries({ queryKey: ['admin', 'payments', 'summary'] });
+  void queryClient.invalidateQueries({ queryKey: ['admin', 'payments', 'revenue'] });
+  void queryClient.invalidateQueries({ queryKey: ['admin', 'orders'] });
+}
+
+/*
+ * POST /v1/admin/payments/settlements/:paymentId/settle — confirm the money
+ * arrived.
+ *
+ * Gated on `payments.settle` server-side, its own grantable permission: nothing
+ * downstream will ever contradict this, because there is no bank feed to
+ * disagree with the person who clicked.
+ *
+ * No amount in the payload, deliberately. The figure is the quote's, resolved
+ * server-side — the client never names what is owed (AGENTS.md, Money).
+ */
+export function useSettlePayment() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      paymentId,
+      ...body
+    }: {
+      paymentId: string;
+      reference?: string;
+      note?: string;
+      paidAt?: string;
+    }) =>
+      apiFetch<ApiSuccess<SettlementRow>>(
+        `/admin/payments/settlements/${paymentId}/settle`,
+        { method: 'POST', body: JSON.stringify(body) },
+      ).then((res) => res.data),
+    onSuccess: () => invalidateAfterSettlement(queryClient),
+  });
+}
+
+/*
+ * POST /v1/admin/payments/settlements/:paymentId/reject — close a payment out
+ * without settling it. The quote goes back to unpaid, which is the point: the
+ * customer is usually about to try again.
+ */
+export function useRejectSettlement() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ paymentId, reason }: { paymentId: string; reason: string }) =>
+      apiFetch<ApiSuccess<SettlementRow>>(
+        `/admin/payments/settlements/${paymentId}/reject`,
+        { method: 'POST', body: JSON.stringify({ reason }) },
+      ).then((res) => res.data),
+    onSuccess: () => invalidateAfterSettlement(queryClient),
   });
 }

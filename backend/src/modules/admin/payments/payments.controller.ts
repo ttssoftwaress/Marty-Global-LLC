@@ -6,9 +6,12 @@ import { pathParam } from '../../../lib/params.js';
 import * as service from './payments.service.js';
 import {
   listLedgerQuerySchema,
+  listSettlementsQuerySchema,
   listUnmatchedQuerySchema,
+  rejectPaymentSchema,
   resolveUnmatchedSchema,
   revenueQuerySchema,
+  settlePaymentSchema,
 } from './payments.validation.js';
 
 // Thin: validate → call service → respond with the { data } envelope.
@@ -88,6 +91,69 @@ export async function remindQuote(
   try {
     res.json({
       data: await service.remindQuote(getAuth(req), pathParam(req, 'quoteId')),
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function listSettlements(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const parsed = listSettlementsQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      throw AppError.validation('Invalid settlement query', parsed.error.issues);
+    }
+
+    res.json({ data: await service.listSettlements(getAuth(req), parsed.data) });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function settlePayment(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const parsed = settlePaymentSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      throw AppError.validation('Invalid settlement', parsed.error.issues);
+    }
+
+    res.json({
+      data: await service.settlePayment(
+        getAuth(req),
+        pathParam(req, 'paymentId'),
+        parsed.data,
+      ),
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function rejectSettlement(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const parsed = rejectPaymentSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw AppError.validation('Invalid rejection', parsed.error.issues);
+    }
+
+    res.json({
+      data: await service.rejectSettlement(
+        getAuth(req),
+        pathParam(req, 'paymentId'),
+        parsed.data,
+      ),
     });
   } catch (error) {
     next(error);

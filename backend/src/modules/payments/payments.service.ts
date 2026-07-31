@@ -6,7 +6,6 @@ import {
   QuoteStatus,
 } from '@prisma/client';
 
-import { env } from '../../config/env.js';
 import { tronConfig, USDT_DECIMALS } from '../../config/tron.js';
 import type { AuthContext } from '../../guards/auth-context.js';
 import { getAuth } from '../../guards/index.js';
@@ -16,10 +15,23 @@ import {
   compareSettlement,
   fiatMinorToUsdtRaw,
   formatUsdtRaw,
+  RATE_SCALE,
 } from '../../lib/money.js';
 import { prisma } from '../../lib/prisma.js';
 import { AuditAction, record } from '../audit/audit.service.js';
 import { advanceOrderStatus } from '../orders/orders.service.js';
+import {
+  findPayableBankAccount,
+  getPaymentSettings,
+  getUsdtConfig,
+  listPayableBankAccounts,
+  readWireInstructions,
+  snapshotWireInstructions,
+  toUsdtConfig,
+  toWireAccountView,
+  type WireAccountView,
+  type WireInstructionField,
+} from './payment-settings.service.js';
 import type { CreateIntentInput } from './payments.validation.js';
 
 /*
@@ -42,6 +54,20 @@ import type { CreateIntentInput } from './payments.validation.js';
  *
  * Under- and overpayment are explicit terminal-ish statuses a human resolves,
  * never a silent pass.
+ *
+ * ── Two providers, settled by opposite mechanisms ───────────────────────────
+ *
+ * USDT is watched: a job polls the chain and credits what it can attribute, and
+ * no human is in the loop. A WIRE TRANSFER cannot be watched — nothing here
+ * reads a bank feed — so it is settled by a person on the team who holds
+ * `payments.settle` and confirms the money arrived (modules/admin/payments).
+ *
+ * That difference is why a wire payment carries no expected amount, no watched
+ * address, and no expiry: there is no amount-matching to do, the quote's own
+ * reference identifies it, and a bank transfer that takes four days must not
+ * find its instructions gone. The one thing both share is the credit itself —
+ * `creditQuote` below — so a settled invoice looks identical whichever way the
+ * money came in.
  */
 
 // --- Views ---------------------------------------------------------------
@@ -67,21 +93,54 @@ export type UsdtPaymentInstructions = {
   confirmations: number;
 };
 
+/*
+ * What a customer wiring money is shown. Every line of it is admin-defined
+ * (`BankAccountField`) and frozen onto the payment at intent time, so editing
+ * the account later never rewrites instructions somebody is already acting on.
+ *
+ * `reference` is the quote's own reference, which is what identifies the
+ * transfer when it lands: a wire carries a free-text reference field, so unlike
+ * TRC-20 there is no need to make the amount unique.
+ */
+export type WirePaymentInstructions = {
+  accountId: string | null;
+  accountLabel: string;
+  description: string | null;
+  currency: string;
+  fields: WireInstructionField[];
+  /** What the customer must put in the transfer's reference field. */
+  reference: string | null;
+};
+
+export type PaymentMethodKindView = 'usdt_trc20' | 'wire_transfer';
+
 export type PaymentView = {
   id: string;
   quoteId: string | null;
   reference: string | null;
   serviceName: string;
-  provider: 'usdt_trc20';
+  provider: PaymentMethodKindView;
   status: PaymentStatusView;
   amount: Money;
   /** The Tron tx hash once a transfer has matched. */
   transactionHash: string | null;
   usdt: UsdtPaymentInstructions | null;
+  wire: WirePaymentInstructions | null;
+  /*
+   * When the customer said the transfer was on its way. Top-level rather than
+   * inside `wire`, because it applies to any payment a person has to settle —
+   * including USDT while an admin has automatic verification switched off.
+   */
+  markedSentAt: string | null;
   /** Set only when the chain settled an amount that didn't match. */
   settledAmountDisplay: string | null;
   paidAt: string | null;
   createdAt: string;
+};
+
+const PROVIDER_VIEW: Record<PaymentProvider, PaymentMethodKindView> = {
+  [PaymentProvider.USDT_TRC20]: 'usdt_trc20',
+  [PaymentProvider.WIRE_TRANSFER]: 'wire_transfer',
 };
 
 export type PaymentStatusView =
@@ -116,6 +175,11 @@ const iso = (date: Date) => date.toISOString();
  * waiting for the sweeper to flip the row — the customer sees the truth now, and
  * the screen stops showing an address that is no longer being watched at that
  * amount. The same rule billing applies to a lapsed quote.
+ *
+ * A wire payment has no `expiresAt` at all, so it never takes this branch: a
+ * bank transfer can be days in flight, and expiring the instructions out from
+ * under one would leave the customer holding a reference for a payment we have
+ * stopped expecting.
  */
 function effectiveStatus(payment: PaymentRecord, now: Date): PaymentStatus {
   const stillOpen =
@@ -128,19 +192,34 @@ function effectiveStatus(payment: PaymentRecord, now: Date): PaymentStatus {
   return payment.status;
 }
 
+/*
+ * The confirmation depth to hold a payment to: the one quoted when its window
+ * opened, falling back to whatever is configured now for rows that predate the
+ * column. Locked per payment because the setting is admin-editable — otherwise
+ * lowering it mid-flight would credit a transfer at a shallower depth than the
+ * screen promised, and raising it would strand one that had already cleared.
+ */
+function requiredConfirmations(
+  payment: { requiredConfirmations: number | null },
+  fallback: number,
+): number {
+  return payment.requiredConfirmations ?? fallback;
+}
+
 export function toPaymentView(payment: PaymentRecord, now = new Date()): PaymentView {
   const status = effectiveStatus(payment, now);
   const isExpired =
     status === PaymentStatus.FAILED && payment.status === PaymentStatus.PENDING;
 
   const expected = payment.usdtExpectedRaw;
+  const snapshot = readWireInstructions(payment.wireInstructions);
 
   return {
     id: payment.id,
     quoteId: payment.quoteId,
     reference: payment.quote?.reference ?? null,
     serviceName: payment.quote?.serviceName ?? 'Payment',
-    provider: 'usdt_trc20',
+    provider: PROVIDER_VIEW[payment.provider],
     status: isExpired ? 'expired' : STATUS_VIEW[status],
     amount: { amount: payment.amount, currency: payment.currency },
     transactionHash: payment.providerRef,
@@ -157,15 +236,41 @@ export function toPaymentView(payment: PaymentRecord, now = new Date()): Payment
             amountRaw: expected.toFixed(0),
             amountDisplay: formatUsdtRaw(BigInt(expected.toFixed(0)), USDT_DECIMALS),
             decimals: payment.usdtDecimals ?? USDT_DECIMALS,
-            rateMinor: payment.lockedRateMinor ?? env.USDT_USD_RATE_MINOR,
+            /*
+             * Both figures come off the row rather than off the current
+             * settings: they are what this customer was quoted. `RATE_SCALE` is
+             * the identity rate (1.000000 USDT per USD) and only stands in for a
+             * row written before the rate was ever locked.
+             */
+            rateMinor: payment.lockedRateMinor ?? Number(RATE_SCALE),
             rateExpiresAt: payment.rateExpiresAt
               ? iso(payment.rateExpiresAt)
               : iso(now),
             expiresAt: payment.expiresAt ? iso(payment.expiresAt) : iso(now),
-            minConfirmations: tronConfig.minConfirmations,
+            minConfirmations: payment.requiredConfirmations ?? payment.confirmations,
             confirmations: payment.confirmations,
           }
         : null,
+    wire:
+      payment.provider === PaymentProvider.WIRE_TRANSFER
+        ? {
+            accountId: payment.bankAccountId,
+            /*
+             * The snapshot first, the stored label second. Both are frozen
+             * copies — the account row itself is never read here, because it is
+             * editable and these instructions are not.
+             */
+            accountLabel:
+              snapshot?.accountLabel || payment.bankAccountLabel || 'Bank transfer',
+            description: snapshot?.description ?? null,
+            currency: snapshot?.currency ?? payment.currency,
+            fields: snapshot?.fields ?? [],
+            reference: payment.quote?.reference ?? null,
+          }
+        : null,
+    markedSentAt: payment.customerMarkedSentAt
+      ? iso(payment.customerMarkedSentAt)
+      : null,
     // Only meaningful once something actually landed on-chain.
     settledAmountDisplay: payment.usdtAmountRaw
       ? formatUsdtRaw(BigInt(payment.usdtAmountRaw.toFixed(0)), USDT_DECIMALS)
@@ -173,6 +278,75 @@ export function toPaymentView(payment: PaymentRecord, now = new Date()): Payment
     paidAt: payment.paidAt ? iso(payment.paidAt) : null,
     createdAt: iso(payment.createdAt),
   };
+}
+
+// --- What checkout may offer ---------------------------------------------
+
+/*
+ * The methods the checkout screen renders, resolved server-side.
+ *
+ * The list is not a frontend constant for the same reason the service catalog
+ * is not: whether we take USDT, whether we take wires, and which bank accounts
+ * are live are all admin settings, and a browser that decided the answer would
+ * offer a method the backend then refuses. `unavailableReason` exists so a
+ * method the admin has switched on but not finished configuring — USDT enabled
+ * with no deposit address — renders as a disabled option that says why, rather
+ * than silently disappearing and looking like we stopped taking crypto.
+ */
+export type PaymentMethodOption = {
+  kind: PaymentMethodKindView;
+  available: boolean;
+  unavailableReason: string | null;
+  /*
+   * Whether this method settles on its own. True only for USDT with automatic
+   * verification switched on; a wire is always false, and so is USDT while the
+   * verifier is off. The checkout copy turns on it — "confirms on-chain in a
+   * minute or two" versus "our team confirms it once it lands" — because
+   * promising the first while a human is in the loop is the kind of wrong that
+   * generates a support ticket per payment.
+   */
+  autoVerified: boolean;
+  /** Wire only: the accounts the customer chooses between. */
+  accounts: WireAccountView[];
+};
+
+export async function listPaymentMethods(): Promise<{
+  methods: PaymentMethodOption[];
+}> {
+  const settings = await getPaymentSettings();
+  const usdt = toUsdtConfig(settings);
+
+  const accounts = settings.wireEnabled ? await listPayableBankAccounts() : [];
+
+  const methods: PaymentMethodOption[] = [];
+
+  if (usdt.enabled) {
+    methods.push({
+      kind: 'usdt_trc20',
+      available: usdt.configured,
+      unavailableReason: usdt.configured
+        ? null
+        : 'Crypto payments are temporarily unavailable. Please try another method or contact us.',
+      autoVerified: usdt.autoVerify,
+      accounts: [],
+    });
+  }
+
+  if (settings.wireEnabled) {
+    methods.push({
+      kind: 'wire_transfer',
+      available: accounts.length > 0,
+      unavailableReason:
+        accounts.length > 0
+          ? null
+          : 'Bank transfer is temporarily unavailable. Please try another method or contact us.',
+      // Nothing here reads a bank feed, so a wire is never auto-verified.
+      autoVerified: false,
+      accounts: accounts.map(toWireAccountView),
+    });
+  }
+
+  return { methods };
 }
 
 const PAYMENT_INCLUDE = {
@@ -259,16 +433,6 @@ export async function createIntent(
   idempotencyKey: string,
 ): Promise<PaymentView> {
   const auth = getAuth(req);
-  const depositAddress = tronConfig.depositAddress;
-
-  if (!depositAddress) {
-    // A misconfiguration, not the customer's fault — but we must not hand out a
-    // screen with no address on it.
-    logger.error('USDT payment requested but TRON_DEPOSIT_ADDRESS is not set');
-    throw AppError.businessRule(
-      'Crypto payment is temporarily unavailable. Please try again later.',
-    );
-  }
 
   /*
    * Idempotency first (AGENTS.md, API Conventions: mutating payment endpoints
@@ -348,40 +512,10 @@ export async function createIntent(
 
   if (live) return toPaymentView(live, now);
 
-  // The rate is locked at intent time and re-checked before crediting
-  // (AGENTS.md, Money). Integer numerator over a fixed scale — never a float.
-  const rateMinor = env.USDT_USD_RATE_MINOR;
-  const baseRaw = fiatMinorToUsdtRaw(quote.total, quote.currency, rateMinor);
-
-  const rateExpiresAt = new Date(
-    now.getTime() + env.USDT_RATE_TTL_MINUTES * 60 * 1000,
-  );
-
-  const created = await createWithUniqueAmount(
-    baseRaw,
-    depositAddress,
-    (expectedRaw) =>
-      prisma.payment.create({
-        data: {
-          customerId: auth.userId,
-          quoteId: quote.id,
-          provider: PaymentProvider.USDT_TRC20,
-          status: PaymentStatus.PENDING,
-          amount: quote.total,
-          currency: quote.currency,
-          depositAddress,
-          usdtExpectedRaw: new Prisma.Decimal(expectedRaw.toString()),
-          usdtDecimals: USDT_DECIMALS,
-          lockedRateMinor: rateMinor,
-          rateExpiresAt,
-          // The payment stops watching when the rate does: a transfer arriving
-          // later must not be credited against a stale price.
-          expiresAt: rateExpiresAt,
-          idempotencyKey,
-        },
-        include: PAYMENT_INCLUDE,
-      }),
-  );
+  const created =
+    input.method === 'wire_transfer'
+      ? await createWireIntent({ quote, customerId: auth.userId, input, idempotencyKey })
+      : await createUsdtIntent({ quote, customerId: auth.userId, now, idempotencyKey });
 
   /*
    * Opening a payment window is a payment state change, so it carries a trail
@@ -399,24 +533,176 @@ export async function createIntent(
     action: AuditAction.PAYMENT_INTENT_CREATED,
     entityType: 'Payment',
     entityId: created.id,
-    // Ids, minor units, and the locked rate — never an address (AGENTS.md, PII).
+    /*
+     * Ids, minor units, and the locked rate — never an address, and never a bank
+     * detail (AGENTS.md, PII). The bank ACCOUNT id is fine: it names a row in our
+     * own settings, not an account number.
+     */
     metadata: {
       quoteId: quote.id,
       reference: quote.reference,
       amount: quote.total,
       currency: quote.currency,
-      provider: 'usdt_trc20',
-      lockedRateMinor: rateMinor,
-      rateExpiresAt: rateExpiresAt.toISOString(),
+      provider: PROVIDER_VIEW[created.provider],
+      ...(created.lockedRateMinor === null
+        ? {}
+        : { lockedRateMinor: created.lockedRateMinor }),
+      ...(created.rateExpiresAt === null
+        ? {}
+        : { rateExpiresAt: created.rateExpiresAt.toISOString() }),
+      ...(created.bankAccountId === null ? {} : { bankAccountId: created.bankAccountId }),
     },
   });
 
   logger.info(
-    { paymentId: created.id, quoteId: quote.id, provider: 'usdt_trc20' },
-    'USDT payment intent created',
+    {
+      paymentId: created.id,
+      quoteId: quote.id,
+      provider: PROVIDER_VIEW[created.provider],
+    },
+    'Payment intent created',
   );
 
   return toPaymentView(created, now);
+}
+
+type IntentContext = {
+  quote: {
+    id: string;
+    total: number;
+    currency: string;
+    reference: string;
+  };
+  customerId: string;
+  idempotencyKey: string;
+};
+
+/*
+ * The USDT window: an address to send to, an amount made unique so the transfer
+ * can be attributed, and a rate locked with an expiry.
+ */
+async function createUsdtIntent({
+  quote,
+  customerId,
+  now,
+  idempotencyKey,
+}: IntentContext & { now: Date }): Promise<PaymentRecord> {
+  const usdt = await getUsdtConfig();
+
+  if (!usdt.enabled) {
+    throw AppError.businessRule('Crypto payment is not currently accepted.');
+  }
+
+  if (!usdt.depositAddress) {
+    /*
+     * A misconfiguration, not the customer's fault — but we must not hand out a
+     * screen with no address on it. Logged as an error because it is now
+     * fixable from the admin screen in under a minute, and nobody will fix what
+     * they cannot see.
+     */
+    logger.error(
+      'USDT payment requested but no deposit address is set in payment settings',
+    );
+    throw AppError.businessRule(
+      'Crypto payment is temporarily unavailable. Please try again later.',
+    );
+  }
+
+  const depositAddress = usdt.depositAddress;
+
+  // The rate is locked at intent time and re-checked before crediting
+  // (AGENTS.md, Money). Integer numerator over a fixed scale — never a float.
+  const rateMinor = usdt.rateMinor;
+  const baseRaw = fiatMinorToUsdtRaw(quote.total, quote.currency, rateMinor);
+
+  const rateExpiresAt = new Date(now.getTime() + usdt.rateTtlMinutes * 60 * 1000);
+
+  return createWithUniqueAmount(baseRaw, depositAddress, (expectedRaw) =>
+    prisma.payment.create({
+      data: {
+        customerId,
+        quoteId: quote.id,
+        provider: PaymentProvider.USDT_TRC20,
+        status: PaymentStatus.PENDING,
+        amount: quote.total,
+        currency: quote.currency,
+        depositAddress,
+        usdtExpectedRaw: new Prisma.Decimal(expectedRaw.toString()),
+        usdtDecimals: USDT_DECIMALS,
+        lockedRateMinor: rateMinor,
+        rateExpiresAt,
+        // Locked with the rate, for the same reason: both are promises made to
+        // this customer, and both are admin-editable behind their backs.
+        requiredConfirmations: usdt.minConfirmations,
+        // The payment stops watching when the rate does: a transfer arriving
+        // later must not be credited against a stale price.
+        expiresAt: rateExpiresAt,
+        idempotencyKey,
+      },
+      include: PAYMENT_INCLUDE,
+    }),
+  );
+}
+
+/*
+ * The wire window: bank details frozen as they were shown, and nothing else.
+ *
+ * No expected amount, because a wire carries a free-text reference and the
+ * quote's own reference identifies it — the amount-uniqueness dance USDT needs
+ * exists only because TRC-20 has no memo field.
+ *
+ * No `expiresAt`, because nothing is being watched that could go stale: the rate
+ * is not converted, the account does not rotate under an open payment (the
+ * details are snapshotted), and an international transfer can be days in flight.
+ * Expiring one would take the instructions away from a customer whose money is
+ * already moving.
+ */
+async function createWireIntent({
+  quote,
+  customerId,
+  input,
+  idempotencyKey,
+}: IntentContext & { input: CreateIntentInput }): Promise<PaymentRecord> {
+  const settings = await getPaymentSettings();
+
+  if (!settings.wireEnabled) {
+    throw AppError.businessRule('Bank transfer is not currently accepted.');
+  }
+
+  /*
+   * The account id comes off the client, so it is re-resolved against the same
+   * "active, has fields" rule the method list applies rather than trusted — a
+   * hand-written request must not be able to name a retired account.
+   */
+  const account = input.bankAccountId
+    ? await findPayableBankAccount(input.bankAccountId)
+    : (await listPayableBankAccounts())[0];
+
+  if (!account) {
+    logger.error(
+      { bankAccountId: input.bankAccountId ?? null },
+      'Wire payment requested but no payable bank account resolved',
+    );
+    throw AppError.businessRule(
+      'Bank transfer is temporarily unavailable. Please try again later.',
+    );
+  }
+
+  return prisma.payment.create({
+    data: {
+      customerId,
+      quoteId: quote.id,
+      provider: PaymentProvider.WIRE_TRANSFER,
+      status: PaymentStatus.PENDING,
+      amount: quote.total,
+      currency: quote.currency,
+      bankAccountId: account.id,
+      bankAccountLabel: account.label,
+      wireInstructions: snapshotWireInstructions(account),
+      idempotencyKey,
+    },
+    include: PAYMENT_INCLUDE,
+  });
 }
 
 /*
@@ -703,6 +989,12 @@ export type SettlementInput = {
   contractAddress: string;
   blockTimestampMs: number;
   confirmations: number;
+  /*
+   * The currently-configured depth, used only for a payment row that predates
+   * the per-payment lock. A payment that carries its own quoted depth is held to
+   * that one instead — see `requiredConfirmations`.
+   */
+  minConfirmations: number;
 };
 
 /*
@@ -1077,7 +1369,7 @@ async function applyTransfer(input: SettlementInput): Promise<ApplyOutcome> {
         };
       }
 
-      if (input.confirmations < tronConfig.minConfirmations) {
+      if (input.confirmations < requiredConfirmations(payment, input.minConfirmations)) {
         // Matched but not yet final. The hash is still claimed here, so the next
         // sweep updates this row instead of matching the transfer again.
         if (!(await claim({ ...common, status: PaymentStatus.PROCESSING }))) {
@@ -1284,6 +1576,7 @@ function nearestCandidate<
 export async function creditConfirmedPayments(
   now: Date,
   confirmationsFor: (chainConfirmedAt: Date) => number,
+  minConfirmations: number,
 ): Promise<PaymentNotice[]> {
   const confirming = await prisma.payment.findMany({
     where: {
@@ -1301,6 +1594,7 @@ export async function creditConfirmedPayments(
       quoteId: true,
       chainConfirmedAt: true,
       rateExpiresAt: true,
+      requiredConfirmations: true,
       amount: true,
       currency: true,
       customerId: true,
@@ -1316,7 +1610,7 @@ export async function creditConfirmedPayments(
 
     const confirmations = confirmationsFor(payment.chainConfirmedAt);
 
-    if (confirmations < tronConfig.minConfirmations) {
+    if (confirmations < requiredConfirmations(payment, minConfirmations)) {
       // Keep the customer's progress bar honest between sweeps.
       await prisma.payment.update({
         where: { id: payment.id },
@@ -1424,3 +1718,355 @@ export async function expireStalePayments(now: Date): Promise<number> {
 // The audit actor for a job-driven credit: there is no human actor, which the
 // audit schema allows (a null actor is a system write).
 export const SYSTEM_ACTOR: AuthContext | null = null;
+
+// --- Wire transfer: the manual settlement path ---------------------------
+
+/*
+ * The customer telling us their transfer is on its way.
+ *
+ * A claim, deliberately: it changes no status, credits nothing, and moves no
+ * money. All it does is stamp the row so it sorts to the top of the team's
+ * queue, which is the difference between "somewhere in a list of open payments"
+ * and "check for this one today". Treating it as anything more would let a
+ * customer settle their own invoice by pressing a button.
+ *
+ * Offered for exactly the payments a human has to settle — every wire, and USDT
+ * while automatic verification is off. With the poller running there is nobody
+ * to tell: the chain says so first, and a button that did nothing would read as
+ * a step the customer had to complete.
+ *
+ * Retry-safe without an idempotency key: the write is conditional on the stamp
+ * being absent, so a repeat returns the row with its first timestamp intact
+ * rather than moving it back down the queue.
+ */
+export async function markPaymentSent(
+  req: Parameters<typeof getAuth>[0],
+  paymentId: string,
+): Promise<PaymentView> {
+  const auth = getAuth(req);
+  const now = new Date();
+
+  const payment = await prisma.payment.findFirst({
+    where: { id: paymentId, deletedAt: null },
+    include: PAYMENT_INCLUDE,
+  });
+
+  if (!payment) throw AppError.notFound('Payment not found');
+
+  // Ownership boundary — the same 404-not-403 reasoning as every read above.
+  if (payment.customerId !== auth.userId) {
+    throw AppError.notFound('Payment not found');
+  }
+
+  await assertManuallySettleable(payment.provider);
+
+  if (!OPEN_STATUSES.includes(payment.status)) {
+    // Already settled, cancelled, or closed out. Report the state rather than
+    // failing a request that asked for something already true.
+    return toPaymentView(payment, now);
+  }
+
+  if (payment.customerMarkedSentAt) return toPaymentView(payment, now);
+
+  await prisma.payment.updateMany({
+    where: {
+      id: payment.id,
+      status: { in: OPEN_STATUSES },
+      customerMarkedSentAt: null,
+    },
+    data: { customerMarkedSentAt: now },
+  });
+
+  await record({
+    actor: auth,
+    action: AuditAction.PAYMENT_MARKED_SENT,
+    entityType: 'Payment',
+    entityId: payment.id,
+    metadata: {
+      quoteId: payment.quoteId,
+      amount: payment.amount,
+      currency: payment.currency,
+      provider: PROVIDER_VIEW[payment.provider],
+    },
+  });
+
+  const updated = await prisma.payment.findUniqueOrThrow({
+    where: { id: payment.id },
+    include: PAYMENT_INCLUDE,
+  });
+
+  return toPaymentView(updated, now);
+}
+
+export type ManualSettlementInput = {
+  paymentId: string;
+  /*
+   * What the provider calls this movement of money — the bank's reference for a
+   * wire, the Tron tx hash for a hand-verified USDT payment. Stored on
+   * `providerRef`, the same column the poller claims, because it answers the
+   * same question.
+   *
+   * Unique in the schema, which is the point: pasting the same reference twice
+   * is exactly how one transfer gets credited against two invoices, and for USDT
+   * it also means a hash the poller later sees is already claimed, so the sweep
+   * reports a duplicate instead of crediting again.
+   */
+  reference?: string;
+  /** Why the settler believes this arrived. Free text, kept on the row. */
+  note?: string;
+  /** When the money landed, per the bank or the block. Defaults to now. */
+  paidAt?: Date;
+};
+
+/*
+ * A person confirming that money we cannot see arrived.
+ *
+ * This is the riskiest write in the payments module and the only credit with a
+ * human actor, so it is guarded on four sides:
+ *
+ *  1. AUTHORIZATION is upstream — `payments.settle`, its own grantable area
+ *     (lib/permissions.ts), separate from reading the ledger. Holding it is what
+ *     lets someone declare an invoice paid.
+ *  2. THE PROVIDER MUST ACTUALLY NEED A HUMAN. A wire always does — nothing here
+ *     reads a bank feed. A USDT payment does only while automatic verification
+ *     is switched off; with the poller running, settling one by hand would route
+ *     around the confirmation depth and the rate lock the customer was quoted,
+ *     and would strand the real transfer in the unmatched queue.
+ *  3. CONDITIONAL WRITE, so two settlers clicking at once credit exactly once —
+ *     the same `updateMany`-with-a-predicate guard the poller uses, for the same
+ *     reason, and the reason this is not a plain `update`.
+ *  4. ONE CREDIT PATH. The quote and its order move through `creditQuote`, the
+ *     same helper the chain path uses, inside the same transaction as the status
+ *     write. A settled invoice looks identical whichever way the money came in.
+ */
+export async function settlePaymentManually(
+  actor: AuthContext,
+  input: ManualSettlementInput,
+): Promise<{ payment: PaymentView; notice: PaymentNotice }> {
+  const now = new Date();
+  const paidAt = input.paidAt ?? now;
+
+  const payment = await prisma.payment.findFirst({
+    where: { id: input.paymentId, deletedAt: null },
+    include: { ...PAYMENT_INCLUDE, ...NOTICE_INCLUDE },
+  });
+
+  if (!payment) throw AppError.notFound('Payment not found');
+
+  await assertManuallySettleable(payment.provider);
+
+  if (payment.status === PaymentStatus.SUCCEEDED) {
+    throw AppError.businessRule('This payment has already been settled.');
+  }
+
+  if (!OPEN_STATUSES.includes(payment.status)) {
+    throw AppError.businessRule(
+      'This payment is closed, so it cannot be marked as received. Ask the customer to start a new payment on the quote.',
+    );
+  }
+
+  const settlerName = await actorName(actor);
+
+  let advanced: OrderAdvance | null = null;
+
+  const settled = await prisma.$transaction(async (tx) => {
+    const { count } = await tx.payment.updateMany({
+      where: { id: payment.id, status: { in: OPEN_STATUSES } },
+      data: {
+        status: PaymentStatus.SUCCEEDED,
+        paidAt,
+        ...(input.reference ? { providerRef: input.reference } : {}),
+        settledById: actor.userId,
+        settledByName: settlerName,
+        ...(input.note ? { settlementNote: input.note } : {}),
+      },
+    });
+
+    // Rule 3: another settler got there first. Nothing further to do, and
+    // crucially the quote is not credited a second time.
+    if (count === 0) return false;
+
+    if (payment.quoteId) {
+      advanced = await creditQuote(tx, payment.quoteId, paidAt);
+    }
+
+    return true;
+  });
+
+  if (!settled) {
+    throw AppError.conflict(
+      'Someone else settled this payment a moment ago. Reload to see the current state.',
+    );
+  }
+
+  // Audited after the commit, never inside it — an entry written in the
+  // transaction would survive a rollback and claim a credit that never happened.
+  if (advanced) auditOrderAdvance(advanced);
+
+  await record({
+    actor,
+    action: AuditAction.PAYMENT_SETTLED_MANUALLY,
+    entityType: 'Payment',
+    entityId: payment.id,
+    /*
+     * Ids, minor units, and the bank's reference. No bank details of any kind —
+     * they are on the row, not in the trail (AGENTS.md, Security & PII).
+     */
+    metadata: {
+      quoteId: payment.quoteId,
+      reference: payment.quote?.reference ?? null,
+      amount: payment.amount,
+      currency: payment.currency,
+      provider: PROVIDER_VIEW[payment.provider],
+      ...(input.reference ? { providerRef: input.reference } : {}),
+    },
+  });
+
+  logger.info(
+    {
+      paymentId: payment.id,
+      quoteId: payment.quoteId,
+      provider: PROVIDER_VIEW[payment.provider],
+    },
+    'Payment settled manually',
+  );
+
+  const updated = await prisma.payment.findUniqueOrThrow({
+    where: { id: payment.id },
+    include: PAYMENT_INCLUDE,
+  });
+
+  return { payment: toPaymentView(updated, now), notice: toPaymentNotice(payment) };
+}
+
+/*
+ * The same decision the other way: the money never arrived, or arrived as
+ * something else, so the payment is closed out.
+ *
+ * CANCELLED rather than FAILED, matching what the status means everywhere else
+ * in this module: nothing went wrong mechanically, the quote is still owed, and
+ * billing's payment history leaves it out. Closing it frees the quote to be paid
+ * again — which is the point, since the customer is usually about to.
+ */
+export async function rejectPayment(
+  actor: AuthContext,
+  paymentId: string,
+  reason: string,
+): Promise<PaymentView> {
+  const now = new Date();
+
+  const payment = await prisma.payment.findFirst({
+    where: { id: paymentId, deletedAt: null },
+    include: PAYMENT_INCLUDE,
+  });
+
+  if (!payment) throw AppError.notFound('Payment not found');
+
+  await assertManuallySettleable(payment.provider);
+
+  if (payment.status === PaymentStatus.SUCCEEDED) {
+    throw AppError.businessRule(
+      'This payment has already been settled, so it cannot be closed out.',
+    );
+  }
+
+  if (!OPEN_STATUSES.includes(payment.status)) {
+    return toPaymentView(payment, now);
+  }
+
+  const { count } = await prisma.payment.updateMany({
+    where: { id: payment.id, status: { in: OPEN_STATUSES } },
+    data: {
+      status: PaymentStatus.CANCELLED,
+      failureReason: reason,
+      settledById: actor.userId,
+      settledByName: await actorName(actor),
+      settlementNote: reason,
+      expiresAt: now,
+    },
+  });
+
+  if (count === 0) {
+    throw AppError.conflict(
+      'Someone else updated this payment a moment ago. Reload to see the current state.',
+    );
+  }
+
+  await record({
+    actor,
+    action: AuditAction.PAYMENT_SETTLEMENT_REJECTED,
+    entityType: 'Payment',
+    entityId: payment.id,
+    metadata: {
+      quoteId: payment.quoteId,
+      amount: payment.amount,
+      currency: payment.currency,
+      provider: PROVIDER_VIEW[payment.provider],
+    },
+  });
+
+  logger.info(
+    {
+      paymentId: payment.id,
+      quoteId: payment.quoteId,
+      provider: PROVIDER_VIEW[payment.provider],
+    },
+    'Payment closed out without settling',
+  );
+
+  const updated = await prisma.payment.findUniqueOrThrow({
+    where: { id: payment.id },
+    include: PAYMENT_INCLUDE,
+  });
+
+  return toPaymentView(updated, now);
+}
+
+/*
+ * Rule 2 above, in one place because both manual writes need it and they must
+ * not be able to disagree about which payments a human may touch.
+ *
+ * A wire always qualifies. A USDT payment qualifies only while automatic
+ * verification is off — the switch that turns the chain sweep into a manual
+ * process (`PaymentSettings.usdtAutoVerifyEnabled`).
+ */
+async function assertManuallySettleable(provider: PaymentProvider): Promise<void> {
+  if (provider === PaymentProvider.WIRE_TRANSFER) return;
+
+  const { autoVerify } = await getUsdtConfig();
+
+  if (autoVerify) {
+    throw AppError.businessRule(
+      'Crypto payments are verified automatically on-chain, so this one cannot be settled by hand. Switch off automatic verification in payment settings first.',
+    );
+  }
+}
+
+/**
+ * Whether a payment of this provider is currently the team's to settle. The read
+ * behind the admin queue and the `Mark as received` control — the same rule
+ * `assertManuallySettleable` enforces, phrased as a question rather than a
+ * refusal.
+ */
+export async function manualProviders(): Promise<PaymentProvider[]> {
+  const { autoVerify } = await getUsdtConfig();
+
+  return autoVerify
+    ? [PaymentProvider.WIRE_TRANSFER]
+    : [PaymentProvider.WIRE_TRANSFER, PaymentProvider.USDT_TRC20];
+}
+
+/*
+ * The settler's name, snapshotted onto the row so the trail still reads after
+ * the account is gone — the same reason `UnmatchedTransfer` stores
+ * `resolvedByName`. Falls back to the email the session carries rather than
+ * leaving the column empty.
+ */
+async function actorName(actor: AuthContext): Promise<string> {
+  const user = await prisma.user.findUnique({
+    where: { id: actor.userId },
+    select: { name: true },
+  });
+
+  return user?.name?.trim() || actor.email;
+}

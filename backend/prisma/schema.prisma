@@ -55,6 +55,9 @@ model User {
   mailRequestsProcessed   MailRequest[]     @relation("MailRequestProcessor")
   mailActionsProcessed    MailActionLog[]   @relation("MailActionProcessor")
   transfersReconciled     UnmatchedTransfer[] @relation("UnmatchedTransferResolver")
+  // Wire transfers this staff member confirmed had arrived. Nothing on a
+  // customer account; only the manual settlement path writes it.
+  paymentsSettled         Payment[]         @relation("PaymentSettler")
 
   @@unique([email])
   @@map("user")
@@ -1684,6 +1687,11 @@ model QuoteLineItem {
 
 enum PaymentProvider {
   USDT_TRC20
+  // Bank / wire transfer. The mirror of USDT in what the customer is shown — an
+  // address and an amount to send — and its opposite in how it settles: nothing
+  // watches a bank account, so a human on the team confirms the money arrived
+  // and marks the payment paid (the `payments.settle` grant, lib/permissions.ts).
+  WIRE_TRANSFER
 }
 
 enum PaymentStatus {
@@ -1731,6 +1739,15 @@ model Payment {
   lockedRateMinor Int?
   rateExpiresAt   DateTime? @db.Timestamptz(3)
   confirmations   Int       @default(0)
+  /*
+   * The confirmation depth quoted to this customer, locked at intent time for
+   * the same reason the rate is. Depth is admin-configurable now
+   * (`PaymentSettings.tronMinConfirmations`), so reading the live value while a
+   * transfer confirms would mean a payment could be credited at a shallower
+   * depth than the one its screen promised — or stall past it. Null on rows
+   * predating this column; the caller falls back to the current setting.
+   */
+  requiredConfirmations Int?
 
   /*
    * The exact raw USDT integer this payment is watching for. TRC-20 transfers
@@ -1753,6 +1770,43 @@ model Payment {
   // confirmation depth on a later sweep without re-reading the chain history.
   chainConfirmedAt DateTime? @db.Timestamptz(3)
 
+  // --- Wire transfer only ------------------------------------------------
+  /*
+   * The bank account the customer was told to send to. `SetNull` rather than a
+   * required link: an account is retired when we stop banking with it, and the
+   * payments already collected through it must survive that.
+   *
+   * Which is why the details are ALSO snapshotted below. The live account row is
+   * editable — that is the whole point of the admin screen — and a customer
+   * looking at "send to IBAN X" must keep seeing X after someone corrects a typo
+   * in the label, or reconciliation would be arguing about which IBAN was on
+   * screen at the time.
+   */
+  bankAccountId    String?
+  bankAccountLabel String?
+  /*
+   * The rendered instruction card as it was shown, frozen at intent time:
+   * `{ label, value, copyable, emphasis }[]` in display order, plus the heading
+   * and note. Never a credential — these are the same published bank details
+   * that go on an invoice.
+   */
+  wireInstructions Json?
+
+  // When the customer said they had sent the transfer. A claim, not a
+  // settlement: it only moves this row to the top of the team's queue. Nothing
+  // downstream reads it as money received.
+  customerMarkedSentAt DateTime? @db.Timestamptz(3)
+
+  /*
+   * Who confirmed the money arrived, snapshotted alongside their id so the trail
+   * still reads after the account is gone — the same shape `UnmatchedTransfer`
+   * uses for its resolver, and for the same reason. Only ever set by the manual
+   * settlement path; a USDT credit has no human actor.
+   */
+  settledById   String?
+  settledByName String?
+  settlementNote String?
+
   // The Idempotency-Key the mutating endpoint accepted, so a retried request
   // resolves to this same row rather than charging twice (AGENTS.md, API).
   idempotencyKey String? @unique
@@ -1765,8 +1819,10 @@ model Payment {
   updatedAt        DateTime  @updatedAt @db.Timestamptz(3)
   deletedAt        DateTime? @db.Timestamptz(3)
 
-  customer User   @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  quote    Quote? @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  customer    User         @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  quote       Quote?       @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  bankAccount BankAccount? @relation(fields: [bankAccountId], references: [id], onDelete: SetNull)
+  settledBy   User?        @relation("PaymentSettler", fields: [settledById], references: [id], onDelete: SetNull)
 
   @@index([customerId, createdAt])
   @@index([status])
@@ -1774,7 +1830,178 @@ model Payment {
   // The USDT poller matches a pending payment by address + amount.
   @@index([depositAddress])
   @@index([depositAddress, usdtExpectedRaw])
+  // The manual settlement queue: open wires, the ones the customer says they
+  // have sent first.
+  @@index([provider, status, customerMarkedSentAt])
   @@map("payment")
+}
+
+// --- Payment configuration (admin-managed) --------------------------------
+/*
+ * How we collect, as data rather than as environment variables.
+ *
+ * Everything here used to live in `config/env.ts`, which made the receiving
+ * address, the USD→USDT rate, and the confirmation depth a redeploy each. They
+ * are operational decisions — rotating a wallet, adjusting a spread, tightening
+ * confirmations after an incident — so they belong to whoever runs the business,
+ * the same argument that moved locations and carriers out of the seed script.
+ *
+ * What deliberately did NOT move: `TRONGRID_API_KEY` (a credential, and secrets
+ * never leave server env) and `TRON_NETWORK` (it pins which hardcoded USDT
+ * contract address we verify against — an admin flipping it would change which
+ * chain we credit real invoices from, and would orphan the sync cursor).
+ *
+ * One row, `@default("singleton")` on the id, upserted on first read. A settings
+ * table with a row count is a settings table someone eventually writes twice.
+ */
+model PaymentSettings {
+  id String @id @default("singleton")
+
+  // --- USDT (TRC-20) -----------------------------------------------------
+  // Off hides the method at checkout entirely rather than offering one that
+  // errors — the same posture the card option takes.
+  usdtEnabled Boolean @default(true)
+
+  /*
+   * The public receiving address customers send USDT to, base58 ('T' + 33
+   * chars). We never hold its key (AGENTS.md, Payments: we watch transfers, we
+   * never sign). Null means USDT cannot be collected and the poller idles.
+   *
+   * Rotating it does not disturb payments already open: each Payment row stores
+   * the address it was issued against, and the poller reads transfers into the
+   * current one, so a rotation is only ever forward-looking.
+   */
+  tronDepositAddress String?
+
+  /*
+   * USD → USDT rate as an integer numerator over 1_000_000 (USDT's own scale) —
+   * never a float (AGENTS.md, Money). 1_000_000 is 1.000000 USDT per USD; a
+   * spread is expressed by raising it (1_010_000 = +1%).
+   */
+  usdtUsdRateMinor Int @default(1000000)
+
+  // How long a quoted USDT amount and its locked rate stay valid, in minutes.
+  usdtRateTtlMinutes Int @default(30)
+
+  // Confirmations before a transfer is credited. Tron blocks are ~3s and
+  // irreversible after ~19 (one SR round), so 19 is the safe floor.
+  tronMinConfirmations Int @default(19)
+
+  // How often the poller sweeps TronGrid, in seconds. Changing it re-registers
+  // the repeatable job (jobs/queues.ts, scheduleUsdtPoll).
+  tronPollIntervalSeconds Int @default(30)
+
+  /*
+   * Whether the chain sweep runs at all — the automatic verifier.
+   *
+   * Separate from `usdtEnabled`, and the two answer different questions:
+   * `usdtEnabled` is "do we offer crypto at checkout", this is "does a job
+   * confirm those payments, or does a person". Off, the poller idles and a USDT
+   * payment is settled by hand exactly like a wire, by whoever holds
+   * `payments.settle` — pasting the tx hash they verified in a block explorer.
+   *
+   * It exists because automatic crediting is the part of this system most likely
+   * to need stopping in a hurry: a TronGrid outage serving stale data, a
+   * suspected mis-credit, a rate that was wrong for an hour. Without a switch
+   * the only way to stop it is a redeploy, which is the wrong tool at the wrong
+   * moment.
+   *
+   * Turning it off does NOT strand payments already confirming — they simply
+   * wait for a human instead of for the chain, and turning it back on resumes
+   * them, because the poller re-derives confirmation depth from the block
+   * timestamp on every sweep rather than counting ticks.
+   */
+  usdtAutoVerifyEnabled Boolean @default(true)
+
+  // --- Wire transfer -----------------------------------------------------
+  // Off by default: a fresh install has no bank account registered, and offering
+  // a wire option with nothing behind it is worse than not offering one.
+  wireEnabled Boolean @default(false)
+
+  // Shown above the bank details at checkout — how long a transfer usually takes
+  // to clear, what to put in the reference, anything the team wants to say.
+  // Plain text; the quote's own reference is what identifies the payment.
+  wireInstructions String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@map("payment_settings")
+}
+
+/*
+ * A bank account customers can wire to.
+ *
+ * Deliberately not a table of columns named `iban`, `swift`, `sortCode`. Banking
+ * details are not the same shape in two countries — a US account has a routing
+ * number and no IBAN, a UK one has a sort code, a SEPA one has neither — so
+ * modelling them as fixed columns means every new market is a migration. The
+ * admin defines the rows themselves (`BankAccountField`), labels included, and
+ * the checkout card renders exactly what they entered in the order they set.
+ *
+ * Soft-deleted, because payments reference it: closing an account is `active:
+ * false`, and the payments collected through it keep resolving.
+ */
+model BankAccount {
+  id String @id @default(cuid())
+
+  // A stable slug the admin never has to see, used as the checkout option's
+  // value so a relabelled account does not change what the client posts.
+  code String @unique
+
+  // What the customer picks from — "USD account (Wise)", "EUR — Deutsche Bank".
+  label String
+  // Optional line under the label at checkout, and the card's own note.
+  description String?
+
+  /*
+   * ISO 4217. Advisory rather than enforced: the quote decides what is owed and
+   * this only says which account is the sensible one to send it to, so a
+   * customer is never blocked from picking an account whose currency differs.
+   */
+  currency String @default("USD")
+
+  active    Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
+  deletedAt DateTime? @db.Timestamptz(3)
+
+  fields   BankAccountField[]
+  payments Payment[]
+
+  @@index([active, sortOrder])
+  @@map("bank_account")
+}
+
+/*
+ * One labelled line on a bank account's checkout card. The admin owns both
+ * halves — "IBAN" / "GB29 NWBK…", "Beneficiary" / "Marty Global LLC" — which is
+ * what makes the card work for any country's banking without a schema change.
+ */
+model BankAccountField {
+  id        String @id @default(cuid())
+  accountId String
+
+  label String
+  value String
+
+  // Renders with a copy button. On for an account number or IBAN (mistyping one
+  // sends money to a stranger), off for a bank's postal address.
+  copyable Boolean @default(true)
+  // Renders larger and monospaced — the one or two lines that matter most.
+  emphasis Boolean @default(false)
+
+  sortOrder Int
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  account BankAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, sortOrder])
+  @@map("bank_account_field")
 }
 
 /*

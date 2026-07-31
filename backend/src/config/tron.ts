@@ -41,20 +41,30 @@ export const USDT_DECIMALS = 6;
  */
 const TRONGRID_TIMEOUT_MS = 10_000;
 
+/*
+ * What the chain client needs, and nothing else.
+ *
+ * This object used to also carry the deposit address, the confirmation depth,
+ * and the poll interval. Those are operational settings an admin changes at
+ * `/admin/settings` — they live in `PaymentSettings` and reach this module as
+ * arguments (see `fetchUsdtTransfers` below). What remains is the pair that is
+ * genuinely deployment-level: which network this process talks to, and the
+ * credential it talks with.
+ */
 export const tronConfig = {
   network: env.TRON_NETWORK,
   baseUrl: TRONGRID_BASE_URL[env.TRON_NETWORK],
   usdtContract: USDT_CONTRACT[env.TRON_NETWORK],
-  depositAddress: env.TRON_DEPOSIT_ADDRESS,
-  minConfirmations: env.TRON_MIN_CONFIRMATIONS,
-  pollIntervalSeconds: env.TRON_POLL_INTERVAL_SECONDS,
   apiKey: env.TRONGRID_API_KEY,
 } as const;
 
-// Without a receiving address there is nothing to watch; the poller checks this
-// and idles rather than erroring every interval.
-export function isTronConfigured(): boolean {
-  return Boolean(tronConfig.depositAddress);
+// A public TRON receiving address: base58, 'T' + 33 characters. Shared with the
+// admin settings validator so the address a form accepts and the address this
+// module will poll are the same set of strings.
+export const TRON_ADDRESS_PATTERN = /^T[1-9A-HJ-NP-Za-km-z]{33}$/;
+
+export function isTronAddress(value: string): boolean {
+  return TRON_ADDRESS_PATTERN.test(value);
 }
 
 /*
@@ -135,17 +145,21 @@ function parseTransfer(row: Trc20ApiRow, expectedContract: string): TronTransfer
 }
 
 /*
- * Every USDT transfer into our deposit address since `sinceMs`, newest first.
- * Read-only: this is a GET, and the API key (when present) is a read key.
+ * Every USDT transfer into `address` since `sinceMs`, newest first. Read-only:
+ * this is a GET, and the API key (when present) is a read key.
+ *
+ * The address is a parameter rather than a module constant because it is admin
+ * settings now — the caller reads the current one and passes it in, so rotating
+ * the wallet takes effect on the next sweep instead of on the next deploy.
  *
  * TronGrid caps a page at 200; we page until the window is exhausted or the cap
  * is hit so a burst of deposits can't leave transfers unseen.
  */
 export async function fetchUsdtTransfers(
+  address: string,
   sinceMs: number,
   { maxPages = 5, pageSize = 200 } = {},
 ): Promise<TronTransfer[]> {
-  const address = tronConfig.depositAddress;
   if (!address) return [];
 
   const headers: Record<string, string> = { Accept: 'application/json' };

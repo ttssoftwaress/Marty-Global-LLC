@@ -55,6 +55,30 @@ router.post(
   controller.cancelPayment,
 );
 
+/*
+ * "I've sent the transfer."
+ *
+ * A mutating payment endpoint, so it takes the same `sensitiveRateLimit` and
+ * `Idempotency-Key` as the two above (AGENTS.md asks for the key on every one,
+ * without carve-outs). It moves no money and credits nothing — what makes a
+ * repeat safe is that the write is conditional on the stamp being absent, so the
+ * second call returns the row with its first timestamp intact.
+ */
+router.post(
+  '/:paymentId/mark-sent',
+  sensitiveRateLimit,
+  requireIdempotencyKey,
+  controller.markSent,
+);
+
+/*
+ * What this deployment offers, and the quote being collected for.
+ *
+ * `/methods` is declared before `/:paymentId` because Express matches in mount
+ * order and "methods" is a valid-looking payment id — the same reason the admin
+ * settings router puts `/order` above `/:code`.
+ */
+router.get('/methods', apiRateLimit, controller.listMethods);
 // The checkout screen reads the quote it is collecting for, then polls the
 // payment while the transfer confirms — both plain authenticated reads.
 router.get('/quotes/:quoteId', apiRateLimit, controller.getCheckoutQuote);

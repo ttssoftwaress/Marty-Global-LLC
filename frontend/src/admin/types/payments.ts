@@ -153,6 +153,64 @@ export type UnmatchedTransferPage = {
 };
 
 /*
+ * --- Manual settlement ---------------------------------------------------
+ *
+ * Payments only a person can close: every bank transfer — nothing in this system
+ * reads a bank feed — plus USDT while an admin has automatic verification
+ * switched off in payment settings.
+ *
+ * Which providers are in the queue is the backend's answer, not a filter this
+ * app applies: with the chain sweep running, settling a crypto payment by hand
+ * would route around the confirmation depth and the rate lock the customer was
+ * quoted, so the API refuses it and the row is simply not listed.
+ */
+export type SettlementProvider = 'usdt_trc20' | 'wire_transfer';
+
+// `awaiting` is what a settler works from; `closed` covers a payment cancelled
+// by the customer or closed out without settling.
+export type SettlementStatus = 'awaiting' | 'settled' | 'closed';
+
+export type SettlementRow = {
+  id: string;
+  provider: SettlementProvider;
+  status: SettlementStatus;
+  amount: Money;
+  /** Pre-resolved by the backend, e.g. "$1,250.00". */
+  amountDisplay: string;
+  quoteId: string | null;
+  reference: string | null;
+  serviceName: string | null;
+  customerName: string;
+  customerEmail: string;
+  /** Which bank account the customer was told to send to, for a wire. */
+  accountLabel: string | null;
+  /**
+   * The bank details as the customer saw them, so a settler can check the
+   * statement against the account the money was meant to land in without
+   * opening the settings screen.
+   */
+  instructions: { label: string; value: string }[];
+  /** When the customer said they had sent it. Null means they have not. */
+  markedSentAt: string | null;
+  /** The bank's reference or the tx hash, once one has been recorded. */
+  providerRef: string | null;
+  settledAt: string | null;
+  settledBy: string | null;
+  settlementNote: string | null;
+  createdAt: string;
+};
+
+export type SettlementFilter = 'open' | 'settled' | 'all';
+
+export type SettlementPage = {
+  rows: SettlementRow[];
+  nextCursor: string | null;
+  // Open items across the whole queue, not just this page, so the section header
+  // never has to count rows it happens to have loaded.
+  openCount: number;
+};
+
+/*
  * The revenue chart's period switch. The backend resolves each into a bucketed
  * series, so the UI never re-buckets or re-aggregates what it is given.
  */

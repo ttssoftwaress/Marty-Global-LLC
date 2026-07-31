@@ -25,11 +25,16 @@ import { Role } from '../../lib/roles.js';
  * provoke against a live testnet.
  */
 
-// The deposit address the config resolves to. Fixed here so tests never depend
-// on whatever is in the developer's .env.
+/*
+ * The deposit address and confirmation depth the payment settings resolve to.
+ * Fixed here so tests never depend on whatever is in the developer's .env — or,
+ * now that these are admin-managed data, on whatever row is in their database.
+ */
 const DEPOSIT_ADDRESS = 'TTestDepositAddress1111111111111111';
 const MIN_CONFIRMATIONS = 19;
 
+// Only the network-level facts remain in `tronConfig`; the rest moved to
+// `PaymentSettings` and is mocked below.
 vi.mock('../../config/tron.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../config/tron.js')>();
   return {
@@ -38,12 +43,57 @@ vi.mock('../../config/tron.js', async (importOriginal) => {
       network: 'nile' as const,
       baseUrl: 'https://nile.trongrid.io',
       usdtContract: 'TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf',
-      depositAddress: DEPOSIT_ADDRESS,
-      minConfirmations: MIN_CONFIRMATIONS,
-      pollIntervalSeconds: 30,
       apiKey: undefined,
     },
-    isTronConfigured: () => true,
+  };
+});
+
+/*
+ * Payment settings, stubbed rather than seeded.
+ *
+ * The service reads them on every intent and every manual settlement, and a test
+ * that had to write the singleton row first would both couple every case here to
+ * a table it is not exercising AND leave the developer's own configuration
+ * changed after the run.
+ *
+ * Mutable on purpose: `autoVerify` and `wireEnabled` are exactly what the
+ * settlement cases are about, so they are toggled per test and reset in
+ * `beforeEach`. The bank ACCOUNT lookups are left real — those read rows the
+ * tests create and clean up themselves.
+ */
+const settings = vi.hoisted(() => ({
+  usdt: {
+    network: 'nile' as const,
+    contractAddress: 'TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf',
+    decimals: 6,
+    enabled: true,
+    depositAddress: 'TTestDepositAddress1111111111111111',
+    rateMinor: 1_000_000,
+    rateTtlMinutes: 30,
+    minConfirmations: 19,
+    pollIntervalSeconds: 30,
+    autoVerify: true,
+    configured: true,
+  },
+  wireEnabled: false,
+}));
+
+function resetSettings() {
+  settings.usdt.autoVerify = true;
+  settings.wireEnabled = false;
+}
+
+vi.mock('./payment-settings.service.js', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('./payment-settings.service.js')>();
+
+  return {
+    ...actual,
+    getUsdtConfig: async () => settings.usdt,
+    toUsdtConfig: () => settings.usdt,
+    // Only the two switches the payment path reads off the row; the columns
+    // behind them are already resolved into `settings.usdt` above.
+    getPaymentSettings: async () => ({ wireEnabled: settings.wireEnabled }),
   };
 });
 
@@ -61,12 +111,17 @@ const {
   expireStalePayments,
   getPayment,
   getQuoteForCheckout,
+  markPaymentSent,
+  rejectPayment,
+  settlePaymentManually,
   settleTransfer,
 } = await import('./payments.service.js');
 
 const CUSTOMER_ID = 'pay_test_customer';
 const OTHER_ID = 'pay_test_other';
-const USER_IDS = [CUSTOMER_ID, OTHER_ID];
+// The staff member who confirms a wire arrived. A User like any other — the
+// settlement path snapshots their name onto the payment.
+const USER_IDS = [CUSTOMER_ID, OTHER_ID, 'pay_test_staff'];
 
 function auth(userId: string, role: Role = Role.CUSTOMER): AuthContext {
   return {
@@ -168,8 +223,60 @@ function transfer(
     contractAddress: 'TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf',
     blockTimestampMs: overrides.blockTimestampMs ?? Date.now(),
     confirmations: overrides.confirmations ?? MIN_CONFIRMATIONS,
+    // The currently-configured depth. Only consulted for a payment row that
+    // predates the per-payment lock; everything created here carries its own.
+    minConfirmations: MIN_CONFIRMATIONS,
   };
 }
+
+const TEST_BANK_PREFIX = 'test-bank-';
+
+/*
+ * A payable bank account: active, not archived, and carrying fields — the same
+ * three conditions `listPayableBankAccounts` applies, because an account failing
+ * any of them is not one a customer may be shown.
+ */
+async function createBankAccount(overrides: { active?: boolean } = {}) {
+  referenceCounter += 1;
+
+  return prisma.bankAccount.create({
+    data: {
+      code: `${TEST_BANK_PREFIX}${Date.now() % 100_000}${referenceCounter}`,
+      label: 'USD account (Test Bank)',
+      description: 'Clears in 1–3 working days.',
+      currency: 'USD',
+      active: overrides.active ?? true,
+      sortOrder: 0,
+      fields: {
+        create: [
+          { label: 'Beneficiary', value: 'Marty Global LLC', sortOrder: 0 },
+          {
+            label: 'IBAN',
+            value: 'GB29 NWBK 6016 1331 9268 19',
+            emphasis: true,
+            sortOrder: 1,
+          },
+        ],
+      },
+    },
+    include: { fields: true },
+  });
+}
+
+// A live wire intent against a quote — the payment a settler confirms.
+async function wireIntentFor(quoteId: string, bankAccountId?: string) {
+  return createIntent(
+    reqAs(auth(CUSTOMER_ID)),
+    {
+      quoteId,
+      method: 'wire_transfer',
+      ...(bankAccountId ? { bankAccountId } : {}),
+    },
+    nextKey(),
+  );
+}
+
+const STAFF_ID = 'pay_test_staff';
 
 // A live USDT intent against a quote — the payment a transfer is meant to match.
 async function intentFor(quoteId: string) {
@@ -219,12 +326,19 @@ async function cleanup() {
     where: { order: { customerId: { in: USER_IDS } } },
   });
   await prisma.order.deleteMany({ where: { customerId: { in: USER_IDS } } });
+  // Test-owned bank accounts only — the code prefix is what keeps a developer's
+  // real configuration out of this. Fields cascade.
+  await prisma.bankAccount.deleteMany({
+    where: { code: { startsWith: TEST_BANK_PREFIX } },
+  });
 }
 
 beforeEach(async () => {
   queueEmail.mockClear();
+  resetSettings();
   await ensureUser(CUSTOMER_ID);
   await ensureUser(OTHER_ID);
+  await ensureUser(STAFF_ID);
   await cleanup();
 });
 
@@ -545,6 +659,7 @@ describe('settleTransfer', () => {
     const credited = await creditConfirmedPayments(
       new Date(),
       () => MIN_CONFIRMATIONS,
+      MIN_CONFIRMATIONS,
     );
     expect(credited.map((payment) => payment.id)).toContain(intent.id);
 
@@ -566,8 +681,11 @@ describe('settleTransfer', () => {
       }),
     );
 
-    const first = await creditConfirmedPayments(new Date(), () => MIN_CONFIRMATIONS);
-    const second = await creditConfirmedPayments(new Date(), () => MIN_CONFIRMATIONS);
+    const sweep = () =>
+      creditConfirmedPayments(new Date(), () => MIN_CONFIRMATIONS, MIN_CONFIRMATIONS);
+
+    const first = await sweep();
+    const second = await sweep();
 
     expect(first.map((payment) => payment.id)).toEqual([intent.id]);
     // Already SUCCEEDED, so the second sweep finds nothing to do.
@@ -1203,5 +1321,270 @@ describe('the audit trail', () => {
     expect(cancelled?.entityType).toBe('Payment');
     expect(cancelled?.actorId).toBe(CUSTOMER_ID);
     expect(cancelled?.actorRole).toBe(Role.CUSTOMER);
+  });
+});
+
+// --- Wire transfer, and settlement by a person ---------------------------
+
+/*
+ * The mirror of the chain path: a customer is shown bank details, and a member
+ * of the team confirms the money arrived. Nothing here watches a bank feed, so
+ * the guards that matter are different from USDT's — no amount matching, no
+ * confirmation depth, and no expiry — while the one that matters most is the
+ * same: a credit happens exactly once.
+ */
+describe('wire transfer', () => {
+  beforeEach(() => {
+    settings.wireEnabled = true;
+  });
+
+  it('freezes the bank details onto the payment and carries the quote reference', async () => {
+    const account = await createBankAccount();
+    const quote = await createQuote();
+
+    const payment = await wireIntentFor(quote.id, account.id);
+
+    expect(payment.provider).toBe('wire_transfer');
+    expect(payment.wire?.accountLabel).toBe(account.label);
+    // A wire carries free text, so the quote's reference is what identifies it —
+    // there is no unique-amount dance, because there is no memo-less chain.
+    expect(payment.wire?.reference).toBe(quote.reference);
+    expect(payment.wire?.fields.map((field) => field.label)).toEqual([
+      'Beneficiary',
+      'IBAN',
+    ]);
+    // No watched amount and no watched address: neither concept applies.
+    expect(payment.usdt).toBeNull();
+
+    const row = await prisma.payment.findUniqueOrThrow({
+      where: { id: payment.id },
+    });
+    expect(row.usdtExpectedRaw).toBeNull();
+    /*
+     * The load-bearing one. A wire can be days in flight, so expiring it would
+     * take the instructions away from a customer whose money is already moving.
+     */
+    expect(row.expiresAt).toBeNull();
+  });
+
+  it('keeps showing the details as issued after the account is edited', async () => {
+    const account = await createBankAccount();
+    const quote = await createQuote();
+    const payment = await wireIntentFor(quote.id, account.id);
+
+    // Someone corrects the account in admin settings.
+    await prisma.bankAccountField.updateMany({
+      where: { accountId: account.id, label: 'IBAN' },
+      data: { value: 'GB99 CHANGED 0000 0000 0000 00' },
+    });
+    await prisma.bankAccount.update({
+      where: { id: account.id },
+      data: { label: 'Renamed account' },
+    });
+
+    const reread = await getPayment(reqAs(auth(CUSTOMER_ID)), payment.id);
+
+    // The customer is acting on what they were shown; reconciliation must not
+    // become an argument about which IBAN was on screen at the time.
+    expect(reread.wire?.accountLabel).toBe('USD account (Test Bank)');
+    expect(reread.wire?.fields.find((field) => field.label === 'IBAN')?.value).toBe(
+      'GB29 NWBK 6016 1331 9268 19',
+    );
+  });
+
+  it('refuses an account that is switched off', async () => {
+    const account = await createBankAccount({ active: false });
+    const quote = await createQuote();
+
+    await expect(wireIntentFor(quote.id, account.id)).rejects.toMatchObject({
+      status: 422,
+    });
+  });
+
+  it('refuses a wire when the method is switched off', async () => {
+    settings.wireEnabled = false;
+    await createBankAccount();
+    const quote = await createQuote();
+
+    await expect(wireIntentFor(quote.id)).rejects.toMatchObject({ status: 422 });
+  });
+
+  it('records the customer saying they sent it without settling anything', async () => {
+    await createBankAccount();
+    const quote = await createQuote();
+    const payment = await wireIntentFor(quote.id);
+
+    const claimed = await markPaymentSent(reqAs(auth(CUSTOMER_ID)), payment.id);
+
+    expect(claimed.markedSentAt).not.toBeNull();
+    // A claim, not a payment. The customer must not be able to settle their own
+    // invoice by pressing a button.
+    expect(claimed.status).toBe('awaiting_payment');
+    expect(
+      (await prisma.quote.findUniqueOrThrow({ where: { id: quote.id } })).status,
+    ).toBe(QuoteStatus.PENDING);
+  });
+
+  it('keeps the first timestamp when the customer says it twice', async () => {
+    await createBankAccount();
+    const quote = await createQuote();
+    const payment = await wireIntentFor(quote.id);
+
+    const first = await markPaymentSent(reqAs(auth(CUSTOMER_ID)), payment.id);
+    const second = await markPaymentSent(reqAs(auth(CUSTOMER_ID)), payment.id);
+
+    expect(second.markedSentAt).toBe(first.markedSentAt);
+  });
+
+  it('credits the quote and advances the order when a settler confirms it', async () => {
+    const order = await createApprovedOrder();
+    await createBankAccount();
+    const quote = await createQuote({ orderId: order.id });
+    const payment = await wireIntentFor(quote.id);
+
+    const { payment: settled } = await settlePaymentManually(
+      auth(STAFF_ID, Role.ADMIN),
+      {
+        paymentId: payment.id,
+        reference: 'FT-TEST-0001',
+        note: 'Seen on statement',
+      },
+    );
+
+    expect(settled.status).toBe('succeeded');
+
+    const row = await prisma.payment.findUniqueOrThrow({
+      where: { id: payment.id },
+    });
+    expect(row.status).toBe(PaymentStatus.SUCCEEDED);
+    expect(row.providerRef).toBe('FT-TEST-0001');
+    // Snapshotted, so the trail still reads after the account is gone.
+    expect(row.settledById).toBe(STAFF_ID);
+    expect(row.settledByName).toBeTruthy();
+
+    // The same credit path the chain uses: quote paid, order carried with it.
+    expect(
+      (await prisma.quote.findUniqueOrThrow({ where: { id: quote.id } })).status,
+    ).toBe(QuoteStatus.PAID);
+    expect(
+      (await prisma.order.findUniqueOrThrow({ where: { id: order.id } })).status,
+    ).toBe(OrderStatus.PAID);
+  });
+
+  /*
+   * THE test this path exists to satisfy. Two settlers clicking at once must
+   * credit exactly once — the same rule the poller's "runs twice, credits once"
+   * case covers, and the reason the settlement write is a conditional
+   * `updateMany` rather than a plain `update`.
+   */
+  it('credits once when two settlers confirm the same payment at once', async () => {
+    const order = await createApprovedOrder();
+    await createBankAccount();
+    const quote = await createQuote({ orderId: order.id });
+    const payment = await wireIntentFor(quote.id);
+
+    const results = await Promise.allSettled([
+      settlePaymentManually(auth(STAFF_ID, Role.ADMIN), { paymentId: payment.id }),
+      settlePaymentManually(auth(STAFF_ID, Role.ADMIN), { paymentId: payment.id }),
+    ]);
+
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+
+    const credits = (await auditFor(payment.id)).filter(
+      (row) => row.action === 'payment.settled_manually',
+    );
+    expect(credits).toHaveLength(1);
+
+    expect(
+      (await prisma.quote.findUniqueOrThrow({ where: { id: quote.id } })).status,
+    ).toBe(QuoteStatus.PAID);
+  });
+
+  it('reopens the quote when a settler closes a payment out', async () => {
+    await createBankAccount();
+    const quote = await createQuote();
+    const payment = await wireIntentFor(quote.id);
+
+    const closed = await rejectPayment(
+      auth(STAFF_ID, Role.ADMIN),
+      payment.id,
+      'Nothing received after 14 days',
+    );
+
+    expect(closed.status).toBe('cancelled');
+    // The point of closing rather than failing: the customer is usually about to
+    // try again, and the quote has to still be payable.
+    expect(
+      (await prisma.quote.findUniqueOrThrow({ where: { id: quote.id } })).status,
+    ).toBe(QuoteStatus.PENDING);
+  });
+
+  it('refuses to settle a payment that has already been settled', async () => {
+    await createBankAccount();
+    const quote = await createQuote();
+    const payment = await wireIntentFor(quote.id);
+
+    await settlePaymentManually(auth(STAFF_ID, Role.ADMIN), {
+      paymentId: payment.id,
+    });
+
+    await expect(
+      settlePaymentManually(auth(STAFF_ID, Role.ADMIN), { paymentId: payment.id }),
+    ).rejects.toMatchObject({ status: 422 });
+  });
+});
+
+/*
+ * The switch that turns the chain sweep into a manual process. It is what
+ * decides whether a human may touch a USDT payment at all: with the poller
+ * running, settling one by hand would route around the confirmation depth and
+ * rate lock the customer was quoted, and strand the real transfer in the
+ * unmatched queue.
+ */
+describe('automatic verification switch', () => {
+  it('refuses to settle a USDT payment by hand while it is on', async () => {
+    const quote = await createQuote();
+    const intent = await intentFor(quote.id);
+
+    await expect(
+      settlePaymentManually(auth(STAFF_ID, Role.ADMIN), { paymentId: intent.id }),
+    ).rejects.toMatchObject({ status: 422 });
+
+    expect(
+      (await prisma.quote.findUniqueOrThrow({ where: { id: quote.id } })).status,
+    ).toBe(QuoteStatus.PENDING);
+  });
+
+  it('allows a USDT payment to be settled by hand once it is off', async () => {
+    const quote = await createQuote();
+    const intent = await intentFor(quote.id);
+
+    settings.usdt.autoVerify = false;
+
+    const { payment } = await settlePaymentManually(auth(STAFF_ID, Role.ADMIN), {
+      paymentId: intent.id,
+      reference: '0xhand-verified-hash',
+    });
+
+    expect(payment.status).toBe('succeeded');
+    expect(
+      (await prisma.quote.findUniqueOrThrow({ where: { id: quote.id } })).status,
+    ).toBe(QuoteStatus.PAID);
+  });
+
+  it('lets the customer flag a transfer as sent only while it is off', async () => {
+    const quote = await createQuote();
+    const intent = await intentFor(quote.id);
+
+    // On: the chain says so first, so there is nobody to tell.
+    await expect(
+      markPaymentSent(reqAs(auth(CUSTOMER_ID)), intent.id),
+    ).rejects.toMatchObject({ status: 422 });
+
+    settings.usdt.autoVerify = false;
+
+    const claimed = await markPaymentSent(reqAs(auth(CUSTOMER_ID)), intent.id);
+    expect(claimed.markedSentAt).not.toBeNull();
+    expect(claimed.status).toBe('awaiting_payment');
   });
 });

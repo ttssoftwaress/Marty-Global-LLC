@@ -17,6 +17,7 @@ import { adminMailroomRouter } from './mailroom/mailroom.routes.js';
 import { adminMeRouter } from './me/me.routes.js';
 import { adminNotificationsRouter } from './notifications/notifications.routes.js';
 import { adminOrdersRouter } from './orders/orders.routes.js';
+import { adminPaymentSettingsRouter } from './payment-settings/payment-settings.routes.js';
 import { adminPaymentsRouter } from './payments/payments.routes.js';
 import { adminQuotesRouter } from './quotes/quotes.routes.js';
 import { adminReportsRouter } from './reports/reports.routes.js';
@@ -85,6 +86,20 @@ router.use('/result-fields', adminResultFieldsRouter);
  * routers stay independently mountable. Both carry the same `catalog` area.
  */
 router.use('/fields', adminFieldsRouter);
+/*
+ * How we collect — the deposit address, the USD→USDT rate, the confirmation
+ * depth, the automatic-verification switch, and the bank accounts customers wire
+ * to. All of it used to be environment variables, so rotating a wallet or
+ * adjusting a spread was a redeploy.
+ *
+ * A sibling of `/payments` rather than a child, and carrying the same `payments`
+ * area: this is configuration, not a queue, and mounting it under `/payments`
+ * would put it behind that router's own path matching for no gain. Deliberately
+ * NOT under `/settings` — that router carries the `settings` area, which is the
+ * location and carrier lists, and nobody who curates jurisdictions should
+ * thereby be able to change where money is sent.
+ */
+router.use('/payment-settings', adminPaymentSettingsRouter);
 router.use('/payments', adminPaymentsRouter);
 router.use('/mailroom', adminMailroomRouter);
 router.use('/team', adminTeamRouter);

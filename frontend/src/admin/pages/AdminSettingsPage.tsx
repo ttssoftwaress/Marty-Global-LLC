@@ -3,37 +3,58 @@ import { Info } from 'lucide-react';
 
 import { Role } from '@/constants/roles';
 import { AdminLayout } from '../components/AdminLayout';
+import {
+  BankAccountsPanel,
+  PaymentConfigPanel,
+} from '../features/payment-settings';
 import { CarriersPanel } from '../features/settings/CarriersPanel';
 import { LocationsPanel } from '../features/settings/LocationsPanel';
 import { useAdminShell } from '../hooks/useAdminShell';
 import { useAdminMe } from '../queries/admin-me';
 
 /*
- * Admin settings — the reference data the rest of the admin picks FROM.
+ * Admin settings — the configuration the rest of the system reads.
  *
- * This screen exists because that data used to have no home. Locations and mail
+ * This screen exists because none of it used to be data. Locations and mail
  * carriers were rows a seed script inserted, which made "which countries do we
- * operate in" a code change and left `db:reset` wiping a list nobody could put
- * back from the app. Nothing seeds them now: these two panels are where they
- * come from, and where they are retired.
+ * operate in" a code change; the deposit address, the USD→USDT rate, and the
+ * confirmation depth were environment variables, which made rotating a wallet a
+ * redeploy. Nothing seeds any of it now: these four panels are where it comes
+ * from, and where it is retired.
  *
- * Two tabs rather than two routes, for the same reason the field registry pairs
- * its two halves: both are org-wide reference lists an admin moves between while
- * setting the business up, and separate URLs would turn that into navigation.
+ * Tabs rather than routes, for the same reason the field registry pairs its two
+ * halves: an admin moves between them while setting the business up, and
+ * separate URLs would turn that into navigation.
  *
- * Reading takes the `settings` area; writing is admin-only on the backend, so a
- * staff member holding the area sees the lists without the controls that would
- * 403 on them. `canWrite` is convenience — the server is the boundary.
+ * Two different permissions live on one screen, which is deliberate rather than
+ * sloppy. Locations and carriers are the `settings` area; the payment tabs are
+ * the `payments` area, because that is where the money goes — someone who
+ * curates jurisdictions should not thereby be able to change the receiving
+ * address. Each pair of tabs is hidden from a member who does not hold its area,
+ * and the backend enforces the same split (the real boundary, AGENTS.md).
+ *
+ * Writing is admin-only on both routers, so a staff member holding an area sees
+ * the lists without the controls that would 403 on them. `canWrite` is
+ * convenience.
  *
  * No Figma link — built to the written brief in the same card, table, and tab
  * language as the designed admin screens, and logged as a deviation.
  */
 
-type SettingsTab = 'locations' | 'carriers';
+type SettingsTab = 'locations' | 'carriers' | 'payments' | 'bank-accounts';
 
-const TABS: { value: SettingsTab; label: string }[] = [
-  { value: 'locations', label: 'Locations' },
-  { value: 'carriers', label: 'Mail carriers' },
+type TabDefinition = {
+  value: SettingsTab;
+  label: string;
+  /** The permission area this tab's endpoints sit behind. */
+  area: 'settings' | 'payments';
+};
+
+const TABS: TabDefinition[] = [
+  { value: 'locations', label: 'Locations', area: 'settings' },
+  { value: 'carriers', label: 'Mail carriers', area: 'settings' },
+  { value: 'payments', label: 'Payments', area: 'payments' },
+  { value: 'bank-accounts', label: 'Bank accounts', area: 'payments' },
 ];
 
 export function AdminSettingsPage() {
@@ -42,6 +63,26 @@ export function AdminSettingsPage() {
   const [tab, setTab] = useState<SettingsTab>('locations');
 
   const canWrite = me.data?.role === Role.ADMIN;
+
+  /*
+   * Which tabs this member may open. Hiding one the server would refuse is a
+   * courtesy, not a boundary — `requirePermission` on each router is the real
+   * check, and both read the same grant list, so they cannot disagree.
+   *
+   * Until `me` resolves nothing is filtered out: a flash of the full tab strip
+   * is better than a flash of an empty one, and the panels behind it do not
+   * fetch until they render.
+   */
+  const permissions = me.data?.permissions;
+  const visibleTabs = permissions
+    ? TABS.filter((option) => permissions.includes(option.area))
+    : TABS;
+
+  // A member who holds only `payments` lands on Locations otherwise — a tab that
+  // is not in their strip and whose panel would 403.
+  const activeTab = visibleTabs.some((option) => option.value === tab)
+    ? tab
+    : (visibleTabs[0]?.value ?? tab);
 
   return (
     <AdminLayout user={user} onLogout={onLogout}>
@@ -53,18 +94,19 @@ export function AdminSettingsPage() {
                 Admin settings
               </h1>
               <p className="text-body text-text-secondary lg:max-w-[45rem]">
-                The lists every other section picks from. Change one here and it
-                changes everywhere it is shown — no deploy, no database script.
+                The lists every other section picks from, and how you get paid.
+                Change something here and it changes everywhere it is used — no
+                deploy, no database script.
               </p>
             </div>
 
             <div
               role="tablist"
               aria-label="Settings"
-              className="flex w-fit items-center gap-1 rounded-input bg-gray-100 p-1"
+              className="flex w-fit max-w-full items-center gap-1 overflow-x-auto rounded-input bg-gray-100 p-1"
             >
-              {TABS.map((option) => {
-                const active = option.value === tab;
+              {visibleTabs.map((option) => {
+                const active = option.value === activeTab;
                 return (
                   <button
                     key={option.value}
@@ -94,15 +136,16 @@ export function AdminSettingsPage() {
                 strokeWidth={1.75}
                 aria-hidden="true"
               />
-              You can view these lists but not change them — editing them is
+              You can view these settings but not change them — editing them is
               restricted to admins.
             </p>
           )}
 
-          {tab === 'locations' ? (
-            <LocationsPanel canWrite={Boolean(canWrite)} />
-          ) : (
-            <CarriersPanel canWrite={Boolean(canWrite)} />
+          {activeTab === 'locations' && <LocationsPanel canWrite={Boolean(canWrite)} />}
+          {activeTab === 'carriers' && <CarriersPanel canWrite={Boolean(canWrite)} />}
+          {activeTab === 'payments' && <PaymentConfigPanel canWrite={Boolean(canWrite)} />}
+          {activeTab === 'bank-accounts' && (
+            <BankAccountsPanel canWrite={Boolean(canWrite)} />
           )}
         </div>
       </div>

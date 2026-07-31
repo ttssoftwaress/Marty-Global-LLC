@@ -72,6 +72,39 @@ export async function cancelPayment(
   }
 }
 
+/*
+ * The methods this deployment actually offers, resolved from admin settings.
+ * A plain authenticated read — it carries published bank details, which are the
+ * same figures that go on an invoice, and no credential of any kind.
+ */
+export async function listMethods(
+  _req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    res.json({ data: await service.listPaymentMethods() });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// The customer saying their transfer is on its way — a claim that reorders the
+// team's queue, never a settlement (see the service).
+export async function markSent(req: Request, res: Response, next: NextFunction) {
+  try {
+    const parsed = paymentIdParamSchema.safeParse(req.params);
+    if (!parsed.success) {
+      throw AppError.validation('Invalid payment id', parsed.error.issues);
+    }
+
+    const payment = await service.markPaymentSent(req, parsed.data.paymentId);
+    res.json({ data: payment });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function getCheckoutQuote(
   req: Request,
   res: Response,

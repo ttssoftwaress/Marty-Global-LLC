@@ -233,6 +233,31 @@ const CATALOG: Record<string, Entry> = {
     category: 'billing',
     severity: 'alert',
   },
+  /*
+   * Wire transfer, and USDT while automatic verification is off.
+   *
+   * The customer's claim is `normal` — it credits nothing and only reorders the
+   * team's queue. The two decisions after it are `alert`: a person declaring
+   * that money we cannot see arrived is the one payment credit with no
+   * downstream check on it, and closing one out reopens an invoice the customer
+   * may believe they have paid. Both are entries a reviewer should be able to
+   * find without filtering for them.
+   */
+  [AuditAction.PAYMENT_MARKED_SENT]: {
+    label: 'Customer said payment was sent',
+    category: 'billing',
+    severity: 'normal',
+  },
+  [AuditAction.PAYMENT_SETTLED_MANUALLY]: {
+    label: 'Payment confirmed received by staff',
+    category: 'billing',
+    severity: 'alert',
+  },
+  [AuditAction.PAYMENT_SETTLEMENT_REJECTED]: {
+    label: 'Payment closed without settling',
+    category: 'billing',
+    severity: 'alert',
+  },
   [AuditAction.PAYMENT_EXPIRED]: {
     label: 'Payment window expired',
     category: 'billing',
@@ -396,6 +421,43 @@ const CATALOG: Record<string, Entry> = {
   },
   [AuditAction.CARRIER_UPDATED]: {
     label: 'Mail carrier updated',
+    category: 'settings',
+    severity: 'normal',
+  },
+  /*
+   * Payment configuration — where money is sent, and what it converts at.
+   *
+   * `alert` on all of it, which is a deliberate step up from the location and
+   * carrier rows above. Changing the deposit address decides where every future
+   * crypto payment lands; changing a bank account's fields decides it for wires.
+   * These are the entries a reviewer wants surfaced next to a role change, not
+   * buried among reference-data edits.
+   *
+   * None of the metadata behind these carries a value — only which fields moved
+   * (AGENTS.md, Security & PII).
+   */
+  [AuditAction.PAYMENT_SETTINGS_UPDATED]: {
+    label: 'Payment settings changed',
+    category: 'settings',
+    severity: 'alert',
+  },
+  [AuditAction.BANK_ACCOUNT_CREATED]: {
+    label: 'Bank account added',
+    category: 'settings',
+    severity: 'alert',
+  },
+  [AuditAction.BANK_ACCOUNT_UPDATED]: {
+    label: 'Bank account updated',
+    category: 'settings',
+    severity: 'alert',
+  },
+  [AuditAction.BANK_ACCOUNT_DELETED]: {
+    label: 'Bank account removed',
+    category: 'settings',
+    severity: 'alert',
+  },
+  [AuditAction.BANK_ACCOUNTS_REORDERED]: {
+    label: 'Bank accounts reordered',
     category: 'settings',
     severity: 'normal',
   },

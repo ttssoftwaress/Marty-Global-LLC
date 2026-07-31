@@ -13,8 +13,8 @@ auth, security — lives here.
 ## Project
 
 Customers form and manage companies, file registrations, receive scanned mail,
-get support, and pay in USDT (TRC-20). Live chat, email/SMS notifications, audit
-logging.
+get support, and pay in USDT (TRC-20) or by bank transfer. Live chat, email/SMS
+notifications, audit logging.
 
 **Card payments are deferred to a later deployment.** There is no card code in
 either app — no provider SDK, no models, no env, no checkout — and none is to be
@@ -71,7 +71,7 @@ corporate-filing-system/
 | Auth | Better Auth |
 | Live chat | Socket.io |
 | Email / SMS | Amazon SES (React Email) / Twilio |
-| Payments | USDT TRC-20 via TronGrid (cards deferred — see Payments) |
+| Payments | USDT TRC-20 via TronGrid · bank transfer, settled by staff (cards deferred — see Payments) |
 | Bot protection | Cloudflare Turnstile (public forms) |
 | Storage | Cloudflare R2 |
 | Monitoring / Analytics | Sentry / PostHog |
@@ -135,7 +135,11 @@ frontend/src/
   areas never import from each other.
 - `pages/` = route screens that compose; `features/` = per-area domain logic
   (queries/mutations, feature components). `portal/features/payments` owns the
-  branded checkout: the USDT screen, and the coming-soon card option beside it.
+  branded checkout: the USDT screen, the bank-transfer screen, and the
+  coming-soon card option beside them. **Which methods exist is a server
+  answer** (`GET /v1/payments/methods`), never a frontend constant — they are
+  admin settings, and a hardcoded list would offer a method the backend refuses
+  and keep offering it after someone switched it off.
 - Marketing is **simple pages, no blog** — copy written directly in the page
   components. A shared `<Seo>` component sets title/description/canonical/OG
   per page; sitemap + robots at build.
@@ -249,9 +253,13 @@ modules/companies/
 ## Payments
 
 `billing/` owns what is owed; `payments/` owns collecting it. A `Payment` row
-is the source of truth, storing the provider reference (the Tron tx hash).
-Reconciliation runs in job processors, never in request handlers; every state
-change is audited.
+is the source of truth, storing the provider reference (the Tron tx hash, or the
+bank's reference for a wire). Reconciliation runs in job processors, never in
+request handlers; every state change is audited.
+
+Two providers, settled by opposite mechanisms. Both end in one credit path —
+`creditQuote` in `payments.service.ts` — so a settled invoice looks identical
+whichever way the money came in.
 
 - **Card — DEFERRED, do not build.** No provider SDK, no `StripeCustomer` /
   `PaymentMethod` / `WebhookEvent` models, no `STRIPE` provider value, no card
@@ -267,6 +275,43 @@ change is audited.
   constraint on tx hash; match + credit in one DB transaction — never
   double-credit. **No private keys anywhere** — we watch transfers, we never
   sign or move funds.
+- **Wire transfer:** the customer is shown bank details and a reference; nothing
+  reads a bank feed, so a person on the team confirms the money arrived. No
+  expected-amount matching (a wire carries free text, so the quote's reference
+  identifies it) and **no expiry** — a transfer can be days in flight, and
+  taking the instructions away mid-flight is the one thing this must never do.
+  The details shown are **snapshotted onto the payment** at intent time, so
+  editing the account later never rewrites instructions somebody is acting on.
+
+**Payment configuration is DATA, not env.** The deposit address, the USD→USDT
+rate, the rate TTL, the confirmation depth, the poll interval, the
+automatic-verification switch, and the bank accounts all live in
+`PaymentSettings` / `BankAccount` and are edited at `/admin/settings` →
+Payments. **Do not put a payment address, amount, or threshold back into
+`config/env.ts`.** Only two payment values remain in env, each for a reason that
+does not generalise: `TRONGRID_API_KEY` (a credential) and `TRON_NETWORK` (it
+pins which hardcoded USDT contract a transfer is verified against).
+
+Bank details are **admin-defined label/value rows** (`BankAccountField`), never
+fixed `iban` / `swift` / `sortCode` columns — banking is not the same shape in
+two countries, and fixed columns would make every new market a migration.
+
+- **Settling by hand takes `payments.settle`** — its own grantable permission
+  area, separate from `payments` (which only opens the ledger). It is the
+  highest-consequence write in the system: nothing downstream will ever
+  contradict it, because there is no feed to disagree with the person who
+  clicked. The write is conditional on the payment still being open, so two
+  settlers credit exactly once.
+- **A USDT payment may only be settled by hand while automatic verification is
+  off.** With the poller running, a manual settlement would route around the
+  confirmation depth and rate lock the customer was quoted, and strand the real
+  transfer in the unmatched queue.
+- **"I've sent it" is a claim, never a settlement.** It stamps the row so it
+  sorts to the top of the team's queue and does nothing else. A customer must
+  not be able to settle their own invoice.
+- Each payment locks the **rate and the confirmation depth it was quoted** onto
+  its own row, because both settings are now editable — reading the live value
+  mid-flight would change a promise already made.
 
 ---
 
@@ -343,7 +388,8 @@ in **Design.md**.)
 Critical paths only — do not chase coverage.
 
 - **Payments:** USDT matching + under/overpayment, money helpers, and a "runs
-  twice, credits once" idempotency test.
+  twice, credits once" idempotency test. Manual settlement carries the same
+  rule — two settlers on one wire must credit exactly once.
 - **Auth:** guard checks per protected route group.
 - Vitest colocated as `*.test.ts`; Playwright for the checkout e2e. Tron Nile
   testnet only; tests use a disposable docker-compose Postgres, never a real

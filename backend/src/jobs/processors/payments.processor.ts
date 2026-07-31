@@ -3,10 +3,10 @@ import { FeedNotificationCategory } from '@prisma/client';
 import {
   estimateConfirmations,
   fetchUsdtTransfers,
-  isTronConfigured,
   tronConfig,
 } from '../../config/tron.js';
 import { publicAppUrl } from '../../config/env.js';
+import { getUsdtConfig } from '../../modules/payments/payment-settings.service.js';
 import { logger } from '../../lib/logger.js';
 import { formatUsdtRaw } from '../../lib/money.js';
 import { prisma } from '../../lib/prisma.js';
@@ -112,10 +112,36 @@ export async function pollUsdtTransfers(now = new Date()): Promise<PollResult> {
     expired: 0,
   };
 
-  if (!isTronConfigured()) {
-    // No deposit address means nothing to watch. Debug, not warn: this is the
-    // normal state of a dev machine that has not been given an address.
+  /*
+   * The address, the depth, and whether we collect USDT at all are admin
+   * settings now, read fresh on every sweep rather than at boot — rotating the
+   * receiving wallet or tightening confirmations takes effect on the next
+   * interval instead of on the next deploy.
+   */
+  const usdt = await getUsdtConfig();
+
+  if (!usdt.configured || !usdt.depositAddress) {
+    // No deposit address (or USDT switched off) means nothing to watch. Debug,
+    // not warn: this is the normal state of a dev machine that has not been
+    // given an address, and of an operation that only takes wires.
     logger.debug('USDT poll skipped — no deposit address configured');
+    return result;
+  }
+
+  /*
+   * The automatic verifier, switched off from `/admin/settings`.
+   *
+   * Returning here rather than unregistering the scheduler is deliberate: the
+   * switch has to be reversible in one click, and a sweep that never ran left no
+   * state to reconcile. Nothing is stranded — depth is re-derived from each
+   * transfer's block timestamp on every sweep, so payments that were confirming
+   * while it was off are picked up and credited the moment it comes back.
+   *
+   * While it is off, USDT settles the same way a wire does: by hand, by whoever
+   * holds `payments.settle`, against a tx hash they verified themselves.
+   */
+  if (!usdt.autoVerify) {
+    logger.debug('USDT poll skipped — automatic verification is switched off');
     return result;
   }
 
@@ -123,7 +149,10 @@ export async function pollUsdtTransfers(now = new Date()): Promise<PollResult> {
   const cursor = await readCursor();
   const since = cursor > 0 ? cursor - OVERLAP_MS : nowMs - COLD_START_WINDOW_MS;
 
-  const transfers = await fetchUsdtTransfers(Math.max(0, since));
+  const transfers = await fetchUsdtTransfers(
+    usdt.depositAddress,
+    Math.max(0, since),
+  );
   result.scanned = transfers.length;
 
   // Oldest first, so the cursor advances monotonically and a mid-sweep failure
@@ -154,6 +183,9 @@ export async function pollUsdtTransfers(now = new Date()): Promise<PollResult> {
         contractAddress: transfer.contractAddress,
         blockTimestampMs: transfer.blockTimestamp,
         confirmations,
+        // Only used for a payment row that predates the per-payment lock; a
+        // payment carrying its own quoted depth is held to that one.
+        minConfirmations: usdt.minConfirmations,
       },
       now,
     );
@@ -217,8 +249,10 @@ export async function pollUsdtTransfers(now = new Date()): Promise<PollResult> {
    * credit. This is why a customer who closes the tab still gets credited: the
    * transfer is already recorded, and depth is a function of elapsed time.
    */
-  const credited = await creditConfirmedPayments(now, (chainConfirmedAt) =>
-    estimateConfirmations(chainConfirmedAt.getTime(), nowMs),
+  const credited = await creditConfirmedPayments(
+    now,
+    (chainConfirmedAt) => estimateConfirmations(chainConfirmedAt.getTime(), nowMs),
+    usdt.minConfirmations,
   );
 
   for (const notice of credited) {
