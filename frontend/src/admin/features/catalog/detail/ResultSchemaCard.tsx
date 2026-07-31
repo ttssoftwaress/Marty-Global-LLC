@@ -219,16 +219,30 @@ export function ResultSchemaCard({
       description="The facts the customer sees once this service is complete. Staff fill these in to deliver it, and the customer gets a page listing every record."
     >
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <Field label="Page title" hint="“My companies” — the heading on the customer’s page.">
+        <Field
+          label="Page title"
+          htmlFor="result-page-title"
+          hint="“My companies” — the heading on the customer’s page."
+        >
           <TextInput
+            id="result-page-title"
             value={pageTitle}
-            onChange={setPageTitle}
+            onChange={(event) => setPageTitle(event.target.value)}
             placeholder="My companies"
           />
         </Field>
 
-        <Field label="Word for one record" hint="Used in counts and empty states.">
-          <TextInput value={noun} onChange={setNoun} placeholder="company" />
+        <Field
+          label="Word for one record"
+          htmlFor="result-noun"
+          hint="Used in counts and empty states."
+        >
+          <TextInput
+            id="result-noun"
+            value={noun}
+            onChange={(event) => setNoun(event.target.value)}
+            placeholder="company"
+          />
         </Field>
       </div>
 
