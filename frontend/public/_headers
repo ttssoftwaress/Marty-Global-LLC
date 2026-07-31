@@ -1,0 +1,42 @@
+# Cloudflare Pages response headers for the SPA.
+#
+# Helmet covers API responses only. This is the app that renders scanned mail and
+# identity documents, and without this file it ships with no headers at all.
+#
+# The CSP is derived from what the code actually loads, not from a template:
+#   script-src   challenges.cloudflare.com — the Turnstile widget
+#                (marketing/components/chat/Turnstile.tsx)
+#   style-src    fonts.googleapis.com — @import in styles/index.css
+#                'unsafe-inline' — React style={{...}} props emit style attributes
+#   font-src     fonts.gstatic.com — the files that stylesheet references
+#   img-src      *.r2.cloudflarestorage.com — mail scans and documents render
+#                through presigned URLs straight from R2
+#                data:/blob: — qrcode renders to a data URL, viewers use blobs
+#   connect-src  the API and its WebSocket, R2 (uploads are browser -> R2 with a
+#                presigned PUT, never through the API), Turnstile's siteverify
+#                round trip, and Sentry ingest
+#   frame-src    challenges.cloudflare.com — the Turnstile challenge iframe
+#
+# posthog-js is in package.json but is never imported, so no PostHog host is
+# listed. Add one when analytics is actually wired, not before.
+#
+# Shipped as Content-Security-Policy-Report-Only. Watch the browser console
+# across marketing, portal, admin, upload, and chat, then rename the header to
+# Content-Security-Policy to enforce. A CSP that has only ever been read is a
+# guess.
+
+/*
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://*.r2.cloudflarestorage.com; connect-src 'self' https://api.martygloballlc.com wss://api.martygloballlc.com https://challenges.cloudflare.com https://*.r2.cloudflarestorage.com https://*.sentry.io; frame-src https://challenges.cloudflare.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+
+# A stale index.html pins users to an asset bundle the last deploy deleted.
+/index.html
+  Cache-Control: no-cache
+
+# Vite content-hashes these, so the filename changes whenever the bytes do.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
