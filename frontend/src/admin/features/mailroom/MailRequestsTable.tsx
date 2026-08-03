@@ -101,7 +101,7 @@ export function MailRequestsTable({
             <tr
               key={request.id}
               onClick={() => onOpen(request)}
-              className="h-[3.25rem] cursor-pointer border-b border-gray-200 transition-colors last:border-b-0 hover:bg-gray-50 lg:h-table-row"
+              className="h-[3.25rem] cursor-pointer border-b border-gray-200 transition-colors last:border-b-0 hover:bg-gray-50 active:bg-gray-100 lg:h-table-row"
             >
               <td className="py-2 pl-4 pr-3 align-middle lg:pl-6 lg:pr-4">
                 <div className="flex items-center gap-2 lg:gap-2.5">

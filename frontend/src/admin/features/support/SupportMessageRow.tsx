@@ -98,7 +98,7 @@ export function SupportMessageRow({ message }: SupportMessageRowProps) {
 
   if (kind === 'internal_note') {
     return (
-      <div className="flex w-full shrink-0 flex-col gap-1.5 rounded-input border border-[var(--color-status-note-border)] bg-[var(--color-status-note-bg)] p-3.5 md:gap-1 md:p-2.5 lg:gap-1.5 lg:p-3.5">
+      <div className="flex w-full shrink-0 animate-rise flex-col gap-1.5 rounded-input border border-[var(--color-status-note-border)] bg-[var(--color-status-note-bg)] p-3.5 motion-reduce:animate-none md:gap-1 md:p-2.5 lg:gap-1.5 lg:p-3.5">
         <p className="text-[0.625rem] font-bold uppercase leading-normal text-[var(--color-status-note-text)] md:font-medium lg:font-bold">
           Internal note ·{' '}
           <time dateTime={sentAt}>{formatMessageTime(sentAt)}</time>
@@ -113,8 +113,10 @@ export function SupportMessageRow({ message }: SupportMessageRowProps) {
   const isStaff = kind === 'staff';
 
   return (
+    /* Rises in as it lands — a message arriving over the socket mid-triage
+     * should be something the operator sees happen. */
     <div
-      className={`flex w-full shrink-0 items-start gap-3 md:gap-2 lg:gap-3 ${
+      className={`flex w-full shrink-0 animate-rise items-start gap-3 motion-reduce:animate-none md:gap-2 lg:gap-3 ${
         mine ? 'justify-end' : ''
       }`}
     >

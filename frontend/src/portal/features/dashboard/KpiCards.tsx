@@ -83,7 +83,7 @@ function KpiCard({
 
 export function KpiCards({ metrics }: { metrics: DashboardMetrics }) {
   return (
-    <div className="grid w-full grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4 lg:gap-6">
+    <div className="stagger-rise grid w-full grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4 lg:gap-6">
       <KpiCard
         label="Active orders"
         value={String(metrics.activeOrders)}

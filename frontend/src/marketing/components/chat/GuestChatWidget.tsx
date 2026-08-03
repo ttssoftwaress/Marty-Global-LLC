@@ -208,7 +208,7 @@ export function GuestChatWidget() {
       {open ? (
         <section
           aria-label="Chat with Marty Global"
-          className="fixed bottom-24 left-4 z-40 flex h-[min(560px,calc(100dvh-8rem))] w-[min(360px,calc(100vw-2rem))] flex-col overflow-hidden rounded-card border border-gray-200 bg-white shadow-lg-elevation md:left-6"
+          className="fixed bottom-24 left-4 z-40 flex h-[min(560px,calc(100dvh-8rem))] w-[min(360px,calc(100vw-2rem))] translate-y-0 flex-col overflow-hidden rounded-card border border-gray-200 bg-white opacity-100 shadow-lg-elevation transition-[opacity,translate] duration-200 ease-out starting:translate-y-4 starting:opacity-0 motion-reduce:transition-none md:left-6"
         >
           <header className="flex shrink-0 items-start justify-between gap-3 bg-primary p-4 text-white">
             <div className="flex flex-col gap-0.5">
@@ -311,7 +311,7 @@ export function GuestChatWidget() {
         onClick={() => setOpen((value) => !value)}
         aria-label={open ? 'Close chat' : 'Chat with us'}
         aria-expanded={open}
-        className="fixed bottom-6 left-4 z-40 flex size-14 items-center justify-center rounded-full bg-primary text-white shadow-lg-elevation transition-colors hover:bg-primary-hover md:left-6"
+        className="fixed bottom-6 left-4 z-40 flex size-14 items-center justify-center rounded-full bg-primary text-white shadow-lg-elevation transition-colors hover:bg-primary-hover hover:shadow-md-elevation md:left-6"
       >
         {open ? (
           <X className="size-6" strokeWidth={2} aria-hidden="true" />

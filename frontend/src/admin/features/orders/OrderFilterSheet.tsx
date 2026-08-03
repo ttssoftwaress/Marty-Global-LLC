@@ -59,7 +59,8 @@ export function OrderFilterSheet({
         type="button"
         aria-label="Close filters"
         onClick={onClose}
-        className="absolute inset-0 cursor-default bg-gray-900/40"
+        data-press="none"
+        className="absolute inset-0 cursor-default bg-gray-900/40 transition-opacity duration-200 starting:opacity-0 motion-reduce:transition-none"
       />
 
       <div
@@ -68,7 +69,7 @@ export function OrderFilterSheet({
         aria-modal="true"
         aria-label="Filter orders"
         tabIndex={-1}
-        className="absolute inset-x-0 bottom-0 flex max-h-[85dvh] flex-col rounded-t-modal bg-white shadow-lg-elevation outline-none"
+        className="absolute inset-x-0 bottom-0 flex max-h-[85dvh] translate-y-0 flex-col rounded-t-modal bg-white shadow-lg-elevation outline-none transition-transform duration-300 ease-out starting:translate-y-full motion-reduce:transition-none"
       >
         <div className="flex justify-center pb-1 pt-3">
           <span aria-hidden="true" className="h-1 w-9 rounded-pill bg-gray-300" />

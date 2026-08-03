@@ -117,7 +117,7 @@ export function Navbar() {
         aria-label={menuOpen ? 'Close menu' : 'Open menu'}
         aria-expanded={menuOpen}
         aria-controls="mobile-nav"
-        className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-gray-50 md:hidden"
+        className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-gray-50 transition-colors hover:bg-gray-100 md:hidden"
       >
         <MenuIcon className="size-5 text-text" />
       </button>
@@ -125,7 +125,7 @@ export function Navbar() {
       {menuOpen && (
         <nav
           id="mobile-nav"
-          className="absolute inset-x-0 top-full z-50 flex flex-col gap-1 border-b border-gray-200 bg-white px-5 py-4 shadow-lg md:hidden"
+          className="absolute inset-x-0 top-full z-50 flex animate-rise flex-col gap-1 border-b border-gray-200 bg-white px-5 py-4 shadow-lg motion-reduce:animate-none md:hidden"
         >
           {NAV_LINKS.map((link) => (
             <Link
@@ -134,8 +134,8 @@ export function Navbar() {
               onClick={() => setMenuOpen(false)}
               className={
                 isActive(link.href, pathname)
-                  ? 'rounded-lg px-3 py-2.5 text-body font-semibold text-primary'
-                  : 'rounded-lg px-3 py-2.5 text-body font-medium text-gray-700'
+                  ? 'press-soft rounded-lg px-3 py-2.5 text-body font-semibold text-primary'
+                  : 'press-soft rounded-lg px-3 py-2.5 text-body font-medium text-gray-700 transition-colors hover:bg-gray-50 hover:text-primary'
               }
             >
               {link.label}
@@ -154,6 +154,12 @@ export function Navbar() {
   );
 }
 
+/*
+ * The design draws the active link with an accent tick under it and gives the
+ * rest no hover state at all. The tick is reproduced as drawn; the inactive
+ * links pick up the shared growing underline and a colour shift, because a
+ * navigation row where nothing answers the pointer reads as static text.
+ */
 function NavItem({ link, active }: { link: NavLink; active: boolean }) {
   if (active) {
     return (
@@ -172,7 +178,7 @@ function NavItem({ link, active }: { link: NavLink; active: boolean }) {
   return (
     <Link
       to={link.href}
-      className="whitespace-nowrap text-[13px] font-medium text-gray-700 lg:text-[14px] lg:font-normal"
+      className="link-underline whitespace-nowrap text-[13px] font-medium text-gray-700 transition-colors hover:text-primary lg:text-[14px] lg:font-normal"
     >
       {link.label}
     </Link>

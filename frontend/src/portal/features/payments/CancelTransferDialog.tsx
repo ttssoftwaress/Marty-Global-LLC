@@ -87,7 +87,8 @@ export function CancelTransferDialog({
         type="button"
         aria-label="Close dialog"
         onClick={onDismiss}
-        className="absolute inset-0 cursor-default bg-gray-900/40"
+        data-press="none"
+        className="absolute inset-0 cursor-default bg-gray-900/40 transition-opacity duration-200 starting:opacity-0 motion-reduce:transition-none"
       />
 
       <div
@@ -96,7 +97,7 @@ export function CancelTransferDialog({
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
-        className="relative flex w-full flex-col rounded-t-modal bg-white shadow-lg-elevation outline-none md:max-w-[30rem] md:rounded-modal"
+        className="relative flex w-full translate-y-0 flex-col rounded-t-modal bg-white opacity-100 shadow-lg-elevation outline-none transition-[opacity,translate] duration-200 ease-out starting:translate-y-8 starting:opacity-0 motion-reduce:transition-none md:max-w-[30rem] md:rounded-modal"
       >
         {/* The grabber reads as "drag me down", so it is mobile-only. */}
         <div className="flex justify-center pb-1 pt-3 md:hidden">

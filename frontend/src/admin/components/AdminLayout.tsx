@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import {
   AdminNotificationsPanel,
@@ -73,6 +73,7 @@ export function AdminLayout({
   );
 
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const me = useAdminMe();
   const panel = useAdminNotificationPanel();
   const markRead = useMarkAdminNotificationRead();
@@ -156,7 +157,20 @@ export function AdminLayout({
           accountMenuOpen={accountMenu === 'topbar'}
         />
 
-        <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
+        {/*
+         * The workspace fades in on arrival at a new section. Keyed on the
+         * section, not the full path: `/admin/support/:id` and the request
+         * slide-overs keep the screen behind them mounted, and remounting there
+         * would reset a queue to its first page mid-triage. Fade only — an
+         * entrance transform would leave a permanent `translate` here, which is
+         * a containing block for the `position: fixed` panels pages render.
+         */}
+        <main
+          key={pathname.split('/').slice(0, 3).join('/')}
+          className="min-h-0 flex-1 animate-fade-in overflow-y-auto motion-reduce:animate-none"
+        >
+          {children}
+        </main>
       </div>
 
       <AdminNotificationsPanel

@@ -76,7 +76,11 @@ export function MessageBubble({ message, firstOfRun }: MessageBubbleProps) {
   const isAgent = message.author === 'agent';
 
   return (
-    <div className={`flex flex-col gap-1 ${isAgent ? 'items-start' : 'items-end'}`}>
+    /* A message rises in as it lands, so a reply arriving over the socket while
+     * the customer is reading is something they see happen rather than find. */
+    <div
+      className={`flex animate-rise flex-col gap-1 motion-reduce:animate-none ${isAgent ? 'items-start' : 'items-end'}`}
+    >
       {isAgent && firstOfRun ? (
         <div className="flex items-center gap-2">
           <AgentAvatar message={message} />

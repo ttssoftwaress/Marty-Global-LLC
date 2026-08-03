@@ -66,7 +66,7 @@ const SHEET =
 
 /* From `md` up the same element becomes a floating card. */
 const DROPDOWN =
-  'md:inset-x-auto md:w-[18.5rem] md:overflow-clip md:rounded-card md:border md:border-gray-200 md:opacity-100 md:shadow-md-elevation md:transition-[opacity,transform] md:duration-200 md:starting:opacity-0 lg:shadow-lg-elevation';
+  'md:inset-x-auto md:w-[18.5rem] md:overflow-clip md:rounded-card md:border md:border-gray-200 md:opacity-100 md:shadow-md-elevation md:transition-[opacity,translate] md:duration-200 md:starting:opacity-0 lg:shadow-lg-elevation';
 
 const ANCHOR_CLASSES: Record<AdminAccountMenuAnchor, string> = {
   /* Under the top bar at its right edge — `h-navbar` with matching side padding. */

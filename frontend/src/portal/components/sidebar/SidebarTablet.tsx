@@ -52,8 +52,8 @@ export function SidebarTablet({ badges, onLogout, className }: SidebarTabletProp
                   aria-current={active ? 'page' : undefined}
                   className={
                     active
-                      ? 'relative flex size-12 items-center justify-center rounded-xl bg-white text-accent'
-                      : 'relative flex size-12 items-center justify-center rounded-xl text-white/80 transition-colors hover:bg-white/10 hover:text-white'
+                      ? 'press relative flex size-12 items-center justify-center rounded-xl bg-white text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white'
+                      : 'press relative flex size-12 items-center justify-center rounded-xl text-white/80 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white'
                   }
                 >
                   <Icon className="size-5" strokeWidth={1.75} aria-hidden="true" />
@@ -90,8 +90,8 @@ export function SidebarTablet({ badges, onLogout, className }: SidebarTabletProp
                   aria-current={active ? 'page' : undefined}
                   className={
                     active
-                      ? 'flex size-12 items-center justify-center rounded-xl bg-white text-accent'
-                      : 'flex size-12 items-center justify-center rounded-xl text-white/80 transition-colors hover:bg-white/10 hover:text-white'
+                      ? 'press flex size-12 items-center justify-center rounded-xl bg-white text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white'
+                      : 'press flex size-12 items-center justify-center rounded-xl text-white/80 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white'
                   }
                 >
                   <Icon className="size-5" strokeWidth={1.75} aria-hidden="true" />
@@ -108,7 +108,7 @@ export function SidebarTablet({ badges, onLogout, className }: SidebarTabletProp
           onClick={onLogout}
           title="Logout"
           aria-label="Logout"
-          className="flex size-10 items-center justify-center rounded-[1.25rem] text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+          className="flex size-10 items-center justify-center rounded-[1.25rem] text-white/80 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
         >
           <LogOut className="size-[1.125rem]" strokeWidth={1.75} aria-hidden="true" />
         </button>

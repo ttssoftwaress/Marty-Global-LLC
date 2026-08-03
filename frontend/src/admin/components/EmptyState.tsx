@@ -49,8 +49,10 @@ export function EmptyState({
   const ActionIcon = action?.icon;
 
   return (
+    /* Fades in rather than replacing the skeleton instantly — the swap from
+     * loading to "nothing here" is otherwise a flash the eye reads as a glitch. */
     <div
-      className={`flex w-full flex-col items-center gap-3 px-6 py-14 text-center ${className}`}
+      className={`flex w-full animate-fade-in flex-col items-center gap-3 px-6 py-14 text-center motion-reduce:animate-none ${className}`}
     >
       <span className="flex size-12 items-center justify-center rounded-full bg-gray-100 text-gray-400">
         <Icon className="size-6" strokeWidth={1.75} aria-hidden="true" />

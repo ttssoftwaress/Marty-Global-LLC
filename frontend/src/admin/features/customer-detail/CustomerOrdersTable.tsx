@@ -72,7 +72,7 @@ export function CustomerOrdersTable({ orders }: CustomerOrdersTableProps) {
             <tr
               key={order.id}
               {...rowProps(order.to)}
-              className={`cursor-pointer border-b border-gray-200 transition-colors last:border-b-0 hover:bg-gray-50 ${ROW_FOCUS_CLASS}`}
+              className={`cursor-pointer border-b border-gray-200 transition-colors last:border-b-0 hover:bg-gray-50 active:bg-gray-100 ${ROW_FOCUS_CLASS}`}
             >
               <td className="h-16 py-3 pl-5 pr-4 align-middle lg:h-table-row lg:pl-card">
                 <span className="block truncate text-body font-medium text-text">

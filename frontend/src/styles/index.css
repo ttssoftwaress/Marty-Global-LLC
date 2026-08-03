@@ -432,38 +432,57 @@
     font-size: var(--text-body-lg);
     line-height: var(--text-body-lg--line-height);
     font-weight: var(--font-weight-semibold);
+    /*
+     * `scale` rides along with the colour swaps so the press dip (Motion
+     * System, below) eases in and out on the design-system button rather than
+     * snapping — this class is the one place the property list is ours to
+     * declare, since a `transition-colors` utility replaces it wholesale.
+     */
     transition:
-      background-color 150ms ease,
-      border-color 150ms ease,
-      color 150ms ease;
+      background-color var(--motion-fast) ease,
+      border-color var(--motion-fast) ease,
+      color var(--motion-fast) ease,
+      box-shadow var(--motion-fast) ease,
+      scale var(--motion-press) var(--ease-standard);
+  }
+  /*
+   * A button that cannot be pressed says so, and stays still when clicked — the
+   * global press feedback already exempts it, and this is the visual half.
+   */
+  .btn:disabled,
+  .btn[aria-disabled='true'] {
+    opacity: 0.55;
+    cursor: not-allowed;
   }
   .btn-primary {
     background-color: var(--color-primary);
     color: var(--color-white);
   }
-  .btn-primary:hover {
+  .btn-primary:hover:not(:disabled):not([aria-disabled='true']) {
     background-color: var(--color-primary-hover);
+    box-shadow: var(--shadow-md-elevation);
   }
   .btn-secondary {
     background-color: var(--color-white);
     color: var(--color-primary);
     border: 1px solid var(--color-primary);
   }
-  .btn-secondary:hover {
+  .btn-secondary:hover:not(:disabled):not([aria-disabled='true']) {
     background-color: var(--color-primary-light);
   }
   .btn-accent {
     background-color: var(--color-accent);
     color: var(--color-white);
   }
-  .btn-accent:hover {
+  .btn-accent:hover:not(:disabled):not([aria-disabled='true']) {
     background-color: var(--color-accent-hover);
+    box-shadow: var(--shadow-md-elevation);
   }
   .btn-danger {
     background-color: var(--color-error);
     color: var(--color-white);
   }
-  .btn-danger:hover {
+  .btn-danger:hover:not(:disabled):not([aria-disabled='true']) {
     background-color: #b91c1c;
   }
 
@@ -482,9 +501,16 @@
     line-height: var(--text-body--line-height);
     color: var(--color-text);
     outline: none;
+    transition:
+      border-color var(--motion-fast) var(--ease-standard),
+      box-shadow var(--motion-fast) var(--ease-standard);
   }
   .input-field::placeholder {
     color: var(--color-gray-400);
+  }
+  /* Hovering a field should show it is one before the click. */
+  .input-field:hover:not(:disabled):not(:focus) {
+    border-color: var(--color-gray-400);
   }
   .input-field:focus {
     border-color: var(--ring-focus);
@@ -539,5 +565,248 @@
   .status-info {
     background-color: var(--color-status-info-bg);
     color: var(--color-status-info-text);
+  }
+}
+
+/*
+ * Marty Global LLC — Motion System
+ *
+ * The single source of truth for movement. Corporate restraint is the brief:
+ * motion confirms an action or introduces content, and is never decoration.
+ * Three rules the whole system obeys —
+ *
+ *   1. Every press answers. A control that can be clicked dips under the
+ *      pointer (`--press-scale`), so a tap on a slow connection is
+ *      acknowledged before the network is.
+ *   2. Distances are small and durations short (90–320ms). Nothing bounces,
+ *      overshoots, or travels further than half a rem — an enterprise console
+ *      should feel responsive, not playful.
+ *   3. Motion is a preference. Everything here collapses under
+ *      `prefers-reduced-motion: reduce`, and the app's existing
+ *      `motion-reduce:transition-none` overlays keep working unchanged.
+ *
+ * Easings become utilities (`ease-entrance`, `ease-standard`); the entrance
+ * animations become `animate-rise`, `animate-fade-in`, and `animate-pop`.
+ * Durations and press depths are plain variables — reference
+ * `var(--motion-base)` in CSS or the matching `duration-*` utility in markup.
+ *
+ * Overlays keep using the house `starting:` idiom (an entrance transition from
+ * an `@starting-style` value) rather than these keyframes, because a panel that
+ * mounts and unmounts needs its "from" state tied to insertion, not to a class.
+ */
+@theme {
+  /* Easing → `ease-entrance`, `ease-standard` */
+  --ease-entrance: cubic-bezier(0.22, 1, 0.36, 1); /* decelerating — arrivals */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1); /* symmetric — state changes */
+
+  /* Durations */
+  --motion-press: 90ms; /* the dip under a pointer */
+  --motion-fast: 150ms; /* hover, focus, colour swaps */
+  --motion-base: 220ms; /* panels, fades, small reveals */
+  --motion-slow: 320ms; /* content entering a page */
+
+  /* Press depth — `soft` is for wide surfaces (rows, cards, nav items) where a
+   * full 3% dip reads as the layout jumping rather than as a button pressing. */
+  --press-scale: 0.97;
+  --press-scale-soft: 0.99;
+
+  /* Entrances */
+  --animate-rise: rise var(--motion-slow) var(--ease-entrance) both;
+  --animate-fade-in: fade-in var(--motion-base) var(--ease-standard) both;
+  --animate-pop: pop var(--motion-base) var(--ease-entrance);
+
+  /*
+   * The end frames land on `none`, not `0`: these animations fill forwards, and
+   * a held `translate: 0 0` (or `scale: 1`) is still a transform — which makes
+   * the element a containing block for any `position: fixed` descendant, so an
+   * overlay opened from inside a risen card would anchor to the card instead of
+   * the viewport. `none` holds nothing.
+   */
+  @keyframes rise {
+    from {
+      opacity: 0;
+      translate: 0 0.5rem;
+    }
+    to {
+      opacity: 1;
+      translate: none;
+    }
+  }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  /* Draws the eye to a value that just changed (a count, a badge). */
+  @keyframes pop {
+    0% {
+      scale: 1;
+    }
+    45% {
+      scale: 1.08;
+    }
+    100% {
+      scale: 1;
+    }
+  }
+}
+
+@layer base {
+  /*
+   * Press feedback, applied once for every button in the app rather than per
+   * component. `scale` is the individual transform property, not `transform`,
+   * so it composes with the positioning utilities controls already carry
+   * (`-translate-y-1/2` on an inline field icon, for example) instead of
+   * wiping them out for the duration of the press.
+   *
+   * The selector is wrapped in `:where()` so the whole rule stays at a single
+   * pseudo-class of specificity: `.press-soft` below, or any component class,
+   * outranks it without needing `!important`. Opt a control out with
+   * `data-press="none"` — the full-bleed backdrop behind a modal is the case
+   * that matters, since scaling a scrim shows the page around its edges.
+   */
+  :where(button, [role='button'], input[type='submit'], input[type='button'], summary, a.btn) {
+    transition: scale var(--motion-press) var(--ease-standard);
+  }
+  :where(button, [role='button'], input[type='submit'], input[type='button'], summary, a.btn):where(
+      :not(:disabled):not([aria-disabled='true']):not([data-press='none'])
+    ):active {
+    scale: var(--press-scale);
+  }
+
+  /*
+   * Focus ring floor. Zero specificity, so the many components that draw their
+   * own `focus-visible:outline-*` win — this only catches what would otherwise
+   * have nothing, which Design.md counts as a bug rather than a default.
+   */
+  :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+    outline: 2px solid var(--ring-focus);
+    outline-offset: 2px;
+  }
+
+  /*
+   * The preference is honoured system-wide. `animate-spin` is deliberately
+   * exempt: a frozen spinner reads as a hung request, and a rotating progress
+   * indicator is the one motion that carries information rather than polish.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    *:not([class*='animate-spin']),
+    *::before,
+    *::after {
+      animation-duration: 1ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 1ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  /*
+   * Motion helpers. Each is a behaviour, not a look — pair them with the
+   * component classes and utilities that carry the styling.
+   */
+
+  /*
+   * Press feedback for the controls the base rule leaves alone — an anchor is
+   * not always a control, so links that act like buttons (a nav tile, a card
+   * that opens a record) opt in here. `.press` is the button-sized dip;
+   * `.press-soft` is for wide surfaces — rows, cards, full-width nav items —
+   * where the full 3% reads as the layout jumping.
+   */
+  .press,
+  .press-soft {
+    transition: scale var(--motion-press) var(--ease-standard);
+  }
+  .press:active {
+    scale: var(--press-scale);
+  }
+  .press-soft:active {
+    scale: var(--press-scale-soft);
+  }
+
+  /*
+   * Card lift. Hover-capable pointers only — on touch the hover state sticks
+   * after the tap and leaves a card floating until something else is touched.
+   */
+  .hover-lift {
+    transition:
+      translate var(--motion-fast) var(--ease-standard),
+      box-shadow var(--motion-fast) var(--ease-standard);
+  }
+  @media (hover: hover) {
+    .hover-lift:hover {
+      translate: 0 -2px;
+      box-shadow: var(--shadow-md-elevation);
+    }
+  }
+  .hover-lift:active {
+    translate: 0 0;
+  }
+
+  /*
+   * Staggered entrance for a list or grid: children arrive 40ms apart, which
+   * reads as one movement rather than ten. Capped at eight — past that the tail
+   * is waiting on an animation instead of reading, so everything later arrives
+   * with the eighth.
+   */
+  .stagger-rise > * {
+    animation: var(--animate-rise);
+  }
+  .stagger-rise > *:nth-child(1) {
+    animation-delay: 0ms;
+  }
+  .stagger-rise > *:nth-child(2) {
+    animation-delay: 40ms;
+  }
+  .stagger-rise > *:nth-child(3) {
+    animation-delay: 80ms;
+  }
+  .stagger-rise > *:nth-child(4) {
+    animation-delay: 120ms;
+  }
+  .stagger-rise > *:nth-child(5) {
+    animation-delay: 160ms;
+  }
+  .stagger-rise > *:nth-child(6) {
+    animation-delay: 200ms;
+  }
+  .stagger-rise > *:nth-child(7) {
+    animation-delay: 240ms;
+  }
+  .stagger-rise > *:nth-child(n + 8) {
+    animation-delay: 280ms;
+  }
+
+  /*
+   * Underline that grows from the left on hover — marketing navigation and
+   * inline links. The pseudo-element means no layout shift and no border
+   * appearing on focus-visible, which already has the ring above.
+   */
+  .link-underline {
+    position: relative;
+  }
+  .link-underline::after {
+    content: '';
+    position: absolute;
+    inset-inline: 0;
+    bottom: -0.125rem;
+    height: 1.5px;
+    border-radius: var(--radius-pill);
+    background-color: currentColor;
+    scale: 0 1;
+    transform-origin: left center;
+    transition: scale var(--motion-fast) var(--ease-standard);
+  }
+  @media (hover: hover) {
+    .link-underline:hover::after {
+      scale: 1 1;
+    }
+  }
+  .link-underline:focus-visible::after {
+    scale: 1 1;
   }
 }

@@ -122,7 +122,7 @@ function Disclaimer() {
       government processing and are not guaranteed. See our{' '}
       <Link
         to="/legal/terms"
-        className="font-medium text-gray-400 underline underline-offset-2 transition-colors hover:text-white"
+        className="font-medium text-gray-400 underline underline-offset-2 transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
       >
         Terms of Service
       </Link>{' '}
@@ -166,7 +166,7 @@ function LinkColumn({
         <Link
           key={link.label}
           to={link.href}
-          className="text-[13px] font-normal text-gray-400 transition-colors hover:text-white lg:text-body"
+          className="text-[13px] font-normal text-gray-400 transition-colors hover:text-white lg:text-body focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
         >
           {link.label}
         </Link>
@@ -205,7 +205,7 @@ function Socials({ className }: { className?: string }) {
           key={label}
           href={href}
           aria-label={label}
-          className="flex size-8 items-center justify-center rounded-pill bg-gray-800 text-white transition-colors hover:bg-primary lg:size-9"
+          className="press flex size-8 items-center justify-center rounded-pill bg-gray-800 text-white transition-colors hover:bg-primary lg:size-9 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
         >
           <Icon className="size-[15px] lg:size-[17px]" />
         </a>
@@ -232,7 +232,7 @@ function BottomBar() {
           <Link
             key={link.label}
             to={link.href}
-            className="transition-colors hover:text-white"
+            className="transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
           >
             {link.label}
           </Link>

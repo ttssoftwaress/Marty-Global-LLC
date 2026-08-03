@@ -83,7 +83,7 @@ export function KpiCards({ metrics }: { metrics: DashboardMetric[] }) {
   if (metrics.length === 0) return null;
 
   return (
-    <div className="grid w-full grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4 lg:gap-6">
+    <div className="stagger-rise grid w-full grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4 lg:gap-6">
       {metrics.map((metric) => (
         <KpiCard key={metric.id} metric={metric} />
       ))}

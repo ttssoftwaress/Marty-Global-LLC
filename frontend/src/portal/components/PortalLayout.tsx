@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import { useCompactScale } from '@/hooks/useCompactScale';
 import { useUnreadCounts } from '@/hooks/useUnreadCounts';
@@ -53,6 +53,7 @@ export function PortalLayout({ user, onLogout, children }: PortalLayoutProps) {
   const [accountMenu, setAccountMenu] = useState<AccountMenuAnchor | null>(null);
 
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const panel = useNotificationPanel();
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllNotificationsRead();
@@ -105,7 +106,22 @@ export function PortalLayout({ user, onLogout, children }: PortalLayoutProps) {
           accountMenuOpen={accountMenu === 'topbar'}
         />
 
-        <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
+        {/*
+         * The workspace fades in when the customer arrives somewhere new. Keyed
+         * on the section rather than the whole path on purpose: a route-driven
+         * overlay (`/app/mailroom/:roomId/:itemId`) and a conversation switch
+         * (`/app/support/:id`) both leave the screen behind them mounted, and
+         * remounting there would reset an infinite list to its first page mid-
+         * read. Fade only — an entrance transform would leave a permanent
+         * `translate` on this element, which is a containing block for the
+         * `position: fixed` slide-overs the pages inside render.
+         */}
+        <main
+          key={pathname.split('/').slice(0, 3).join('/')}
+          className="min-h-0 flex-1 animate-fade-in overflow-y-auto motion-reduce:animate-none"
+        >
+          {children}
+        </main>
       </div>
 
       <NotificationsPanel

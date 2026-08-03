@@ -212,7 +212,7 @@ export function OrdersList({
                 <tr
                   key={order.id}
                   {...rowProps(order.id)}
-                  className={`h-16 cursor-pointer border-b border-gray-200 transition-colors last:border-b-0 hover:bg-gray-50 lg:h-table-row ${ROW_FOCUS_CLASS}`}
+                  className={`h-16 cursor-pointer border-b border-gray-200 transition-colors last:border-b-0 hover:bg-gray-50 active:bg-gray-100 lg:h-table-row ${ROW_FOCUS_CLASS}`}
                 >
                   <td className="min-w-0 px-4 lg:px-6">
                     <Link

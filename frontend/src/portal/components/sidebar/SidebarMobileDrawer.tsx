@@ -82,7 +82,7 @@ export function SidebarMobileDrawer({
   return (
     <div className="fixed inset-0 z-50 md:hidden">
       <div
-        className="absolute inset-0 bg-gray-900/50"
+        className="absolute inset-0 bg-gray-900/50 transition-opacity duration-300 starting:opacity-0 motion-reduce:transition-none"
         onClick={onClose}
         aria-hidden="true"
       />
@@ -93,7 +93,7 @@ export function SidebarMobileDrawer({
         aria-modal="true"
         aria-label="Portal navigation"
         tabIndex={-1}
-        className="absolute inset-y-0 left-0 flex w-[17.5rem] max-w-[85vw] flex-col justify-between overflow-y-auto bg-primary px-5 pb-8 pt-6 outline-none"
+        className="absolute inset-y-0 left-0 flex w-[17.5rem] max-w-[85vw] translate-x-0 flex-col justify-between overflow-y-auto bg-primary px-5 pb-8 pt-6 outline-none transition-transform duration-300 ease-out starting:-translate-x-full motion-reduce:transition-none"
       >
         <div className="flex w-full flex-col gap-7">
           <div className="flex w-full items-center justify-between">
@@ -115,7 +115,7 @@ export function SidebarMobileDrawer({
               type="button"
               onClick={onClose}
               aria-label="Close navigation"
-              className="flex size-[1.625rem] shrink-0 items-center justify-center rounded-pill bg-white/10 text-white transition-colors hover:bg-white/20"
+              className="flex size-[1.625rem] shrink-0 items-center justify-center rounded-pill bg-white/10 text-white transition-colors hover:bg-white/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
             >
               <X className="size-3.5" strokeWidth={1.75} aria-hidden="true" />
             </button>
@@ -136,8 +136,8 @@ export function SidebarMobileDrawer({
                       aria-current={active ? 'page' : undefined}
                       className={
                         active
-                          ? 'flex w-full items-center gap-3 rounded-input bg-white px-4 py-3 text-body font-semibold text-primary [&>svg]:text-accent'
-                          : 'flex w-full items-center gap-3 rounded-input px-4 py-3 text-body font-medium text-white/80 transition-colors hover:bg-white/10 hover:text-white'
+                          ? 'press-soft flex w-full items-center gap-3 rounded-input bg-white px-4 py-3 text-body font-semibold text-primary [&>svg]:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white'
+                          : 'press-soft flex w-full items-center gap-3 rounded-input px-4 py-3 text-body font-medium text-white/80 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white'
                       }
                     >
                       <Icon className="size-5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
@@ -169,8 +169,8 @@ export function SidebarMobileDrawer({
                       aria-current={active ? 'page' : undefined}
                       className={
                         active
-                          ? 'flex w-full items-center gap-3 rounded-input bg-white px-4 py-3 text-body font-semibold text-primary [&>svg]:text-accent'
-                          : 'flex w-full items-center gap-3 rounded-input px-4 py-3 text-body font-medium text-white/80 transition-colors hover:bg-white/10 hover:text-white'
+                          ? 'press-soft flex w-full items-center gap-3 rounded-input bg-white px-4 py-3 text-body font-semibold text-primary [&>svg]:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white'
+                          : 'press-soft flex w-full items-center gap-3 rounded-input px-4 py-3 text-body font-medium text-white/80 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white'
                       }
                     >
                       <Icon className="size-5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
@@ -195,7 +195,7 @@ export function SidebarMobileDrawer({
             <button
               type="button"
               onClick={onLogout}
-              className="flex items-center gap-2 text-body font-medium text-white/80 transition-colors hover:text-white"
+              className="flex items-center gap-2 text-body font-medium text-white/80 transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
             >
               <LogOut className="size-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
               <span className="whitespace-nowrap">Logout</span>
