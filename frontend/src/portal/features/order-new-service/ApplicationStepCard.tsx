@@ -2,6 +2,7 @@ import { ClipboardList } from 'lucide-react';
 
 import type { ServiceFieldAnswers } from '../../types/order-new-service';
 import type { ApplicationStep } from './applicationSteps';
+import { visibleOptions } from './applicationSteps';
 import { ApplicationField } from './ApplicationField';
 import { serviceIcon } from './serviceIcons';
 
@@ -31,6 +32,12 @@ type ApplicationStepCardProps = {
   filesByField: Record<string, File[]>;
   onFieldChange: (fieldName: string, value: string) => void;
   onFilesChange: (fieldName: string, files: File[]) => void;
+  /*
+   * Every question on the master form, by name — the labels a dependent dropdown
+   * needs to say which answer it is waiting on. A parent routinely sits on an
+   * earlier screen, so this card cannot look it up in its own fields.
+   */
+  labelsByField: Record<string, string>;
 };
 
 export function ApplicationStepCard({
@@ -39,6 +46,7 @@ export function ApplicationStepCard({
   filesByField,
   onFieldChange,
   onFilesChange,
+  labelsByField,
 }: ApplicationStepCardProps) {
   const onlyService = step.askedBy.length === 1 ? step.askedBy[0] : undefined;
   const Icon = onlyService ? serviceIcon(onlyService.iconKey) : ClipboardList;
@@ -98,6 +106,17 @@ export function ApplicationStepCard({
               askedBy={askedBy.map(
                 (service) => service.shortName ?? service.name,
               )}
+              {...(field.type === 'select'
+                ? {
+                    options: visibleOptions(field, answers),
+                    ...(field.dependsOn
+                      ? {
+                          parentLabel:
+                            labelsByField[field.dependsOn] ?? field.dependsOn,
+                        }
+                      : {}),
+                  }
+                : {})}
             />
           </div>
         ))}

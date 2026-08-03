@@ -48,6 +48,38 @@ export const selectOptionSchema = z.object({
 });
 
 /*
+ * A dropdown choice, plus the parent answers it belongs to.
+ *
+ * `when` is what makes a dependent dropdown possible: a choice carrying
+ * `when: ['us']` is offered only while the field's parent — the field named by
+ * `config.dependsOn` — is answered `us`. A choice with no `when` is offered
+ * under every parent value, which is how an "Other" escape hatch is written.
+ *
+ * The alternative would have been a nested option tree per parent value. This
+ * shape stays flat, so one dropdown is still one array however deep the chain
+ * runs, and a choice that belongs under two parents is one row rather than two.
+ */
+export const fieldOptionSchema = selectOptionSchema.extend({
+  when: z.array(z.string().trim().min(1).max(60)).min(1).max(200).optional(),
+});
+export type FieldOption = z.infer<typeof fieldOptionSchema>;
+
+/*
+ * How long a dependency chain may run — country → state → city → address is
+ * four, so five leaves room without letting a mis-authored registry produce a
+ * form no customer could finish. Every walk up a chain is bounded by it.
+ */
+export const MAX_FIELD_DEPENDENCY_DEPTH = 5;
+
+/*
+ * How many choices one dropdown may hold. Far above a plain select's needs
+ * because a dependent one carries every level's choices in a single array — a
+ * country list is ~200 rows on its own, and the states beneath it sit in the
+ * same field only when the admin authors them that way.
+ */
+export const MAX_FIELD_OPTIONS = 500;
+
+/*
  * Per-type extras, stored in `FieldDefinition.config`. Every key is optional so
  * one schema covers all four types; the service layer strips the ones that don't
  * apply to the field's own type, so a text field can never carry a stray
@@ -55,7 +87,13 @@ export const selectOptionSchema = z.object({
  */
 export const fieldConfigSchema = z.object({
   // select
-  options: z.array(selectOptionSchema).min(1).max(50).optional(),
+  options: z.array(fieldOptionSchema).min(1).max(MAX_FIELD_OPTIONS).optional(),
+  /*
+   * select — the key of the field this dropdown's choices are filtered by. The
+   * parent is always another registered `select`, so its answer is a known value
+   * an option's `when` can name. Absent on an independent dropdown.
+   */
+  dependsOn: fieldKeySchema.optional(),
   // textarea
   rows: z.number().int().min(2).max(12).optional(),
   // file
@@ -86,7 +124,14 @@ const serviceFieldSchema = z.discriminatedUnion('type', [
   resolvedFieldBase.extend({ type: z.literal('text') }),
   resolvedFieldBase.extend({
     type: z.literal('select'),
-    options: z.array(selectOptionSchema).min(1),
+    options: z.array(fieldOptionSchema).min(1),
+    /*
+     * Present on a dependent dropdown. Both frontends read it to filter the
+     * choices by the parent's current answer and to lock the control until the
+     * parent is answered; the backend re-derives the same set when validating,
+     * because a locked control is a courtesy and the filter is the rule.
+     */
+    dependsOn: z.string().optional(),
   }),
   resolvedFieldBase.extend({
     type: z.literal('textarea'),

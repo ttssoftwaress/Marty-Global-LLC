@@ -1,7 +1,12 @@
 import { useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp, GripVertical, Plus, Trash2 } from 'lucide-react';
 
-import { emptyStepDraft, fieldDraft, moveItem } from '../../../lib/catalog';
+import {
+  dependencyIssues,
+  emptyStepDraft,
+  moveItem,
+  pickedFieldChain,
+} from '../../../lib/catalog';
 import type {
   ServiceFieldDraft,
   ServiceFormErrors,
@@ -103,6 +108,17 @@ export function RequestFormStepsCard({
     [steps],
   );
 
+  /*
+   * Dependent dropdowns arranged wrongly. Judged over the whole service in step
+   * order, because that is the sequence the customer meets the screens in: a
+   * chain split across two steps is fine as long as the parent's step comes
+   * first, and the same chain reversed is not.
+   */
+  const issues = useMemo(
+    () => dependencyIssues(pickedKeys, registry),
+    [pickedKeys, registry],
+  );
+
   return (
     <DetailCard
       title="Request form & steps"
@@ -135,6 +151,7 @@ export function RequestFormStepsCard({
                 isRetryingRegistry={isRetryingRegistry}
                 onRetryRegistry={onRetryRegistry}
                 pickedKeys={pickedKeys}
+                dependencyIssues={issues}
                 collapsed={collapsed.has(step.key)}
                 onToggleCollapsed={() => toggleCollapsed(step.key)}
                 onChange={(patch) => updateStep(index, patch)}
@@ -163,6 +180,7 @@ function StepRow({
   isRetryingRegistry,
   onRetryRegistry,
   pickedKeys,
+  dependencyIssues: issues,
   collapsed,
   onToggleCollapsed,
   onChange,
@@ -180,6 +198,8 @@ function StepRow({
   isRetryingRegistry: boolean;
   onRetryRegistry?: () => void;
   pickedKeys: string[];
+  // Keyed by field key, service-wide — a parent may sit on another step.
+  dependencyIssues: Record<string, string>;
   collapsed: boolean;
   onToggleCollapsed: () => void;
   onChange: (patch: Partial<ServiceFormStepDraft>) => void;
@@ -315,6 +335,9 @@ function StepRow({
               index={fieldIndex}
               fieldCount={step.fields.length}
               error={errors[`steps.${index}.fields.${fieldIndex}.fieldKey`]}
+              {...(issues[field.fieldKey]
+                ? { dependencyIssue: issues[field.fieldKey] }
+                : {})}
               onChange={(patch) =>
                 setFields(
                   step.fields.map((item, i) =>
@@ -341,7 +364,13 @@ function StepRow({
             // another step would collide here.
             pickedKeys={pickedKeys}
             onPick={(definition) => {
-              setFields([...step.fields, fieldDraft(definition.key)]);
+              // Any parent the SERVICE doesn't ask yet comes along above it —
+              // `pickedKeys` is service-wide, so one already sitting on an
+              // earlier step is left where it is.
+              setFields([
+                ...step.fields,
+                ...pickedFieldChain(definition.key, registry, pickedKeys),
+              ]);
               setIsPickerOpen(false);
             }}
             onClose={() => setIsPickerOpen(false)}

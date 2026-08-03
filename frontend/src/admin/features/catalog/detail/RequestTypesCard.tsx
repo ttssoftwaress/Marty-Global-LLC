@@ -3,6 +3,7 @@ import { Loader2, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import { ApiError } from '@/services/api';
+import { pickedFieldChain } from '../../../lib/catalog';
 import { deriveKey } from '../../../lib/field-registry';
 import type { ServiceRequestTypeDraft } from '../../../types/delivery';
 import type { FieldDefinition } from '../../../types/fields';
@@ -212,7 +213,19 @@ function RequestTypeRow({
           isLoading={isRegistryLoading}
           pickedKeys={fields.map((ref) => ref.fieldKey)}
           onPick={(definition) => {
-            onChange({ fields: [...fields, { fieldKey: definition.key }] });
+            // A dependent dropdown brings its parents with it, above it: an
+            // intake form is one screen, so a parent it doesn't ask itself is a
+            // question the customer never gets to answer.
+            onChange({
+              fields: [
+                ...fields,
+                ...pickedFieldChain(
+                  definition.key,
+                  registry,
+                  fields.map((ref) => ref.fieldKey),
+                ).map((draft) => ({ fieldKey: draft.fieldKey })),
+              ],
+            });
             setPickerOpen(false);
           }}
           onClose={() => setPickerOpen(false)}

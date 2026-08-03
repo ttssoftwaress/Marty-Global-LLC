@@ -18,9 +18,12 @@ import { PrismaClient } from '@prisma/client';
  *
  *   Configuration — the service catalog, both field registries, and the
  *   locations and carriers behind `/admin/settings`. KEPT unless `--all` is
- *   passed. None of it is seeded any more, so it is the admin's own typed-in
- *   work: wiping it by default would destroy a list with nothing to restore it
- *   from, which is exactly the trap this script used to set.
+ *   passed, because by the time anyone runs this it is the admin's own edited
+ *   work: `db:seed` writes a starting catalog and location list, and everything
+ *   after that — a retired address, a reworded question, a new price point — was
+ *   typed into the admin and exists nowhere else. `--all` then `db:seed` is the
+ *   way back to the shipped catalog; the default keeps what the team built on
+ *   top of it. Carriers are still admin-only and have no seed to restore them.
  *
  * What survives regardless: the `user` row whose email matches ADMIN_EMAIL, and
  * the Better Auth `account` rows that hold its credential.
@@ -134,9 +137,10 @@ async function clearAll(keepEmail: string): Promise<void> {
 
   /*
    * The admin's own configuration: the catalog, both registries, and the
-   * locations and carriers behind `/admin/settings`. Kept unless `--all`,
-   * because nothing seeds it — clearing it deletes work that has to be retyped
-   * rather than re-run.
+   * locations and carriers behind `/admin/settings`. Kept unless `--all`:
+   * `db:seed` restores the shipped catalog and location list, but every edit
+   * made since — and every carrier, which has no seed at all — has to be
+   * retyped.
    */
   const configuration = [
     prisma.serviceRequestType.deleteMany(),

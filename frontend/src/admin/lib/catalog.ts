@@ -141,6 +141,80 @@ export function fieldDraft(fieldKey: string, required = false): ServiceFieldDraf
   return { key: nextDraftKey('field'), fieldKey, required };
 }
 
+/*
+ * A picked question plus any parent dropdowns the form doesn't ask yet, in
+ * chain order.
+ *
+ * A dependent dropdown offers nothing until its parent is answered, so picking
+ * "Address" on a form with no "State" adds a control the customer can never
+ * open — and the backend refuses to store it. Rather than let the admin discover
+ * that on save, the missing ancestors come along with it, above it, which is the
+ * only order they can be answered in.
+ *
+ * `asked` is every key the SERVICE already asks, not just this list's — the
+ * parent may already sit on an earlier step, and adding it twice would break the
+ * one-question-per-service rule.
+ */
+export function pickedFieldChain(
+  fieldKey: string,
+  registry: { key: string; config: { dependsOn?: string } }[],
+  asked: readonly string[],
+): ServiceFieldDraft[] {
+  const byKey = new Map(registry.map((definition) => [definition.key, definition]));
+  const present = new Set(asked);
+  const chain: string[] = [];
+
+  let cursor: string | undefined = fieldKey;
+  // Bounded by the registry size: a stored cycle would otherwise spin here, and
+  // the backend's depth cap is the real limit.
+  for (let depth = 0; cursor && depth <= registry.length; depth += 1) {
+    if (present.has(cursor)) break;
+    present.add(cursor);
+    chain.unshift(cursor);
+    cursor = byKey.get(cursor)?.config.dependsOn;
+  }
+
+  return chain.map((key) => fieldDraft(key));
+}
+
+/*
+ * Per-key messages for dependent dropdowns this form arranges wrongly — a chain
+ * whose parent is missing, or sits below the field that needs it.
+ *
+ * The backend refuses both on save (`assertDependenciesSatisfied`), and this is
+ * the same rule read out beside the row that breaks it. Reordering is a keyboard
+ * action here, so "move Country above State" has to be visible next to the
+ * arrows rather than arriving as an error at the bottom of a long form.
+ *
+ * `orderedKeys` is the form in reading order — for a stepped form, every step's
+ * fields flattened in step order, since that is the sequence the customer meets
+ * them in.
+ */
+export function dependencyIssues(
+  orderedKeys: readonly string[],
+  registry: { key: string; label: string; config: { dependsOn?: string } }[],
+): Record<string, string> {
+  const byKey = new Map(registry.map((definition) => [definition.key, definition]));
+  const asked = new Set(orderedKeys);
+  const issues: Record<string, string> = {};
+  const seen = new Set<string>();
+
+  for (const key of orderedKeys) {
+    const parentKey = byKey.get(key)?.config.dependsOn;
+
+    if (parentKey && !seen.has(parentKey)) {
+      const parentLabel = byKey.get(parentKey)?.label ?? parentKey;
+      issues[key] = asked.has(parentKey)
+        ? `Move ${parentLabel} above this — its answer decides what this offers.`
+        : `Add ${parentLabel} first — this offers nothing until it is answered.`;
+    }
+
+    seen.add(key);
+  }
+
+  return issues;
+}
+
 // Text areas that collect a list edit as one item per line.
 function splitLines(value: string) {
   return value

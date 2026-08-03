@@ -107,3 +107,57 @@ export type CarrierDraft = {
 };
 
 export type SettingsFormErrors = Partial<Record<'code' | 'label', string>>;
+
+/*
+ * --- Outbound email ------------------------------------------------------
+ *
+ * The switch that decides whether any email leaves the system, and the mirror of
+ * the automatic-verification switch on the Payments tab: both stand a background
+ * integration down without a redeploy.
+ *
+ * NOT the same thing as a customer's notification preferences (`/app/settings`,
+ * per account). This is the business saying the transport is stood down, and it
+ * outranks every preference — a customer opting in to email cannot make a
+ * provider that is refusing us accept the send.
+ */
+export type AdminNotificationSettings = {
+  email: {
+    enabled: boolean;
+    // Why it was switched off, for whoever finds the pause days later. Admin-only.
+    disabledReason: string | null;
+    // Whether SES credentials are present — a boolean, never the key. "No
+    // credentials" and "switched off" are both silence, and the panel says which.
+    transportConfigured: boolean;
+    // Our envelope sender, so the panel can name the identity the provider has
+    // to have verified.
+    fromAddress: string;
+    // The delivery ledger by outcome: what is waiting, what failed, and what the
+    // pause has withheld.
+    ledger: {
+      pending: number;
+      failed: number;
+      suppressed: number;
+    };
+  };
+  updatedAt: string;
+};
+
+/*
+ * What the write stood down, present only on the response to the write that did
+ * it. "Email is now off" and "email is now off and 47 messages nobody will
+ * receive were dropped" are different facts, and the second is the one an admin
+ * needs at the moment they cause it.
+ */
+export type NotificationSettingsChange = {
+  suppressed: number;
+  jobsDropped: number;
+};
+
+export type NotificationSettingsUpdateResult = AdminNotificationSettings & {
+  changed: NotificationSettingsChange | null;
+};
+
+export type NotificationSettingsUpdatePayload = {
+  emailEnabled?: boolean;
+  emailDisabledReason?: string;
+};

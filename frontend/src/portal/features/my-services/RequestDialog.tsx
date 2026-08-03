@@ -25,14 +25,75 @@ type RequestDialogProps = {
   onClose: () => void;
 };
 
+/*
+ * The choices a dropdown currently offers — the cascade rule, mirroring the
+ * backend's own `visibleOptions`.
+ *
+ * A dependent dropdown offers NOTHING until its parent is answered, then only
+ * the choices scoped to that answer plus any scoped to none. That is what keeps
+ * an address list from showing before a state is chosen, and from ever showing
+ * an address in a different one.
+ */
+function visibleOptions(
+  field: RequestFormField,
+  answers: Record<string, string>,
+) {
+  const options = field.options ?? [];
+  if (!field.dependsOn) return options;
+
+  const parentValue = (answers[field.dependsOn] ?? '').trim();
+  if (!parentValue) return [];
+
+  return options.filter(
+    (option) => !option.when || option.when.includes(parentValue),
+  );
+}
+
+// Every field downstream of one that just changed, so a parent's new answer
+// clears the answers given under its old one rather than submitting a
+// contradiction the customer can no longer see.
+function descendantFieldNames(
+  fields: RequestFormField[],
+  fieldName: string,
+): string[] {
+  const found = new Set<string>();
+  let frontier = new Set([fieldName]);
+
+  for (let depth = 0; frontier.size > 0 && depth <= fields.length; depth += 1) {
+    const next = new Set<string>();
+
+    for (const field of fields) {
+      if (
+        field.dependsOn &&
+        frontier.has(field.dependsOn) &&
+        !found.has(field.name) &&
+        field.name !== fieldName
+      ) {
+        found.add(field.name);
+        next.add(field.name);
+      }
+    }
+
+    frontier = next;
+  }
+
+  return [...found];
+}
+
 function FieldControl({
   field,
   value,
+  options,
+  parentLabel,
   onChange,
   invalid,
 }: {
   field: RequestFormField;
   value: string;
+  // A dependent dropdown's currently available choices, and the label of the
+  // question they depend on. Both come from the dialog, which holds the answers.
+  options: RequestFormField['options'];
+  parentLabel?: string;
   onChange: (value: string) => void;
   invalid: boolean;
 }) {
@@ -55,16 +116,26 @@ function FieldControl({
   }
 
   if (field.type === 'select') {
+    // Locked rather than empty: a dropdown that opens onto nothing reads as a
+    // broken form, so it says which answer it is waiting on (Design.md — a
+    // control disabled for a reason the user can fix states the reason).
+    const locked = Boolean(field.dependsOn) && (options ?? []).length === 0;
+
     return (
       <select
         id={field.name}
         value={value}
+        disabled={locked}
         onChange={(event) => onChange(event.target.value)}
         aria-invalid={invalid}
-        className={`${base} h-11`}
+        className={`${base} h-11 ${locked ? 'cursor-not-allowed bg-gray-50 text-gray-400' : ''}`}
       >
-        <option value="">Select an option</option>
-        {field.options?.map((option) => (
+        <option value="">
+          {locked
+            ? `Choose ${parentLabel ?? 'the question above'} first`
+            : 'Select an option'}
+        </option>
+        {options?.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
           </option>
@@ -197,8 +268,28 @@ export function RequestDialog({ resultId, requestType, onClose }: RequestDialogP
                   <FieldControl
                     field={field}
                     value={answers[field.name] ?? ''}
+                    options={visibleOptions(field, answers)}
+                    {...(field.dependsOn
+                      ? {
+                          parentLabel:
+                            requestType.fields.find(
+                              (candidate) => candidate.name === field.dependsOn,
+                            )?.label ?? field.dependsOn,
+                        }
+                      : {})}
                     onChange={(value) =>
-                      setAnswers((current) => ({ ...current, [field.name]: value }))
+                      setAnswers((current) => {
+                        const next = { ...current, [field.name]: value };
+                        // A new parent answer invalidates everything chosen
+                        // under the old one.
+                        for (const name of descendantFieldNames(
+                          requestType.fields,
+                          field.name,
+                        )) {
+                          delete next[name];
+                        }
+                        return next;
+                      })
                     }
                     invalid={invalid}
                   />

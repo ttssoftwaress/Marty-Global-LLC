@@ -6,7 +6,10 @@ import { cursorArgs, takePage } from '../../../lib/pagination.js';
 import { prisma } from '../../../lib/prisma.js';
 import { AuditAction, record } from '../../audit/audit.service.js';
 import { iso, money, type Money } from '../admin.views.js';
-import { assertFieldsExist } from '../fields/fields.service.js';
+import {
+  assertDependenciesSatisfied,
+  assertFieldsExist,
+} from '../fields/fields.service.js';
 import { assertResultFieldsExist } from '../result-fields/result-fields.service.js';
 import type {
   CreateServiceInput,
@@ -225,6 +228,24 @@ function referencedKeys(input: {
   ];
 }
 
+/*
+ * Both shapes a form can be stored in, each in the order a customer reads it.
+ *
+ * Checked as two sequences rather than one concatenation: the flat list and the
+ * steps are two views of the same questions (the steps card writes `detailFields`
+ * as the flattened union of its steps), so concatenating them would judge each
+ * question twice and see a parent "after" its child across the seam.
+ */
+function orderedFormSequences(input: {
+  detailFields?: readonly { fieldKey: string }[];
+  formSteps?: readonly { fields: readonly { fieldKey: string }[] }[];
+}): string[][] {
+  return [
+    input.detailFields?.map((ref) => ref.fieldKey) ?? [],
+    input.formSteps?.flatMap((step) => step.fields.map((ref) => ref.fieldKey)) ?? [],
+  ].filter((sequence) => sequence.length > 0);
+}
+
 function toDetail(service: ServiceWithDetail): CatalogServiceDetail {
   const footer = (service.footer ?? {}) as { label?: string; chips?: string[] };
   const steps = service.formSteps as CatalogServiceDetail['formSteps'] | null;
@@ -337,6 +358,11 @@ export async function createService(
   // reference a registered field or nothing at all.
   await assertFieldsExist(referencedKeys(input));
 
+  // And a dependent dropdown is only answerable if its parent is asked first.
+  for (const sequence of orderedFormSequences(input)) {
+    await assertDependenciesSatisfied(sequence);
+  }
+
   // A new service sorts after everything that exists, so the portal's card order
   // stays stable and the admin reorders deliberately rather than by accident.
   const last = await prisma.service.findFirst({
@@ -417,6 +443,10 @@ export async function updateService(
   ]);
 
   await assertFieldsExist(referencedKeys(input));
+
+  for (const sequence of orderedFormSequences(input)) {
+    await assertDependenciesSatisfied(sequence);
+  }
 
   // One transaction: a half-applied edit would leave the portal rendering a form
   // whose fields no longer match the tiers priced against them.
@@ -640,6 +670,12 @@ export async function updateRequestTypes(
   await assertFieldsExist(
     input.requestTypes.flatMap((type) => type.fields?.map((ref) => ref.fieldKey) ?? []),
   );
+
+  // Each intake form is its own sequence — a type asking "State" has to ask
+  // "Country" itself, since the customer only ever sees one type's fields.
+  for (const type of input.requestTypes) {
+    await assertDependenciesSatisfied(type.fields?.map((ref) => ref.fieldKey) ?? []);
+  }
 
   const { service, added, deactivated } = await prisma.$transaction(async (tx) => {
     const submittedKeys = new Set(input.requestTypes.map((type) => type.key));

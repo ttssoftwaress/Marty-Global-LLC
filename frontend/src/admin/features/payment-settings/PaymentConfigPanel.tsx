@@ -2,7 +2,14 @@ import { useEffect, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Info, ShieldAlert } from 'lucide-react';
 
 import { ApiError } from '@/services/api';
-import { Field, FormSection, TextArea, TextInput } from '../../components/FormControls';
+import {
+  Callout,
+  Field,
+  FormSection,
+  SwitchRow,
+  TextArea,
+  TextInput,
+} from '../../components/FormControls';
 import {
   paymentSettingsPayload,
   rateMinorToDecimal,
@@ -14,7 +21,6 @@ import type {
   PaymentSettings,
   PaymentSettingsErrors,
 } from '../../types/payment-settings';
-import { ToggleSwitch } from '../catalog/detail/ToggleSwitch';
 import { usePaymentSettings, useUpdatePaymentSettings } from './queries';
 
 /*
@@ -398,39 +404,6 @@ export function PaymentConfigPanel({ canWrite }: { canWrite: boolean }) {
   );
 }
 
-/*
- * A switch with the sentence that says what its two positions actually do. The
- * label alone is never enough here — "Accept USDT" off and "Verify
- * automatically" off are very different kinds of off.
- */
-function SwitchRow({
-  checked,
-  onChange,
-  disabled,
-  label,
-  on,
-  off,
-}: {
-  checked: boolean;
-  onChange: (next: boolean) => void;
-  disabled: boolean;
-  label: string;
-  on: string;
-  off: string;
-}) {
-  return (
-    <div className="flex items-center gap-3 text-body text-text">
-      <ToggleSwitch
-        checked={checked}
-        onChange={onChange}
-        label={label}
-        disabled={disabled}
-      />
-      <span>{checked ? on : off}</span>
-    </div>
-  );
-}
-
 function ReadOnlyRow({
   label,
   value,
@@ -451,27 +424,5 @@ function ReadOnlyRow({
         {value}
       </dd>
     </div>
-  );
-}
-
-function Callout({
-  tone,
-  icon: Icon,
-  children,
-}: {
-  tone: 'warning' | 'info';
-  icon: typeof Info;
-  children: React.ReactNode;
-}) {
-  const styles =
-    tone === 'warning'
-      ? 'border-[var(--color-status-review-text)]/25 bg-[var(--color-status-review-bg)] text-[var(--color-status-review-text)]'
-      : 'border-gray-200 bg-gray-50 text-text-secondary';
-
-  return (
-    <p className={`flex items-start gap-2 rounded-card border p-3.5 text-body leading-6 ${styles}`}>
-      <Icon className="mt-1 size-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
-      <span>{children}</span>
-    </p>
   );
 }

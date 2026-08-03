@@ -31,7 +31,9 @@ import { assertKeyForPurpose } from '../uploads/uploads.service.js';
 import {
   fieldsByKey,
   getActiveServicesByIds,
+  orderByDependency,
   serviceQuestions,
+  visibleOptions,
   type CatalogService,
 } from '../services/services.service.js';
 import type { ServiceField } from '../services/services.validation.js';
@@ -129,10 +131,19 @@ function makeReference(): string {
 }
 
 // --- Answer validation ---------------------------------------------------
-// Validate a customer's answers for one service against that service's own
-// field schema: every required field must be a non-empty string. Returns the
-// snapshot of known answers (unknown keys are dropped so a client can't stuff
-// arbitrary data into the order record).
+/*
+ * Validate a customer's answers for one service against that service's own field
+ * schema: every required field must be a non-empty string. Returns the snapshot
+ * of known answers (unknown keys are dropped so a client can't stuff arbitrary
+ * data into the order record).
+ *
+ * A dependent dropdown is validated against the choices its PARENT'S answer
+ * leaves available, not against its whole list — an address in Texas is not a
+ * valid answer on an application that named California, and the browser's
+ * filtered `<select>` is a convenience, never the boundary. That is why the
+ * questions are walked in dependency order: the parent's answer has to be
+ * accepted before the child's options can be derived from it.
+ */
 function resolveAnswers(
   service: CatalogService,
   raw: Record<string, string> | undefined,
@@ -143,7 +154,7 @@ function resolveAnswers(
   // Every question the service asks, stepped or flat — validating against the
   // flat list alone would skip a required question on a service whose form the
   // admin has split into steps.
-  for (const field of serviceQuestions(service)) {
+  for (const field of orderByDependency(serviceQuestions(service))) {
     const value = (provided[field.name] ?? '').trim();
 
     if (field.required && value.length === 0) {
@@ -153,13 +164,20 @@ function resolveAnswers(
       );
     }
 
-    // A select's value must be one of its options — a free-form value would be a
-    // tampered request, since the UI only offers the listed options.
+    // A select's value must be one of the options it currently offers — a
+    // free-form value would be a tampered request, since the UI only ever offers
+    // the listed ones, and for a dependent dropdown "currently" means "given the
+    // answer above it", which is empty until that answer exists.
     if (field.type === 'select' && value.length > 0) {
-      const allowed = field.options.some((option) => option.value === value);
+      const allowed = visibleOptions(field, answers).some(
+        (option) => option.value === value,
+      );
+
       if (!allowed) {
         throw AppError.validation(
-          `Invalid value for "${field.label}" on ${service.name}`,
+          field.dependsOn && !answers[field.dependsOn]
+            ? `"${field.label}" cannot be answered on ${service.name} until the question it depends on is`
+            : `Invalid value for "${field.label}" on ${service.name}`,
           { serviceId: service.id, field: field.name },
         );
       }

@@ -1,4 +1,7 @@
 import type { ReactNode } from 'react';
+import type { LucideIcon } from 'lucide-react';
+
+import { ToggleSwitch } from '../features/catalog/detail/ToggleSwitch';
 
 /*
  * The admin form's control primitives — one label/error wrapper plus the three
@@ -120,6 +123,77 @@ export function SelectInput({
     >
       {children}
     </select>
+  );
+}
+
+/*
+ * A switch with the sentence that says what its two positions actually do.
+ *
+ * The label alone is never enough on a settings screen: "Accept USDT" off and
+ * "Verify automatically" off are very different kinds of off, and so is "Send
+ * customer emails" off. Written for the payments panel and extracted here when
+ * the email-delivery panel needed the same row — the second copy is where a
+ * duplicated pattern inside one area gets extracted (Design.md).
+ *
+ * It reaches into `features/catalog` for the switch itself, which every other
+ * admin feature already does: `ToggleSwitch` is the admin area's one switch, and
+ * moving it is a bigger change than this row is worth.
+ */
+export function SwitchRow({
+  checked,
+  onChange,
+  disabled,
+  label,
+  on,
+  off,
+}: {
+  checked: boolean;
+  onChange: (next: boolean) => void;
+  disabled: boolean;
+  label: string;
+  on: string;
+  off: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 text-body text-text">
+      <ToggleSwitch
+        checked={checked}
+        onChange={onChange}
+        label={label}
+        disabled={disabled}
+      />
+      <span>{checked ? on : off}</span>
+    </div>
+  );
+}
+
+/*
+ * The consequence of a setting, said next to it. `warning` is for a state that
+ * is costing something right now (a method switched on with nowhere to send to,
+ * a background job standing idle); `info` for a rule of the system the admin
+ * cannot change from here.
+ */
+export function Callout({
+  tone,
+  icon: Icon,
+  children,
+}: {
+  tone: 'warning' | 'info';
+  icon: LucideIcon;
+  children: ReactNode;
+}) {
+  const styles =
+    tone === 'warning'
+      ? 'border-[var(--color-status-review-text)]/25 bg-[var(--color-status-review-bg)] text-[var(--color-status-review-text)]'
+      : 'border-gray-200 bg-gray-50 text-text-secondary';
+
+  return (
+    <p
+      className={`flex items-start gap-2 rounded-card border p-3.5 text-body leading-6 ${styles}`}
+    >
+      <Icon className="mt-1 size-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+      <span>{children}</span>
+    </p>
   );
 }
 

@@ -7,6 +7,8 @@ import {
   fieldRefsSchema,
   formStepRefsSchema,
   serviceFooterSchema,
+  MAX_FIELD_DEPENDENCY_DEPTH,
+  type FieldOption,
   type FieldRef,
   type ServiceField,
   type ServiceFormStep,
@@ -74,7 +76,14 @@ function resolveField(
         );
         return null;
       }
-      return { ...base, type: 'select', options: config.options };
+      return {
+        ...base,
+        type: 'select',
+        options: config.options,
+        // Present only on a dependent dropdown; the registry guarantees the key
+        // names another registered select.
+        ...(config.dependsOn ? { dependsOn: config.dependsOn } : {}),
+      };
     }
     case 'textarea':
       return {
@@ -127,6 +136,123 @@ function resolveRefs(
   }
 
   return fields;
+}
+
+/*
+ * The parent, if this field is a dependent dropdown.
+ *
+ * One reader rather than the `type === 'select' && field.dependsOn` test spelled
+ * out at each site — the union means a `text` field has no `dependsOn` property
+ * at all, so every call site would otherwise repeat the narrowing.
+ */
+export function parentFieldKey(field: ServiceField): string | undefined {
+  return field.type === 'select' ? field.dependsOn : undefined;
+}
+
+/*
+ * The keys of every dependent dropdown on a form whose parent the form doesn't
+ * ask, including the ones orphaned by that removal further down the chain.
+ *
+ * A dependent dropdown offers nothing until its parent is answered, so a form
+ * carrying the child without the parent renders a control the customer can never
+ * open — the same unanswerable question as a select with no choices. The
+ * catalog's write path refuses to store such a form; a form that reaches here
+ * with one lost its parent afterwards, in the registry or in a later edit.
+ *
+ * Computed across the WHOLE service, not per step: a chain is routinely split
+ * across screens (country on the first, state on the second), and judging a step
+ * on its own would break exactly the arrangement the feature is for.
+ */
+export function orphanedDependents(fields: ServiceField[]): Set<string> {
+  const orphaned = new Set<string>();
+
+  // Iterated to a fixed point — dropping a parent orphans its own children, and
+  // a chain runs several levels deep.
+  for (;;) {
+    const present = new Set(
+      fields
+        .filter((field) => !orphaned.has(field.name))
+        .map((field) => field.name),
+    );
+
+    const found = fields.filter((field) => {
+      if (orphaned.has(field.name)) return false;
+      const parent = parentFieldKey(field);
+      return parent !== undefined && !present.has(parent);
+    });
+
+    if (found.length === 0) return orphaned;
+
+    for (const field of found) {
+      logger.warn(
+        { fieldKey: field.name, dependsOn: parentFieldKey(field) },
+        'Dependent field has no parent on this form — omitted',
+      );
+      orphaned.add(field.name);
+    }
+  }
+}
+
+/*
+ * The choices a dependent dropdown offers for a given set of answers.
+ *
+ * The one definition of the cascade rule, shared by every layer that needs it:
+ * with the parent unanswered a dependent dropdown offers NOTHING (which is what
+ * keeps a state list from showing before a country is picked), and once answered
+ * it offers the choices scoped to that answer plus any choice scoped to none.
+ *
+ * An independent dropdown returns its full list, so callers never branch.
+ */
+export function visibleOptions(
+  field: Extract<ServiceField, { type: 'select' }>,
+  answers: Record<string, string>,
+): FieldOption[] {
+  if (!field.dependsOn) return field.options;
+
+  const parentValue = (answers[field.dependsOn] ?? '').trim();
+  if (!parentValue) return [];
+
+  return field.options.filter(
+    (option) => !option.when || option.when.includes(parentValue),
+  );
+}
+
+/*
+ * A form's questions with every parent ahead of its children.
+ *
+ * Answer validation has to read a parent's validated answer before it can decide
+ * which choices its child may take, and the order a form was authored in is only
+ * guaranteed within one list — a service's flat list and its steps are unioned,
+ * and a merged master form interleaves several services. Sorting here means the
+ * validator never depends on how the admin happened to arrange the screens.
+ *
+ * Stable: a field with no parent, or one whose parent isn't on this form, keeps
+ * its original position relative to its siblings.
+ */
+export function orderByDependency(fields: ServiceField[]): ServiceField[] {
+  const byName = new Map(fields.map((field) => [field.name, field]));
+  const ordered: ServiceField[] = [];
+  const placed = new Set<string>();
+
+  const place = (field: ServiceField, depth: number) => {
+    if (placed.has(field.name)) return;
+
+    // The registry rejects cycles and over-deep chains on write; the guard is
+    // here so a row that predates that check cannot spin this loop.
+    if (depth <= MAX_FIELD_DEPENDENCY_DEPTH) {
+      const parentKey = parentFieldKey(field);
+      const parent = parentKey ? byName.get(parentKey) : undefined;
+      if (parent) place(parent, depth + 1);
+    }
+
+    if (placed.has(field.name)) return;
+    placed.add(field.name);
+    ordered.push(field);
+  };
+
+  for (const field of fields) place(field, 0);
+
+  return ordered;
 }
 
 // Every field key a set of service rows references, so the registry can be
@@ -186,14 +312,32 @@ function toCatalogService(
     );
   }
 
-  const formSteps: ServiceFormStep[] = (steps.success ? steps.data : []).map(
-    (step) => ({
-      key: step.key,
-      title: step.title,
-      ...(step.description ? { description: step.description } : {}),
-      fields: resolveRefs(step.fields, registry),
-    }),
-  );
+  const resolvedSteps = (steps.success ? steps.data : []).map((step) => ({
+    key: step.key,
+    title: step.title,
+    ...(step.description ? { description: step.description } : {}),
+    fields: resolveRefs(step.fields, registry),
+  }));
+
+  const detailFields = resolveRefs(flat.success ? flat.data : [], registry);
+
+  // Judged across the flat list and every step together, so a chain the admin
+  // split over two screens survives and only a genuinely parentless dropdown
+  // goes.
+  const orphaned = orphanedDependents([
+    ...resolvedSteps.flatMap((step) => step.fields),
+    ...detailFields,
+  ]);
+
+  const keep = (fields: ServiceField[]) =>
+    orphaned.size === 0
+      ? fields
+      : fields.filter((field) => !orphaned.has(field.name));
+
+  const formSteps: ServiceFormStep[] = resolvedSteps.map((step) => ({
+    ...step,
+    fields: keep(step.fields),
+  }));
 
   return {
     id: service.id,
@@ -203,7 +347,7 @@ function toCatalogService(
     description: service.description,
     features: service.features,
     footer: footer.success ? footer.data : { label: '' },
-    detailFields: resolveRefs(flat.success ? flat.data : [], registry),
+    detailFields: keep(detailFields),
     ...(formSteps.length > 0 ? { formSteps } : {}),
   };
 }

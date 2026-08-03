@@ -425,6 +425,17 @@ const CATALOG: Record<string, Entry> = {
     severity: 'normal',
   },
   /*
+   * `alert`, like the payment switches and unlike the reference-data rows around
+   * it: while this is off nobody is told anything by email — no quote, no filing
+   * update, no password reset — and that is a fact a reviewer needs surfaced
+   * rather than buried.
+   */
+  [AuditAction.NOTIFICATION_SETTINGS_UPDATED]: {
+    label: 'Outbound email switched on or off',
+    category: 'settings',
+    severity: 'alert',
+  },
+  /*
    * Payment configuration — where money is sent, and what it converts at.
    *
    * `alert` on all of it, which is a deliberate step up from the location and

@@ -16,7 +16,10 @@
 // actual icon so an unknown/new key still renders a sensible default.
 export type ServiceIconKey =
   | 'company-formation'
+  | 'registered-agent'
   | 'virtual-mail-room'
+  | 'remote-desktop'
+  | 'website'
   | 'bank-account'
   | 'e-commerce'
   | 'default';
@@ -92,14 +95,34 @@ export type ServiceTextField = ServiceFieldBase & {
   type: 'text';
 };
 
+/*
+ * A dropdown choice, plus the parent answers it belongs to.
+ *
+ * `when` is what makes a dropdown conditional: a choice carrying `when: ['us']`
+ * is offered only while the field's parent — the field named by `dependsOn` — is
+ * answered `us`. A choice with no `when` is offered under every parent answer.
+ */
 export type ServiceSelectOption = {
   value: string;
   label: string;
+  when?: string[];
 };
 
 export type ServiceSelectField = ServiceFieldBase & {
   type: 'select';
   options: ServiceSelectOption[];
+  /*
+   * The field whose answer filters these choices — "country" on a State
+   * dropdown, "state" on the addresses beneath it. Chains to any depth, since
+   * each level names only the one above it.
+   *
+   * Absent on an ordinary dropdown. When present the control offers NOTHING
+   * until the parent is answered, which is what stops a state list appearing
+   * before a country is chosen and an address from another state appearing at
+   * all. The backend re-derives the same set when validating — the filtered
+   * control is a courtesy, never the rule (AGENTS.md: guards are server-side).
+   */
+  dependsOn?: string;
 };
 
 export type ServiceTextareaField = ServiceFieldBase & {

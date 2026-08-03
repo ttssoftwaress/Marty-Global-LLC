@@ -8,20 +8,35 @@ vi.mock('../../config/ses.js', () => ({ sendEmail }));
 vi.mock('../../jobs/queues.js', () => ({ enqueueEmail }));
 
 const { prisma } = await import('../../lib/prisma.js');
+const { NOTIFICATION_SETTINGS_ID } = await import(
+  './notification-settings.service.js'
+);
 const { deliverEmail, markFailed, queueEmail } = await import(
   './notifications.service.js'
 );
 
 const recipient = 'notifications-test@example.com';
 
+// The outbound switch is one shared row, so every test puts it back — a suite
+// that left email off would silently turn every later assertion into a no-op.
+async function setEmailDelivery(enabled: boolean) {
+  await prisma.notificationSettings.upsert({
+    where: { id: NOTIFICATION_SETTINGS_ID },
+    create: { id: NOTIFICATION_SETTINGS_ID, emailEnabled: enabled },
+    update: { emailEnabled: enabled },
+  });
+}
+
 beforeEach(async () => {
   sendEmail.mockClear();
   sendEmail.mockResolvedValue('ses-message-id');
   enqueueEmail.mockClear();
+  await setEmailDelivery(true);
   await prisma.notification.deleteMany({ where: { recipient } });
 });
 
 afterAll(async () => {
+  await setEmailDelivery(true);
   await prisma.notification.deleteMany({ where: { recipient } });
   await prisma.$disconnect();
 });
@@ -101,6 +116,52 @@ describe('notifications service', () => {
     });
     expect(stored.status).toBe(NotificationStatus.FAILED);
     expect(stored.lastError).toBe('SES throttled');
+  });
+
+  /*
+   * The outbound switch. Both halves are covered because the failure it exists
+   * to stop happens in two places: a new email queued while sending is off, and
+   * a job that was already queued when someone switched it off.
+   */
+  it('records the row but queues nothing when outbound email is switched off', async () => {
+    await setEmailDelivery(false);
+
+    const notification = await queueEmail(input());
+
+    // The ledger still says what was owed — only the send is withheld.
+    expect(notification.status).toBe(NotificationStatus.SUPPRESSED);
+    expect(notification.body).toContain('Filing confirmed');
+    expect(enqueueEmail).not.toHaveBeenCalled();
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('declines to send a job that was queued before email was switched off', async () => {
+    const notification = await queueEmail(input());
+    expect(enqueueEmail).toHaveBeenCalledTimes(1);
+
+    await setEmailDelivery(false);
+
+    // Returns rather than throws: a thrown error would burn five retries and
+    // then count as a failed background job, which is the alert the switch is
+    // meant to silence.
+    const result = await deliverEmail(notification.id);
+
+    expect(result).toEqual({ delivered: false, reason: 'suppressed' });
+    expect(sendEmail).not.toHaveBeenCalled();
+
+    const stored = await prisma.notification.findUniqueOrThrow({
+      where: { id: notification.id },
+    });
+    expect(stored.status).toBe(NotificationStatus.SUPPRESSED);
+    // Never claimed, so the attempt counter stays where it was.
+    expect(stored.attempts).toBe(0);
+
+    // Switching it back on does not resend the backlog on its own, but the row
+    // still carries everything a deliberate re-raise needs.
+    await setEmailDelivery(true);
+    await expect(deliverEmail(notification.id)).resolves.toMatchObject({
+      delivered: true,
+    });
   });
 
   it('drops a job whose notification row is gone', async () => {

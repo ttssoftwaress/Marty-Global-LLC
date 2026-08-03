@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { deriveKey } from '../../lib/field-registry';
 import {
@@ -16,6 +16,7 @@ import type {
 import { FIELD_TYPE_OPTIONS, FILE_ACCEPT_OPTIONS } from '../../types/fields';
 import { FormDialog } from '../../components/FormDialog';
 import { Field, SelectInput, TextArea, TextInput } from '../../components/FormControls';
+import { useFieldPicker } from './queries';
 
 /*
  * Register a field, or edit a registered one.
@@ -24,7 +25,7 @@ import { Field, SelectInput, TextArea, TextInput } from '../../components/FormCo
  * label, control type, and per-type settings are typed. Everywhere else (the
  * service form builder) only PICKS from what was registered here.
  *
- * Two rules the form enforces visibly rather than by failing on save:
+ * Three rules the form enforces visibly rather than by failing on save:
  *
  *   - The key is derived from the label while the field is new, and shown
  *     read-only once it exists. Answers are stored under it, so renaming one
@@ -33,6 +34,14 @@ import { Field, SelectInput, TextArea, TextInput } from '../../components/FormCo
  *     given so far was given against the old control, so switching it would
  *     retroactively invalidate answers that were correct when given. The select
  *     is disabled and says why.
+ *   - A dropdown other dropdowns depend on cannot stop being a dropdown. Its
+ *     children read its answer to decide what to offer, so the type select is
+ *     locked and names them.
+ *
+ * The dependency controls are the third of those made authorable: pick a parent
+ * dropdown, then group the choices under the parent answers they belong to. The
+ * parent's own values are printed beside the box, because the admin is writing
+ * `[us]` headers against a vocabulary they'd otherwise have to go and look up.
  */
 
 type FieldFormDialogProps = {
@@ -63,7 +72,52 @@ export function FieldFormDialog({
   const [keyTouched, setKeyTouched] = useState(false);
 
   const isEdit = field !== null;
-  const isLocked = isEdit && field.usageCount > 0;
+  const hasDependents = isEdit && field.dependentKeys.length > 0;
+  const isLocked = isEdit && (field.usageCount > 0 || hasDependents);
+
+  /*
+   * The live registry, for the parent picker. The same query the service form
+   * builder's picker uses, so opening this dialog after building a form costs
+   * nothing.
+   */
+  const registry = useFieldPicker();
+
+  /*
+   * Which dropdowns this field may depend on.
+   *
+   * Itself is out, and so is anything already downstream of it — depending on
+   * your own child is a cycle, and the field would offer nothing forever. The
+   * backend refuses both; filtering here means the option is never on screen to
+   * be chosen in the first place.
+   */
+  const parentOptions = useMemo(() => {
+    const all = registry.data ?? [];
+    const selects = all.filter((candidate) => candidate.type === 'select');
+    if (!field) return selects;
+
+    const byKey = new Map(all.map((candidate) => [candidate.key, candidate]));
+
+    const isDownstream = (candidate: string): boolean => {
+      let cursor: string | undefined = candidate;
+      // Bounded by the registry size — a stored cycle would otherwise spin here.
+      for (let depth = 0; cursor && depth <= all.length; depth += 1) {
+        if (cursor === field.key) return true;
+        cursor = byKey.get(cursor)?.config.dependsOn;
+      }
+      return false;
+    };
+
+    return selects.filter((candidate) => !isDownstream(candidate.key));
+  }, [registry.data, field]);
+
+  // The parent's own choices, printed as the vocabulary a `[header]` line names.
+  const parentValues = useMemo(() => {
+    if (!draft.dependsOn) return [];
+    const parent = (registry.data ?? []).find(
+      (candidate) => candidate.key === draft.dependsOn,
+    );
+    return parent?.config.options ?? [];
+  }, [registry.data, draft.dependsOn]);
 
   // Reseed whenever the dialog opens on a different field.
   useEffect(() => {
@@ -184,18 +238,24 @@ export function FieldFormDialog({
             label="Answer type"
             htmlFor="field-type"
             hint={
-              isLocked
-                ? `Used by ${field.usageCount} service${field.usageCount === 1 ? '' : 's'}, so the type is locked.`
-                : undefined
+              !isLocked
+                ? undefined
+                : hasDependents
+                  ? `${field.dependentKeys.length} field${field.dependentKeys.length === 1 ? '' : 's'} filter their choices by this answer, so the type is locked.`
+                  : `Used by ${field.usageCount} service${field.usageCount === 1 ? '' : 's'}, so the type is locked.`
             }
           >
             <SelectInput
               id="field-type"
               value={draft.type}
               disabled={isLocked}
-              onChange={(event) =>
-                patch({ type: event.target.value as FieldDraft['type'] })
-              }
+              onChange={(event) => {
+                const type = event.target.value as FieldDraft['type'];
+                // Only a dropdown can depend on another field, so leaving the
+                // type drops the parent rather than carrying a setting the new
+                // control has no use for.
+                patch({ type, ...(type === 'select' ? {} : { dependsOn: '' }) });
+              }}
             >
               {FIELD_TYPE_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -251,22 +311,92 @@ export function FieldFormDialog({
         </div>
 
         {draft.type === 'select' && (
-          <Field
-            label="Choices"
-            htmlFor="field-options"
-            error={errors.options}
-            hint="One per line. Use value|Label to set a stored value."
-            required
-          >
-            <TextArea
-              id="field-options"
-              value={draft.options}
-              onChange={(event) => patch({ options: event.target.value })}
-              rows={5}
-              placeholder={'Delaware\nWyoming\nnew-mexico|New Mexico'}
+          <div className="flex flex-col gap-4 rounded-card border border-gray-200 bg-gray-50 p-3 md:p-4">
+            <Field
+              label="Filter choices by"
+              htmlFor="field-depends-on"
+              error={errors.dependsOn}
+              hint={
+                draft.dependsOn
+                  ? 'This dropdown stays locked until that question is answered, then offers only the choices grouped under the answer.'
+                  : 'Optional. Pick a dropdown to make this one depend on it — a State that only lists the states of the chosen Country.'
+              }
+            >
+              <SelectInput
+                id="field-depends-on"
+                value={draft.dependsOn}
+                disabled={registry.isLoading}
+                onChange={(event) => patch({ dependsOn: event.target.value })}
+                error={errors.dependsOn}
+              >
+                <option value="">Nothing — offer every choice</option>
+                {parentOptions.map((option) => (
+                  <option key={option.id} value={option.key}>
+                    {option.label}
+                  </option>
+                ))}
+              </SelectInput>
+            </Field>
+
+            <Field
+              label="Choices"
+              htmlFor="field-options"
               error={errors.options}
-            />
-          </Field>
+              hint={
+                draft.dependsOn
+                  ? 'One per line, under a [parent answer] header. Choices above the first header show for every answer.'
+                  : 'One per line. Use value|Label to set a stored value.'
+              }
+              required
+            >
+              <TextArea
+                id="field-options"
+                value={draft.options}
+                onChange={(event) => patch({ options: event.target.value })}
+                rows={draft.dependsOn ? 8 : 5}
+                placeholder={
+                  draft.dependsOn
+                    ? '[us]\ntx|Texas\nca|California\n\n[gb]\neng|England'
+                    : 'Delaware\nWyoming\nnew-mexico|New Mexico'
+                }
+                error={errors.options}
+              />
+            </Field>
+
+            {/* The parent's vocabulary. Without it the admin is typing header
+                values from memory, and a typo produces a group that matches no
+                answer — which reads on the customer's side as a dropdown that
+                simply never fills in. */}
+            {draft.dependsOn ? (
+              parentValues.length > 0 ? (
+                <div className="flex flex-col gap-2">
+                  <span className="text-caption font-medium uppercase tracking-[0.4px] text-gray-500">
+                    Header values available
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {parentValues.map((option) => (
+                      <span
+                        key={option.value}
+                        className="inline-flex items-center gap-1.5 rounded-pill bg-white px-2.5 py-1 text-caption text-gray-700 ring-1 ring-gray-200"
+                      >
+                        <code className="text-gray-900">[{option.value}]</code>
+                        {option.label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : registry.isLoading ? (
+                <p className="text-caption text-gray-500">
+                  Loading the parent&rsquo;s choices…
+                </p>
+              ) : (
+                <p className="text-caption text-gray-500">
+                  That field has no choices yet, so there is nothing to group
+                  under.
+                </p>
+              )
+            ) : null}
+          </div>
         )}
 
         {draft.type === 'file' && (

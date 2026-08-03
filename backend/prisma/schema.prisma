@@ -233,6 +233,22 @@ enum NotificationStatus {
   PENDING
   SENT
   FAILED
+
+  /*
+   * Never sent, and never attempted — outbound email was switched off in admin
+   * settings when this row was owed (`NotificationSettings.emailEnabled`).
+   *
+   * Distinct from FAILED, which is a delivery that was tried and did not work.
+   * Conflating the two would make a deliberate pause read as an incident in
+   * every queue and dashboard that counts failures, which is exactly the noise
+   * the switch exists to stop.
+   *
+   * Terminal: switching email back on does not resend the backlog. A pause of
+   * any length would otherwise end in a burst of stale mail — order updates a
+   * customer has long since seen in the app — and the row keeps the content, so
+   * anything genuinely owed can be re-raised deliberately.
+   */
+  SUPPRESSED
 }
 
 model Notification {
@@ -259,6 +275,49 @@ model Notification {
   @@index([status, createdAt])
   @@index([userId])
   @@map("notification")
+}
+
+/*
+ * The outbound-delivery switch, admin-owned and edited at `/admin/settings`.
+ *
+ * The operational counterpart to `NotificationPreference` below: that row is one
+ * customer saying what they want to hear about, this one is the business saying
+ * whether anything goes out at all.
+ *
+ * It exists for the same reason `PaymentSettings.usdtAutoVerifyEnabled` does —
+ * the parts of this system that talk to a provider are the parts most likely to
+ * need stopping in a hurry, and without a switch the only way to stop them is a
+ * redeploy. Concretely: a sending domain still in the SES sandbox rejects every
+ * address it has not verified, so each send fails five attempts and lands in the
+ * failed queue, and a monitor counting failed jobs flips on work nobody can fix
+ * until AWS grants production access.
+ *
+ * Off, `queueEmail` still renders and stores the row — the ledger stays complete
+ * — and marks it SUPPRESSED instead of enqueueing a job. Nothing calls SES.
+ *
+ * One row by construction: the id defaults to 'singleton' and the service upserts
+ * it. A settings table with a row count is a settings table someone eventually
+ * writes twice.
+ */
+model NotificationSettings {
+  id String @id @default("singleton")
+
+  /*
+   * Whether any email leaves the system. On by default — a fresh install that
+   * silently swallowed its own verification mail would be far harder to diagnose
+   * than one whose sends fail loudly.
+   */
+  emailEnabled Boolean @default(true)
+
+  // Why it was switched off, for whoever finds the pause days later ("SES
+  // production access pending"). Shown only in the admin panel; never rendered
+  // to a customer and never a secret.
+  emailDisabledReason String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@map("notification_settings")
 }
 
 // --- Notification preferences --------------------------------------------

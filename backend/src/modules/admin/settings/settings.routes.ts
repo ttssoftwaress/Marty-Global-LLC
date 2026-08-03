@@ -77,4 +77,26 @@ router.delete(
   controller.deleteCarrier,
 );
 
+/*
+ * --- Outbound email ------------------------------------------------------
+ *
+ * The switch that stops every email leaving the system, and the mirror of the
+ * automatic-verification switch on the payments screen. Admin-only to write for
+ * the same reason as everything else here, and more so: turning it off means
+ * customers stop hearing about their filings, which is an account-level decision
+ * rather than a curation one.
+ *
+ * Under `settings` rather than its own area — it is a single operational switch
+ * on the same screen, not a section — and, unlike the customer notification
+ * preferences at `/v1/notifications/preferences`, it is not anybody's choice
+ * about what they receive.
+ */
+router.get('/notifications', apiRateLimit, controller.readNotificationSettings);
+router.patch(
+  '/notifications',
+  requireAdmin,
+  sensitiveRateLimit,
+  controller.updateNotificationSettings,
+);
+
 export const adminSettingsRouter = router;

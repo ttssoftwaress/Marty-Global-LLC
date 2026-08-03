@@ -23,7 +23,10 @@ export type ListServicesQuery = z.infer<typeof listServicesQuerySchema>;
 
 const iconKey = z.enum([
   'company-formation',
+  'registered-agent',
   'virtual-mail-room',
+  'remote-desktop',
+  'website',
   'bank-account',
   'e-commerce',
   'default',

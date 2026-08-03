@@ -12,6 +12,7 @@ import { enqueueEmail } from '../../jobs/queues.js';
 import { AppError } from '../../lib/app-error.js';
 import { logger } from '../../lib/logger.js';
 import { prisma } from '../../lib/prisma.js';
+import { isEmailDeliveryEnabled } from './notification-settings.service.js';
 import type {
   ListFeedQuery,
   NotificationFilter,
@@ -22,6 +23,14 @@ import { GenericEmail } from './templates/generic-email.js';
 // All outbound email flows through here: render → persist → enqueue. Nothing
 // sends inline in a request handler (AGENTS.md "Security & PII"), and the
 // Notification row is the delivery ledger the processor claims against.
+
+/*
+ * What a suppressed row records. Written to `lastError` because that is the
+ * column the admin screens already print when they explain why a notification
+ * did not arrive — and "why" here is an operator decision, not a provider error.
+ */
+const SUPPRESSED_REASON =
+  'Outbound email is switched off in admin settings — nothing was sent.';
 
 export async function queueEmail(input: SendEmailInput) {
   const element = GenericEmail({
@@ -34,6 +43,13 @@ export async function queueEmail(input: SendEmailInput) {
   const html = await render(element);
   const text = toPlainText(html);
 
+  /*
+   * The row is written whether or not sending is on, and that is the point: the
+   * ledger records what was owed, so a pause is auditable rather than invisible.
+   * Only the job is skipped.
+   */
+  const enabled = await isEmailDeliveryEnabled();
+
   const notification = await prisma.notification.create({
     data: {
       channel: NotificationChannel.EMAIL,
@@ -43,8 +59,29 @@ export async function queueEmail(input: SendEmailInput) {
       body: html,
       bodyText: text,
       userId: input.userId,
+      ...(enabled
+        ? {}
+        : {
+            status: NotificationStatus.SUPPRESSED,
+            lastError: SUPPRESSED_REASON,
+          }),
     },
   });
+
+  /*
+   * Switched off, nothing is enqueued. Queueing a job that would immediately
+   * decline to send is the failure mode this switch exists to remove — every one
+   * of them burns its retries against a transport we already know is refusing us
+   * and then sits in the failed queue looking like an incident.
+   */
+  if (!enabled) {
+    logger.info(
+      { notificationId: notification.id, template: input.template },
+      'Email suppressed — outbound email is switched off',
+    );
+
+    return notification;
+  }
 
   await enqueueEmail({ notificationId: notification.id });
 
@@ -82,6 +119,36 @@ export async function deliverEmail(notificationId: string) {
 
   if (notification.status === NotificationStatus.SENT) {
     return { delivered: false, reason: 'already-sent' as const };
+  }
+
+  /*
+   * The switch, re-read here and not only at enqueue time.
+   *
+   * Two cases reach this line with sending off: a job that was already in the
+   * queue when someone flipped it, and a delayed retry of one that failed before
+   * they did. Both must stop here rather than at SES — the same reason the USDT
+   * sweep re-reads its own settings on every run instead of trusting what was
+   * true when the job was scheduled.
+   *
+   * Returning normally (not throwing) is deliberate: a thrown error would be
+   * retried five times and then counted as a failed background job, which is
+   * exactly the alert this switch is meant to silence.
+   */
+  if (!(await isEmailDeliveryEnabled())) {
+    await prisma.notification.updateMany({
+      where: { id: notification.id, status: NotificationStatus.PENDING },
+      data: {
+        status: NotificationStatus.SUPPRESSED,
+        lastError: SUPPRESSED_REASON,
+      },
+    });
+
+    logger.info(
+      { notificationId },
+      'Email not sent — outbound email is switched off',
+    );
+
+    return { delivered: false, reason: 'suppressed' as const };
   }
 
   if (notification.channel !== NotificationChannel.EMAIL) {

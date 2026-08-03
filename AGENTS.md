@@ -411,6 +411,15 @@ Critical paths only — do not chase coverage.
   through the analytics wrapper and loads after consent on marketing pages.
 - Email (SES + React Email) and SMS (Twilio) always send from a queued job,
   never inline in a request handler.
+- **Outbound email has an off switch, and it is data** —
+  `NotificationSettings.emailEnabled`, edited at `/admin/settings` → Email, read
+  fresh by the send path on every call. The same posture as the USDT
+  automatic-verification switch: an integration that hands work to a provider
+  needs a way to be stood down that is not a redeploy (a sending domain still in
+  the SES sandbox fails every send, five retries at a time). Off, `queueEmail`
+  still renders and stores the row — the ledger stays complete — and marks it
+  `SUPPRESSED` instead of enqueueing. Suppressed is terminal: switching email
+  back on resumes new mail only and never replays the backlog.
 
 ---
 
