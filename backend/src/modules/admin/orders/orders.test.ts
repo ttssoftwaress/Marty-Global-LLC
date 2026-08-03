@@ -97,6 +97,26 @@ async function ensureStaff(id: string, roleKey: string) {
   });
 }
 
+/*
+ * The catalog row every order below references. The id matches prisma/seed.ts so
+ * the fixture reads like production data, but it is created here rather than
+ * assumed: OrderItem.serviceId is a foreign key, so on a database that has never
+ * been seeded every createOrder() fails to insert.
+ */
+async function ensureService(id: string, name: string) {
+  await prisma.service.upsert({
+    where: { id },
+    create: {
+      id,
+      iconKey: 'default',
+      name,
+      description: 'Test service',
+      footer: { label: 'Test' },
+    },
+    update: { deletedAt: null },
+  });
+}
+
 // Assigned to the staff fixture by default: the queue is scoped to its assignee,
 // so an order nobody holds is invisible to a reviewer and every test about what
 // they can do to one would 404 before reaching the rule it is checking.
@@ -125,6 +145,7 @@ async function createOrder(
 
 beforeEach(async () => {
   queueEmail.mockClear();
+  await ensureService(COMPANY, 'Company Formation');
   await ensureUser(CUSTOMER_ID, Role.CUSTOMER);
   await ensureUser(STAFF_ID, Role.STAFF);
   await ensureUser(OTHER_STAFF_ID, Role.STAFF);

@@ -1,0 +1,35 @@
+# gitleaks configuration for the secrets-scan CI job.
+#
+# Starts from gitleaks' full default rule set and narrows it in exactly two
+# places, both for documentation placeholders rather than real credentials.
+# Nothing here disables a rule — a genuine secret still fails the build.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Placeholder values in documentation and example env files"
+
+# Match against the whole source line rather than the captured secret, because
+# what makes these safe is the shape of the assignment, not the value.
+regexTarget = "line"
+
+regexes = [
+  # An angle-bracket placeholder: R2_SECRET_ACCESS_KEY=<marty-cors-admin secret>.
+  # A value written as <something> is an instruction to the reader, not a
+  # credential — a real one would never survive a shell unquoted.
+  '''=\s*<[^>\n]{1,80}>''',
+
+  # The self-describing placeholders in .env.example.
+  '''=\s*replace-with-[a-z0-9-]+''',
+
+  # Values whose text says they are for local use only.
+  '''=\s*(ci|test|dev|local)-only-[a-z0-9-]+''',
+]
+
+paths = [
+  # Deliberately illustrative: every value in here is a blank or a placeholder,
+  # and the file exists to be read.
+  '''backend/\.env\.example$''',
+  '''frontend/\.env\.example$''',
+]

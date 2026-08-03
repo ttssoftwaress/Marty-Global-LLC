@@ -73,6 +73,26 @@ async function ensureStaff(id: string, roleKey: string) {
   });
 }
 
+/*
+ * The catalog row every order below references. The id matches prisma/seed.ts so
+ * the fixture reads like production data, but it is created here rather than
+ * assumed: OrderItem.serviceId is a foreign key, so on a database that has never
+ * been seeded every createOrder() fails to insert.
+ */
+async function ensureService(id: string, name: string) {
+  await prisma.service.upsert({
+    where: { id },
+    create: {
+      id,
+      iconKey: 'default',
+      name,
+      description: 'Test service',
+      footer: { label: 'Test' },
+    },
+    update: { deletedAt: null },
+  });
+}
+
 async function createOrder(assigneeId: string | null) {
   return prisma.order.create({
     data: {
@@ -94,6 +114,7 @@ async function createOrder(assigneeId: string | null) {
 }
 
 beforeEach(async () => {
+  await ensureService(COMPANY, 'Company Formation');
   await ensureUser(CUSTOMER_ID, Role.CUSTOMER);
   await ensureUser(OTHER_CUSTOMER_ID, Role.CUSTOMER);
   await ensureUser(ASSIGNEE_ID, Role.STAFF);

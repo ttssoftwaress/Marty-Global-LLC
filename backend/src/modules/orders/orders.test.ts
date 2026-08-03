@@ -15,8 +15,14 @@ const { createOrder, listOrders, getOrderDetail } = await import(
   './orders.service.js'
 );
 
-// The two seeded services these tests order (see prisma/seed.ts). Seed must have
-// been run against the test DB.
+/*
+ * The two services these tests order. The ids match prisma/seed.ts so the
+ * fixtures read like production data, but ensureService below creates them
+ * rather than assuming the seed has been run: OrderItem.serviceId is a foreign
+ * key, so on a database that has never been seeded every order here fails to
+ * insert. A test that needs `db:seed` first is a test that passes on one
+ * machine.
+ */
 const COMPANY = 'company-formation';
 const BANK = 'bank-account';
 
@@ -47,6 +53,37 @@ async function ensureUser(id: string) {
   });
 }
 
+// Upsert rather than create: these ids are shared with the seed, so the row may
+// already exist. `deletedAt: null` on update revives one a previous test soft
+// deleted.
+async function ensureService(id: string, name: string) {
+  await prisma.service.upsert({
+    where: { id },
+    create: {
+      id,
+      iconKey: 'default',
+      name,
+      description: 'Test service',
+      footer: { label: 'Test' },
+    },
+    update: { deletedAt: null },
+  });
+}
+
+/*
+ * Regions are reference data an admin maintains at /admin/settings — deliberately
+ * never seeded, so no fresh database has any. `Order.regionCode` is resolved by
+ * looking the candidate up against the active regions (orders.service.ts), which
+ * means the "us-de" answer only denormalises to "US" when this row exists.
+ */
+async function ensureRegion(code: string, label: string) {
+  await prisma.region.upsert({
+    where: { code },
+    create: { code, label, flag: '🏳️', active: true },
+    update: { active: true },
+  });
+}
+
 /*
  * Answer keys are `FieldDefinition.key` values from the seeded field registry —
  * a service's form is a list of references into it, so these are the only keys
@@ -74,6 +111,9 @@ beforeEach(async () => {
   queueEmail.mockClear();
   await ensureUser(OWNER_ID);
   await ensureUser(OTHER_ID);
+  await ensureService(COMPANY, 'Company Formation');
+  await ensureService(BANK, 'Bank Account');
+  await ensureRegion('US', 'United States');
   await prisma.order.deleteMany({ where: { customerId: { in: [OWNER_ID, OTHER_ID] } } });
 });
 
