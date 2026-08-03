@@ -37,7 +37,7 @@ export function DataErrorState({
   return (
     <div
       role="alert"
-      className={`flex w-full flex-col items-center gap-3 px-6 py-14 text-center ${
+      className={`flex w-full animate-fade-in flex-col items-center gap-3 px-6 py-14 text-center motion-reduce:animate-none ${
         bare ? '' : 'rounded-card border border-gray-200 bg-white'
       } ${className}`}
     >

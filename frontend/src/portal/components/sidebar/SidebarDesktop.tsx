@@ -21,6 +21,8 @@ import { isServiceNavItemActive, useServiceNavItems } from './useServiceNavItems
 type SidebarDesktopProps = {
   user: SidebarUser;
   badges?: PortalNavBadges;
+  onOpenAccountMenu?: () => void;
+  accountMenuOpen?: boolean;
   onLogout?: () => void;
   className?: string;
 };
@@ -28,6 +30,8 @@ type SidebarDesktopProps = {
 export function SidebarDesktop({
   user,
   badges,
+  onOpenAccountMenu,
+  accountMenuOpen,
   onLogout,
   className,
 }: SidebarDesktopProps) {
@@ -64,8 +68,8 @@ export function SidebarDesktop({
                     aria-current={active ? 'page' : undefined}
                     className={
                       active
-                        ? 'flex w-full items-center gap-3 rounded-input bg-white px-4 py-3 text-body font-semibold text-primary [&>svg]:text-accent'
-                        : 'flex w-full items-center gap-3 rounded-input px-4 py-3 text-body font-medium text-white/80 transition-colors hover:bg-white/10 hover:text-white'
+                        ? 'press-soft flex w-full items-center gap-3 rounded-input bg-white px-4 py-3 text-body font-semibold text-primary [&>svg]:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white'
+                        : 'press-soft flex w-full items-center gap-3 rounded-input px-4 py-3 text-body font-medium text-white/80 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white'
                     }
                   >
                     <Icon className="size-5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
@@ -98,8 +102,8 @@ export function SidebarDesktop({
                         aria-current={active ? 'page' : undefined}
                         className={
                           active
-                            ? 'flex w-full items-center gap-3 rounded-input bg-white px-4 py-3 text-body font-semibold text-primary [&>svg]:text-accent'
-                            : 'flex w-full items-center gap-3 rounded-input px-4 py-3 text-body font-medium text-white/80 transition-colors hover:bg-white/10 hover:text-white'
+                            ? 'press-soft flex w-full items-center gap-3 rounded-input bg-white px-4 py-3 text-body font-semibold text-primary [&>svg]:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white'
+                            : 'press-soft flex w-full items-center gap-3 rounded-input px-4 py-3 text-body font-medium text-white/80 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white'
                         }
                       >
                         <Icon
@@ -126,13 +130,17 @@ export function SidebarDesktop({
       </div>
 
       <div className="flex w-full flex-col gap-6">
-        <SidebarUserBlock user={user} />
+        <SidebarUserBlock
+          user={user}
+          onOpenAccountMenu={onOpenAccountMenu}
+          accountMenuOpen={accountMenuOpen}
+        />
 
         <div className="flex w-full flex-col gap-3">
           <button
             type="button"
             onClick={onLogout}
-            className="flex items-center gap-2 text-body font-medium text-white/80 transition-colors hover:text-white"
+            className="flex items-center gap-2 text-body font-medium text-white/80 transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
           >
             <LogOut className="size-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
             <span className="whitespace-nowrap">Logout</span>

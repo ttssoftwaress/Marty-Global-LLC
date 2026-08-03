@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
 import logoColor from '@/assets/Marty-Logo-Color.PNG';
@@ -42,9 +42,53 @@ function isActive(href: string, pathname: string) {
 export function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const { pathname } = useLocation();
+  // Wraps the trigger and the panel, so a press on either is not an outside press.
+  const headerRef = useRef<HTMLElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  /*
+   * The mobile sheet is a non-modal popover (Design.md): it dismisses on an
+   * outside press and on Escape and leaves page scroll and Tab alone — no scrim,
+   * no focus trap. Marketing keeps its own copy of the behaviour rather than
+   * importing the admin hook; areas never import across the boundary.
+   *
+   * Scroll dismisses it too, which a popover anchored to a scrolled-away trigger
+   * needs and the admin hook has no reason to do: this panel hangs off a static
+   * header, so scrolling carries it off-screen while `menuOpen` stays true and
+   * the hamburger keeps reporting `aria-expanded="true"` for a menu nobody can
+   * see. Captured rather than bubbled — scroll events do not bubble, so a
+   * listener on `document` only sees them on the way down.
+   */
+  useEffect(() => {
+    if (!menuOpen) return;
+
+    const close = () => setMenuOpen(false);
+
+    const onPointerDown = (event: PointerEvent) => {
+      if (!headerRef.current?.contains(event.target as Node)) close();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      close();
+      triggerRef.current?.focus();
+    };
+
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('scroll', close, { capture: true, passive: true });
+
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('scroll', close, { capture: true });
+    };
+  }, [menuOpen]);
 
   return (
-    <header className="relative flex h-[72px] w-full items-center justify-between border-b border-gray-200 bg-white px-5 md:h-[88px] md:px-10 lg:px-20">
+    <header
+      ref={headerRef}
+      className="relative flex h-[72px] w-full items-center justify-between border-b border-gray-200 bg-white px-5 md:h-[88px] md:px-10 lg:px-20"
+    >
       <Link to="/" className="shrink-0" aria-label="Marty Global LLC — Home">
         <img
           src={logoColor}
@@ -67,12 +111,13 @@ export function Navbar() {
       </Link>
 
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setMenuOpen((v) => !v)}
         aria-label={menuOpen ? 'Close menu' : 'Open menu'}
         aria-expanded={menuOpen}
         aria-controls="mobile-nav"
-        className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-gray-50 md:hidden"
+        className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-gray-50 transition-colors hover:bg-gray-100 md:hidden"
       >
         <MenuIcon className="size-5 text-text" />
       </button>
@@ -80,7 +125,7 @@ export function Navbar() {
       {menuOpen && (
         <nav
           id="mobile-nav"
-          className="absolute inset-x-0 top-full z-50 flex flex-col gap-1 border-b border-gray-200 bg-white px-5 py-4 shadow-lg md:hidden"
+          className="absolute inset-x-0 top-full z-50 flex animate-rise flex-col gap-1 border-b border-gray-200 bg-white px-5 py-4 shadow-lg motion-reduce:animate-none md:hidden"
         >
           {NAV_LINKS.map((link) => (
             <Link
@@ -89,8 +134,8 @@ export function Navbar() {
               onClick={() => setMenuOpen(false)}
               className={
                 isActive(link.href, pathname)
-                  ? 'rounded-lg px-3 py-2.5 text-body font-semibold text-primary'
-                  : 'rounded-lg px-3 py-2.5 text-body font-medium text-gray-700'
+                  ? 'press-soft rounded-lg px-3 py-2.5 text-body font-semibold text-primary'
+                  : 'press-soft rounded-lg px-3 py-2.5 text-body font-medium text-gray-700 transition-colors hover:bg-gray-50 hover:text-primary'
               }
             >
               {link.label}
@@ -109,6 +154,12 @@ export function Navbar() {
   );
 }
 
+/*
+ * The design draws the active link with an accent tick under it and gives the
+ * rest no hover state at all. The tick is reproduced as drawn; the inactive
+ * links pick up the shared growing underline and a colour shift, because a
+ * navigation row where nothing answers the pointer reads as static text.
+ */
 function NavItem({ link, active }: { link: NavLink; active: boolean }) {
   if (active) {
     return (
@@ -127,7 +178,7 @@ function NavItem({ link, active }: { link: NavLink; active: boolean }) {
   return (
     <Link
       to={link.href}
-      className="whitespace-nowrap text-[13px] font-medium text-gray-700 lg:text-[14px] lg:font-normal"
+      className="link-underline whitespace-nowrap text-[13px] font-medium text-gray-700 transition-colors hover:text-primary lg:text-[14px] lg:font-normal"
     >
       {link.label}
     </Link>

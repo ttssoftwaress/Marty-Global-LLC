@@ -27,6 +27,8 @@ type AdminSidebarDesktopProps = {
   user: AdminSidebarUser;
   items: AdminNavItem[];
   badges?: AdminNavBadges;
+  onOpenAccountMenu?: () => void;
+  accountMenuOpen?: boolean;
   onLogout?: () => void;
   className?: string;
 };
@@ -35,6 +37,8 @@ export function AdminSidebarDesktop({
   user,
   items,
   badges,
+  onOpenAccountMenu,
+  accountMenuOpen,
   onLogout,
   className,
 }: AdminSidebarDesktopProps) {
@@ -67,8 +71,8 @@ export function AdminSidebarDesktop({
                     aria-current={active ? 'page' : undefined}
                     className={
                       active
-                        ? 'flex w-full items-center gap-3 rounded-input bg-white px-4 py-3 text-body font-semibold text-primary [&>svg]:text-accent'
-                        : 'flex w-full items-center gap-3 rounded-input px-4 py-3 text-body font-medium text-white/80 transition-colors hover:bg-white/10 hover:text-white'
+                        ? 'press-soft flex w-full items-center gap-3 rounded-input bg-white px-4 py-3 text-body font-semibold text-primary [&>svg]:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white'
+                        : 'press-soft flex w-full items-center gap-3 rounded-input px-4 py-3 text-body font-medium text-white/80 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white'
                     }
                   >
                     <Icon className="size-5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
@@ -85,12 +89,16 @@ export function AdminSidebarDesktop({
       </div>
 
       <div className="flex w-full shrink-0 flex-col gap-4 pt-6">
-        <AdminSidebarUserBlock user={user} />
+        <AdminSidebarUserBlock
+          user={user}
+          onOpenAccountMenu={onOpenAccountMenu}
+          accountMenuOpen={accountMenuOpen}
+        />
 
         <button
           type="button"
           onClick={onLogout}
-          className="flex items-center gap-2 text-body font-medium text-white/80 transition-colors hover:text-white"
+          className="flex items-center gap-2 text-body font-medium text-white/80 transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
         >
           <LogOut className="size-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
           <span className="whitespace-nowrap">Log out</span>

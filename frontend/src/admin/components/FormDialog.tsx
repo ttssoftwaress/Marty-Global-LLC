@@ -68,20 +68,32 @@ export function FormDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center md:items-center md:p-6">
+      {/*
+       * `data-press="none"` opts the scrim out of the global press dip — it is
+       * a button covering the viewport, and scaling it would show the page
+       * around its edges for the length of the click.
+       */}
       <button
         type="button"
         aria-label="Close dialog"
         onClick={onClose}
-        className="absolute inset-0 cursor-default bg-gray-900/40"
+        data-press="none"
+        className="absolute inset-0 cursor-default bg-gray-900/40 transition-opacity duration-200 starting:opacity-0 motion-reduce:transition-none"
       />
 
+      {/*
+       * One entrance for both shapes — the sheet and the centred modal are the
+       * same element, and `@starting-style` is read once at first render, so a
+       * `md:starting:` override would sit alongside the base one rather than
+       * replace it and the two would fight.
+       */}
       <div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
-        className={`relative flex max-h-[92dvh] w-full flex-col rounded-t-modal bg-white shadow-lg-elevation outline-none md:max-h-[86dvh] md:rounded-modal ${SIZE_STYLES[size]}`}
+        className={`relative flex max-h-[92dvh] w-full translate-y-0 flex-col rounded-t-modal bg-white opacity-100 shadow-lg-elevation outline-none transition-[opacity,translate] duration-200 ease-out starting:translate-y-8 starting:opacity-0 motion-reduce:transition-none md:max-h-[86dvh] md:rounded-modal ${SIZE_STYLES[size]}`}
       >
         {/* The grabber reads as "drag me down", so it is mobile-only. */}
         <div className="flex justify-center pb-1 pt-3 md:hidden">

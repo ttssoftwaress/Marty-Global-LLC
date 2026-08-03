@@ -2,7 +2,10 @@ import { LogOut } from 'lucide-react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 
 import { AdminNavBadge } from './AdminNavBadge';
-import { AdminSidebarAvatar, type AdminSidebarUser } from './AdminSidebarUserBlock';
+import {
+  AdminSidebarAvatarButton,
+  type AdminSidebarUser,
+} from './AdminSidebarUserBlock';
 import {
   isAdminNavItemActive,
   type AdminNavBadges,
@@ -28,6 +31,8 @@ type AdminSidebarTabletProps = {
   user: AdminSidebarUser;
   items: AdminNavItem[];
   badges?: AdminNavBadges;
+  onOpenAccountMenu?: () => void;
+  accountMenuOpen?: boolean;
   onLogout?: () => void;
   className?: string;
 };
@@ -36,6 +41,8 @@ export function AdminSidebarTablet({
   user,
   items,
   badges,
+  onOpenAccountMenu,
+  accountMenuOpen,
   onLogout,
   className,
 }: AdminSidebarTabletProps) {
@@ -73,8 +80,8 @@ export function AdminSidebarTablet({
                     aria-current={active ? 'page' : undefined}
                     className={
                       active
-                        ? 'relative flex size-10 items-center justify-center rounded-input bg-white text-accent'
-                        : 'relative flex size-10 items-center justify-center rounded-input text-white/80 transition-colors hover:bg-white/10 hover:text-white'
+                        ? 'press relative flex size-10 items-center justify-center rounded-input bg-white text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white'
+                        : 'press relative flex size-10 items-center justify-center rounded-input text-white/80 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white'
                     }
                   >
                     <Icon className="size-5" strokeWidth={1.75} aria-hidden="true" />
@@ -94,14 +101,18 @@ export function AdminSidebarTablet({
       </div>
 
       <div className="flex w-full shrink-0 flex-col items-center gap-5 pt-5">
-        <AdminSidebarAvatar user={user} />
+        <AdminSidebarAvatarButton
+          user={user}
+          onOpenAccountMenu={onOpenAccountMenu}
+          accountMenuOpen={accountMenuOpen}
+        />
 
         <button
           type="button"
           onClick={onLogout}
           title="Log out"
           aria-label="Log out"
-          className="flex size-8 items-center justify-center rounded-pill text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+          className="flex size-8 items-center justify-center rounded-pill text-white/80 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
         >
           <LogOut className="size-5" strokeWidth={1.75} aria-hidden="true" />
         </button>

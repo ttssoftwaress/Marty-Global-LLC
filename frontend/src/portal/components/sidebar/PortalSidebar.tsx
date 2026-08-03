@@ -21,6 +21,9 @@ type PortalSidebarProps = {
   badges?: PortalNavBadges;
   mobileOpen: boolean;
   onMobileClose: () => void;
+  /* Opens the shell's account menu from the user block (desktop + drawer). */
+  onOpenAccountMenu?: () => void;
+  accountMenuOpen?: boolean;
   onLogout?: () => void;
 };
 
@@ -29,6 +32,8 @@ export function PortalSidebar({
   badges,
   mobileOpen,
   onMobileClose,
+  onOpenAccountMenu,
+  accountMenuOpen,
   onLogout,
 }: PortalSidebarProps) {
   return (
@@ -41,6 +46,8 @@ export function PortalSidebar({
       <SidebarDesktop
         user={user}
         badges={badges}
+        onOpenAccountMenu={onOpenAccountMenu}
+        accountMenuOpen={accountMenuOpen}
         onLogout={onLogout}
         className="hidden lg:flex"
       />
@@ -49,6 +56,7 @@ export function PortalSidebar({
         onClose={onMobileClose}
         user={user}
         badges={badges}
+        onOpenAccountMenu={onOpenAccountMenu}
         onLogout={onLogout}
       />
     </>

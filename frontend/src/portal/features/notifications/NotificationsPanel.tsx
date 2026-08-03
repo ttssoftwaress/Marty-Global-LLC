@@ -78,7 +78,7 @@ export function NotificationsPanel({
         aria-modal="true"
         aria-label="Notifications"
         tabIndex={-1}
-        className="absolute inset-x-0 bottom-0 flex max-h-[85dvh] translate-y-0 flex-col rounded-t-modal bg-white outline-none shadow-[0px_-0.25rem_0.9375rem_rgba(0,0,0,0.1)] transition-transform duration-300 ease-out starting:translate-y-full motion-reduce:transition-none md:inset-x-auto md:bottom-auto md:right-6 md:top-navbar md:max-h-[calc(100dvh-var(--spacing-navbar)-1.5rem)] md:w-[25rem] md:overflow-clip md:rounded-card md:border md:border-gray-200 md:opacity-100 md:shadow-md-elevation md:transition-[opacity,transform] md:duration-200 md:starting:-translate-y-2 md:starting:opacity-0 lg:right-8 lg:w-[23.75rem] lg:shadow-lg-elevation"
+        className="absolute inset-x-0 bottom-0 flex max-h-[85dvh] translate-y-0 flex-col rounded-t-modal bg-white outline-none shadow-[0px_-0.25rem_0.9375rem_rgba(0,0,0,0.1)] transition-transform duration-300 ease-out starting:translate-y-full motion-reduce:transition-none md:inset-x-auto md:bottom-auto md:right-6 md:top-navbar md:max-h-[calc(100dvh-var(--spacing-navbar)-1.5rem)] md:w-[25rem] md:overflow-clip md:rounded-card md:border md:border-gray-200 md:opacity-100 md:shadow-md-elevation md:transition-[opacity,translate] md:duration-200 md:starting:-translate-y-2 md:starting:opacity-0 lg:right-8 lg:w-[23.75rem] lg:shadow-lg-elevation"
       >
         {/* The sheet's drag handle — the dropdown has no such affordance. */}
         <div className="flex shrink-0 flex-col items-center py-2 md:hidden">

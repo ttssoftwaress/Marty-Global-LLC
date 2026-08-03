@@ -17,7 +17,8 @@ type TopBarMobileProps = {
   notificationCount?: number;
   onOpenMenu?: () => void;
   onOpenNotifications?: () => void;
-  onOpenUserMenu?: () => void;
+  onOpenUserMenu: () => void;
+  accountMenuOpen?: boolean;
   className?: string;
 };
 
@@ -27,6 +28,7 @@ export function TopBarMobile({
   onOpenMenu,
   onOpenNotifications,
   onOpenUserMenu,
+  accountMenuOpen = false,
   className,
 }: TopBarMobileProps) {
   return (
@@ -59,23 +61,16 @@ export function TopBarMobile({
           compact
         />
 
-        {/* Inert until a user menu exists — see TopBarUserMenu. */}
-        {onOpenUserMenu ? (
-          <button
-            type="button"
-            onClick={onOpenUserMenu}
-            aria-haspopup="menu"
-            aria-label={`Account menu — ${user.name}`}
-            className="flex shrink-0 rounded-pill transition-opacity hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-          >
-            <TopBarAvatar user={user} />
-          </button>
-        ) : (
-          <span className="flex shrink-0">
-            <TopBarAvatar user={user} />
-            <span className="sr-only">{user.name}</span>
-          </span>
-        )}
+        <button
+          type="button"
+          onClick={onOpenUserMenu}
+          aria-haspopup="dialog"
+          aria-expanded={accountMenuOpen}
+          aria-label={`Account menu — ${user.name}`}
+          className="flex shrink-0 rounded-pill transition-opacity hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        >
+          <TopBarAvatar user={user} />
+        </button>
       </div>
     </header>
   );

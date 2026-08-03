@@ -58,15 +58,17 @@ function HeroCopy() {
       </div>
 
       <div className="flex w-full flex-col items-stretch gap-3 md:w-auto md:flex-row md:items-center md:gap-4">
+        {/* Links styled as buttons, so they opt into the press dip the real
+         * buttons get for free. */}
         <a
           href="/get-started"
-          className="flex items-center justify-center rounded-input bg-accent px-6 py-3.5 text-[15px] font-semibold text-white shadow-[0px_4px_6px_rgba(228,32,97,0.2)] transition-colors hover:bg-accent-hover md:px-8 lg:text-[16px]"
+          className="press flex items-center justify-center rounded-input bg-accent px-6 py-3.5 text-[15px] font-semibold text-white shadow-[0px_4px_6px_rgba(228,32,97,0.2)] transition-colors hover:bg-accent-hover md:px-8 lg:text-[16px]"
         >
           Start Your LLC
         </a>
         <a
           href="/how-it-works"
-          className="flex items-center justify-center rounded-input border-2 border-primary bg-white px-6 py-3.5 text-[15px] font-semibold text-primary transition-colors hover:bg-primary-light md:px-7 lg:px-8 lg:text-[16px]"
+          className="press flex items-center justify-center rounded-input border-2 border-primary bg-white px-6 py-3.5 text-[15px] font-semibold text-primary transition-colors hover:bg-primary-light md:px-7 lg:px-8 lg:text-[16px]"
         >
           See How It Works
         </a>
@@ -74,7 +76,7 @@ function HeroCopy() {
 
       <div className="h-px w-full bg-gray-200" />
 
-      <div className="flex flex-wrap content-start items-start gap-2 md:gap-2.5 lg:gap-3">
+      <div className="stagger-rise flex flex-wrap content-start items-start gap-2 md:gap-2.5 lg:gap-3">
         {TRUST_BADGES.map(({ label, Icon }) => (
           <div
             key={label}

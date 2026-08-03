@@ -31,6 +31,12 @@ type AdminSidebarMobileDrawerProps = {
   user: AdminSidebarUser;
   items: AdminNavItem[];
   badges?: AdminNavBadges;
+  /*
+   * The shell closes the drawer before opening the account sheet, so the two
+   * overlays are never stacked: nesting them would mean two `aria-modal` dialogs
+   * at once and an Escape that dismisses both.
+   */
+  onOpenAccountMenu?: () => void;
   onLogout?: () => void;
 };
 
@@ -40,6 +46,7 @@ export function AdminSidebarMobileDrawer({
   user,
   items,
   badges,
+  onOpenAccountMenu,
   onLogout,
 }: AdminSidebarMobileDrawerProps) {
   const { pathname } = useLocation();
@@ -55,7 +62,7 @@ export function AdminSidebarMobileDrawer({
   return (
     <div className="fixed inset-0 z-50 md:hidden">
       <div
-        className="absolute inset-0 bg-gray-900/50"
+        className="absolute inset-0 bg-gray-900/50 transition-opacity duration-300 starting:opacity-0 motion-reduce:transition-none"
         onClick={onClose}
         aria-hidden="true"
       />
@@ -66,7 +73,7 @@ export function AdminSidebarMobileDrawer({
         aria-modal="true"
         aria-label="Admin navigation"
         tabIndex={-1}
-        className="absolute inset-y-0 left-0 flex w-[17.5rem] max-w-[85vw] flex-col justify-between bg-primary px-4 py-6 shadow-[0.25rem_0_0.5rem_rgba(0,0,0,0.25)] outline-none"
+        className="absolute inset-y-0 left-0 flex w-[17.5rem] max-w-[85vw] translate-x-0 flex-col justify-between bg-primary px-4 py-6 shadow-[0.25rem_0_0.5rem_rgba(0,0,0,0.25)] outline-none transition-transform duration-300 ease-out starting:-translate-x-full motion-reduce:transition-none"
       >
         <div className="flex min-h-0 w-full flex-col gap-6">
           <div className="flex w-full items-start justify-between gap-3">
@@ -89,7 +96,7 @@ export function AdminSidebarMobileDrawer({
               type="button"
               onClick={onClose}
               aria-label="Close navigation"
-              className="-m-1 flex size-7 shrink-0 items-center justify-center rounded-pill p-1 text-white transition-colors hover:bg-white/10"
+              className="-m-1 flex size-7 shrink-0 items-center justify-center rounded-pill p-1 text-white transition-colors hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
             >
               <X className="size-5" strokeWidth={1.75} aria-hidden="true" />
             </button>
@@ -110,8 +117,8 @@ export function AdminSidebarMobileDrawer({
                       aria-current={active ? 'page' : undefined}
                       className={
                         active
-                          ? 'flex w-full items-center gap-3 rounded-input bg-white px-4 py-3 text-body font-semibold text-primary [&>svg]:text-accent'
-                          : 'flex w-full items-center gap-3 rounded-input px-4 py-3 text-body font-medium text-white/80 transition-colors hover:bg-white/10 hover:text-white'
+                          ? 'press-soft flex w-full items-center gap-3 rounded-input bg-white px-4 py-3 text-body font-semibold text-primary [&>svg]:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white'
+                          : 'press-soft flex w-full items-center gap-3 rounded-input px-4 py-3 text-body font-medium text-white/80 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white'
                       }
                     >
                       <Icon className="size-5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
@@ -130,12 +137,15 @@ export function AdminSidebarMobileDrawer({
         <div className="flex w-full shrink-0 flex-col gap-4 pt-6">
           <hr className="w-full border-0 border-t border-white/15" />
 
-          <AdminSidebarUserBlock user={user} />
+          <AdminSidebarUserBlock
+            user={user}
+            onOpenAccountMenu={onOpenAccountMenu}
+          />
 
           <button
             type="button"
             onClick={onLogout}
-            className="flex items-center gap-2 text-body font-medium text-white/80 transition-colors hover:text-white"
+            className="flex items-center gap-2 text-body font-medium text-white/80 transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
           >
             <LogOut className="size-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
             <span className="whitespace-nowrap">Log out</span>

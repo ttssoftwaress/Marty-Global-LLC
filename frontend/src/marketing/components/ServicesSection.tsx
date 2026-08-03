@@ -65,7 +65,9 @@ export function ServicesSection() {
         </p>
       </div>
 
-      <div className="flex w-full flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
+      {/* The cards arrive one after another rather than all at once — the same
+       * 40ms step the rest of the site uses for a group of peers. */}
+      <div className="stagger-rise flex w-full flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
         {SERVICES.map((service) => (
           <ServiceCard key={service.title} {...service} />
         ))}
@@ -83,9 +85,9 @@ export function ServicesSection() {
 
 function ServiceCard({ Icon, title, description, linkLabel, href }: Service) {
   return (
-    <div className="flex flex-col items-start gap-4 rounded-card border border-gray-200 bg-white p-6 shadow-[0px_8px_12px_rgba(3,18,109,0.04)] md:gap-5 md:p-7 lg:min-w-0 lg:flex-1 lg:gap-6 lg:p-8">
-      <div className="flex size-12 items-center justify-center rounded-[10px] bg-primary-light md:size-[52px] md:rounded-card lg:size-14">
-        <Icon className="size-6 text-primary md:size-[26px] lg:size-7" />
+    <div className="hover-lift group flex flex-col items-start gap-4 rounded-card border border-gray-200 bg-white p-6 shadow-[0px_8px_12px_rgba(3,18,109,0.04)] md:gap-5 md:p-7 lg:min-w-0 lg:flex-1 lg:gap-6 lg:p-8">
+      <div className="flex size-12 items-center justify-center rounded-[10px] bg-primary-light transition-colors group-hover:bg-soft-pink md:size-[52px] md:rounded-card lg:size-14">
+        <Icon className="size-6 text-primary transition-colors group-hover:text-accent md:size-[26px] lg:size-7" />
       </div>
 
       <div className="flex w-full flex-col items-start gap-2">
@@ -101,7 +103,14 @@ function ServiceCard({ Icon, title, description, linkLabel, href }: Service) {
         href={href}
         className="text-[13px] font-semibold text-primary transition-colors hover:text-primary-hover md:text-[14px]"
       >
-        {linkLabel} →
+        {linkLabel}{' '}
+        {/* The arrow leans toward where the link goes when the card is hovered. */}
+        <span
+          aria-hidden="true"
+          className="inline-block transition-transform duration-150 ease-out group-hover:translate-x-1"
+        >
+          →
+        </span>
       </a>
     </div>
   );

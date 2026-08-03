@@ -18,10 +18,19 @@ import { GuestChatWidget } from '../chat';
 
 export function PublicChrome() {
   useHashScroll();
+  const { pathname } = useLocation();
 
   return (
     <>
-      <Outlet />
+      {/*
+       * Each page fades in as it arrives. Keyed on the path so the entrance
+       * replays per navigation, and a fade rather than a rise because a lasting
+       * `translate` on this wrapper would become the containing block for the
+       * chat panel's fixed positioning.
+       */}
+      <div key={pathname} className="animate-fade-in motion-reduce:animate-none">
+        <Outlet />
+      </div>
       <GuestChatWidget />
     </>
   );

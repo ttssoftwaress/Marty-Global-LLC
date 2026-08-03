@@ -69,6 +69,10 @@ export function usePortalShell(): { user: SidebarUser; onLogout: () => void } {
       // refreshes on its own schedule.
       name: profile?.fullName || (session?.user.name ?? ''),
       role: roleLabel(session?.user.role),
+      // The account menu prints the address. Same precedence as the name: an
+      // edit writes the profile record immediately, while the session copy
+      // refreshes on its own schedule.
+      email: profile?.email || session?.user.email,
       avatarUrl: profile?.avatarUrl,
     },
     onLogout,
