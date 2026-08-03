@@ -151,6 +151,14 @@ async function clearAll(keepEmail: string): Promise<void> {
     prisma.fieldDefinition.deleteMany(),
     prisma.region.deleteMany(),
     prisma.mailCarrier.deleteMany(),
+    /*
+     * Job roles are configuration in the same sense the carrier list is — typed
+     * into the admin and belonging to nobody's customer record. Only the ones an
+     * admin defined go: the five built-ins are restored by the boot-time
+     * provisioner anyway, and dropping them here would break the foreign key on
+     * a StaffProfile in the same transaction.
+     */
+    prisma.staffRole.deleteMany({ where: { isSystem: false } }),
   ];
 
   await prisma.$transaction(

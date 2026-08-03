@@ -1,6 +1,8 @@
 import { useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 
+import { useSession } from '@/auth/client';
+
 import { GuestChatWidget } from '../chat';
 
 /*
@@ -18,7 +20,20 @@ import { GuestChatWidget } from '../chat';
 
 export function PublicChrome() {
   useHashScroll();
+  useScrollToTopOnNavigate();
   const { pathname } = useLocation();
+
+  /*
+   * The guest widget is for people who have no account — it opens an anonymous
+   * conversation keyed by a localStorage token. Marketing is logged-out-only
+   * now, so this only bites on the legal pages, which a customer can still
+   * reach: offering them the guest bubble there would file their question in a
+   * thread their own portal inbox never shows. Held back while the session
+   * check is in flight so the bubble doesn't mount and immediately tear its
+   * socket down.
+   */
+  const { data: session, isPending } = useSession();
+  const showGuestChat = !isPending && !session;
 
   return (
     <>
@@ -31,9 +46,27 @@ export function PublicChrome() {
       <div key={pathname} className="animate-fade-in motion-reduce:animate-none">
         <Outlet />
       </div>
-      <GuestChatWidget />
+      {showGuestChat && <GuestChatWidget />}
     </>
   );
+}
+
+/*
+ * Starts each page at the top. React Router keeps the window's scroll position
+ * across a client-side navigation, so following an in-page link from far down a
+ * page — a service card near the bottom of `/services`, a footer link — lands on
+ * the next page already scrolled past its heading.
+ *
+ * Skipped when the URL carries a fragment: that navigation has its own
+ * destination, and `useHashScroll` below owns it.
+ */
+function useScrollToTopOnNavigate() {
+  const { pathname, hash } = useLocation();
+
+  useEffect(() => {
+    if (hash) return;
+    window.scrollTo({ top: 0, left: 0 });
+  }, [pathname, hash]);
 }
 
 /*

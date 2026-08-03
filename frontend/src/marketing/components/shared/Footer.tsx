@@ -25,10 +25,10 @@ type FooterLink = {
 };
 
 const SERVICES: FooterLink[] = [
-  { label: 'LLC Formation', href: '/services' },
-  { label: 'Bank Account Opening', href: '/services' },
-  { label: 'Virtual Mail Room', href: '/services' },
-  { label: 'Registered Agent', href: '/services' },
+  { label: 'LLC Formation', href: '/services/formation' },
+  { label: 'Bank Account Opening', href: '/services/banking' },
+  { label: 'Virtual Mail Room', href: '/services/mailroom' },
+  { label: 'Registered Agent', href: '/services/registered-agent' },
   { label: 'Corporate Compliance', href: '/services' },
 ];
 

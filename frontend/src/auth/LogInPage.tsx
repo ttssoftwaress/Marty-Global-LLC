@@ -6,6 +6,7 @@ import { signIn } from '@/auth/client';
 import { returnPathFor } from '@/auth/landing';
 import { useCompactScale } from '@/hooks/useCompactScale';
 import { deviceAccountName } from '@/lib/device-account';
+import { markSessionHint } from '@/lib/session-hint';
 import { LeftPanel } from './components/auth-brand';
 import {
   CheckIcon,
@@ -161,6 +162,11 @@ function LogInForm() {
       );
       return;
     }
+
+    // Mark the device before navigating: the next hard load of a public route
+    // should hold its render rather than flash the marketing site at someone who
+    // is signed in (see lib/session-hint.ts).
+    markSessionHint();
 
     // The role comes from the sign-in response, not useSession — the session
     // query has not refetched yet at this point, so it would still read null.

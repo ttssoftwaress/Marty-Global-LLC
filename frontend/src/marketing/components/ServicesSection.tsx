@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 
 import {
   BriefcaseIcon,
@@ -76,7 +77,14 @@ export function ServicesSection() {
       <div className="flex items-center justify-center gap-1.5 pt-2 md:gap-2">
         <ShieldCheckIcon className="size-3.5 shrink-0 text-accent md:size-4" />
         <p className="text-[12px] font-medium text-text-secondary md:text-[14px]">
-          Plus: Registered Agent services available in all US states
+          Plus:{' '}
+          <Link
+            to="/services/registered-agent"
+            className="font-semibold text-primary hover:underline"
+          >
+            Registered Agent services
+          </Link>{' '}
+          available in all US states
         </p>
       </div>
     </section>
@@ -99,8 +107,8 @@ function ServiceCard({ Icon, title, description, linkLabel, href }: Service) {
         </p>
       </div>
 
-      <a
-        href={href}
+      <Link
+        to={href}
         className="text-[13px] font-semibold text-primary transition-colors hover:text-primary-hover md:text-[14px]"
       >
         {linkLabel}{' '}
@@ -111,7 +119,7 @@ function ServiceCard({ Icon, title, description, linkLabel, href }: Service) {
         >
           →
         </span>
-      </a>
+      </Link>
     </div>
   );
 }

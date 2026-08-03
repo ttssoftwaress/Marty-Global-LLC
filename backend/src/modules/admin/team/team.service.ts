@@ -7,15 +7,15 @@ import { toInitials, toShortName } from '../../../lib/initials.js';
 import { logger } from '../../../lib/logger.js';
 import { cursorArgs, takePage, totalPages } from '../../../lib/pagination.js';
 import {
-  PERMISSION_AREAS,
-  findStaffRole,
+  overridesFor,
+  parseOverrides,
   permissionAreasFor,
   permissionMap,
-  resolvePermissions,
-  roleOptions,
-  staffRoleLabel,
+  type PermissionOverrides,
 } from '../../../lib/permissions.js';
 import { prisma } from '../../../lib/prisma.js';
+import { Role } from '../../../lib/roles.js';
+import { resolveMemberPermissions } from '../../../lib/staff-permissions.js';
 import { AuditAction, record } from '../../audit/audit.service.js';
 import { isoOrNull } from '../admin.views.js';
 import type {
@@ -33,6 +33,24 @@ import type {
  * the job role, the account state, and the per-area grants. Both move together —
  * promoting someone to Operations Manager must also make the guards treat them
  * as an admin, or the role would be a label with no effect.
+ *
+ * THE PERMISSION SWITCHES ARE AN OVERRIDE, NOT A COPY
+ *
+ * A member's access is their role's grant set with their own deviations applied
+ * on top. The switches on the edit screen show the effective answer — what this
+ * person can actually reach — and saving them stores only the keys that disagree
+ * with the role (`permissionOverrides`).
+ *
+ * That distinction is the whole point. Denying one reviewer `payments` takes it
+ * from that account and no other, and it survives the role being edited later.
+ * A key left agreeing with the role carries no override, so a role edit moves it
+ * — which is what makes roles worth defining at all. `lib/staff-permissions.ts`
+ * owns both directions.
+ *
+ * Changing a member's *role* clears their overrides: the deviations were decided
+ * against a different grant set, and carrying "denied payments" across to a role
+ * that never gave payments would silently deny it again if the new role ever
+ * gained it.
  *
  * There is no invite flow. An admin creates the login itself — name, email, and
  * the password the member signs in with — so an account is usable the moment it
@@ -70,6 +88,16 @@ const VIEW_TO_STATUS: Record<string, StaffStatus[]> = {
 
 const ACTIVE_PROFILES: Prisma.StaffProfileWhereInput = { deletedAt: null };
 
+// The columns every screen here needs off a role: what it grants, what it forces
+// on, and what to print.
+const roleSelect = {
+  key: true,
+  label: true,
+  authRole: true,
+  permissions: true,
+  lockedPermissions: true,
+} satisfies Prisma.StaffRoleSelect;
+
 // --- Summary -------------------------------------------------------------
 export type AdminTeamSummary = {
   totalMembers: number;
@@ -77,13 +105,30 @@ export type AdminTeamSummary = {
   deactivatedMembers: number;
   tabs: { value: TeamStatusFilter; label: string; count?: number }[];
   roles: { value: string; label: string }[];
-  permissionAreas: { key: string; label: string }[];
+  permissionAreas: { key: string; label: string; scopeKey?: string }[];
+  /*
+   * Each role's own grant set, keyed by role key. The add-staff form needs it to
+   * seed the grid the moment the admin picks a role — without it the switches
+   * would open blank and the first save would deny everything the role gives.
+   *
+   * It also lets the form mark a switch the admin has moved away from the role's
+   * default, which is the only way "this is an override" is visible before the
+   * account exists.
+   */
+  rolePermissions: Record<string, Record<string, boolean>>;
+  // Roles whose members bypass the grid entirely — `authRole: admin`, which
+  // `hasPermission` short-circuits (admin.guards.ts). The form says so.
+  fullAccessRoles: string[];
 };
 
 export async function getSummary(): Promise<AdminTeamSummary> {
-  const [totalMembers, activeMembers] = await Promise.all([
+  const [totalMembers, activeMembers, roles] = await Promise.all([
     prisma.staffProfile.count({ where: ACTIVE_PROFILES }),
     prisma.staffProfile.count({ where: { ...ACTIVE_PROFILES, status: StaffStatus.ACTIVE } }),
+    prisma.staffRole.findMany({
+      orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
+      select: roleSelect,
+    }),
   ]);
 
   // Derived rather than counted: every profile is one or the other, so a second
@@ -99,8 +144,12 @@ export async function getSummary(): Promise<AdminTeamSummary> {
       { value: 'active', label: 'Active', count: activeMembers },
       { value: 'deactivated', label: 'Deactivated', count: deactivatedMembers },
     ],
-    // The role catalogue is server-owned; the dropdown renders what it offers.
-    roles: [{ value: 'all', label: 'All roles' }, ...roleOptions()],
+    // Admin-defined now, so the dropdown renders the rows rather than a
+    // hardcoded catalogue.
+    roles: [
+      { value: 'all', label: 'All roles' },
+      ...roles.map((role) => ({ value: role.key, label: role.label })),
+    ],
     /*
      * The permission grid the add-staff form renders. It ships with the summary
      * because that form has no member to fetch yet — without it the areas would
@@ -111,10 +160,13 @@ export async function getSummary(): Promise<AdminTeamSummary> {
      * are locked depends on the role, and the role is still being chosen. The
      * service forces them on when the account is created either way.
      */
-    permissionAreas: PERMISSION_AREAS.map((area) => ({
-      key: area.key,
-      label: area.label,
-    })),
+    permissionAreas: permissionAreasFor(),
+    rolePermissions: Object.fromEntries(
+      roles.map((role) => [role.key, permissionMap(role.permissions)]),
+    ),
+    fullAccessRoles: roles
+      .filter((role) => role.authRole === Role.ADMIN)
+      .map((role) => role.key),
   };
 }
 
@@ -141,6 +193,10 @@ export type AdminTeamPage = {
 
 const memberInclude = {
   user: { select: { id: true, name: true, email: true } },
+  // Joined rather than looked up from a code catalogue: the label an admin gave
+  // the role is the label the row prints, and the grants are what the detail
+  // screen resolves the member's effective access against.
+  role: { select: roleSelect },
 } satisfies Prisma.StaffProfileInclude;
 
 export async function listTeam(query: ListTeamQuery): Promise<AdminTeamPage> {
@@ -186,7 +242,7 @@ export async function listTeam(query: ListTeamQuery): Promise<AdminTeamPage> {
       initials: toInitials(profile.user.name),
       email: profile.user.email,
       role: profile.roleKey,
-      roleLabel: staffRoleLabel(profile.roleKey),
+      roleLabel: profile.role.label,
       status: STATUS_VIEW[profile.status],
       statusLabel: STATUS_LABEL[profile.status],
       joinedAt: isoOrNull(profile.joinedAt),
@@ -204,11 +260,33 @@ export type AdminTeamMemberDetail = {
   name: string;
   email: string;
   role: string;
+  roleLabel: string;
   isActive: boolean;
   statusDescription: string;
+  /*
+   * The effective grid — what this member can actually reach, which is what the
+   * switches show and what the admin edits. Role grants with this member's own
+   * overrides applied on top.
+   */
   permissions: Record<string, boolean>;
+  /*
+   * What the role alone gives, so the screen can mark every switch the admin has
+   * moved away from it and offer to put it back. Without this the override is
+   * invisible: a denied switch and a switch the role never granted look the same.
+   */
+  rolePermissions: Record<string, boolean>;
+  // The keys that currently carry a decision about this account specifically.
+  // Derived from the two maps above, but sent rather than diffed in the browser
+  // so "is this overridden" has one definition.
+  overriddenPermissions: string[];
+  /*
+   * True when the role's `authRole` is `admin`: the guards short-circuit on the
+   * authorization role, so this member reaches every section whatever the grid
+   * says. The screen warns rather than letting an admin find out by accident.
+   */
+  roleGrantsFullAccess: boolean;
   roles: { value: string; label: string }[];
-  permissionAreas: { key: string; label: string; locked?: boolean }[];
+  permissionAreas: { key: string; label: string; scopeKey?: string; locked?: boolean }[];
 };
 
 // The sentence under the status switch. Kept with the backend so the wording for
@@ -221,34 +299,71 @@ const STATUS_DESCRIPTION: Record<StaffStatus, string> = {
     'Deactivated — the account cannot sign in or act on any record.',
 };
 
-function toDetail(profile: {
+type MemberRecord = {
   userId: string;
   roleKey: string;
   status: StaffStatus;
   permissions: string[];
   user: { name: string; email: string };
-}): AdminTeamMemberDetail {
+  role: {
+    label: string;
+    authRole: string;
+    permissions: string[];
+    lockedPermissions: string[];
+  };
+};
+
+function toDetail(
+  profile: MemberRecord,
+  roles: { key: string; label: string }[],
+): AdminTeamMemberDetail {
+  const effective = permissionMap(profile.permissions);
+  const fromRole = permissionMap(profile.role.permissions);
+
   return {
     id: profile.userId,
     name: profile.user.name,
     email: profile.user.email,
     role: profile.roleKey,
+    roleLabel: profile.role.label,
     isActive: profile.status === StaffStatus.ACTIVE,
     statusDescription: STATUS_DESCRIPTION[profile.status],
-    permissions: permissionMap(profile.permissions),
-    roles: roleOptions(),
-    permissionAreas: permissionAreasFor(profile.roleKey),
+    permissions: effective,
+    rolePermissions: fromRole,
+    /*
+     * Compared against the *materialized* set rather than against the stored
+     * override map, so a key that was overridden to a value the role has since
+     * caught up with stops reading as an override — the screen shows deviations
+     * that still make a difference, not the history of how they got there.
+     */
+    overriddenPermissions: Object.keys(effective).filter(
+      (key) => effective[key] !== fromRole[key],
+    ),
+    roleGrantsFullAccess: profile.role.authRole === Role.ADMIN,
+    roles: roles.map((role) => ({ value: role.key, label: role.label })),
+    permissionAreas: permissionAreasFor(profile.role.lockedPermissions),
   };
 }
 
-export async function getTeamMember(userId: string): Promise<AdminTeamMemberDetail> {
-  const profile = await prisma.staffProfile.findFirst({
-    where: { userId, ...ACTIVE_PROFILES },
-    include: memberInclude,
+// The dropdown's options, in the order the roles screen lists them.
+function listRoleOptions() {
+  return prisma.staffRole.findMany({
+    orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
+    select: { key: true, label: true },
   });
+}
+
+export async function getTeamMember(userId: string): Promise<AdminTeamMemberDetail> {
+  const [profile, roles] = await Promise.all([
+    prisma.staffProfile.findFirst({
+      where: { userId, ...ACTIVE_PROFILES },
+      include: memberInclude,
+    }),
+    listRoleOptions(),
+  ]);
 
   if (!profile) throw AppError.notFound('Team member not found');
-  return toDetail(profile);
+  return toDetail(profile, roles);
 }
 
 // --- Create --------------------------------------------------------------
@@ -271,9 +386,12 @@ export async function createTeamMember(
   actor: AuthContext,
   input: CreateTeamMemberInput,
 ): Promise<AdminTeamMemberDetail> {
-  const roleDefinition = findStaffRole(input.role);
+  const role = await prisma.staffRole.findUnique({
+    where: { key: input.role },
+    select: roleSelect,
+  });
 
-  if (!roleDefinition) {
+  if (!role) {
     throw AppError.validation('Unknown role', { role: input.role });
   }
 
@@ -292,12 +410,22 @@ export async function createTeamMember(
     });
   }
 
-  // Untouched grid → the role's defaults. The resolver forces the role's locked
-  // areas on either way, so a submitted map is still only a request.
-  const permissions = resolvePermissions(
-    input.role,
-    input.permissions ?? permissionMap(roleDefinition.defaults),
-  );
+  /*
+   * An untouched grid means the role's own set, which produces no overrides at
+   * all — the account simply follows its role, and a later role edit reaches it.
+   * A grid the admin adjusted is diffed against the role, so only what they
+   * actually changed is recorded as this account's own decision.
+   */
+  const overrides =
+    input.permissions === undefined
+      ? {}
+      : overridesFor({
+          rolePermissions: role.permissions,
+          submitted: input.permissions,
+          locked: role.lockedPermissions,
+        });
+
+  const permissions = resolveMemberPermissions(role, overrides);
 
   /*
    * The role is set below rather than passed here. The admin plugin types its
@@ -323,7 +451,7 @@ export async function createTeamMember(
       await tx.user.update({
         where: { id: user.id },
         // The job role decides the authorization role the guards read.
-        data: { emailVerified: true, role: roleDefinition.authRole },
+        data: { emailVerified: true, role: role.authRole },
       });
 
       return tx.staffProfile.create({
@@ -331,6 +459,7 @@ export async function createTeamMember(
           userId: user.id,
           roleKey: input.role,
           status,
+          permissionOverrides: overrides,
           permissions,
           shortName: toShortName(input.name),
           // The admin created the login outright, so this is the join date —
@@ -346,12 +475,13 @@ export async function createTeamMember(
       action: AuditAction.STAFF_CREATED,
       entityType: 'StaffProfile',
       entityId: user.id,
-      // Role, status, and the granted key set — never the name, email, or
+      // Role, status, the granted key set, and which of those keys were decided
+      // for this account rather than inherited — never the name, email, or
       // password (AGENTS.md, Security & PII).
-      metadata: { role: input.role, status, permissions },
+      metadata: { role: input.role, status, permissions, overrides },
     });
 
-    return toDetail(profile);
+    return toDetail(profile, await listRoleOptions());
   } catch (error) {
     await prisma.user
       .delete({ where: { id: user.id } })
@@ -380,9 +510,13 @@ export async function updateTeamMember(
   if (!profile) throw AppError.notFound('Team member not found');
 
   const roleKey = input.role ?? profile.roleKey;
-  const roleDefinition = findStaffRole(roleKey);
+  const roleChanged = roleKey !== profile.roleKey;
 
-  if (!roleDefinition) {
+  const role = roleChanged
+    ? await prisma.staffRole.findUnique({ where: { key: roleKey }, select: roleSelect })
+    : profile.role;
+
+  if (!role) {
     throw AppError.validation('Unknown role', { role: roleKey });
   }
 
@@ -428,30 +562,52 @@ export async function updateTeamMember(
    * either alone is not what actually grants access.
    */
   const losingAdmin =
-    findStaffRole(profile.roleKey)?.authRole === 'admin' &&
-    (roleDefinition.authRole !== 'admin' || nextStatus !== StaffStatus.ACTIVE);
+    profile.role.authRole === Role.ADMIN &&
+    (role.authRole !== Role.ADMIN || nextStatus !== StaffStatus.ACTIVE);
 
   if (losingAdmin) {
     await assertNotLastAdmin(userId);
   }
 
-  // Locked areas are forced on and unknown keys dropped (lib/permissions.ts).
-  const permissions = resolvePermissions(
-    roleKey,
-    input.permissions ?? permissionMap(profile.permissions),
-  );
+  /*
+   * What this account decides for itself, after the save.
+   *
+   * Three cases, and the order matters:
+   *   - `resetPermissions` clears every override outright, putting the member
+   *     back on exactly what their role gives.
+   *   - a role change clears them too. The deviations were decided against the
+   *     old role's grant set, and "denied payments" carried onto a role that
+   *     never gave payments would lie dormant and deny it if the role later
+   *     gained it. Whatever grid the form sent came from the old role, so it is
+   *     not a statement about the new one either.
+   *   - otherwise the submitted grid is diffed against the role. A switch left
+   *     agreeing with the role records nothing and keeps following it; a switch
+   *     the admin moved is stored, and stays put when the role changes later.
+   */
+  const overrides: PermissionOverrides =
+    input.resetPermissions || roleChanged
+      ? {}
+      : input.permissions === undefined
+        ? parseOverrides(profile.permissionOverrides)
+        : overridesFor({
+            rolePermissions: role.permissions,
+            submitted: input.permissions,
+            locked: role.lockedPermissions,
+          });
+
+  const permissions = resolveMemberPermissions(role, overrides);
 
   // One transaction: the auth role and the job role must never disagree, or a
   // member would hold a title the guards do not honour.
   const updated = await prisma.$transaction(async (tx) => {
-    if (input.name !== undefined || input.email !== undefined || input.role !== undefined) {
+    if (input.name !== undefined || input.email !== undefined || roleChanged) {
       await tx.user.update({
         where: { id: userId },
         data: {
           ...(input.name === undefined ? {} : { name: input.name }),
           ...(input.email === undefined ? {} : { email: input.email.toLowerCase() }),
           // The job role decides the authorization role.
-          ...(input.role === undefined ? {} : { role: roleDefinition.authRole }),
+          ...(roleChanged ? { role: role.authRole } : {}),
         },
       });
     }
@@ -461,6 +617,7 @@ export async function updateTeamMember(
       data: {
         roleKey,
         status: nextStatus,
+        permissionOverrides: overrides,
         permissions,
         ...(input.name === undefined ? {} : { shortName: toShortName(input.name) }),
       },
@@ -488,11 +645,16 @@ export async function updateTeamMember(
       statusTo: nextStatus,
       permissionsFrom: profile.permissions,
       permissionsTo: permissions,
+      // The deviations from the role, separately from the effective set: a
+      // reader six months later needs to know whether a member reached something
+      // because their role gives it or because somebody decided it for them.
+      overridesFrom: parseOverrides(profile.permissionOverrides),
+      overridesTo: overrides,
       passwordReset: input.password !== undefined,
     },
   });
 
-  return toDetail(updated);
+  return toDetail(updated, await listRoleOptions());
 }
 
 // --- Delete --------------------------------------------------------------
@@ -500,16 +662,26 @@ export async function updateTeamMember(
 /*
  * Delete a staff account.
  *
- * Soft delete, per AGENTS.md ("Customer-facing records soft-delete via
- * `deletedAt`… ask before any hard delete"). A staff member authors order
- * activity, processes mail requests, and appears as an assignee on rows that
- * carry regulatory retention — hard-deleting the user row would either orphan
- * or cascade those. The profile and the user row are both stamped, so the
- * member leaves every admin list and can no longer be assigned work.
+ * The user row itself is removed from the database, not stamped with
+ * `deletedAt`. A soft delete left the credential alive: neither Better Auth nor
+ * the guards read `deletedAt`, so a "deleted" member could sign in again with
+ * the password they already had. Deleting the row is what actually ends the
+ * account — the profile, the sessions, and the credential go with it by cascade.
  *
- * The sessions are hard-deleted, and that is the point: `deletedAt` alone would
- * leave a signed-in member with a live cookie, and a session row carries no
- * history worth keeping. Deleting them is what actually ends the access.
+ * The work they did stays. Order activity, chat messages, and settled payments
+ * snapshot the author's name onto their own row and hold the user id without a
+ * foreign key, and the audit log deliberately has no FK either ("a deleted user
+ * must not erase what they did"). Every staff-side link that *is* a foreign key
+ * — order/conversation/request assignee, mail processor, payment settler,
+ * transfer resolver — is `onDelete: SetNull`, so the history reads correctly
+ * with the pointer gone.
+ *
+ * The one thing a hard delete would destroy is the customer-owned side of a
+ * user: orders, quotes, payments, companies, mail rooms and delivered results
+ * all cascade from `user`. Those carry regulatory retention (AGENTS.md), so an
+ * account holding any of them keeps its row and has its access revoked instead —
+ * banned, signed out, and stripped of its credential, which ends the login just
+ * as firmly without deleting a filing or a payment.
  */
 export async function deleteTeamMember(
   actor: AuthContext,
@@ -517,7 +689,12 @@ export async function deleteTeamMember(
 ): Promise<{ id: string }> {
   const profile = await prisma.staffProfile.findFirst({
     where: { userId, ...ACTIVE_PROFILES },
-    select: { roleKey: true, status: true, permissions: true },
+    select: {
+      roleKey: true,
+      status: true,
+      permissions: true,
+      role: { select: { authRole: true } },
+    },
   });
 
   if (!profile) throw AppError.notFound('Team member not found');
@@ -528,17 +705,18 @@ export async function deleteTeamMember(
     throw AppError.businessRule('You cannot delete your own account');
   }
 
-  if (findStaffRole(profile.roleKey)?.authRole === 'admin') {
+  if (profile.role.authRole === Role.ADMIN) {
     await assertNotLastAdmin(userId);
   }
 
-  const deletedAt = new Date();
+  const retained = await hasRetainedRecords(userId);
 
-  await prisma.$transaction(async (tx) => {
-    await tx.staffProfile.update({ where: { userId }, data: { deletedAt } });
-    await tx.user.update({ where: { id: userId }, data: { deletedAt } });
-    await tx.session.deleteMany({ where: { userId } });
-  });
+  if (retained) {
+    await revokeAccount(userId);
+  } else {
+    // Cascades take the staff profile, the sessions, and the credential account.
+    await prisma.user.delete({ where: { id: userId } });
+  }
 
   void record({
     actor,
@@ -549,10 +727,78 @@ export async function deleteTeamMember(
       role: profile.roleKey,
       status: profile.status,
       permissions: profile.permissions,
+      // Which of the two paths ran — the row is gone in one and revoked in the
+      // other, and this entry is the only place that still says so.
+      userRowRemoved: !retained,
     },
   });
 
   return { id: userId };
+}
+
+/*
+ * Does this account own records that a delete would cascade away?
+ *
+ * Only the customer-owned relations are checked: those are the ones whose
+ * foreign keys cascade from `user`, and the ones AGENTS.md puts under retention.
+ * A normal staff login — provisioned by an admin, never a customer — has none of
+ * them, so the ordinary case deletes outright.
+ */
+async function hasRetainedRecords(userId: string): Promise<boolean> {
+  const owned = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      // One-to-one, so it has no `_count` entry of its own.
+      company: { select: { id: true } },
+      _count: {
+        select: {
+          orders: true,
+          quotes: true,
+          payments: true,
+          mailRooms: true,
+          serviceResults: true,
+          serviceRequests: true,
+          conversations: true,
+        },
+      },
+    },
+  });
+
+  if (!owned) return false;
+
+  return (
+    owned.company !== null ||
+    Object.values(owned._count).some((count) => count > 0)
+  );
+}
+
+/*
+ * End every way into an account whose row has to stay.
+ *
+ * Three separate locks, because each closes a different door: the ban is what
+ * Better Auth checks on sign-in (and `require-auth.ts` re-checks per request),
+ * dropping the credential account leaves no password to sign in with or reset,
+ * and deleting the sessions revokes the cookies already issued. `deletedAt` on
+ * both rows is what removes the member from the admin screens.
+ */
+async function revokeAccount(userId: string): Promise<void> {
+  const deletedAt = new Date();
+
+  await prisma.$transaction(async (tx) => {
+    await tx.staffProfile.update({ where: { userId }, data: { deletedAt } });
+    await tx.user.update({
+      where: { id: userId },
+      data: {
+        deletedAt,
+        banned: true,
+        banReason: 'Account deleted',
+        // Permanent — an expiring ban would let the account back in.
+        banExpires: null,
+      },
+    });
+    await tx.session.deleteMany({ where: { userId } });
+    await tx.account.deleteMany({ where: { userId } });
+  });
 }
 
 // --- Shared rules --------------------------------------------------------
