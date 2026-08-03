@@ -9,20 +9,26 @@ import {
   Clock,
   CreditCard,
   Eye,
+  FileText,
   Globe,
+  Landmark,
   type LucideProps,
   Mail,
   MailOpen,
+  MapPin,
   Menu,
   Phone,
   PiggyBank,
+  ScanLine,
   Search,
   Shield,
   ShieldCheck,
   ShoppingCart,
   Shuffle,
   Star,
+  Trash2,
   TrendingUp,
+  Truck,
   User,
   X,
   Zap,
@@ -111,6 +117,30 @@ export function ShuffleIcon(props: LucideProps) {
 
 export function EyeIcon(props: LucideProps) {
   return <Eye strokeWidth={1.75} aria-hidden="true" {...props} />;
+}
+
+export function FileTextIcon(props: LucideProps) {
+  return <FileText strokeWidth={1.75} aria-hidden="true" {...props} />;
+}
+
+export function LandmarkIcon(props: LucideProps) {
+  return <Landmark strokeWidth={1.75} aria-hidden="true" {...props} />;
+}
+
+export function ScanLineIcon(props: LucideProps) {
+  return <ScanLine strokeWidth={1.75} aria-hidden="true" {...props} />;
+}
+
+export function TruckIcon(props: LucideProps) {
+  return <Truck strokeWidth={1.75} aria-hidden="true" {...props} />;
+}
+
+export function MapPinIcon(props: LucideProps) {
+  return <MapPin strokeWidth={1.75} aria-hidden="true" {...props} />;
+}
+
+export function ShredIcon(props: LucideProps) {
+  return <Trash2 strokeWidth={1.75} aria-hidden="true" {...props} />;
 }
 
 export function ShieldIcon(props: LucideProps) {

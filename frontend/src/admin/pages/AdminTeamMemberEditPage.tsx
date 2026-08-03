@@ -11,6 +11,7 @@ import {
   EditMemberHeader,
   RolePermissionsCard,
   useAdminTeamMember,
+  useAdminTeamSummary,
   useDeleteTeamMember,
   useUpdateTeamMember,
 } from '../features/team';
@@ -19,6 +20,7 @@ import {
   draftFromMember,
   isDraftDirty,
   payloadFromDraft,
+  permissionsFromRole,
   validateMemberDraft,
 } from '../lib/team-member-edit';
 import type { TeamMemberEditDraft } from '../types/team-member-edit';
@@ -56,6 +58,13 @@ export function AdminTeamMemberEditPage() {
   const navigate = useNavigate();
 
   const member = useAdminTeamMember(memberId || null);
+  /*
+   * The summary carries every role's grant set. The member record only carries
+   * the role they currently hold, so without this the grid could not be re-seeded
+   * when the admin picks a different one — and picking a role is exactly when the
+   * switches have to move.
+   */
+  const summary = useAdminTeamSummary();
   const updateMember = useUpdateTeamMember();
   const deleteMember = useDeleteTeamMember();
 
@@ -100,12 +109,57 @@ export function AdminTeamMemberEditPage() {
     );
 
   /*
-   * Switching role re-applies that role's defaults server-side, so the client
-   * sends the role it picked and renders whatever access comes back rather than
-   * guessing the defaults itself — the permission switches below are the
-   * per-member overrides on top of that.
+   * What the selected role grants — the baseline the switches are read against.
+   * It follows the *draft's* role, not the saved one, so choosing a different
+   * role in the select immediately re-reads the grid against it.
+   *
+   * Falls back to the member's own `rolePermissions` while the summary is still
+   * loading, so the marks are right for the role they actually hold rather than
+   * every row briefly reading as an override.
    */
-  const setRole = (role: string) => patch({ role });
+  const roleGrants = useMemo(() => {
+    if (!draft) return {};
+
+    return (
+      summary.data?.rolePermissions[draft.role] ??
+      (draft.role === loadedMember?.role ? loadedMember.rolePermissions : {})
+    );
+  }, [draft, summary.data, loadedMember]);
+
+  const roleGrantsFullAccess = draft
+    ? (summary.data?.fullAccessRoles.includes(draft.role) ??
+      (draft.role === loadedMember?.role
+        ? (loadedMember?.roleGrantsFullAccess ?? false)
+        : false))
+    : false;
+
+  /*
+   * Switching role re-seeds the switches from the new role, because the backend
+   * clears this member's overrides on a role change — the deviations were
+   * decided against the old role's grant set, so carrying them across would deny
+   * a key on a role nobody made that decision about. Showing the old grid until
+   * save would misreport what is about to be written.
+   *
+   * The grid is only re-seeded once the new role's grants are actually known;
+   * seeding from an empty map would blank every switch.
+   */
+  const setRole = (role: string) => {
+    const grants = summary.data?.rolePermissions[role];
+
+    patch({
+      role,
+      ...(grants && loadedMember
+        ? { permissions: permissionsFromRole(loadedMember.permissionAreas, grants) }
+        : {}),
+    });
+  };
+
+  // Put every switch back on the role, in the draft — the write happens on save
+  // like any other edit, so it can be reviewed and cancelled first.
+  const resetPermissions = () => {
+    if (!draft || !loadedMember) return;
+    patch({ permissions: permissionsFromRole(loadedMember.permissionAreas, roleGrants) });
+  };
 
   /*
    * On success the draft is re-seeded from the response here rather than left to
@@ -213,8 +267,11 @@ export function AdminTeamMemberEditPage() {
                 roles={loadedMember?.roles ?? []}
                 areas={loadedMember?.permissionAreas ?? []}
                 permissions={draft.permissions}
+                roleGrants={roleGrants}
+                roleGrantsFullAccess={roleGrantsFullAccess}
                 onRoleChange={setRole}
                 onPermissionChange={setPermission}
+                onResetPermissions={resetPermissions}
               />
 
               {showErrors && hasErrors ? (

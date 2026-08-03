@@ -3,7 +3,6 @@ import type { Prisma } from '@prisma/client';
 import { toInitials } from '../../../lib/initials.js';
 import { cursorArgs, takePage, totalPages } from '../../../lib/pagination.js';
 import { prisma } from '../../../lib/prisma.js';
-import { staffRoleLabel } from '../../../lib/permissions.js';
 import {
   AUDIT_CATEGORIES,
   actionsInCategory,
@@ -176,7 +175,7 @@ async function resolveActors(
     select: {
       id: true,
       name: true,
-      staffProfile: { select: { roleKey: true } },
+      staffProfile: { select: { role: { select: { label: true } } } },
     },
   });
 
@@ -190,7 +189,7 @@ async function resolveActors(
         initials: toInitials(user.name),
         // The job role, which is what the team screen prints. A customer has no
         // staff profile, so theirs is null and the row shows no role chip.
-        roleLabel: user.staffProfile ? staffRoleLabel(user.staffProfile.roleKey) : null,
+        roleLabel: user.staffProfile?.role.label ?? null,
       },
     ]),
   );

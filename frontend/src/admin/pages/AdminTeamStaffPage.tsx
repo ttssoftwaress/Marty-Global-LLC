@@ -24,12 +24,14 @@ import {
   useDeleteTeamMember,
   useUpdateTeamMember,
 } from '../features/team';
+import { RolesPanel } from '../features/roles';
 import { useAdminShell } from '../hooks/useAdminShell';
 import { useCursorPageWindow } from '../hooks/useCursorPageWindow';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import {
   emptyCreateDraft,
   payloadFromCreateDraft,
+  permissionsFromRole,
   validateMemberDraft,
 } from '../lib/team-member-edit';
 import type { AdminTeamMemberRow, TeamStatusFilter } from '../types/team';
@@ -186,14 +188,47 @@ export function AdminTeamStaffPage() {
     [summary.data],
   );
 
+  // What the draft's role grants — the baseline the dialog's switches start from
+  // and are marked against.
+  const addRoleGrants = useMemo(
+    () =>
+      addDraft ? (summary.data?.rolePermissions[addDraft.role] ?? {}) : {},
+    [addDraft, summary.data],
+  );
+
   const onAddStaff = () => {
     const defaultRole = assignableRoles[0]?.value;
     if (!defaultRole) return;
 
     createMember.reset();
-    setAddDraft(emptyCreateDraft(defaultRole));
+    setAddDraft(
+      emptyCreateDraft(
+        defaultRole,
+        summary.data?.permissionAreas ?? [],
+        summary.data?.rolePermissions[defaultRole] ?? {},
+      ),
+    );
     setShowAddErrors(false);
   };
+
+  /*
+   * Picking a role re-seeds the grid from it. The switches are an override on
+   * top of the role, so leaving the previous role's grid up would silently
+   * record every difference between the two as a decision about this account.
+   */
+  const onAddRoleChange = (role: string) =>
+    setAddDraft((prev) =>
+      prev
+        ? {
+            ...prev,
+            role,
+            permissions: permissionsFromRole(
+              summary.data?.permissionAreas ?? [],
+              summary.data?.rolePermissions[role] ?? {},
+            ),
+          }
+        : prev,
+    );
 
   const closeAddDialog = () => {
     if (createMember.isPending) return;
@@ -430,6 +465,16 @@ export function AdminTeamStaffPage() {
               )}
             </>
           )}
+
+          {/*
+           * Roles sit under the members who hold them, on the same screen: an
+           * admin reading a role on a member's row can find out what it grants
+           * without losing the list. The rule marks it as a second subject rather
+           * than more of the table.
+           */}
+          <hr className="w-full border-t border-gray-200" />
+
+          <RolesPanel />
         </div>
       </div>
 
@@ -469,9 +514,15 @@ export function AdminTeamStaffPage() {
               draft={addDraft}
               roles={assignableRoles}
               areas={summary.data?.permissionAreas ?? []}
+              roleGrants={addRoleGrants}
+              roleGrantsFullAccess={
+                summary.data?.fullAccessRoles.includes(addDraft.role) ?? false
+              }
               errors={showAddErrors ? addErrors : {}}
               onChange={(next) =>
-                setAddDraft((prev) => (prev ? { ...prev, ...next } : prev))
+                next.role !== undefined && next.role !== addDraft.role
+                  ? onAddRoleChange(next.role)
+                  : setAddDraft((prev) => (prev ? { ...prev, ...next } : prev))
               }
               onPermissionChange={(key, granted) =>
                 setAddDraft((prev) =>
