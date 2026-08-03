@@ -19,7 +19,6 @@ import { withIdempotency } from '../../../lib/idempotency.js';
 import { toInitials } from '../../../lib/initials.js';
 import { logger } from '../../../lib/logger.js';
 import { cursorArgs, takePage, totalPages } from '../../../lib/pagination.js';
-import { staffRoleLabel } from '../../../lib/permissions.js';
 import { prisma } from '../../../lib/prisma.js';
 import { Role } from '../../../lib/roles.js';
 import { presignObject } from '../../../lib/storage.js';
@@ -492,7 +491,13 @@ async function assigneeOptions(): Promise<AdminOrderAssigneeOption[]> {
       status: StaffStatus.ACTIVE,
       OR: [{ permissions: { has: 'orders' } }, { user: { is: { role: Role.ADMIN } } }],
     },
-    select: { userId: true, roleKey: true, user: { select: { name: true } } },
+    select: {
+      userId: true,
+      user: { select: { name: true } },
+      // The admin's own wording for the job role — read off the row, since roles
+      // are data now and no code catalogue knows every one of them.
+      role: { select: { label: true } },
+    },
   });
 
   return staff
@@ -500,7 +505,7 @@ async function assigneeOptions(): Promise<AdminOrderAssigneeOption[]> {
       value: member.userId,
       label: member.user.name,
       initials: toInitials(member.user.name),
-      roleLabel: staffRoleLabel(member.roleKey),
+      roleLabel: member.role.label,
     }))
     .sort((a, b) => a.label.localeCompare(b.label));
 }

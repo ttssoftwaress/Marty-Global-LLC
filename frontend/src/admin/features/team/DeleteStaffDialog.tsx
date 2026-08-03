@@ -11,11 +11,10 @@ import { FormDialog } from '../../components/FormDialog';
  * are about to remove the account they meant to — a row action three columns
  * from a name is easy to misfire.
  *
- * The copy says what actually happens: the backend soft-deletes the record and
- * drops the member's sessions, so their work history stays attributed while the
- * account itself stops working. Promising an irreversible wipe would be wrong,
- * and promising it is reversible would be worse — an admin cannot restore it
- * from here.
+ * The copy says what actually happens: the backend removes the account itself
+ * and drops the member's sessions, so there is no login left to use — while the
+ * work they handled stays on the record, because order activity, chat messages
+ * and settled payments carry the author's name on their own rows.
  *
  * It reuses the shared admin dialog shell so the sheet/modal behaviour, the
  * focus trap, and the Escape handling are the same as the add-staff form's.
@@ -84,9 +83,9 @@ export function DeleteStaffDialog({
         </div>
 
         <p className="text-body text-text-secondary">
-          This account will be removed from the team and signed out everywhere.
-          They will no longer be able to sign in or act on any record. Work they
-          have already handled stays on the record.
+          This account will be permanently deleted and signed out everywhere.
+          They will not be able to sign in again, and it cannot be restored. Work
+          they have already handled stays on the record.
         </p>
 
         {error ? (

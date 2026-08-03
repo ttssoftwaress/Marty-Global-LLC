@@ -60,9 +60,15 @@ export type CreateTeamMemberInput = z.infer<typeof createTeamMemberSchema>;
  * back on any response.
  *
  * `permissions` is a map of area key → granted, exactly as the switch grid holds
- * it. The service resolves it against the catalogue: unknown keys are dropped
- * and the role's locked areas are forced on, so what the client sends is a
- * request rather than the final word.
+ * it — the *effective* grid, which is what the switches show. The service diffs
+ * it against the role and stores only the deviations, so what the client sends
+ * is a request rather than the final word: unknown keys are dropped, the role's
+ * locked areas are forced on, and a scope key without its area is dropped.
+ *
+ * `resetPermissions` is the "follow the role again" action, and it is a separate
+ * flag rather than an empty `permissions` map because those mean opposite things
+ * — an empty map is a grid with everything switched off, which is a legal thing
+ * for an admin to want.
  */
 export const updateTeamMemberSchema = z
   .object({
@@ -72,6 +78,7 @@ export const updateTeamMemberSchema = z
     isActive: z.boolean().optional(),
     role: z.string().trim().min(1).max(40).optional(),
     permissions: z.record(z.string(), z.boolean()).optional(),
+    resetPermissions: z.boolean().optional(),
   })
   .refine((value) => Object.keys(value).length > 0, {
     message: 'Nothing to update',

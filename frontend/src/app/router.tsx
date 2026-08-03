@@ -27,10 +27,23 @@ export const router = createBrowserRouter([
      * live-chat bubble mounts once for the whole site. Per-page it would drop
      * its socket and close its panel on every navigation — mid-conversation.
      * Navbar and Footer stay per-page, as they were.
+     *
+     * The whole group is logged-out-only. Marketing exists to sell to a visitor
+     * who has no account yet; a signed-in customer landing on it gets a page of
+     * "Get Started" CTAs for something they already bought, so a live session is
+     * sent to that role's portal instead. The legal documents are deliberately
+     * NOT in here — see the group below.
      */
     lazy: async () => {
       const { PublicChrome } = await import('@/marketing/components/shared/PublicChrome');
-      return { Component: PublicChrome };
+      const { RedirectIfAuthenticated } = await import('@/auth/RedirectIfAuthenticated');
+      return {
+        Component: () => (
+          <RedirectIfAuthenticated>
+            <PublicChrome />
+          </RedirectIfAuthenticated>
+        ),
+      };
     },
     children: [
       {
@@ -45,6 +58,56 @@ export const router = createBrowserRouter([
         lazy: async () => {
           const { ServicesPage } = await import('@/marketing/pages/ServicesPage');
           return { Component: ServicesPage };
+        },
+      },
+      {
+        // The per-service detail pages, one per `/services/<slug>` the Services
+        // grid links to. Registered Agent has no card of its own — it is sold
+        // with formation and linked from the note under the grid.
+        path: '/services/formation',
+        lazy: async () => {
+          const { ServiceFormationPage } = await import(
+            '@/marketing/pages/ServiceFormationPage'
+          );
+          return { Component: ServiceFormationPage };
+        },
+      },
+      {
+        path: '/services/mailroom',
+        lazy: async () => {
+          const { ServiceMailRoomPage } = await import(
+            '@/marketing/pages/ServiceMailRoomPage'
+          );
+          return { Component: ServiceMailRoomPage };
+        },
+      },
+      {
+        path: '/services/ecommerce',
+        lazy: async () => {
+          const { ServiceEcommercePage } = await import(
+            '@/marketing/pages/ServiceEcommercePage'
+          );
+          return { Component: ServiceEcommercePage };
+        },
+      },
+      {
+        path: '/services/banking',
+        lazy: async () => {
+          const { ServiceBankingPage } = await import(
+            '@/marketing/pages/ServiceBankingPage'
+          );
+          return { Component: ServiceBankingPage };
+        },
+      },
+      {
+        // Registered Agent has no card on the Services grid — it is sold with
+        // formation and named in the note under the grid, which links here.
+        path: '/services/registered-agent',
+        lazy: async () => {
+          const { ServiceRegisteredAgentPage } = await import(
+            '@/marketing/pages/ServiceRegisteredAgentPage'
+          );
+          return { Component: ServiceRegisteredAgentPage };
         },
       },
       {
@@ -78,10 +141,29 @@ export const router = createBrowserRouter([
           return { Component: FaqPage };
         },
       },
+    ],
+  },
+  {
+    /*
+     * The three legal documents, in their own group because they are the one
+     * part of the public site a signed-in customer must still be able to open.
+     * They are open to EVERYONE — a visitor has to be able to read the terms
+     * before deciding to sign up, and a customer has to be able to read the
+     * terms they are already bound by and change their cookie consent after it.
+     * Redirecting them to /app here would mean the only way to reach the privacy
+     * policy is to log out.
+     *
+     * Same PublicChrome parent as marketing, so they keep the shared hash-scroll
+     * and page transition; the chrome hides the guest chat bubble for a
+     * signed-in reader, whose conversations live in the portal instead.
+     */
+    lazy: async () => {
+      const { PublicChrome } = await import('@/marketing/components/shared/PublicChrome');
+      return { Component: PublicChrome };
+    },
+    children: [
       {
         // The three legal documents the footer links from every public page.
-        // They are public and unauthenticated by design — a visitor has to be
-        // able to read the terms before deciding to sign up.
         path: '/legal/privacy',
         lazy: async () => {
           const { PrivacyPolicyPage } = await import(
@@ -985,10 +1067,20 @@ export const router = createBrowserRouter([
     ],
   },
   {
+    // Anything unmatched falls back to the marketing home page, so it carries
+    // the same logged-out-only rule: a signed-in visitor who mistypes a portal
+    // URL lands back in their own portal rather than on the sales site.
     path: '*',
     lazy: async () => {
       const { HomePage } = await import('@/marketing/pages/HomePage');
-      return { Component: HomePage };
+      const { RedirectIfAuthenticated } = await import('@/auth/RedirectIfAuthenticated');
+      return {
+        Component: () => (
+          <RedirectIfAuthenticated>
+            <HomePage />
+          </RedirectIfAuthenticated>
+        ),
+      };
     },
   },
 ]);

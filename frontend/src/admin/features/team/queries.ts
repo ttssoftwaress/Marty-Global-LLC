@@ -152,10 +152,10 @@ export function useCreateTeamMember() {
 /*
  * DELETE /v1/admin/team/:memberId — remove a staff account.
  *
- * The backend soft-deletes the record and drops the member's sessions, so this
- * ends their access rather than only hiding the row. The cached detail record is
- * dropped outright: the member no longer resolves, and a stale entry would let
- * the edit screen render a form over an account that is gone.
+ * The backend deletes the account row itself and drops the member's sessions, so
+ * this ends the login rather than only hiding the row. The cached detail record
+ * is dropped outright: the member no longer resolves, and a stale entry would
+ * let the edit screen render a form over an account that is gone.
  */
 export function useDeleteTeamMember() {
   const queryClient = useQueryClient();

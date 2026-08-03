@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 
 import {
   BuildingIcon,
@@ -102,11 +103,19 @@ export function ServicesGridSection() {
         ))}
       </div>
 
+      {/* The agent has no card of its own — it is sold with formation — so this
+       * note is its one entry point from the grid. */}
       <div className="flex w-full items-start gap-2 py-2 md:items-center md:justify-center md:py-0">
         <ShieldCheckIcon className="size-4 shrink-0 text-accent" />
         <p className="flex-1 text-[12px] font-medium leading-4 text-text-secondary md:flex-none md:text-[13px] md:leading-normal lg:text-[14px]">
-          We also provide Registered Agent services in all 50 states — included
-          with every LLC formation package.
+          We also provide{' '}
+          <Link
+            to="/services/registered-agent"
+            className="font-semibold text-primary hover:underline"
+          >
+            Registered Agent services
+          </Link>{' '}
+          in all 50 states — included with every LLC formation package.
         </p>
       </div>
     </section>
@@ -151,12 +160,12 @@ function ServiceCard({
       {platforms ? <PlatformLogos platforms={platforms} /> : null}
 
       <div className="flex w-full items-start pt-0 lg:pt-3">
-        <a
-          href={href}
+        <Link
+          to={href}
           className="flex w-full items-center justify-center rounded-[8px] border-2 border-primary bg-white px-4 py-3 text-[14px] font-semibold text-primary transition-colors hover:bg-primary-light md:rounded-input md:px-5 lg:w-auto lg:px-6 lg:py-3.5 lg:text-[16px]"
         >
           {buttonLabel}
-        </a>
+        </Link>
       </div>
     </div>
   );

@@ -380,6 +380,23 @@ const CATALOG: Record<string, Entry> = {
     category: 'team',
     severity: 'alert',
   },
+  // A role edit moves everyone holding it in one write, so it is the widest
+  // access change the system can record.
+  [AuditAction.STAFF_ROLE_CREATED]: {
+    label: 'Staff role created',
+    category: 'team',
+    severity: 'alert',
+  },
+  [AuditAction.STAFF_ROLE_UPDATED]: {
+    label: 'Staff role permissions changed',
+    category: 'team',
+    severity: 'alert',
+  },
+  [AuditAction.STAFF_ROLE_DELETED]: {
+    label: 'Staff role deleted',
+    category: 'team',
+    severity: 'alert',
+  },
 
   // --- Support -----------------------------------------------------------
   [AuditAction.CONVERSATION_ASSIGNED]: {

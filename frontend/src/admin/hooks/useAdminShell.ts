@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { signOut, useSession } from '@/auth/client';
+import { clearSessionHint } from '@/lib/session-hint';
 import { closeSocket } from '@/services/socket';
 import type { AdminSidebarUser } from '@/admin/components/sidebar';
 
@@ -48,6 +49,9 @@ export function useAdminShell(): {
           // open after sign-out would keep delivering this agent's messages to a
           // browser that is back on the login screen.
           closeSocket();
+          // The session is gone, so the public routes must stop holding their
+          // render for it (see lib/session-hint.ts).
+          clearSessionHint();
           navigate(LOGIN_ROUTE, { replace: true });
         },
       },

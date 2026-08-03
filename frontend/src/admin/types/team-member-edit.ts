@@ -36,9 +36,32 @@ export type AdminTeamMemberDetail = {
   name: string;
   email: string;
   role: string;
+  roleLabel: string;
   isActive: boolean;
   statusDescription: string;
+  /*
+   * The effective grid — what this member can actually reach, which is what the
+   * switches show and what an edit writes back. It is their role's grants with
+   * their own overrides applied on top.
+   */
   permissions: Record<string, boolean>;
+  /*
+   * What the role alone gives. The pair is what makes an override legible: a
+   * switch that disagrees with this is a decision somebody took about this one
+   * account, and the screen marks it and offers to put it back. Without it a
+   * denied area and an area the role never granted look identical.
+   */
+  rolePermissions: Record<string, boolean>;
+  // The keys that currently disagree. Derived from the two maps above, but sent
+  // rather than diffed here so "is this overridden" has one definition.
+  overriddenPermissions: string[];
+  /*
+   * True when the role carries the `admin` authorization role: the backend's
+   * guards let an admin past every area check, so this member reaches every
+   * section whatever the grid below says. The screen warns rather than letting
+   * an admin discover it by accident.
+   */
+  roleGrantsFullAccess: boolean;
   roles: TeamRoleOption[];
   permissionAreas: TeamPermissionArea[];
 };
@@ -71,7 +94,16 @@ export type TeamMemberEditDraft = {
  * A blank password is dropped rather than sent: it is write-only, and an empty
  * string would fail the backend's length check instead of meaning "unchanged".
  */
-export type TeamMemberWritePayload = Partial<TeamMemberEditDraft>;
+export type TeamMemberWritePayload = Partial<TeamMemberEditDraft> & {
+  /*
+   * "Follow the role again" — clears every per-member override in one write.
+   *
+   * A separate flag rather than an empty `permissions` map, because those mean
+   * opposite things: an empty map is a grid with everything switched off, which
+   * is a legal thing for an admin to want.
+   */
+  resetPermissions?: boolean;
+};
 
 /*
  * The "Add staff member" form. The same fields as the editor, except the

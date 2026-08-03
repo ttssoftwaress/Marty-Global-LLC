@@ -1,5 +1,5 @@
 import { useId, useState } from 'react';
-import { ChevronDown, Eye, EyeOff } from 'lucide-react';
+import { ChevronDown, Eye, EyeOff, ShieldAlert } from 'lucide-react';
 
 import type { TeamRoleOption } from '../../types/team';
 import type {
@@ -25,16 +25,21 @@ import { TeamToggleSwitch } from './edit/TeamToggleSwitch';
  * change rather than a frontend deploy.
  *
  * The permission grid is disclosed rather than always open: choosing a role is
- * the normal path, and its defaults are applied server-side. Opening the grid is
- * what turns the map from "untouched — use the role's defaults" into an explicit
- * per-area override, which is why the toggle also seeds it from the defaults the
- * caller passes.
+ * the normal path, and the role decides the switches. Opening the grid shows
+ * what that role grants, already applied — the page seeds it whenever the role
+ * changes — so an admin adjusting a switch here is knowingly overriding the role
+ * for this one account rather than filling in a blank form.
  */
 
 type AddStaffFormProps = {
   draft: TeamMemberCreateDraft;
   roles: TeamRoleOption[];
   areas: TeamPermissionArea[];
+  // What the selected role grants — the baseline a switch is marked against.
+  roleGrants: Record<string, boolean>;
+  // True when the selected role carries the `admin` authorization role, in which
+  // case the grid below decides nothing.
+  roleGrantsFullAccess: boolean;
   errors: TeamMemberEditErrors;
   onChange: (next: Partial<TeamMemberCreateDraft>) => void;
   onPermissionChange: (key: string, granted: boolean) => void;
@@ -44,6 +49,8 @@ export function AddStaffForm({
   draft,
   roles,
   areas,
+  roleGrants,
+  roleGrantsFullAccess,
   errors,
   onChange,
   onPermissionChange,
@@ -56,9 +63,20 @@ export function AddStaffForm({
 
   const [showPassword, setShowPassword] = useState(false);
 
-  // The grid opens by itself once any area has been set, so a validation error
-  // or a reopened dialog never hides overrides the admin already made.
-  const hasOverrides = Object.keys(draft.permissions).length > 0;
+  /*
+   * The grid opens by itself once anything deviates from the role, so a
+   * validation error or a reopened dialog never hides an override the admin
+   * already made. The grid always holds a full map now — seeded from the role —
+   * so "has the admin touched it" is a comparison against the role rather than a
+   * count of keys.
+   */
+  const hasOverrides = areas.some(
+    (area) =>
+      (draft.permissions[area.key] === true) !== (roleGrants[area.key] === true) ||
+      (area.scopeKey !== undefined &&
+        (draft.permissions[area.scopeKey] === true) !==
+          (roleGrants[area.scopeKey] === true)),
+  );
   const [showPermissions, setShowPermissions] = useState(false);
   const permissionsOpen = showPermissions || hasOverrides;
 
@@ -213,15 +231,33 @@ export function AddStaffForm({
           </div>
 
           <p id={helperId} className="text-small leading-[1.4] text-gray-400">
-            The role applies its default permissions. Customise them below if this
-            member needs different access.
+            The role sets this member’s permissions. Anything you change below
+            applies to this member only, and stays put when the role is edited
+            later.
           </p>
         </div>
+
+        {/* The grid decides nothing for an administrator — the backend's guards
+            pass them before ever reading it. Logged as a deviation. */}
+        {roleGrantsFullAccess ? (
+          <p className="flex items-start gap-2 rounded-input border border-warning/30 bg-warning/5 px-4 py-3 text-small text-text-secondary">
+            <ShieldAlert
+              className="mt-0.5 size-[1.125rem] shrink-0 text-warning"
+              strokeWidth={1.75}
+              aria-hidden="true"
+            />
+            <span>
+              This role has administrator access, so the member will reach every
+              section regardless of the switches below.
+            </span>
+          </p>
+        ) : null}
 
         {permissionsOpen ? (
           <PermissionGrid
             areas={areas}
             permissions={draft.permissions}
+            roleGrants={roleGrants}
             onPermissionChange={onPermissionChange}
           />
         ) : (

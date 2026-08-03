@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { signOut, useSession } from '@/auth/client';
+import { clearSessionHint } from '@/lib/session-hint';
 import { closeSocket } from '@/services/socket';
 import type { SidebarUser } from '@/portal/components/sidebar';
 // Imported from the query module rather than the feature barrel so the shell —
@@ -53,6 +54,9 @@ export function usePortalShell(): { user: SidebarUser; onLogout: () => void } {
           // after sign-out would keep delivering this customer's messages to a
           // browser that is back on the login screen.
           closeSocket();
+          // The session is gone, so the public routes must stop holding their
+          // render for it (see lib/session-hint.ts).
+          clearSessionHint();
           navigate(LOGIN_ROUTE, { replace: true });
         },
       },
