@@ -7,7 +7,9 @@ import type {
 import {
   answersByServiceFrom,
   buildApplicationSteps,
+  descendantFieldNames,
   isStepComplete,
+  visibleOptions,
 } from './applicationSteps';
 
 /*
@@ -232,5 +234,92 @@ describe('answersByServiceFrom', () => {
     expect(answersByServiceFrom([only], { company_name: 'Acme', notes: '   ' })).toEqual(
       { only: { company_name: 'Acme' } },
     );
+  });
+});
+
+/*
+ * The conditional-dropdown cascade. The customer-facing half of the rule the
+ * backend enforces: a dependent dropdown shows nothing until the question above
+ * it is answered, and never shows a choice belonging to a different answer.
+ *
+ * Silent when wrong in both directions — a leaking filter offers an address in
+ * the wrong state, and a clearing bug submits one the customer can no longer
+ * see on screen — so both are covered here.
+ */
+
+const country: ServiceField = {
+  type: 'select',
+  name: 'country',
+  label: 'Country',
+  options: [
+    { value: 'us', label: 'United States' },
+    { value: 'gb', label: 'United Kingdom' },
+  ],
+};
+
+const state: ServiceField = {
+  type: 'select',
+  name: 'state',
+  label: 'State',
+  dependsOn: 'country',
+  options: [
+    { value: 'tx', label: 'Texas', when: ['us'] },
+    { value: 'ca', label: 'California', when: ['us'] },
+    { value: 'eng', label: 'England', when: ['gb'] },
+    { value: 'other', label: 'Somewhere else' },
+  ],
+};
+
+const address: ServiceField = {
+  type: 'select',
+  name: 'address',
+  label: 'Address',
+  dependsOn: 'state',
+  options: [
+    { value: 'tx_1', label: '901 S MoPac, Austin TX', when: ['tx'] },
+    { value: 'ca_1', label: '535 Mission St, San Francisco CA', when: ['ca'] },
+  ],
+};
+
+const asSelect = (field: ServiceField) =>
+  field as Extract<ServiceField, { type: 'select' }>;
+
+describe('visibleOptions', () => {
+  it('offers nothing while the parent is unanswered', () => {
+    expect(visibleOptions(asSelect(state), {})).toEqual([]);
+  });
+
+  it('offers the parent answer’s choices plus the unscoped ones', () => {
+    expect(
+      visibleOptions(asSelect(state), { country: 'us' }).map((o) => o.value),
+    ).toEqual(['tx', 'ca', 'other']);
+  });
+
+  it('never leaks another branch of the tree', () => {
+    expect(
+      visibleOptions(asSelect(address), { state: 'ca' }).map((o) => o.value),
+    ).toEqual(['ca_1']);
+  });
+
+  it('returns the whole list for an independent dropdown', () => {
+    expect(visibleOptions(asSelect(country), {})).toHaveLength(2);
+  });
+});
+
+describe('descendantFieldNames', () => {
+  it('finds every field below the one that changed, across screens', () => {
+    const steps = buildApplicationSteps([
+      service('mail', 'Virtual Mail Room', [
+        { key: 'where', title: 'Where', fields: [country, state] },
+        { key: 'which', title: 'Which', fields: [address] },
+      ]),
+    ]);
+
+    expect(descendantFieldNames(steps, 'country').sort()).toEqual([
+      'address',
+      'state',
+    ]);
+    expect(descendantFieldNames(steps, 'state')).toEqual(['address']);
+    expect(descendantFieldNames(steps, 'address')).toEqual([]);
   });
 });

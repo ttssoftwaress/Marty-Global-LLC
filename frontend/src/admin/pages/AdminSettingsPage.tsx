@@ -8,6 +8,7 @@ import {
   PaymentConfigPanel,
 } from '../features/payment-settings';
 import { CarriersPanel } from '../features/settings/CarriersPanel';
+import { EmailDeliveryPanel } from '../features/settings/EmailDeliveryPanel';
 import { LocationsPanel } from '../features/settings/LocationsPanel';
 import { useAdminShell } from '../hooks/useAdminShell';
 import { useAdminMe } from '../queries/admin-me';
@@ -41,7 +42,12 @@ import { useAdminMe } from '../queries/admin-me';
  * language as the designed admin screens, and logged as a deviation.
  */
 
-type SettingsTab = 'locations' | 'carriers' | 'payments' | 'bank-accounts';
+type SettingsTab =
+  | 'locations'
+  | 'carriers'
+  | 'email'
+  | 'payments'
+  | 'bank-accounts';
 
 type TabDefinition = {
   value: SettingsTab;
@@ -53,6 +59,13 @@ type TabDefinition = {
 const TABS: TabDefinition[] = [
   { value: 'locations', label: 'Locations', area: 'settings' },
   { value: 'carriers', label: 'Mail carriers', area: 'settings' },
+  /*
+   * The outbound-email switch. In the `settings` area rather than a new one: it
+   * is one operational switch, and it is the counterpart of the
+   * automatic-verification switch two tabs along — the two background
+   * integrations that ever need standing down in a hurry.
+   */
+  { value: 'email', label: 'Email', area: 'settings' },
   { value: 'payments', label: 'Payments', area: 'payments' },
   { value: 'bank-accounts', label: 'Bank accounts', area: 'payments' },
 ];
@@ -143,6 +156,7 @@ export function AdminSettingsPage() {
 
           {activeTab === 'locations' && <LocationsPanel canWrite={Boolean(canWrite)} />}
           {activeTab === 'carriers' && <CarriersPanel canWrite={Boolean(canWrite)} />}
+          {activeTab === 'email' && <EmailDeliveryPanel canWrite={Boolean(canWrite)} />}
           {activeTab === 'payments' && <PaymentConfigPanel canWrite={Boolean(canWrite)} />}
           {activeTab === 'bank-accounts' && (
             <BankAccountsPanel canWrite={Boolean(canWrite)} />

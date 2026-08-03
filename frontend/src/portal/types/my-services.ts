@@ -166,7 +166,20 @@ export type RequestFormField = {
   required?: boolean;
   placeholder?: string;
   hint?: string;
-  options?: ResultSelectOption[];
+  /*
+   * A choice's `when` names the parent answers it belongs to; a choice without
+   * one is offered under every answer. Together with `dependsOn` below this is
+   * the same conditional-dropdown contract the order form reads — the intake
+   * forms draw on the same registry, so "which address?" can narrow by the
+   * country and state answered above it.
+   */
+  options?: (ResultSelectOption & { when?: string[] })[];
+  /*
+   * The field whose answer filters these choices. While it is unanswered this
+   * dropdown offers nothing and renders locked; the backend re-derives the same
+   * set when validating, so the filtered control is a courtesy, never the rule.
+   */
+  dependsOn?: string;
   rows?: number;
   accept?: string[];
   maxSizeMb?: number;

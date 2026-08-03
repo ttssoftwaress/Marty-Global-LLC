@@ -178,6 +178,13 @@ export const AuditAction = {
   CARRIER_UPDATED: 'settings.carrier_updated',
   CARRIER_DELETED: 'settings.carrier_deleted',
   CARRIERS_REORDERED: 'settings.carriers_reordered',
+  /*
+   * Outbound email switched on or off. Carries its value, unlike the payment
+   * settings above: the switch is not sensitive, and "was the system sending
+   * email at all that week" is exactly the question asked weeks later when a
+   * customer says nobody told them. The metadata never names a recipient.
+   */
+  NOTIFICATION_SETTINGS_UPDATED: 'settings.notification_settings_updated',
   STAFF_CREATED: 'team.member_created',
   STAFF_UPDATED: 'team.member_updated',
   STAFF_DELETED: 'team.member_deleted',

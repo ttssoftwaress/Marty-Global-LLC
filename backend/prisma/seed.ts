@@ -16,6 +16,8 @@ import {
 } from '@prisma/client';
 
 import { seedAdminDemo } from './seed-admin-demo.js';
+import { FIELDS, RESULT_FIELDS, SERVICES } from './seed-catalog.js';
+import { seedLocations } from './seed-locations.js';
 import {
   seedDemoCatalogPricing,
   seedDemoReferenceData,
@@ -31,717 +33,6 @@ const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString }),
 });
 
-/*
- * The field registry — the vocabulary every service form is built from
- * (AGENTS.md: the backend owns the catalog).
- *
- * An admin registers a question once here, then builds a service's form by
- * PICKING from this list. That is what keeps `OrderItem.answers` keyed by a
- * closed set: every answer key in the database is a `FieldDefinition.key`, not
- * whatever an admin happened to type on a particular service.
- *
- * It is also what makes the customer's merged master form exact. Two services
- * picking `company_name` are asking the same question by construction, so the
- * order flow asks it once and records the answer against both — no spelling
- * convention to remember, no near-duplicate keys to reconcile later.
- *
- * `config` holds the per-type extras: a select's `options`, a file field's
- * `accept` / `maxSizeMb` / `multiple`, a textarea's `rows`.
- */
-type SeedField = {
-  key: string;
-  label: string;
-  type: 'text' | 'select' | 'textarea' | 'file';
-  placeholder?: string;
-  hint?: string;
-  category?: string;
-  config?: Record<string, unknown>;
-};
-
-const FIELDS: SeedField[] = [
-  {
-    key: 'company_name',
-    label: 'Company name',
-    type: 'text',
-    placeholder: 'e.g. Marty Ventures LLC',
-    category: 'Company details',
-  },
-  {
-    key: 'jurisdiction',
-    label: 'Jurisdiction',
-    type: 'select',
-    category: 'Company details',
-    config: {
-      options: [
-        { value: 'us-de', label: 'United States — Delaware' },
-        { value: 'us-wy', label: 'United States — Wyoming' },
-        { value: 'uk', label: 'United Kingdom' },
-        { value: 'ca', label: 'Canada' },
-        { value: 'eu', label: 'European Union' },
-        { value: 'uae', label: 'United Arab Emirates' },
-      ],
-    },
-  },
-  {
-    key: 'entity_type',
-    label: 'Entity type',
-    type: 'select',
-    category: 'Company details',
-    config: {
-      options: [
-        { value: 'llc', label: 'LLC' },
-        { value: 'inc', label: 'INC / Corporation' },
-        { value: 'ltd', label: 'LTD' },
-      ],
-    },
-  },
-  {
-    key: 'business_activity',
-    label: 'Primary business activity',
-    type: 'textarea',
-    placeholder: 'Briefly describe what the company will do.',
-    category: 'Company details',
-    config: { rows: 3 },
-  },
-  {
-    key: 'identity_document',
-    label: 'Photo ID for each owner',
-    type: 'file',
-    hint: 'Passport or national ID for every person owning 25% or more.',
-    category: 'Identity documents',
-    config: {
-      accept: ['application/pdf', 'image/jpeg', 'image/png'],
-      maxSizeMb: 10,
-      multiple: true,
-    },
-  },
-  {
-    key: 'proof_of_address',
-    label: 'Proof of address',
-    type: 'file',
-    hint: 'A utility bill or bank statement from the last three months.',
-    category: 'Identity documents',
-    config: {
-      accept: ['application/pdf', 'image/jpeg', 'image/png'],
-      maxSizeMb: 10,
-    },
-  },
-  {
-    key: 'address_region',
-    label: 'Preferred address region',
-    type: 'select',
-    category: 'Mail & address',
-    config: {
-      options: [
-        { value: 'us', label: 'United States' },
-        { value: 'uk', label: 'United Kingdom' },
-        { value: 'ca', label: 'Canada' },
-        { value: 'eu', label: 'European Union' },
-      ],
-    },
-  },
-  {
-    key: 'mail_handling',
-    label: 'Mail handling preference',
-    type: 'select',
-    category: 'Mail & address',
-    config: {
-      options: [
-        { value: 'scan', label: 'Scan & notify' },
-        { value: 'forward', label: 'Forward physically' },
-        { value: 'both', label: 'Scan and forward' },
-      ],
-    },
-  },
-  {
-    key: 'banking_region',
-    label: 'Preferred banking region',
-    type: 'select',
-    category: 'Banking',
-    config: {
-      options: [
-        { value: 'us', label: 'United States' },
-        { value: 'uk', label: 'United Kingdom' },
-        { value: 'ca', label: 'Canada' },
-        { value: 'eu', label: 'European Union' },
-      ],
-    },
-  },
-  {
-    key: 'marketplace',
-    label: 'Target marketplace',
-    type: 'select',
-    category: 'E-commerce',
-    config: {
-      options: [
-        { value: 'amazon', label: 'Amazon' },
-        { value: 'ebay', label: 'eBay' },
-        { value: 'walmart', label: 'Walmart' },
-        { value: 'alibaba', label: 'Alibaba' },
-      ],
-    },
-  },
-  {
-    key: 'store_name',
-    label: 'Store / brand name',
-    type: 'text',
-    placeholder: 'e.g. North Peak Goods',
-    category: 'E-commerce',
-  },
-  {
-    key: 'product_categories',
-    label: 'Product categories',
-    type: 'textarea',
-    placeholder: 'What do you plan to sell?',
-    category: 'E-commerce',
-    config: { rows: 3 },
-  },
-];
-
-/*
- * The RESULT registry — the vocabulary of facts a completed service delivers
- * back to the customer.
- *
- * The mirror of `FIELDS` above, pointed the other way: that list is what we ASK,
- * this is what we RETURN. Same two rules, for the same reasons — a key is
- * immutable because delivered values are stored under it, and a fact registered
- * once is reused across every service that returns it.
- *
- * `isPrimary` and `showInList` here are DEFAULTS a picking service inherits. The
- * service's own reference overrides them, because the same "Company name" titles
- * a formation record and is an ordinary column elsewhere.
- */
-type SeedResultField = {
-  key: string;
-  label: string;
-  type:
-    | 'text'
-    | 'textarea'
-    | 'select'
-    | 'file'
-    | 'date'
-    | 'number'
-    | 'url'
-    | 'status';
-  hint?: string;
-  category?: string;
-  config?: Record<string, unknown>;
-  isPrimary?: boolean;
-  showInList?: boolean;
-};
-
-const RESULT_FIELDS: SeedResultField[] = [
-  {
-    key: 'registered_name',
-    label: 'Registered name',
-    type: 'text',
-    hint: 'Exactly as filed with the registry.',
-    category: 'Registration',
-    isPrimary: true,
-    showInList: true,
-  },
-  {
-    key: 'registration_number',
-    label: 'Registration number',
-    type: 'text',
-    category: 'Registration',
-    showInList: true,
-  },
-  {
-    key: 'entity_status',
-    label: 'Status',
-    type: 'status',
-    category: 'Registration',
-    showInList: true,
-    config: {
-      statusOptions: [
-        { value: 'active', label: 'Active', tone: 'success' },
-        { value: 'pending', label: 'Pending', tone: 'warning' },
-        { value: 'dissolved', label: 'Dissolved', tone: 'error' },
-      ],
-    },
-  },
-  {
-    key: 'formation_date',
-    label: 'Formation date',
-    type: 'date',
-    category: 'Registration',
-    showInList: true,
-  },
-  {
-    key: 'registered_jurisdiction',
-    label: 'Jurisdiction',
-    type: 'text',
-    category: 'Registration',
-    showInList: true,
-  },
-  {
-    key: 'ein',
-    label: 'EIN / Tax ID',
-    type: 'text',
-    hint: 'Issued by the tax authority.',
-    category: 'Tax',
-  },
-  {
-    key: 'annual_report_due',
-    label: 'Next annual report due',
-    type: 'date',
-    category: 'Compliance',
-  },
-  {
-    key: 'registered_agent',
-    label: 'Registered agent',
-    type: 'text',
-    category: 'Compliance',
-  },
-  {
-    key: 'registry_listing_url',
-    label: 'Public registry listing',
-    type: 'url',
-    hint: 'The jurisdiction’s own record of your entity.',
-    category: 'Compliance',
-  },
-  {
-    key: 'formation_certificate',
-    label: 'Certificate of formation',
-    type: 'file',
-    category: 'Documents',
-    config: { accept: ['application/pdf'], maxSizeMb: 20 },
-  },
-  {
-    key: 'operating_agreement',
-    label: 'Operating agreement',
-    type: 'file',
-    category: 'Documents',
-    config: { accept: ['application/pdf'], maxSizeMb: 20 },
-  },
-  // --- Bank account -------------------------------------------------------
-  {
-    key: 'bank_name',
-    label: 'Bank',
-    type: 'text',
-    category: 'Account',
-    isPrimary: true,
-    showInList: true,
-  },
-  {
-    key: 'account_number_masked',
-    label: 'Account number',
-    type: 'text',
-    // The full number is never stored here — an account is identified by its
-    // last four, exactly as a card is (AGENTS.md, Security & PII).
-    hint: 'Last four digits only.',
-    category: 'Account',
-    showInList: true,
-  },
-  {
-    key: 'account_status',
-    label: 'Status',
-    type: 'status',
-    category: 'Account',
-    showInList: true,
-    config: {
-      statusOptions: [
-        { value: 'open', label: 'Open', tone: 'success' },
-        { value: 'pending', label: 'Pending activation', tone: 'warning' },
-        { value: 'closed', label: 'Closed', tone: 'neutral' },
-      ],
-    },
-  },
-  {
-    key: 'account_opened_on',
-    label: 'Opened on',
-    type: 'date',
-    category: 'Account',
-    showInList: true,
-  },
-  {
-    key: 'online_banking_url',
-    label: 'Online banking',
-    type: 'url',
-    category: 'Account',
-  },
-  // --- E-commerce ---------------------------------------------------------
-  {
-    key: 'store_name',
-    label: 'Store name',
-    type: 'text',
-    category: 'Store',
-    isPrimary: true,
-    showInList: true,
-  },
-  {
-    key: 'store_url',
-    label: 'Store address',
-    type: 'url',
-    category: 'Store',
-    showInList: true,
-  },
-  {
-    key: 'store_platform',
-    label: 'Platform',
-    type: 'select',
-    category: 'Store',
-    showInList: true,
-    config: {
-      options: [
-        { value: 'shopify', label: 'Shopify' },
-        { value: 'woocommerce', label: 'WooCommerce' },
-        { value: 'amazon', label: 'Amazon' },
-      ],
-    },
-  },
-  {
-    key: 'store_launched_on',
-    label: 'Launched on',
-    type: 'date',
-    category: 'Store',
-    showInList: true,
-  },
-  {
-    key: 'delivery_notes',
-    label: 'Notes from your specialist',
-    type: 'textarea',
-    category: 'Store',
-    config: { rows: 4 },
-  },
-
-  /*
-   * Virtual mail room — the address a customer's room is opened at.
-   *
-   * These are the questions staff answer when they deliver the service, and
-   * answering them is what OPENS the room (mailroom.provisioning.ts reads them
-   * back by these keys). They are registry fields like any other, so an admin
-   * can reword a label or add a question from `/admin/catalog` without a deploy
-   * — but the KEYS are a contract, and renaming one detaches it from
-   * provisioning.
-   *
-   * The service that uses them is flagged `resultInternal`, so none of this
-   * becomes a customer-facing record page: what the customer gets is the mail
-   * room at `/app/mailroom`.
-   */
-  {
-    key: 'mail_room_name',
-    label: 'Room name',
-    type: 'text',
-    hint: 'What the customer sees on the room card — e.g. "Main Office".',
-    category: 'Mail room',
-    isPrimary: true,
-    showInList: true,
-  },
-  {
-    key: 'mail_room_address_line1',
-    label: 'Address line 1',
-    type: 'text',
-    hint: 'Street address of the mail room. Required to open the room.',
-    category: 'Mail room',
-    showInList: true,
-  },
-  {
-    key: 'mail_room_address_line2',
-    label: 'Address line 2',
-    type: 'text',
-    hint: 'Suite or unit number, if any.',
-    category: 'Mail room',
-  },
-  { key: 'mail_room_city', label: 'City', type: 'text', category: 'Mail room' },
-  {
-    key: 'mail_room_address_region',
-    label: 'State / region',
-    type: 'text',
-    category: 'Mail room',
-  },
-  {
-    key: 'mail_room_postal_code',
-    label: 'Postal code',
-    type: 'text',
-    category: 'Mail room',
-  },
-  {
-    key: 'mail_room_address_country',
-    label: 'Country',
-    type: 'text',
-    hint: 'ISO 3166-1 alpha-2 code — US, GB, CA.',
-    category: 'Mail room',
-  },
-];
-
-/*
- * The orderable service catalog. These are the four services the "Order new
- * service" flow offers. Each carries its Step 1 card copy and its request form
- * as REFERENCES into the registry above — `{ fieldKey, required? }`, never an
- * inline field definition.
- *
- * A service therefore records only which registered questions it asks and
- * whether each is mandatory *here*: `identity_document` is optional on Company
- * Formation and required for a bank account, which is the one per-service
- * override that genuinely varies.
- *
- * Note `company_name` and `identity_document` appearing on two services each.
- * That is the point of the registry: a customer ordering both is asked for each
- * exactly once, and the answer is recorded against both order items.
- *
- * `iconKey` names an intent the frontend maps to a lucide glyph; `footer` is the
- * card's uppercase meta line (`{ label, chips? }`). Copy is kept aligned with the
- * marketing Services page but trimmed to the portal card's shorter form.
- *
- * Idempotent: seeding upserts by a stable slug id, so re-running updates the
- * catalog in place rather than duplicating it.
- */
-
-type SeedService = {
-  id: string;
-  iconKey: string;
-  name: string;
-  shortName: string;
-  description: string;
-  features: string[];
-  footer: { label: string; chips?: string[] };
-  detailFields: { fieldKey: string; required?: boolean }[];
-  sortOrder: number;
-  /*
-   * The delivery half — what this service RETURNS once it is complete, as
-   * references into the result registry below, plus the wording the customer's
-   * page for it uses.
-   *
-   * A service with no `resultFields` delivers no structured record and therefore
-   * gets no customer page. That is the case for the virtual mail room, which
-   * keeps its own bespoke screens.
-   */
-  resultFields?: {
-    fieldKey: string;
-    required?: boolean;
-    isPrimary?: boolean;
-    showInList?: boolean;
-  }[];
-  resultPageTitle?: string;
-  resultNoun?: string;
-  /*
-   * The result form is completed by the TEAM and produces no customer-facing
-   * record. Set on the virtual mail room: staff enter the address the room opens
-   * at, and what the customer receives is the room itself at `/app/mailroom`.
-   */
-  resultInternal?: boolean;
-  // The follow-up actions offered on a delivered record — the buttons the
-  // customer presses, each raising a ticket in the admin requests queue.
-  requestTypes?: {
-    key: string;
-    label: string;
-    description?: string;
-    turnaround?: string;
-    fields?: { fieldKey: string; required?: boolean }[];
-  }[];
-};
-
-const SERVICES: SeedService[] = [
-  {
-    id: 'company-formation',
-    iconKey: 'company-formation',
-    name: 'Company Formation',
-    shortName: 'Company Formation',
-    description:
-      'Register your LLC, INC, or LTD in any supported jurisdiction, with registered agent service included.',
-    features: [
-      'Full entity registration & filing',
-      '1 year of Registered Agent service',
-      'EIN / Tax ID application support',
-    ],
-    footer: { label: 'Coverage — US, UK, EU, UAE' },
-    detailFields: [
-      { fieldKey: 'company_name', required: true },
-      { fieldKey: 'jurisdiction', required: true },
-      { fieldKey: 'entity_type', required: true },
-      { fieldKey: 'business_activity' },
-      { fieldKey: 'identity_document' },
-    ],
-    sortOrder: 1,
-    /*
-     * The worked example: a formation delivers a company record, and the
-     * customer gets "My companies" — a table of every entity we have formed for
-     * them, each row opening the full filing detail.
-     *
-     * The four required facts are what makes the record worth showing at all, so
-     * the delivery gate holds until staff have them.
-     */
-    resultPageTitle: 'My companies',
-    resultNoun: 'company',
-    resultFields: [
-      { fieldKey: 'registered_name', required: true, isPrimary: true },
-      { fieldKey: 'registration_number', required: true },
-      { fieldKey: 'entity_status', required: true },
-      { fieldKey: 'formation_date', required: true },
-      { fieldKey: 'registered_jurisdiction', showInList: true },
-      { fieldKey: 'ein' },
-      { fieldKey: 'registered_agent' },
-      { fieldKey: 'annual_report_due' },
-      { fieldKey: 'registry_listing_url' },
-      { fieldKey: 'formation_certificate' },
-      { fieldKey: 'operating_agreement' },
-    ],
-    requestTypes: [
-      {
-        key: 'certified-copy',
-        label: 'Request a certified copy',
-        description: 'A stamped copy of your formation documents.',
-        turnaround: 'Typically 3–5 business days',
-      },
-      {
-        key: 'amendment',
-        label: 'File an amendment',
-        description: 'Change your company name, address, or members.',
-        turnaround: 'Typically 5–10 business days',
-        // Reuses the request registry — the same question the order form asks.
-        fields: [{ fieldKey: 'business_activity', required: true }],
-      },
-      {
-        key: 'annual-report',
-        label: 'File my annual report',
-        description: 'We prepare and file it with the registry on your behalf.',
-        turnaround: 'Filed within 5 business days',
-      },
-    ],
-  },
-  {
-    id: 'virtual-mail-room',
-    iconKey: 'virtual-mail-room',
-    name: 'Virtual Mail Room',
-    shortName: 'Virtual Mail Room',
-    description:
-      'A professional business address that receives, scans, and forwards your mail from anywhere in the world.',
-    features: [
-      'Real street address in a business corridor',
-      'High-resolution mail scanning',
-      'Worldwide package forwarding',
-    ],
-    footer: { label: 'Coverage — US, UK, CA, EU' },
-    detailFields: [
-      { fieldKey: 'address_region', required: true },
-      { fieldKey: 'mail_handling', required: true },
-    ],
-    sortOrder: 2,
-    /*
-     * The result form here is INTERNAL — see `resultInternal` below.
-     *
-     * The mail room has bespoke screens (`/app/mailroom`) with their own models;
-     * a scanned inbox is not a table of facts, so it must not also appear as a
-     * record page in the "My services" sidebar. But staff still need somewhere to
-     * enter the address the room opens at, and that is what these fields are:
-     * filling them in and delivering the item is what provisions the room
-     * (mailroom.provisioning.ts matches them back by key).
-     */
-    resultFields: [
-      { fieldKey: 'mail_room_name', isPrimary: true },
-      { fieldKey: 'mail_room_address_line1', required: true },
-      { fieldKey: 'mail_room_address_line2' },
-      { fieldKey: 'mail_room_city', required: true },
-      { fieldKey: 'mail_room_address_region' },
-      { fieldKey: 'mail_room_postal_code', required: true },
-      { fieldKey: 'mail_room_address_country', required: true },
-    ],
-    resultInternal: true,
-  },
-  {
-    id: 'bank-account',
-    iconKey: 'bank-account',
-    name: 'Bank Account Opening Assistance',
-    shortName: 'Bank Account Opening',
-    description:
-      'Guided applications with partner banks for non-residents and newly formed entities across all regions.',
-    features: [
-      'US, UK, Canadian & European accounts',
-      'Guided application & compliance onboarding',
-      'Non-resident & international founder support',
-    ],
-    footer: { label: 'Coverage — US, UK, CA, EU' },
-    detailFields: [
-      { fieldKey: 'banking_region', required: true },
-      // Shared with Company Formation — asked once on the master form.
-      { fieldKey: 'company_name', required: true },
-      { fieldKey: 'identity_document', required: true },
-      { fieldKey: 'proof_of_address', required: true },
-    ],
-    sortOrder: 3,
-    resultPageTitle: 'My bank accounts',
-    resultNoun: 'account',
-    resultFields: [
-      { fieldKey: 'bank_name', required: true, isPrimary: true },
-      // Last four only — we never hold a full account number, the same rule that
-      // keeps a PAN out of the payments tables (AGENTS.md, Security & PII).
-      { fieldKey: 'account_number_masked', required: true },
-      { fieldKey: 'account_status', required: true },
-      { fieldKey: 'account_opened_on' },
-      { fieldKey: 'online_banking_url' },
-    ],
-    requestTypes: [
-      {
-        key: 'bank-letter',
-        label: 'Request a bank reference letter',
-        description: 'A letter confirming your account, for suppliers or landlords.',
-        turnaround: 'Typically 5–7 business days',
-      },
-      {
-        key: 'update-signatory',
-        label: 'Update a signatory',
-        description: 'Add or remove someone authorised on the account.',
-        turnaround: 'Typically 10 business days',
-        fields: [{ fieldKey: 'identity_document', required: true }],
-      },
-    ],
-  },
-  {
-    id: 'e-commerce',
-    iconKey: 'e-commerce',
-    name: 'E-Commerce Account Setup',
-    shortName: 'E-Commerce Setup',
-    description:
-      'Get verified and set up seller accounts on major marketplaces that require a registered local entity.',
-    features: [
-      'Seller account setup & verification',
-      'Identity & address verification support',
-      'Localized compliance guidance',
-    ],
-    footer: {
-      label: 'Marketplaces',
-      chips: ['Amazon', 'eBay', 'Walmart', 'Alibaba'],
-    },
-    detailFields: [
-      { fieldKey: 'marketplace', required: true },
-      { fieldKey: 'store_name', required: true },
-      { fieldKey: 'product_categories' },
-    ],
-    sortOrder: 4,
-    resultPageTitle: 'My stores',
-    resultNoun: 'store',
-    /*
-     * `store_name` here is the RESULT field of that key, not the request one.
-     * The two registries are separate tables, so a fact and a question may share
-     * a key without colliding — the store the customer asked for and the store
-     * we actually set up are the same idea at two points in time.
-     */
-    resultFields: [
-      { fieldKey: 'store_name', required: true, isPrimary: true },
-      { fieldKey: 'store_url', required: true },
-      { fieldKey: 'store_platform', required: true },
-      { fieldKey: 'store_launched_on' },
-      { fieldKey: 'delivery_notes' },
-    ],
-    requestTypes: [
-      {
-        key: 'reverify-store',
-        label: 'Request re-verification',
-        description: 'If the marketplace has suspended or flagged your account.',
-        turnaround: 'We respond within 2 business days',
-      },
-      {
-        key: 'add-marketplace',
-        label: 'Add another marketplace',
-        description: 'Set up a seller account on an additional platform.',
-        turnaround: 'Typically 7–14 business days',
-        fields: [{ fieldKey: 'marketplace', required: true }],
-      },
-    ],
-  },
-];
 
 /*
  * Demo customer — the portal has a screen for every domain (orders, mail rooms,
@@ -1195,7 +486,19 @@ async function upsertManyBy(
 }
 
 async function main() {
-  // The registry first: a service's form references these keys, and the catalog
+  /*
+   * Locations first. A service's coverage points at `Region.code`, and the
+   * address cascade in the field registry is generated from the same address
+   * book, so nothing below can be written until the jurisdictions exist.
+   *
+   * They are seeded on the NORMAL path, not behind SEED_DEMO: where we operate
+   * is a fact about the business, not a development fixture. Retiring one is
+   * still an admin action at `/admin/settings` — this only guarantees a fresh
+   * database starts with the list we actually hold desks in.
+   */
+  await seedLocations(prisma);
+
+  // The registry next: a service's form references these keys, and the catalog
   // write path rejects a reference to a field that isn't registered.
   for (const [index, field] of FIELDS.entries()) {
     const row = {
@@ -1206,6 +509,9 @@ async function main() {
       hint: field.hint ?? null,
       category: field.category ?? null,
       config: (field.config ?? {}) as object,
+      // Retired questions stay registered and leave the picker. Set explicitly
+      // so re-seeding also REVIVES a field that came back into use.
+      archived: field.archived ?? false,
       sortOrder: index,
     };
 
@@ -1230,6 +536,7 @@ async function main() {
       config: (field.config ?? {}) as object,
       isPrimary: field.isPrimary ?? false,
       showInList: field.showInList ?? false,
+      archived: field.archived ?? false,
       sortOrder: index,
     };
 
@@ -1246,7 +553,8 @@ async function main() {
     const {
       id,
       footer,
-      detailFields,
+      formSteps,
+      coverage,
       resultFields,
       requestTypes,
       resultPageTitle,
@@ -1258,7 +566,17 @@ async function main() {
     const row = {
       ...rest,
       footer: footer as object,
-      detailFields: detailFields as object,
+      /*
+       * The form lives in `formSteps`, and the flat list is empty.
+       *
+       * Both columns are read and de-duplicated by key (services.service.ts), so
+       * carrying the same questions in both would work — but it would also mean
+       * two places to keep in step, and the one that lost an edit would keep
+       * rendering. The stepped shape is the one the customer meets, so it is the
+       * only one written.
+       */
+      detailFields: [] as object,
+      formSteps: formSteps as object,
       resultFields: (resultFields ?? []) as object,
       resultPageTitle: resultPageTitle ?? null,
       resultNoun: resultNoun ?? null,
@@ -1271,6 +589,29 @@ async function main() {
       create: { id, ...row },
       update: row,
     });
+
+    /*
+     * Where the service is offered. `enabled: false` is how the admin closes a
+     * jurisdiction, so the upsert re-enables only the rows this seed names and
+     * leaves any extra one the team added alone.
+     */
+    for (const [index, region] of coverage.entries()) {
+      await prisma.serviceRegionOffering.upsert({
+        where: { serviceId_regionCode: { serviceId: id, regionCode: region.code } },
+        create: {
+          serviceId: id,
+          regionCode: region.code,
+          enabled: true,
+          processingTime: region.processingTime,
+          sortOrder: index,
+        },
+        update: {
+          enabled: true,
+          processingTime: region.processingTime,
+          sortOrder: index,
+        },
+      });
+    }
 
     /*
      * The follow-up actions, keyed on (serviceId, key) so re-seeding revives a
@@ -1296,22 +637,36 @@ async function main() {
     }
   }
 
-  console.info(`Seed complete — upserted ${SERVICES.length} services.`);
+  /*
+   * Anything else in the catalog is a service we no longer sell — deactivated,
+   * never deleted.
+   *
+   * Deactivating hides it from the order flow and leaves every order, quote, and
+   * delivered record that references it intact and readable (schema.prisma,
+   * `Service.active`). Hard-deleting would take the customer's history with it,
+   * which is exactly the thing AGENTS.md says to ask before doing.
+   */
+  const retired = await prisma.service.updateMany({
+    where: { id: { notIn: SERVICES.map((service) => service.id) }, active: true },
+    data: { active: false },
+  });
+
+  console.info(
+    `Catalog seeded — ${SERVICES.length} services` +
+      (retired.count > 0 ? `, ${retired.count} older service(s) deactivated.` : '.'),
+  );
 
   /*
-   * Locations, carriers, and per-service coverage/pricing are deliberately NOT
-   * seeded here.
+   * Carriers and per-service PRICING are deliberately still not seeded here.
    *
-   * They used to be, and that was the bug: the only way a jurisdiction existed
-   * was for someone to add it to a script and re-seed, so `db:reset` wiped a
-   * list nobody could put back from the app. They are operational decisions —
-   * locations and carriers are managed at `/admin/settings`, a service's
-   * coverage and price points at `/admin/catalog/:serviceId` — and a fresh
-   * database now starts with none of them rather than with someone else's.
+   * Who the mail room ships with is an operational choice made at
+   * `/admin/settings`, and what a service costs is set per region at
+   * `/admin/catalog/:serviceId` — the catalog is quote-based, so a seeded price
+   * would be a number nobody agreed to, printed beside a real service.
    *
-   * The demo fixtures below still need rows to point at (an order is filed under
-   * a location, a forwarded parcel shipped with a carrier), so they seed their
-   * own beside the rest of the development data.
+   * The demo fixtures below still need rows to point at (a forwarded parcel
+   * ships with a carrier), so they seed their own beside the rest of the
+   * development data.
    */
   if (process.env.SEED_DEMO === 'true') {
     await seedDemoReferenceData(prisma);

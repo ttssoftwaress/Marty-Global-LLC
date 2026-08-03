@@ -1,6 +1,9 @@
 import { ChevronDown } from 'lucide-react';
 
-import type { ServiceField } from '../../types/order-new-service';
+import type {
+  ServiceField,
+  ServiceSelectOption,
+} from '../../types/order-new-service';
 import { ApplicationFileField } from './ApplicationFileField';
 
 /*
@@ -20,6 +23,13 @@ import { ApplicationFileField } from './ApplicationFileField';
  * `askedBy` is the master form's one addition: when a question came from more
  * than one selected service, the field says so, which is what makes "asked
  * once" legible rather than looking like a question went missing.
+ *
+ * A DEPENDENT dropdown — one whose choices are filtered by another answer — is
+ * given `options` already narrowed by the page and, while its parent is
+ * unanswered, an empty list. It renders disabled with "Choose <parent> first"
+ * rather than as an empty dropdown, because a control that opens onto nothing
+ * reads as a broken form (Design.md: a control disabled for a reason the user
+ * can fix states the reason).
  */
 
 type ApplicationFieldProps = {
@@ -34,6 +44,13 @@ type ApplicationFieldProps = {
   onFilesChange?: (files: File[]) => void;
   // Service names this question serves, when more than one asked it.
   askedBy?: string[];
+  /*
+   * A dependent dropdown's currently available choices, and the label of the
+   * question they depend on. Both come from the page, which is the only place
+   * that holds every answer — a field cannot narrow itself.
+   */
+  options?: ServiceSelectOption[];
+  parentLabel?: string;
 };
 
 export function ApplicationField({
@@ -44,11 +61,23 @@ export function ApplicationField({
   files,
   onFilesChange,
   askedBy,
+  options,
+  parentLabel,
 }: ApplicationFieldProps) {
   const fieldId = `${idPrefix}-${field.name}`;
   const hintId = field.hint ? `${fieldId}-hint` : undefined;
   const sharedId = askedBy && askedBy.length > 1 ? `${fieldId}-shared` : undefined;
-  const describedBy = [hintId, sharedId].filter(Boolean).join(' ') || undefined;
+
+  // A locked dropdown says why in its own line rather than only in its
+  // placeholder, so the reason is announced and not just drawn.
+  const isLocked =
+    field.type === 'select' &&
+    Boolean(field.dependsOn) &&
+    (options ?? field.options).length === 0;
+  const lockedId = isLocked ? `${fieldId}-locked` : undefined;
+
+  const describedBy =
+    [hintId, sharedId, lockedId].filter(Boolean).join(' ') || undefined;
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -95,23 +124,30 @@ export function ApplicationField({
             value={value}
             onChange={(event) => onChange(event.target.value)}
             required={field.required}
+            disabled={isLocked}
             aria-describedby={describedBy}
-            className={`input-field cursor-pointer appearance-none pr-11 ${
-              value ? 'text-text' : 'text-gray-400'
+            className={`input-field appearance-none pr-11 ${
+              isLocked
+                ? 'cursor-not-allowed bg-gray-100 text-gray-400'
+                : `cursor-pointer ${value ? 'text-text' : 'text-gray-400'}`
             }`}
           >
             {/* Empty first option acts as the placeholder until the user picks. */}
             <option value="" disabled hidden>
-              {field.placeholder ?? 'Select an option'}
+              {isLocked
+                ? `Choose ${parentLabel ?? 'the question above'} first`
+                : (field.placeholder ?? 'Select an option')}
             </option>
-            {field.options.map((option) => (
+            {(options ?? field.options).map((option) => (
               <option key={option.value} value={option.value} className="text-text">
                 {option.label}
               </option>
             ))}
           </select>
           <ChevronDown
-            className="pointer-events-none absolute right-4 top-1/2 size-4 -translate-y-1/2 text-gray-500"
+            className={`pointer-events-none absolute right-4 top-1/2 size-4 -translate-y-1/2 ${
+              isLocked ? 'text-gray-400' : 'text-gray-500'
+            }`}
             strokeWidth={1.75}
             aria-hidden="true"
           />
@@ -127,6 +163,12 @@ export function ApplicationField({
           aria-describedby={describedBy}
           className="input-field"
         />
+      )}
+
+      {lockedId && (
+        <p id={lockedId} className="text-small text-text-secondary">
+          Answer {parentLabel ?? 'the question above'} to see the options here.
+        </p>
       )}
 
       {field.hint && (

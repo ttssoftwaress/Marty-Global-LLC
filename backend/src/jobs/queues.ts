@@ -102,6 +102,37 @@ export async function enqueueEmail(payload: SendEmailJob) {
 }
 
 /*
+ * Throw away every email job that has not started yet, and every one that has
+ * already given up. Called when an admin switches outbound email off.
+ *
+ * Safe to do because Redis is not the ledger — the `notification` row is (see
+ * the retry note above), and the same settings write marks those rows SUPPRESSED
+ * so the record of what was owed survives. What is discarded is the *intent to
+ * send*, which is exactly what was just withdrawn.
+ *
+ * It matters for the same reason the switch does: a failed job lives in Redis
+ * for a week (`removeOnFail` above), so without this a monitor counting failed
+ * background jobs would keep flipping for days after the sends were stopped, on
+ * work nobody can fix. `active` is deliberately not cleaned — a job mid-send is
+ * already past the point where removing it changes anything, and it re-checks
+ * the switch itself before touching SES (notifications.service.ts).
+ */
+const DRAINABLE_EMAIL_STATES = ['wait', 'delayed', 'paused', 'failed'] as const;
+
+export async function drainEmailQueue(): Promise<number> {
+  let removed = 0;
+
+  for (const state of DRAINABLE_EMAIL_STATES) {
+    // grace 0 = "no matter how recent". The limit is a BullMQ requirement, not a
+    // budget, so it is set well above any backlog this queue could hold.
+    const ids = await notificationsQueue.clean(0, 50_000, state);
+    removed += ids.length;
+  }
+
+  return removed;
+}
+
+/*
  * Register the repeating chain sweep. BullMQ keys a repeatable job by its
  * scheduler id, so calling this on every boot re-registers the same schedule
  * rather than stacking a second one — which matters because every boot runs it.

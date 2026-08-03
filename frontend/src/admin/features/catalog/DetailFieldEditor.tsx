@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
 
-import { fieldDraft, moveItem } from '../../lib/catalog';
+import { dependencyIssues, moveItem, pickedFieldChain } from '../../lib/catalog';
 import type { ServiceFieldDraft, ServiceFormErrors } from '../../types/catalog';
 import type { FieldDefinition } from '../../types/fields';
 import { FieldPicker } from './FieldPicker';
@@ -50,6 +50,16 @@ export function DetailFieldEditor({
     [registry],
   );
 
+  // A dependent dropdown whose parent this form doesn't ask, or asks below it.
+  const issues = useMemo(
+    () =>
+      dependencyIssues(
+        fields.map((field) => field.fieldKey),
+        registry,
+      ),
+    [fields, registry],
+  );
+
   const updateField = (index: number, patch: Partial<ServiceFieldDraft>) => {
     onChange(
       fields.map((field, i) => (i === index ? { ...field, ...patch } : field)),
@@ -73,6 +83,9 @@ export function DetailFieldEditor({
           index={index}
           fieldCount={fields.length}
           error={errors[`fields.${index}.fieldKey`]}
+          {...(issues[field.fieldKey]
+            ? { dependencyIssue: issues[field.fieldKey] }
+            : {})}
           onChange={(patch) => updateField(index, patch)}
           onRemove={() => onChange(fields.filter((_, i) => i !== index))}
           onMove={(to) => onChange(moveItem(fields, index, to))}
@@ -85,7 +98,16 @@ export function DetailFieldEditor({
         isLoading={isRegistryLoading}
         pickedKeys={fields.map((field) => field.fieldKey)}
         onPick={(definition) => {
-          onChange([...fields, fieldDraft(definition.key)]);
+          // A dependent dropdown arrives with the parents this form doesn't ask
+          // yet, above it — it offers nothing until they are answered.
+          onChange([
+            ...fields,
+            ...pickedFieldChain(
+              definition.key,
+              registry,
+              fields.map((field) => field.fieldKey),
+            ),
+          ]);
           setIsPickerOpen(false);
         }}
         onClose={() => setIsPickerOpen(false)}

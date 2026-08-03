@@ -13,7 +13,7 @@ import { format, parseISO } from 'date-fns';
  * from the backend's `fieldKeySchema`.
  */
 
-export type RegistryOption = { value: string; label: string };
+export type RegistryOption = { value: string; label: string; when?: string[] };
 
 /*
  * "Company name" → "company_name". The admin types a label; the key is derived
@@ -80,13 +80,108 @@ export function parseOptions(value: string): RegistryOption[] {
 // The inverse: a line keeps its explicit value only when the slug would not
 // produce it, so a round trip through the textarea does not add noise.
 export function serializeOptions(options: RegistryOption[]): string {
-  return options
-    .map((option) =>
-      option.value === optionSlug(option.label)
-        ? option.label
-        : `${option.value}|${option.label}`,
-    )
-    .join('\n');
+  return options.map(optionLine).join('\n');
+}
+
+function optionLine(option: RegistryOption): string {
+  return option.value === optionSlug(option.label)
+    ? option.label
+    : `${option.value}|${option.label}`;
+}
+
+/*
+ * A dependent dropdown's choices, grouped by the parent answer they belong to.
+ *
+ * `[us]` on its own line opens a group; every choice below it is scoped to the
+ * parent value `us` until the next header. Choices typed before any header
+ * belong to no group and are offered under every parent answer — the "Other"
+ * escape hatch.
+ *
+ * A textarea with header lines rather than a control per parent value: a country
+ * list runs to two hundred entries, and a form that rendered a box for each
+ * would be unusable long before it was complete. It also keeps the whole tree
+ * copy-pasteable, which is how an admin actually loads one.
+ */
+export function parseGroupedOptions(value: string): RegistryOption[] {
+  const options: RegistryOption[] = [];
+  let group: string | null = null;
+
+  for (const raw of value.split('\n')) {
+    const line = raw.trim();
+    if (!line) continue;
+
+    const header = /^\[(.+)\]$/.exec(line);
+    if (header) {
+      group = header[1]?.trim() || null;
+      continue;
+    }
+
+    const [option] = parseOptions(line);
+    if (!option) continue;
+
+    options.push(group ? { ...option, when: [group] } : option);
+  }
+
+  return mergeByValue(options);
+}
+
+/*
+ * The same choice under two headers is one choice offered under both parents,
+ * not two rows with the same value — a dropdown can only ever store one of them,
+ * and the second would silently win. Merging here means an admin can list
+ * "Remote" under every country without thinking about it.
+ */
+function mergeByValue(options: RegistryOption[]): RegistryOption[] {
+  const byValue = new Map<string, RegistryOption>();
+
+  for (const option of options) {
+    const existing = byValue.get(option.value);
+
+    if (!existing) {
+      byValue.set(option.value, option);
+      continue;
+    }
+
+    // An unscoped copy wins outright: it already shows everywhere, so narrowing
+    // it to the other's group would take choices away.
+    if (!existing.when || !option.when) {
+      byValue.set(option.value, { value: option.value, label: existing.label });
+      continue;
+    }
+
+    byValue.set(option.value, {
+      ...existing,
+      when: [...new Set([...existing.when, ...option.when])],
+    });
+  }
+
+  return [...byValue.values()];
+}
+
+/*
+ * The inverse, written back as headers. Unscoped choices come first so they read
+ * as the defaults they are; the rest group under their parent value in the order
+ * those values first appear. A choice offered under two parents is written under
+ * each — which is exactly what `parseGroupedOptions` merges back.
+ */
+export function serializeGroupedOptions(options: RegistryOption[]): string {
+  const ungrouped = options.filter((option) => !option.when?.length);
+  const groups = new Map<string, RegistryOption[]>();
+
+  for (const option of options) {
+    for (const value of option.when ?? []) {
+      groups.set(value, [...(groups.get(value) ?? []), option]);
+    }
+  }
+
+  const blocks = [
+    ...(ungrouped.length > 0 ? [ungrouped.map(optionLine).join('\n')] : []),
+    ...[...groups.entries()].map(
+      ([value, items]) => `[${value}]\n${items.map(optionLine).join('\n')}`,
+    ),
+  ];
+
+  return blocks.join('\n\n');
 }
 
 // "Jul 8, 2026". Timestamps arrive as UTC (AGENTS.md, Dates); `parseISO`

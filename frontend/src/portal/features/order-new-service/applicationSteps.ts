@@ -3,6 +3,7 @@ import type {
   ServiceField,
   ServiceFieldAnswers,
   ServiceFormStep,
+  ServiceSelectOption,
 } from '../../types/order-new-service';
 
 /*
@@ -205,6 +206,78 @@ export function buildApplicationSteps(
     // A step every one of whose questions was merged away cannot happen, but a
     // step an admin left empty can — and an empty screen is never worth showing.
     .filter((step) => step.fields.length > 0);
+}
+
+/*
+ * The choices a dropdown currently offers.
+ *
+ * The cascade rule, and the mirror of the backend's own `visibleOptions`: with
+ * its parent unanswered a dependent dropdown offers NOTHING — which is what
+ * keeps a state list from showing before a country is picked — and once the
+ * parent is answered it offers the choices scoped to that answer plus any choice
+ * scoped to none.
+ *
+ * An ordinary dropdown returns its whole list, so callers never branch.
+ */
+export function visibleOptions(
+  field: Extract<ServiceField, { type: 'select' }>,
+  answers: ServiceFieldAnswers,
+): ServiceSelectOption[] {
+  if (!field.dependsOn) return field.options;
+
+  const parentValue = (answers[field.dependsOn] ?? '').trim();
+  if (!parentValue) return [];
+
+  return field.options.filter(
+    (option) => !option.when || option.when.includes(parentValue),
+  );
+}
+
+/*
+ * Every field downstream of one that just changed.
+ *
+ * Changing a country invalidates the state chosen under it, and the address
+ * chosen under that — the answers are still non-empty and would still be
+ * submitted, and the backend would reject the whole application for a
+ * contradiction the customer can't see. So the answers go when the parent moves,
+ * and the controls reset to their locked, empty state.
+ *
+ * Computed across the WHOLE master form rather than per step, because a chain is
+ * routinely split across screens.
+ */
+export function descendantFieldNames(
+  steps: ApplicationStep[],
+  fieldName: string,
+): string[] {
+  const parents = new Map<string, string>();
+
+  for (const step of steps) {
+    for (const { field } of step.fields) {
+      if (field.type === 'select' && field.dependsOn) {
+        parents.set(field.name, field.dependsOn);
+      }
+    }
+  }
+
+  const found = new Set<string>();
+  let frontier = new Set([fieldName]);
+
+  // Level by level, bounded by the number of dependent fields — a cycle the
+  // registry should never store cannot spin this.
+  for (let depth = 0; frontier.size > 0 && depth <= parents.size; depth += 1) {
+    const next = new Set<string>();
+
+    for (const [child, parent] of parents) {
+      if (frontier.has(parent) && !found.has(child) && child !== fieldName) {
+        found.add(child);
+        next.add(child);
+      }
+    }
+
+    frontier = next;
+  }
+
+  return [...found];
 }
 
 // Every required field on a step has a non-empty answer. Optional fields never

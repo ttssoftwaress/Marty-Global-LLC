@@ -33,7 +33,15 @@ export function fieldTypeLabel(type: string): string {
   return FIELD_TYPE_OPTIONS.find((option) => option.value === type)?.label ?? type;
 }
 
-export type SelectOption = { value: string; label: string };
+/*
+ * A dropdown choice, plus the parent answers it belongs to.
+ *
+ * `when` is what makes a dependent dropdown work: a choice carrying
+ * `when: ['us']` is offered only while the field's parent — the field named by
+ * `config.dependsOn` — is answered `us`. A choice with no `when` shows under
+ * every parent value, which is how an "Other" escape hatch is written.
+ */
+export type SelectOption = { value: string; label: string; when?: string[] };
 
 /*
  * The per-type extras. One flat shape covers all four types; the backend strips
@@ -42,6 +50,8 @@ export type SelectOption = { value: string; label: string };
  */
 export type FieldConfig = {
   options?: SelectOption[];
+  // The dropdown whose answer filters this one's choices. Set only on a select.
+  dependsOn?: string;
   rows?: number;
   accept?: string[];
   maxSizeMb?: number;
@@ -77,6 +87,13 @@ export type FieldDefinition = {
    * answered is archived, never deleted.
    */
   canDelete: boolean;
+  /*
+   * The keys of the dropdowns filtered by this field's answer. Empty on almost
+   * every field; on a "Country" it names its "State". The screen prints it so an
+   * admin can see the chain before editing a link in it — and it is why a parent
+   * can be neither deleted nor retyped while a child reads it.
+   */
+  dependentKeys: string[];
 };
 
 export type FieldDefinitionPage = {
@@ -113,8 +130,26 @@ export type FieldDraft = {
   placeholder: string;
   hint: string;
   category: string;
-  // Dropdown choices as one-per-line text. "value|Label" sets a stored value.
+  /*
+   * Dropdown choices as one-per-line text. "value|Label" sets a stored value.
+   *
+   * A dependent dropdown's choices are grouped by parent answer with a
+   * `[parentValue]` header line, and every choice below a header belongs to it:
+   *
+   *   [us]
+   *   tx|Texas
+   *   ca|California
+   *
+   *   [gb]
+   *   eng|England
+   *
+   * Choices written before any header belong to no group and show under every
+   * parent answer. A textarea rather than a control per parent value because the
+   * parent may offer two hundred of them.
+   */
   options: string;
+  // The parent field's key, or '' for an independent dropdown.
+  dependsOn: string;
   accept: string[];
   maxSizeMb: string;
   multiple: boolean;
@@ -129,6 +164,7 @@ export const EMPTY_FIELD_DRAFT: FieldDraft = {
   hint: '',
   category: '',
   options: '',
+  dependsOn: '',
   accept: [],
   maxSizeMb: '',
   multiple: false,

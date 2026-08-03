@@ -14,6 +14,7 @@ import {
 import {
   answersByServiceFrom,
   buildApplicationSteps,
+  descendantFieldNames,
   isStepComplete,
 } from '../features/order-new-service/applicationSteps';
 import {
@@ -160,6 +161,26 @@ export function OrderApplicationDetailsPage({
     return services.filter((service) => chosen.has(service.id));
   }, [catalog, selectedIds]);
 
+  /*
+   * The master form's screens: the selected services' forms merged into one
+   * flow. An empty list means no service asks anything, in which case the flow
+   * is the documents/notes screen alone.
+   */
+  const applicationSteps = useMemo(
+    () => buildApplicationSteps(selectedServices),
+    [selectedServices],
+  );
+
+  // Every question by name, for the label a dependent dropdown prints while it
+  // waits on an answer that may be several screens back.
+  const labelsByField = useMemo(() => {
+    const labels: Record<string, string> = {};
+    for (const step of applicationSteps) {
+      for (const { field } of step.fields) labels[field.name] = field.label;
+    }
+    return labels;
+  }, [applicationSteps]);
+
   const [draft, setDraft] = useState<OrderApplicationDraft>({
     answers: {},
     filesByField: {},
@@ -167,13 +188,25 @@ export function OrderApplicationDetailsPage({
     notes: '',
   });
 
-  // Answers are keyed by field name, not by service — that is what makes a
-  // question shared between services a single input holding a single value.
+  /*
+   * Answers are keyed by field name, not by service — that is what makes a
+   * question shared between services a single input holding a single value.
+   *
+   * Changing a dropdown other dropdowns depend on clears them. A state chosen
+   * under the old country is not merely stale, it is wrong: the control would
+   * still show it, the answer would still be submitted, and the backend would
+   * reject the application for a contradiction the customer cannot see on the
+   * screen. Clearing puts those controls back into their locked, empty state,
+   * which is the honest one.
+   */
   const setFieldValue = (fieldName: string, value: string) => {
-    setDraft((prev) => ({
-      ...prev,
-      answers: { ...prev.answers, [fieldName]: value },
-    }));
+    const dependents = descendantFieldNames(applicationSteps, fieldName);
+
+    setDraft((prev) => {
+      const answers = { ...prev.answers, [fieldName]: value };
+      for (const name of dependents) delete answers[name];
+      return { ...prev, answers };
+    });
   };
 
   const setFieldFiles = (fieldName: string, files: File[]) => {
@@ -187,16 +220,6 @@ export function OrderApplicationDetailsPage({
     setDraft((prev) => ({ ...prev, documents }));
 
   const setNotes = (notes: string) => setDraft((prev) => ({ ...prev, notes }));
-
-  /*
-   * The master form's screens: the selected services' forms merged into one
-   * flow. An empty list means no service asks anything, in which case the flow
-   * is the documents/notes screen alone.
-   */
-  const applicationSteps = useMemo(
-    () => buildApplicationSteps(selectedServices),
-    [selectedServices],
-  );
 
   // The last screen carries the documents, notes, and Submit — so there is
   // always one more screen than there are configured steps.
@@ -402,6 +425,7 @@ export function OrderApplicationDetailsPage({
                     filesByField={draft.filesByField}
                     onFieldChange={setFieldValue}
                     onFilesChange={setFieldFiles}
+                    labelsByField={labelsByField}
                   />
                 ) : (
                   <>

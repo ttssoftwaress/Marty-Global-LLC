@@ -15,7 +15,12 @@ import { cursorArgs, takePage } from '../../lib/pagination.js';
 import { prisma } from '../../lib/prisma.js';
 import { presignObject } from '../../lib/storage.js';
 import { iso, isoOrNull } from '../admin/admin.views.js';
-import { fieldsByKey } from '../services/services.service.js';
+import {
+  fieldsByKey,
+  orderByDependency,
+  orphanedDependents,
+  visibleOptions,
+} from '../services/services.service.js';
 import { fieldRefsSchema } from '../services/services.validation.js';
 import {
   listFields,
@@ -485,6 +490,17 @@ async function requestTypesFor(serviceId: string): Promise<RequestTypeView[]> {
   return types.map((type) => {
     const refs = refsByType.get(type.id) ?? [];
 
+    const fields = refs.flatMap((ref) => {
+      const field = registry.get(ref.fieldKey);
+      if (!field) return [];
+      return [{ ...field, ...(ref.required ? { required: true } : {}) }];
+    });
+
+    // A dependent dropdown whose parent this type doesn't ask offers nothing, so
+    // it renders as a control the customer can never open. The catalog refuses to
+    // store that arrangement; one reaching here lost its parent afterwards.
+    const orphaned = orphanedDependents(fields);
+
     return {
       id: type.id,
       key: type.key,
@@ -492,11 +508,10 @@ async function requestTypesFor(serviceId: string): Promise<RequestTypeView[]> {
       ...(type.description ? { description: type.description } : {}),
       ...(type.iconKey ? { iconKey: type.iconKey } : {}),
       ...(type.turnaround ? { turnaround: type.turnaround } : {}),
-      fields: refs.flatMap((ref) => {
-        const field = registry.get(ref.fieldKey);
-        if (!field) return [];
-        return [{ ...field, ...(ref.required ? { required: true } : {}) }];
-      }),
+      fields:
+        orphaned.size === 0
+          ? fields
+          : fields.filter((field) => !orphaned.has(field.name)),
     } as RequestTypeView;
   });
 }
@@ -588,9 +603,14 @@ function makeRequestReference(): string {
  * Validate the intake answers against the request type's own field references.
  *
  * The same rules as the order form's `resolveAnswers`: every required question
- * must have a non-empty answer, a select's value must be one of its options, and
- * unknown keys are dropped so a client cannot stuff arbitrary data into the
- * record. The registry is only a closed set if this layer enforces it.
+ * must have a non-empty answer, a select's value must be one of the options it
+ * currently offers, and unknown keys are dropped so a client cannot stuff
+ * arbitrary data into the record. The registry is only a closed set if this
+ * layer enforces it.
+ *
+ * "Currently offers" is the cascade rule: a dependent dropdown is checked
+ * against the choices scoped to its parent's answer, which is why the questions
+ * are walked in dependency order rather than as authored.
  */
 async function resolveRequestAnswers(
   fields: RequestTypeView['fields'],
@@ -598,7 +618,7 @@ async function resolveRequestAnswers(
 ): Promise<Record<string, string>> {
   const answers: Record<string, string> = {};
 
-  for (const field of fields) {
+  for (const field of orderByDependency(fields)) {
     const value = raw?.[field.name];
     const text = typeof value === 'string' ? value.trim() : '';
 
@@ -612,10 +632,15 @@ async function resolveRequestAnswers(
     }
 
     if (field.type === 'select') {
-      const match = field.options.find((option) => option.value === text);
+      const match = visibleOptions(field, answers).find(
+        (option) => option.value === text,
+      );
+
       if (!match) {
         throw AppError.validation(
-          `"${text}" is not a valid choice for "${field.label}"`,
+          field.dependsOn && !answers[field.dependsOn]
+            ? `"${field.label}" cannot be answered until the question it depends on is`
+            : `"${text}" is not a valid choice for "${field.label}"`,
           { fieldKey: field.name },
         );
       }

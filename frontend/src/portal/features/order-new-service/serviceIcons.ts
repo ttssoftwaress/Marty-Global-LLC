@@ -1,4 +1,13 @@
-import { Building2, Landmark, Mail, ShoppingCart, Sparkles } from 'lucide-react';
+import {
+  Building2,
+  Globe,
+  Landmark,
+  Mail,
+  MonitorSmartphone,
+  ShieldCheck,
+  ShoppingCart,
+  Sparkles,
+} from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 import type { ServiceIconKey } from '../../types/order-new-service';
@@ -15,7 +24,10 @@ import type { ServiceIconKey } from '../../types/order-new-service';
 
 const SERVICE_ICONS: Record<ServiceIconKey, LucideIcon> = {
   'company-formation': Building2,
+  'registered-agent': ShieldCheck,
   'virtual-mail-room': Mail,
+  'remote-desktop': MonitorSmartphone,
+  website: Globe,
   'bank-account': Landmark,
   'e-commerce': ShoppingCart,
   default: Sparkles,

@@ -16,15 +16,88 @@ const { createOrder, listOrders, getOrderDetail } = await import(
 );
 
 /*
- * The two services these tests order. The ids match prisma/seed.ts so the
- * fixtures read like production data, but ensureService below creates them
- * rather than assuming the seed has been run: OrderItem.serviceId is a foreign
- * key, so on a database that has never been seeded every order here fails to
- * insert. A test that needs `db:seed` first is a test that passes on one
- * machine.
+ * The two services these tests order, and the questions they ask — all of it
+ * owned by this file.
+ *
+ * They used to be the seeded `company-formation` and `bank-account` rows, which
+ * made these tests a second copy of whatever the catalog happened to say: the
+ * fixtures read like production data right up until the real catalog changed its
+ * form, and then five tests failed for a reason that had nothing to do with
+ * orders. The catalog is admin-editable by design, so a test that asserts
+ * against it is asserting against data someone is expected to edit.
+ *
+ * Test-owned ids and test-owned field keys instead. Nothing here touches the
+ * seeded catalog — which also means running the suite no longer rewrites the
+ * dev database's real services — and the behaviour under test (required
+ * answers, option validation, region denormalisation, the shared-key merge) is
+ * exercised on a form this file controls end to end.
  */
-const COMPANY = 'company-formation';
-const BANK = 'bank-account';
+const COMPANY = 'orders-test-formation';
+const BANK = 'orders-test-bank';
+
+/*
+ * The registry rows the forms below reference. Answers are keyed by
+ * `FieldDefinition.key`, so a service can only ask what is registered — and the
+ * `jurisdiction` in this key is load-bearing: the orders module denormalises
+ * `Order.regionCode` from any answer whose FIELD NAME reads as a region,
+ * country, or jurisdiction (orders.service.ts, REGION_FIELD_PATTERN).
+ */
+const COMPANY_NAME_KEY = 'orders_test_company_name';
+const JURISDICTION_KEY = 'orders_test_jurisdiction';
+const ENTITY_TYPE_KEY = 'orders_test_entity_type';
+const BANK_REGION_KEY = 'orders_test_bank_jurisdiction';
+
+const TEST_FIELDS = [
+  {
+    key: COMPANY_NAME_KEY,
+    label: 'Company name',
+    type: 'text',
+    config: {},
+  },
+  {
+    key: JURISDICTION_KEY,
+    label: 'Jurisdiction',
+    type: 'select',
+    config: {
+      options: [
+        { value: 'us-de', label: 'United States — Delaware' },
+        { value: 'uk', label: 'United Kingdom' },
+      ],
+    },
+  },
+  {
+    key: ENTITY_TYPE_KEY,
+    label: 'Entity type',
+    type: 'select',
+    config: {
+      options: [
+        { value: 'llc', label: 'LLC' },
+        { value: 'ltd', label: 'LTD' },
+      ],
+    },
+  },
+  {
+    key: BANK_REGION_KEY,
+    label: 'Banking jurisdiction',
+    type: 'select',
+    config: { options: [{ value: 'us', label: 'United States' }] },
+  },
+];
+
+// Which questions each service asks, as the references a real service stores.
+const SERVICE_FORMS: Record<string, { fieldKey: string; required?: boolean }[]> = {
+  [COMPANY]: [
+    { fieldKey: COMPANY_NAME_KEY, required: true },
+    { fieldKey: JURISDICTION_KEY, required: true },
+    { fieldKey: ENTITY_TYPE_KEY, required: true },
+  ],
+  [BANK]: [
+    { fieldKey: BANK_REGION_KEY, required: true },
+    // Deliberately shared with the formation form: that is how the registry
+    // marks two services as asking the same question.
+    { fieldKey: COMPANY_NAME_KEY, required: true },
+  ],
+};
 
 const OWNER_ID = 'orders_test_owner';
 const OTHER_ID = 'orders_test_other';
@@ -53,20 +126,39 @@ async function ensureUser(id: string) {
   });
 }
 
-// Upsert rather than create: these ids are shared with the seed, so the row may
-// already exist. `deletedAt: null` on update revives one a previous test soft
-// deleted.
+/*
+ * The registry first — a service's form is a list of references into it, and an
+ * unregistered key resolves to nothing, so a missing definition would quietly
+ * turn a required question into no question at all.
+ */
+async function ensureFields() {
+  for (const [index, field] of TEST_FIELDS.entries()) {
+    const row = { ...field, sortOrder: 1_000 + index };
+    await prisma.fieldDefinition.upsert({
+      where: { key: field.key },
+      create: row,
+      update: row,
+    });
+  }
+}
+
+// Upsert rather than create, and the whole row on update: a previous run may
+// have left these behind, and the form is part of what this file asserts on.
 async function ensureService(id: string, name: string) {
+  const row = {
+    iconKey: 'default',
+    name,
+    description: 'Test service',
+    footer: { label: 'Test' },
+    detailFields: SERVICE_FORMS[id] ?? [],
+    active: true,
+    deletedAt: null,
+  };
+
   await prisma.service.upsert({
     where: { id },
-    create: {
-      id,
-      iconKey: 'default',
-      name,
-      description: 'Test service',
-      footer: { label: 'Test' },
-    },
-    update: { deletedAt: null },
+    create: { id, ...row },
+    update: row,
   });
 }
 
@@ -95,15 +187,13 @@ async function ensureRegion(code: string, label: string) {
  */
 const validAnswers = {
   [COMPANY]: {
-    company_name: 'North Peak LLC',
-    jurisdiction: 'us-de',
-    entity_type: 'llc',
+    [COMPANY_NAME_KEY]: 'North Peak LLC',
+    [JURISDICTION_KEY]: 'us-de',
+    [ENTITY_TYPE_KEY]: 'llc',
   },
   [BANK]: {
-    banking_region: 'us',
-    company_name: 'North Peak LLC',
-    identity_document: 'passport.pdf',
-    proof_of_address: 'utility-bill.pdf',
+    [BANK_REGION_KEY]: 'us',
+    [COMPANY_NAME_KEY]: 'North Peak LLC',
   },
 };
 
@@ -111,6 +201,7 @@ beforeEach(async () => {
   queueEmail.mockClear();
   await ensureUser(OWNER_ID);
   await ensureUser(OTHER_ID);
+  await ensureFields();
   await ensureService(COMPANY, 'Company Formation');
   await ensureService(BANK, 'Bank Account');
   await ensureRegion('US', 'United States');
@@ -120,6 +211,12 @@ beforeEach(async () => {
 afterAll(async () => {
   await prisma.order.deleteMany({ where: { customerId: { in: [OWNER_ID, OTHER_ID] } } });
   await prisma.user.deleteMany({ where: { id: { in: [OWNER_ID, OTHER_ID] } } });
+  // The fixtures are this file's own rows, so it clears them rather than leaving
+  // two services and four questions behind in every developer's catalog.
+  await prisma.service.deleteMany({ where: { id: { in: [COMPANY, BANK] } } });
+  await prisma.fieldDefinition.deleteMany({
+    where: { key: { in: TEST_FIELDS.map((field) => field.key) } },
+  });
   await prisma.$disconnect();
 });
 
@@ -156,7 +253,7 @@ describe('createOrder', () => {
     await expect(
       createOrder(reqAs(auth(OWNER_ID)), {
         serviceIds: [COMPANY],
-        answersByService: { [COMPANY]: { company_name: '' } },
+        answersByService: { [COMPANY]: { [COMPANY_NAME_KEY]: '' } },
       }),
     ).rejects.toMatchObject({ status: 400 });
 
@@ -171,9 +268,9 @@ describe('createOrder', () => {
         serviceIds: [COMPANY],
         answersByService: {
           [COMPANY]: {
-            company_name: 'X',
-            jurisdiction: 'not-a-real-place',
-            entity_type: 'llc',
+            [COMPANY_NAME_KEY]: 'X',
+            [JURISDICTION_KEY]: 'not-a-real-place',
+            [ENTITY_TYPE_KEY]: 'llc',
           },
         },
       }),

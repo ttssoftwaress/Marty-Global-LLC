@@ -5,10 +5,13 @@ import type { ApiSuccess } from '@/types/api';
 import type {
   AdminCarrier,
   AdminLocation,
+  AdminNotificationSettings,
   CarrierCreatePayload,
   CarrierUpdatePayload,
   LocationCreatePayload,
   LocationUpdatePayload,
+  NotificationSettingsUpdatePayload,
+  NotificationSettingsUpdateResult,
 } from '../../types/settings';
 
 /*
@@ -197,6 +200,50 @@ export function useDeleteCarrier() {
         method: 'DELETE',
       }).then((res) => res.data),
     onSuccess: () => invalidateCarrierReaders(queryClient),
+  });
+}
+
+export const adminNotificationSettingsKey = () =>
+  ['admin', 'settings', 'notifications'] as const;
+
+/*
+ * GET /v1/admin/settings/notifications — the outbound email switch.
+ *
+ * Not cached long: the ledger counts on it move on their own as mail is sent,
+ * and an admin reading "3 waiting" that is an hour stale would draw the wrong
+ * conclusion about whether the pause is working.
+ */
+export function useAdminNotificationSettings() {
+  return useQuery({
+    queryKey: adminNotificationSettingsKey(),
+    queryFn: () =>
+      apiFetch<ApiSuccess<AdminNotificationSettings>>(
+        '/admin/settings/notifications',
+      ).then((res) => res.data),
+    staleTime: 0,
+  });
+}
+
+/*
+ * PATCH /v1/admin/settings/notifications — switch outbound email on or off.
+ *
+ * The response is seeded straight into the cache rather than refetched: it
+ * carries the ledger counts recomputed after the write, so the panel can say how
+ * many queued emails were stood down without a second round trip that would
+ * briefly show the old numbers.
+ */
+export function useUpdateAdminNotificationSettings() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: NotificationSettingsUpdatePayload) =>
+      apiFetch<ApiSuccess<NotificationSettingsUpdateResult>>(
+        '/admin/settings/notifications',
+        { method: 'PATCH', body: JSON.stringify(payload) },
+      ).then((res) => res.data),
+    onSuccess: ({ changed: _changed, ...settings }) => {
+      queryClient.setQueryData(adminNotificationSettingsKey(), settings);
+    },
   });
 }
 

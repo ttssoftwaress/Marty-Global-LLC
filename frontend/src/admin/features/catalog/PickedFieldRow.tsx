@@ -40,6 +40,12 @@ type PickedFieldRowProps = {
   index: number;
   fieldCount: number;
   error?: string;
+  /*
+   * Why this dependent dropdown can't work where it sits — its parent is missing
+   * from the form, or below it. Shown here rather than only as a save error,
+   * because the fix is one of the arrows in this very row.
+   */
+  dependencyIssue?: string;
   onChange: (patch: Partial<ServiceFieldDraft>) => void;
   onRemove: () => void;
   onMove: (to: number) => void;
@@ -51,6 +57,7 @@ export function PickedFieldRow({
   index,
   fieldCount,
   error,
+  dependencyIssue,
   onChange,
   onRemove,
   onMove,
@@ -62,7 +69,7 @@ export function PickedFieldRow({
   return (
     <div
       className={`flex items-center gap-3 rounded-card border bg-white p-3 ${
-        error || !definition ? 'border-error' : 'border-gray-200'
+        error || dependencyIssue || !definition ? 'border-error' : 'border-gray-200'
       }`}
     >
       <span className="flex size-8 shrink-0 items-center justify-center rounded-[0.5rem] bg-gray-100">
@@ -75,10 +82,17 @@ export function PickedFieldRow({
         </span>
         <span className="truncate text-caption text-gray-500">
           {definition
-            ? `${fieldTypeLabel(definition.type)} · ${definition.key}`
+            ? `${fieldTypeLabel(definition.type)} · ${definition.key}${
+                definition.config.dependsOn
+                  ? ` · filtered by ${definition.config.dependsOn}`
+                  : ''
+              }`
             : 'This field is no longer in the registry — remove it.'}
         </span>
         {error && <span className="text-caption text-error">{error}</span>}
+        {dependencyIssue && (
+          <span className="text-caption text-error">{dependencyIssue}</span>
+        )}
       </div>
 
       {/* Required is the one per-service override: the same question can be

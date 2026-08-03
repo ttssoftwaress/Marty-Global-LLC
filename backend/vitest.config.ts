@@ -3,7 +3,10 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     environment: 'node',
-    include: ['src/**/*.test.ts'],
+    // `prisma/` holds the seed's own integrity tests — the catalog it writes is
+    // authored data, and it is written with raw upserts that skip every API
+    // guard, so the rules are re-checked there instead.
+    include: ['src/**/*.test.ts', 'prisma/**/*.test.ts'],
     // Tests share one Postgres — run files serially so row counts stay stable.
     fileParallelism: false,
     env: {

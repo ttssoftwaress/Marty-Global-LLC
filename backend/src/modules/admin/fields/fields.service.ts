@@ -9,6 +9,7 @@ import {
   fieldConfigSchema,
   fieldRefsSchema,
   formStepRefsSchema,
+  MAX_FIELD_DEPENDENCY_DEPTH,
   type FieldConfig,
 } from '../../services/services.validation.js';
 import { iso } from '../admin.views.js';
@@ -37,9 +38,18 @@ import type {
  *   3. A field ANYTHING has ever referenced cannot be deleted. Deleting one is
  *      offered — a question registered by mistake should be removable rather
  *      than sitting archived forever — but it only ever reaches the write when
- *      no service form, no request type, and no stored answer points at the key.
- *      Everything else is archived, which retires it from the picker while
- *      leaving every existing form and answer intact.
+ *      no service form, no request type, no stored answer, and no dependent
+ *      dropdown points at the key. Everything else is archived, which retires it
+ *      from the picker while leaving every existing form and answer intact.
+ *
+ *   4. A dependency is a real edge, checked on both ends. A dropdown whose
+ *      choices are filtered by another field's answer (`config.dependsOn`) can
+ *      only point at a registered SELECT, never at itself, and never around a
+ *      cycle; every choice's `when` must name a value that parent actually
+ *      offers. The parent, in return, cannot change type, lose one of those
+ *      values, or be deleted while a child is reading it. Without both halves a
+ *      "country → state → address" chain silently degrades into a dropdown that
+ *      offers nothing, which looks to a customer exactly like a broken form.
  */
 
 export type FieldDefinitionView = {
@@ -66,6 +76,12 @@ export type FieldDefinitionView = {
    * answers behind it.
    */
   canDelete: boolean;
+  /*
+   * The keys of the dropdowns filtered by this field's answer. Empty on almost
+   * every field; on a "Country" it names its "State", which is what the screen
+   * prints so an admin can see the chain before editing a link in it.
+   */
+  dependentKeys: string[];
 };
 
 export type FieldDefinitionPage = {
@@ -78,6 +94,7 @@ function toView(
   definition: FieldDefinition,
   usageCount: number,
   canDelete: boolean,
+  dependentKeys: string[] = [],
 ): FieldDefinitionView {
   const parsed = fieldConfigSchema.safeParse(definition.config ?? {});
 
@@ -95,6 +112,7 @@ function toView(
     updatedAt: iso(definition.updatedAt),
     usageCount,
     canDelete,
+    dependentKeys,
   };
 }
 
@@ -108,8 +126,12 @@ function toView(
  * placed has a usage count of zero and answers behind it, and only the delete
  * path pays for that query.
  */
-function isDeletable(usageCount: number, inRequestType: boolean): boolean {
-  return usageCount === 0 && !inRequestType;
+function isDeletable(
+  usageCount: number,
+  inRequestType: boolean,
+  dependentCount: number,
+): boolean {
+  return usageCount === 0 && !inRequestType && dependentCount === 0;
 }
 
 /*
@@ -121,7 +143,12 @@ function configFor(type: string, config: FieldConfig | undefined): FieldConfig {
 
   switch (type) {
     case 'select':
-      return config.options ? { options: config.options } : {};
+      return config.options
+        ? {
+            options: config.options,
+            ...(config.dependsOn ? { dependsOn: config.dependsOn } : {}),
+          }
+        : {};
     case 'textarea':
       return config.rows !== undefined ? { rows: config.rows } : {};
     case 'file':
@@ -198,6 +225,183 @@ async function requestTypeKeys(): Promise<Set<string>> {
   return keys;
 }
 
+// --- Dependencies ---------------------------------------------------------
+
+type Dependency = { key: string; label: string; dependsOn?: string };
+
+function configOf(definition: Pick<FieldDefinition, 'config'>): FieldConfig {
+  const parsed = fieldConfigSchema.safeParse(definition.config ?? {});
+  return parsed.success ? parsed.data : {};
+}
+
+/*
+ * Every field that declares a parent, as a flat edge list.
+ *
+ * `config.dependsOn` lives in a Json column, so this reads the handful of select
+ * rows and unpacks them in memory rather than through an index-less Json probe —
+ * the same reasoning as `usageByKey` above, and it gives the whole graph in one
+ * query for the cycle walk to reuse.
+ */
+async function dependencyEdges(): Promise<Dependency[]> {
+  const rows = await prisma.fieldDefinition.findMany({
+    where: { type: 'select' },
+    select: { key: true, label: true, config: true },
+  });
+
+  return rows.map((row) => {
+    const dependsOn = configOf(row).dependsOn;
+    return {
+      key: row.key,
+      label: row.label,
+      ...(dependsOn ? { dependsOn } : {}),
+    };
+  });
+}
+
+// The fields whose choices are filtered by this key's answer, in one edge list
+// so the caller pays for the query once.
+function dependentsOf(edges: Dependency[], key: string): Dependency[] {
+  return edges.filter((edge) => edge.dependsOn === key);
+}
+
+/*
+ * Rule 4's write-side check: a dependency must point at a registered dropdown,
+ * up a chain that terminates, and every choice must name a value that parent
+ * actually offers.
+ *
+ * `key` is the field being written. It may not exist yet (create), which is
+ * exactly why the cycle walk starts at the parent and looks for `key` on the way
+ * up rather than trusting the stored graph to already contain the new edge.
+ */
+async function assertDependencyIsSound(
+  key: string,
+  config: FieldConfig,
+): Promise<void> {
+  const parentKey = config.dependsOn;
+  if (!parentKey) return;
+
+  if (parentKey === key) {
+    throw AppError.validation('A field cannot depend on itself', {
+      fieldKey: key,
+    });
+  }
+
+  const parent = await prisma.fieldDefinition.findUnique({
+    where: { key: parentKey },
+  });
+
+  if (!parent) {
+    throw AppError.validation(
+      `"${parentKey}" is not a registered field, so this dropdown cannot depend on it`,
+      { fieldKey: key, dependsOn: parentKey },
+    );
+  }
+
+  if (parent.type !== 'select') {
+    throw AppError.businessRule(
+      `"${parent.label}" is not a dropdown, so its answer cannot filter this field's choices. Depend on a dropdown instead.`,
+      { fieldKey: key, dependsOn: parentKey },
+    );
+  }
+
+  const edges = await dependencyEdges();
+  const byKey = new Map(edges.map((edge) => [edge.key, edge]));
+
+  // Walk from the parent to the root. Reaching `key` means the new edge closes a
+  // loop; running past the cap means the chain is longer than a customer could
+  // reasonably be asked to fill in.
+  let cursor: string | undefined = parentKey;
+  for (let depth = 1; cursor; depth += 1) {
+    if (cursor === key) {
+      throw AppError.businessRule(
+        `Depending on "${parent.label}" would make these fields depend on each other in a loop`,
+        { fieldKey: key, dependsOn: parentKey },
+      );
+    }
+
+    if (depth > MAX_FIELD_DEPENDENCY_DEPTH) {
+      throw AppError.businessRule(
+        `A dropdown can sit at most ${MAX_FIELD_DEPENDENCY_DEPTH} levels below the top of its chain`,
+        { fieldKey: key, dependsOn: parentKey },
+      );
+    }
+
+    cursor = byKey.get(cursor)?.dependsOn;
+  }
+
+  const parentValues = new Set(
+    (configOf(parent).options ?? []).map((option) => option.value),
+  );
+
+  const unknown = [
+    ...new Set(
+      (config.options ?? []).flatMap((option) =>
+        (option.when ?? []).filter((value) => !parentValues.has(value)),
+      ),
+    ),
+  ];
+
+  if (unknown.length > 0) {
+    throw AppError.validation(
+      `"${parent.label}" does not offer ${unknown.map((value) => `"${value}"`).join(', ')}, so no choice can be scoped to it`,
+      { fieldKey: key, dependsOn: parentKey, unknownValues: unknown },
+    );
+  }
+}
+
+/*
+ * Rule 4's other half: what this field's own children still need from it.
+ *
+ * Removing a choice from a parent orphans every child choice scoped to it, and
+ * the orphan is invisible — the child simply stops offering those options for an
+ * answer nobody can give any more. Refused with the values named, so the fix is
+ * "edit the child first" rather than a form that quietly went half-empty.
+ */
+async function assertDependentsStillFit(
+  existing: FieldDefinition,
+  nextType: string,
+  nextConfig: FieldConfig | undefined,
+): Promise<void> {
+  const edges = await dependencyEdges();
+  const dependents = dependentsOf(edges, existing.key);
+  if (dependents.length === 0) return;
+
+  const names = dependents.map((child) => `"${child.label}"`).join(', ');
+
+  if (nextType !== 'select') {
+    throw AppError.businessRule(
+      `${names} filter${dependents.length === 1 ? 's' : ''} its choices by this field's answer, so it must stay a dropdown. Change ${dependents.length === 1 ? 'that field' : 'those fields'} first.`,
+      { fieldKey: existing.key, dependents: dependents.map((d) => d.key) },
+    );
+  }
+
+  if (!nextConfig?.options) return;
+
+  const nextValues = new Set(nextConfig.options.map((option) => option.value));
+
+  for (const child of dependents) {
+    const definition = await prisma.fieldDefinition.findUnique({
+      where: { key: child.key },
+      select: { config: true },
+    });
+
+    const orphaned = [
+      ...new Set(
+        (configOf(definition ?? { config: null }).options ?? []).flatMap(
+          (option) => (option.when ?? []).filter((value) => !nextValues.has(value)),
+        ),
+      ),
+    ];
+
+    if (orphaned.length > 0) {
+      throw AppError.businessRule(
+        `"${child.label}" still has choices scoped to ${orphaned.map((value) => `"${value}"`).join(', ')}, so removing ${orphaned.length === 1 ? 'that choice' : 'those choices'} would leave them unreachable. Edit "${child.label}" first.`,
+        { fieldKey: existing.key, dependent: child.key, orphanedValues: orphaned },
+      );
+    }
+  }
+}
+
 /*
  * Whether any customer answer is stored under this key.
  *
@@ -237,7 +441,7 @@ export async function listFields(
       : {}),
   };
 
-  const [totalResults, rows, usage, requestKeys] = await Promise.all([
+  const [totalResults, rows, usage, requestKeys, edges] = await Promise.all([
     prisma.fieldDefinition.count({ where }),
     prisma.fieldDefinition.findMany({
       where,
@@ -246,6 +450,7 @@ export async function listFields(
     }),
     usageByKey(),
     requestTypeKeys(),
+    dependencyEdges(),
   ]);
 
   const page = takePage(rows, query.limit);
@@ -253,7 +458,13 @@ export async function listFields(
   return {
     fields: page.rows.map((row) => {
       const usageCount = usage.get(row.key) ?? 0;
-      return toView(row, usageCount, isDeletable(usageCount, requestKeys.has(row.key)));
+      const dependents = dependentsOf(edges, row.key).map((child) => child.key);
+      return toView(
+        row,
+        usageCount,
+        isDeletable(usageCount, requestKeys.has(row.key), dependents.length),
+        dependents,
+      );
     }),
     nextCursor: page.nextCursor,
     totalResults,
@@ -274,6 +485,9 @@ export async function createField(
     throw AppError.conflict(`A field with the key "${input.key}" already exists`);
   }
 
+  const config = configFor(input.type, input.config);
+  await assertDependencyIsSound(input.key, config);
+
   const last = await prisma.fieldDefinition.findFirst({
     orderBy: { sortOrder: 'desc' },
     select: { sortOrder: true },
@@ -287,7 +501,7 @@ export async function createField(
       placeholder: input.placeholder || null,
       hint: input.hint || null,
       category: input.category || null,
-      config: configFor(input.type, input.config),
+      config,
       archived: input.archived ?? false,
       sortOrder: (last?.sortOrder ?? 0) + 1,
     },
@@ -302,7 +516,7 @@ export async function createField(
   });
 
   // Nothing can reference a field that did not exist a moment ago.
-  return toView(definition, 0, true);
+  return toView(definition, 0, true, []);
 }
 
 export async function updateField(
@@ -345,6 +559,16 @@ export async function updateField(
             fieldConfigSchema.safeParse(existing.config ?? {}).data,
         );
 
+  // Rule 4, both directions: what this field may point at, and what the fields
+  // pointing at it still need from it. Checked before the write so a refusal
+  // leaves the chain exactly as it was.
+  if (config !== undefined) {
+    await assertDependencyIsSound(existing.key, config);
+    await assertDependentsStillFit(existing, type, config);
+  } else if (input.type !== undefined) {
+    await assertDependentsStillFit(existing, type, undefined);
+  }
+
   const definition = await prisma.fieldDefinition.update({
     where: { id: fieldId },
     data: {
@@ -372,10 +596,15 @@ export async function updateField(
     metadata: { key: definition.key, fields: Object.keys(input), usageCount },
   });
 
+  const dependents = dependentsOf(await dependencyEdges(), definition.key).map(
+    (child) => child.key,
+  );
+
   return toView(
     definition,
     usageCount,
-    isDeletable(usageCount, requestKeys.has(definition.key)),
+    isDeletable(usageCount, requestKeys.has(definition.key), dependents.length),
+    dependents,
   );
 }
 
@@ -402,25 +631,35 @@ export async function deleteField(
 
   if (!existing) throw AppError.notFound('Field not found');
 
-  const [usage, requestKeys, hasAnswers] = await Promise.all([
+  const [usage, requestKeys, hasAnswers, edges] = await Promise.all([
     usageByKey(),
     requestTypeKeys(),
     hasStoredAnswers(existing.key),
+    dependencyEdges(),
   ]);
 
   const usageCount = usage.get(existing.key) ?? 0;
   const inRequestType = requestKeys.has(existing.key);
+  const dependents = dependentsOf(edges, existing.key);
 
-  if (!isDeletable(usageCount, inRequestType) || hasAnswers) {
+  if (!isDeletable(usageCount, inRequestType, dependents.length) || hasAnswers) {
     const reason = hasAnswers
       ? 'customers have already answered it'
       : usageCount > 0
         ? `${usageCount} service${usageCount === 1 ? '' : 's'} still ask${usageCount === 1 ? 's' : ''} it`
-        : 'a service request form still asks it';
+        : dependents.length > 0
+          ? `${dependents.map((child) => `"${child.label}"`).join(', ')} filter${dependents.length === 1 ? 's' : ''} its choices by this field's answer`
+          : 'a service request form still asks it';
 
     throw AppError.businessRule(
       `"${existing.label}" cannot be deleted because ${reason}. Archive it instead — it leaves the picker and every form and answer already using it keeps working.`,
-      { fieldKey: existing.key, usageCount, inRequestType, hasAnswers },
+      {
+        fieldKey: existing.key,
+        usageCount,
+        inRequestType,
+        hasAnswers,
+        dependents: dependents.map((child) => child.key),
+      },
     );
   }
 
@@ -457,4 +696,69 @@ export async function assertFieldsExist(keys: readonly string[]): Promise<void> 
   if (unknown.length > 0) {
     throw AppError.validation('Unknown field key', { fieldKeys: unknown });
   }
+}
+
+/*
+ * A form may only ask a dependent dropdown if it also asks its parent, EARLIER.
+ *
+ * This is the rule that makes the cascade legible on the customer's side. A
+ * dependent dropdown offers nothing until its parent is answered, so a form
+ * asking "Address" without "State" is a control the customer can never open, and
+ * one asking it above "State" is a control that sits dead until they scroll back
+ * up. Both are authoring mistakes, and both are far cheaper to refuse here than
+ * to explain from a support ticket.
+ *
+ * `keys` is the form in reading order — a flat list as stored, or the steps
+ * flattened in step order, since a customer meets the screens in that sequence.
+ * A chain split across two steps is fine as long as the parent's step comes
+ * first.
+ */
+export async function assertDependenciesSatisfied(
+  keys: readonly string[],
+): Promise<void> {
+  if (keys.length === 0) return;
+
+  const definitions = await prisma.fieldDefinition.findMany({
+    where: { key: { in: [...new Set(keys)] }, type: 'select' },
+    select: { key: true, label: true, config: true },
+  });
+
+  const parents = new Map(
+    definitions.map((definition) => [definition.key, configOf(definition).dependsOn]),
+  );
+  const labels = new Map(
+    definitions.map((definition) => [definition.key, definition.label]),
+  );
+
+  const seen = new Set<string>();
+
+  for (const key of keys) {
+    const parentKey = parents.get(key);
+
+    if (parentKey && !seen.has(parentKey)) {
+      const label = labels.get(key) ?? key;
+      const parentLabel = await parentLabelFor(parentKey);
+
+      throw AppError.validation(
+        keys.includes(parentKey)
+          ? `"${label}" only offers choices once ${parentLabel} is answered, so ${parentLabel} has to come before it on the form`
+          : `"${label}" filters its choices by ${parentLabel}, so this form has to ask ${parentLabel} too`,
+        { fieldKey: key, dependsOn: parentKey },
+      );
+    }
+
+    seen.add(key);
+  }
+}
+
+// The parent's registered label for the message above, falling back to its key
+// if the parent was removed from the registry — the form is still wrong, and a
+// bare key is more useful in that message than no name at all.
+async function parentLabelFor(key: string): Promise<string> {
+  const parent = await prisma.fieldDefinition.findUnique({
+    where: { key },
+    select: { label: true },
+  });
+
+  return parent ? `"${parent.label}"` : `"${key}"`;
 }

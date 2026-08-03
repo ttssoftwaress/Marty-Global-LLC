@@ -9,8 +9,8 @@ import type {
 import { EMPTY_FIELD_DRAFT } from '../types/fields';
 import {
   deriveKey,
-  parseOptions,
-  serializeOptions,
+  parseGroupedOptions,
+  serializeGroupedOptions,
   validateKey,
 } from './field-registry';
 
@@ -37,7 +37,12 @@ export function draftFromField(field: FieldDefinition): FieldDraft {
     placeholder: field.placeholder ?? '',
     hint: field.hint ?? '',
     category: field.category ?? '',
-    options: field.config.options ? serializeOptions(field.config.options) : '',
+    // One serializer for both kinds of dropdown: an independent one has no
+    // scoped choices, so it round-trips through the grouped writer unchanged.
+    options: field.config.options
+      ? serializeGroupedOptions(field.config.options)
+      : '',
+    dependsOn: field.config.dependsOn ?? '',
     accept: field.config.accept ?? [],
     maxSizeMb:
       field.config.maxSizeMb !== undefined ? String(field.config.maxSizeMb) : '',
@@ -56,11 +61,25 @@ export function validateFieldDraft(draft: FieldDraft): FieldFormErrors {
 
   if (!draft.label.trim()) errors.label = 'Name this field.';
 
-  const keyError = validateKey(draft.key.trim() || deriveKey(draft.label));
+  const key = draft.key.trim() || deriveKey(draft.label);
+  const keyError = validateKey(key);
   if (keyError) errors.key = keyError;
 
-  if (draft.type === 'select' && parseOptions(draft.options).length === 0) {
-    errors.options = 'Add at least one choice.';
+  if (draft.type === 'select') {
+    const options = parseGroupedOptions(draft.options);
+
+    if (options.length === 0) {
+      errors.options = 'Add at least one choice.';
+    } else if (draft.dependsOn && !options.some((option) => option.when?.length)) {
+      // Without a scoped choice the parent gates nothing — every choice would
+      // show under every answer, which is a plain dropdown wearing a dependency.
+      errors.options =
+        'Group the choices under a parent answer, e.g. a [us] line above them.';
+    }
+
+    if (draft.dependsOn && draft.dependsOn === key) {
+      errors.dependsOn = 'A field cannot depend on itself.';
+    }
   }
 
   const size = draft.maxSizeMb.trim();
@@ -79,7 +98,10 @@ export function validateFieldDraft(draft: FieldDraft): FieldFormErrors {
 function configFromDraft(draft: FieldDraft): FieldConfig | undefined {
   switch (draft.type) {
     case 'select':
-      return { options: parseOptions(draft.options) };
+      return {
+        options: parseGroupedOptions(draft.options),
+        ...(draft.dependsOn ? { dependsOn: draft.dependsOn } : {}),
+      };
     case 'file': {
       const size = Number(draft.maxSizeMb.trim());
       return {

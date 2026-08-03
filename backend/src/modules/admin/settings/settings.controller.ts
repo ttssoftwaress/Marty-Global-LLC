@@ -3,6 +3,7 @@ import type { NextFunction, Request, Response } from 'express';
 import { getAuth } from '../../../guards/index.js';
 import { AppError } from '../../../lib/app-error.js';
 import { pathParam } from '../../../lib/params.js';
+import * as notifications from './settings.notifications.js';
 import * as service from './settings.service.js';
 import {
   carrierCodeSchema,
@@ -13,6 +14,7 @@ import {
   reorderLocationsSchema,
   updateCarrierSchema,
   updateLocationSchema,
+  updateNotificationSettingsSchema,
 } from './settings.validation.js';
 
 /*
@@ -189,6 +191,42 @@ export async function reorderCarriers(
     }
 
     res.json({ data: await service.reorderCarriers(getAuth(req), parsed.data) });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// --- Outbound email ------------------------------------------------------
+
+export async function readNotificationSettings(
+  _req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    res.json({ data: await notifications.readNotificationSettings() });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function updateNotificationSettings(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const parsed = updateNotificationSettingsSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw AppError.validation('Invalid email settings', parsed.error.issues);
+    }
+
+    res.json({
+      data: await notifications.updateNotificationSettings(
+        getAuth(req),
+        parsed.data,
+      ),
+    });
   } catch (error) {
     next(error);
   }

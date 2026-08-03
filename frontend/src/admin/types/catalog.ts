@@ -32,14 +32,20 @@ export type { Money };
  */
 export type ServiceIconKey =
   | 'company-formation'
+  | 'registered-agent'
   | 'virtual-mail-room'
+  | 'remote-desktop'
+  | 'website'
   | 'bank-account'
   | 'e-commerce'
   | 'default';
 
 export const SERVICE_ICON_OPTIONS: { value: ServiceIconKey; label: string }[] = [
   { value: 'company-formation', label: 'Company formation' },
+  { value: 'registered-agent', label: 'Registered agent' },
   { value: 'virtual-mail-room', label: 'Virtual mail room' },
+  { value: 'remote-desktop', label: 'Remote desktop' },
+  { value: 'website', label: 'Website' },
   { value: 'bank-account', label: 'Bank account' },
   { value: 'e-commerce', label: 'E-commerce' },
   { value: 'default', label: 'General service' },

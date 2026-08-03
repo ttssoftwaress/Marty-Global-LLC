@@ -111,3 +111,24 @@ export const reorderCarriersSchema = z.object({
   codes: z.array(carrierCodeSchema).min(1).max(500),
 });
 export type ReorderCarriersInput = z.infer<typeof reorderCarriersSchema>;
+
+/*
+ * Outbound email, on or off — the operational switch, not a customer preference
+ * (that is `notifications.preferences.ts`, per account).
+ *
+ * `emailDisabledReason` is a note for the team, shown only in the admin panel:
+ * a pause found days later needs to say why it is there. It is ignored when the
+ * switch is turned back on — the service clears it rather than leaving a stale
+ * explanation under a switch that is on again.
+ */
+export const updateNotificationSettingsSchema = z
+  .object({
+    emailEnabled: z.boolean().optional(),
+    emailDisabledReason: z.string().trim().max(200).optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, {
+    message: 'Nothing to update',
+  });
+export type UpdateNotificationSettingsInput = z.infer<
+  typeof updateNotificationSettingsSchema
+>;

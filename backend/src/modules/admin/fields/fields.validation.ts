@@ -2,8 +2,9 @@ import { z } from 'zod';
 
 import {
   fieldKeySchema,
+  fieldOptionSchema,
   fieldTypeSchema,
-  selectOptionSchema,
+  MAX_FIELD_OPTIONS,
 } from '../../services/services.validation.js';
 
 /*
@@ -44,7 +45,11 @@ const category = z.string().trim().max(60);
  * type's settings should not require re-sending the whole field.
  */
 const config = z.object({
-  options: z.array(selectOptionSchema).max(50).optional(),
+  options: z.array(fieldOptionSchema).max(MAX_FIELD_OPTIONS).optional(),
+  // The field whose answer filters this dropdown's choices. The service layer
+  // owns the rest of the contract — that the key is a registered select, that
+  // the chain has no cycle, and that every `when` names a real parent choice.
+  dependsOn: fieldKeySchema.optional(),
   rows: z.number().int().min(2).max(12).optional(),
   accept: z.array(z.string().trim().min(1).max(80)).max(20).optional(),
   maxSizeMb: z.number().int().min(1).max(50).optional(),
@@ -62,27 +67,61 @@ const fieldBody = {
 };
 
 /*
- * A dropdown must offer at least one choice. Enforced here rather than in the
- * shape above because it depends on the sibling `type` — and a select with no
- * options is a field the customer can never answer, so it must not be storable
- * in the first place.
+ * The rules that depend on the sibling `type`, so they can't live in the shape
+ * above:
+ *
+ *   - A dropdown must offer at least one choice. A select with no options is a
+ *     field the customer can never answer, so it must not be storable at all.
+ *   - Only a dropdown may depend on another field. A dependency filters CHOICES,
+ *     and a text box has none to filter — on any other type the key would be
+ *     stored and silently ignored.
+ *   - A dependent dropdown needs at least one choice scoped to a parent value.
+ *     Without one the parent gates nothing: every choice would show under every
+ *     answer, which is a plain dropdown wearing a dependency.
  */
-function requireSelectOptions(
-  value: { type: string; config?: { options?: unknown[] } },
+function validateFieldShape(
+  value: {
+    type: string;
+    config?: { options?: { when?: unknown[] }[]; dependsOn?: string };
+  },
   ctx: z.RefinementCtx,
 ) {
-  if (value.type === 'select' && !value.config?.options?.length) {
+  if (value.type !== 'select') {
+    if (value.config?.dependsOn) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['config', 'dependsOn'],
+        message: 'Only a dropdown can depend on another field',
+      });
+    }
+    return;
+  }
+
+  if (!value.config?.options?.length) {
     ctx.addIssue({
       code: 'custom',
       path: ['config', 'options'],
       message: 'A dropdown needs at least one choice',
+    });
+    return;
+  }
+
+  if (
+    value.config.dependsOn &&
+    !value.config.options.some((option) => option.when?.length)
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['config', 'options'],
+      message:
+        'A dependent dropdown needs at least one choice scoped to a parent answer',
     });
   }
 }
 
 export const createFieldSchema = z
   .object({ key: fieldKeySchema, ...fieldBody })
-  .superRefine(requireSelectOptions);
+  .superRefine(validateFieldShape);
 export type CreateFieldInput = z.infer<typeof createFieldSchema>;
 
 /*
@@ -107,6 +146,6 @@ export const updateFieldSchema = z
     message: 'Nothing to update',
   })
   .superRefine((value, ctx) => {
-    if (value.type) requireSelectOptions({ type: value.type, ...value }, ctx);
+    if (value.type) validateFieldShape({ type: value.type, ...value }, ctx);
   });
 export type UpdateFieldInput = z.infer<typeof updateFieldSchema>;
