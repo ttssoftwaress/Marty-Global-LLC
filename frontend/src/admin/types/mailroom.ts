@@ -257,9 +257,10 @@ export type MailCarrierOption = {
  * Everything the slide-over shows for one request — the queue row plus the
  * parts only the detail view needs.
  *
- * `shippingAddress` is a pre-composed single line resolved server-side, so the
- * client never assembles an address from parts (formats differ by country and
- * the backend already holds the customer's on file). It is null on a shredding
+ * `shippingAddress` is the customer's forwarding address (its label everywhere
+ * in the UI) — a pre-composed single line resolved server-side, so the client
+ * never assembles an address from parts (formats differ by country and the
+ * backend already holds the customer's on file). It is null on a shredding
  * request, which has nowhere to ship to — the design's shredding panel drops
  * that row entirely.
  *

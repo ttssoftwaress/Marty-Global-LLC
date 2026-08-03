@@ -37,31 +37,28 @@ type AuditTableProps = {
   onToggle: (id: string) => void;
 };
 
-const HEAD_CELL =
-  'px-0 py-0 text-left text-caption font-semibold uppercase tracking-[0.6px] text-gray-500';
-
 export function AuditTable({ entries, expandedId, onToggle }: AuditTableProps) {
   return (
-    <div className="hidden w-full overflow-x-auto md:block">
-      <table className="w-full min-w-[44rem] table-fixed border-collapse text-left lg:min-w-[60rem] lg:table-auto">
+    <div className="table-scroll hidden md:block">
+      <table className="data-table min-w-[44rem] table-fixed lg:min-w-[60rem] lg:table-auto">
         <thead>
-          <tr className="h-12 border-b border-gray-200 bg-[var(--table-header-bg)]">
-            <th scope="col" className={`${HEAD_CELL} w-[11.5rem] pl-5 pr-4 lg:w-[13rem] lg:pl-card`}>
-              When
-            </th>
-            <th scope="col" className={`${HEAD_CELL} pr-4`}>
-              Action
-            </th>
-            <th scope="col" className={`${HEAD_CELL} w-[11rem] pr-4 lg:w-[13rem]`}>
-              Actor
-            </th>
+          <tr className="h-12">
             <th
               scope="col"
-              className={`${HEAD_CELL} hidden w-[13rem] pr-4 lg:table-cell`}
+              className="w-[11.5rem] pl-5 pr-4 lg:w-[13rem] lg:pl-card"
             >
+              When
+            </th>
+            <th scope="col" className="pr-4">
+              Action
+            </th>
+            <th scope="col" className="w-[11rem] pr-4 lg:w-[13rem]">
+              Actor
+            </th>
+            <th scope="col" className="hidden w-[13rem] pr-4 lg:table-cell">
               Record
             </th>
-            <th scope="col" className={`${HEAD_CELL} w-[4rem] pr-5 lg:pr-card`}>
+            <th scope="col" className="w-[4rem] pr-5 lg:pr-card">
               <span className="sr-only">Details</span>
             </th>
           </tr>
@@ -78,7 +75,7 @@ export function AuditTable({ entries, expandedId, onToggle }: AuditTableProps) {
               // on the fragment holding both rather than on either one.
               <Fragment key={entry.id}>
                 <tr
-                  className={`border-b border-gray-200 transition-colors ${
+                  className={`transition-colors ${
                     isExpanded ? 'bg-gray-50' : 'hover:bg-gray-50'
                   }`}
                 >
@@ -152,7 +149,7 @@ export function AuditTable({ entries, expandedId, onToggle }: AuditTableProps) {
                 </tr>
 
                 {isExpanded ? (
-                  <tr className="border-b border-gray-200">
+                  <tr>
                     <td
                       id={panelId}
                       colSpan={5}

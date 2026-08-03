@@ -35,9 +35,6 @@ type DocumentListProps = {
   downloadError: string | null;
 };
 
-const HEADER_CLASS =
-  'text-caption font-medium uppercase tracking-[0.4px] text-gray-500';
-
 function DownloadAction({
   document,
   onDownload,
@@ -81,7 +78,11 @@ function DownloadAction({
         </>
       ) : (
         <>
-          <Download className="size-3.5 shrink-0" strokeWidth={2} aria-hidden="true" />
+          <Download
+            className="size-3.5 shrink-0"
+            strokeWidth={2}
+            aria-hidden="true"
+          />
           Download
         </>
       )}
@@ -95,7 +96,11 @@ function DocumentName({ document }: { document: PortalDocument }) {
   return (
     <span className="flex min-w-0 items-center gap-2.5">
       <span className="flex size-9 shrink-0 items-center justify-center rounded-input bg-gray-100">
-        <Icon className="size-4 text-gray-500" strokeWidth={1.75} aria-hidden="true" />
+        <Icon
+          className="size-4 text-gray-500"
+          strokeWidth={1.75}
+          aria-hidden="true"
+        />
       </span>
       <span className="min-w-0">
         <span className="block truncate text-body font-semibold text-text">
@@ -117,7 +122,11 @@ function EmptyState({ isFiltered }: { isFiltered: boolean }) {
   return (
     <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
       <span className="flex size-12 items-center justify-center rounded-[1.5rem] bg-gray-100">
-        <FileText className="size-6 text-gray-400" strokeWidth={1.75} aria-hidden="true" />
+        <FileText
+          className="size-6 text-gray-400"
+          strokeWidth={1.75}
+          aria-hidden="true"
+        />
       </span>
       <p className="text-body-lg font-semibold text-text">
         {isFiltered ? 'No documents match' : 'No documents yet'}
@@ -135,7 +144,10 @@ function SkeletonRows() {
   return (
     <div className="flex flex-col gap-3 p-4 md:p-card" aria-hidden="true">
       {Array.from({ length: 5 }).map((_, index) => (
-        <div key={index} className="h-12 w-full animate-pulse rounded-input bg-gray-200" />
+        <div
+          key={index}
+          className="h-12 w-full animate-pulse rounded-input bg-gray-200"
+        />
       ))}
     </div>
   );
@@ -230,87 +242,87 @@ export function DocumentList({
 
       {/* Tablet & desktop — card-wrapped table */}
       <div className="hidden w-full overflow-hidden rounded-card border border-gray-200 bg-white shadow-sm-elevation md:block">
-        <table className="w-full table-fixed border-collapse">
-          <thead>
-            <tr className="h-12 border-b border-gray-200 bg-[var(--table-header-bg)] text-left align-middle">
-              <th scope="col" className={`pl-4 lg:pl-6 ${HEADER_CLASS}`}>
-                Document
-              </th>
-              <th
-                scope="col"
-                className={`hidden w-[13.75rem] lg:table-cell ${HEADER_CLASS}`}
-              >
-                Belongs to
-              </th>
-              <th scope="col" className={`w-[6.25rem] ${HEADER_CLASS}`}>
-                Source
-              </th>
-              <th
-                scope="col"
-                className={`hidden w-[6.25rem] lg:table-cell ${HEADER_CLASS}`}
-              >
-                Size
-              </th>
-              <th scope="col" className={`w-[8.75rem] ${HEADER_CLASS}`}>
-                Added
-              </th>
-              <th
-                scope="col"
-                className={`w-[7.5rem] pr-4 text-right lg:w-[9.375rem] lg:pr-6 ${HEADER_CLASS}`}
-              >
-                Action
-              </th>
-            </tr>
-          </thead>
-
-          {!showSkeleton && !isEmpty && (
-            <tbody>
-              {windowDocuments.map((document) => (
-                <tr
-                  key={`${document.source}-${document.id}`}
-                  className="h-16 border-b border-gray-200 bg-white last:border-b-0 lg:h-[4.5rem]"
+        <div className="table-scroll">
+          <table className="data-table min-w-[38rem] table-fixed lg:min-w-[54rem]">
+            <thead>
+              <tr className="h-12">
+                <th scope="col" className="pl-4 pr-3 lg:pl-6">
+                  Document
+                </th>
+                <th scope="col" className="hidden w-[11rem] pr-3 lg:table-cell">
+                  Belongs to
+                </th>
+                <th scope="col" className="w-[6.25rem] pr-3">
+                  Source
+                </th>
+                <th
+                  scope="col"
+                  className="hidden w-[6.25rem] pr-3 lg:table-cell"
                 >
-                  <td className="min-w-0 py-2 pl-4 pr-2 lg:pl-6">
-                    <DocumentName document={document} />
-                  </td>
+                  Size
+                </th>
+                <th scope="col" className="w-[8.75rem] pr-3">
+                  Added
+                </th>
+                <th
+                  scope="col"
+                  className="w-[7.5rem] pr-4 text-right lg:w-[9.375rem] lg:pr-6"
+                >
+                  Action
+                </th>
+              </tr>
+            </thead>
 
-                  <td className="hidden min-w-0 pr-2 lg:table-cell">
-                    <Link
-                      to={document.contextHref}
-                      className="block truncate text-body text-primary hover:underline"
-                    >
-                      {document.contextLabel}
-                    </Link>
-                  </td>
+            {!showSkeleton && !isEmpty && (
+              <tbody>
+                {windowDocuments.map((document) => (
+                  <tr
+                    key={`${document.source}-${document.id}`}
+                    className="h-16 bg-white lg:h-[4.5rem]"
+                  >
+                    <td className="min-w-0 py-2 pl-4 pr-3 lg:pl-6">
+                      <DocumentName document={document} />
+                    </td>
 
-                  <td>
-                    <DocumentSourceChip source={document.source} />
-                  </td>
+                    <td className="hidden min-w-0 pr-3 lg:table-cell">
+                      <Link
+                        to={document.contextHref}
+                        title={document.contextLabel}
+                        className="block truncate text-primary hover:underline"
+                      >
+                        {document.contextLabel}
+                      </Link>
+                    </td>
 
-                  <td className="hidden text-body text-gray-600 lg:table-cell">
-                    {document.sizeBytes !== null
-                      ? formatFileSize(document.sizeBytes)
-                      : '—'}
-                  </td>
+                    <td className="pr-3">
+                      <DocumentSourceChip source={document.source} />
+                    </td>
 
-                  <td className="text-body text-gray-600">
-                    {formatOrderDate(document.createdAt)}
-                  </td>
+                    <td className="hidden whitespace-nowrap pr-3 text-gray-600 lg:table-cell">
+                      {document.sizeBytes !== null
+                        ? formatFileSize(document.sizeBytes)
+                        : '—'}
+                    </td>
 
-                  <td className="pr-4 text-right lg:pr-6">
-                    <div className="flex justify-end">
-                      <DownloadAction
-                        document={document}
-                        onDownload={onDownload}
-                        isDownloading={downloadingId === document.id}
-                      />
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          )}
-        </table>
+                    <td className="whitespace-nowrap pr-3 text-gray-600">
+                      {formatOrderDate(document.createdAt)}
+                    </td>
+
+                    <td className="pr-4 text-right lg:pr-6">
+                      <div className="flex justify-end">
+                        <DownloadAction
+                          document={document}
+                          onDownload={onDownload}
+                          isDownloading={downloadingId === document.id}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            )}
+          </table>
+        </div>
 
         {showSkeleton && <SkeletonRows />}
         {isEmpty && <EmptyState isFiltered={isFiltered} />}

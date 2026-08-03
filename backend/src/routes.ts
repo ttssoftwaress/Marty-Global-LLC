@@ -1,6 +1,6 @@
 import { Router } from 'express';
 
-import { requireAuth } from './guards/index.js';
+import { gatewayRateLimit, requireAuth } from './guards/index.js';
 import { adminRouter } from './modules/admin/admin.routes.js';
 import { billingRouter } from './modules/billing/billing.routes.js';
 import { contactRouter } from './modules/contact/contact.routes.js';
@@ -20,6 +20,24 @@ import { supportRouter } from './modules/support/support.routes.js';
 import { uploadsRouter } from './modules/uploads/uploads.routes.js';
 
 const router = Router();
+
+/*
+ * Per-IP ceiling on the whole /v1 surface, ahead of everything below.
+ *
+ * The default-deny guard resolves the session, and a session lookup is a
+ * database round trip. Every other limiter in this API is attached inside a
+ * module router, which is to say AFTER that lookup has already happened — so
+ * until this line the one piece of work an unauthenticated caller could force on
+ * every request was the only piece nothing was counting. A flood of requests
+ * carrying a junk cookie never reaches a rate-limited route; it just makes the
+ * API query the database as fast as it can accept connections.
+ *
+ * It runs before `isPublic` too: the public endpoints are the most exposed of
+ * all, and their own tighter limiters (guest-chat, contact) sit inside their
+ * routers behind this one. `/health` has no limiter of its own and gets its
+ * ceiling from here.
+ */
+router.use(gatewayRateLimit);
 
 /*
  * Default-deny, applied before any module router is reached.

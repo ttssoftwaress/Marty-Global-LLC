@@ -29,7 +29,7 @@ function Avatar({ initials }: { initials: string }) {
 
 function Unassigned() {
   return (
-    <span className="text-body text-[color:var(--color-status-review-text)]">
+    <span className="whitespace-nowrap text-[color:var(--color-status-review-text)]">
       Unassigned
     </span>
   );
@@ -39,7 +39,11 @@ function EmptyState({ hasFilter }: { hasFilter: boolean }) {
   return (
     <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
       <span className="flex size-12 items-center justify-center rounded-[1.5rem] bg-gray-100">
-        <Inbox className="size-6 text-gray-400" strokeWidth={1.75} aria-hidden="true" />
+        <Inbox
+          className="size-6 text-gray-400"
+          strokeWidth={1.75}
+          aria-hidden="true"
+        />
       </span>
       <p className="text-body-lg font-semibold text-text">
         {hasFilter ? 'Nothing matches this view' : 'No open requests'}
@@ -57,7 +61,10 @@ function SkeletonRows() {
   return (
     <div className="flex flex-col gap-3 p-4 md:p-card" aria-hidden="true">
       {Array.from({ length: 5 }).map((_, index) => (
-        <div key={index} className="h-12 w-full animate-pulse rounded-input bg-gray-200" />
+        <div
+          key={index}
+          className="h-12 w-full animate-pulse rounded-input bg-gray-200"
+        />
       ))}
     </div>
   );
@@ -93,18 +100,18 @@ export function RequestQueueTable({
   return (
     <div className="w-full rounded-card border border-gray-200 bg-white shadow-sm-elevation">
       {/* --- Table: tablet and up ------------------------------------------ */}
-      <div className="hidden overflow-x-auto md:block">
-        <table className="w-full min-w-[45rem] border-collapse">
+      <div className="table-scroll hidden md:block">
+        <table className="data-table min-w-[45rem]">
           <thead>
-            <tr className="border-b border-gray-200">
+            <tr>
               {['Request', 'Record', 'Customer', 'Assignee', 'Status', ''].map(
                 (heading, index) => (
                   <th
                     key={heading || index}
                     scope="col"
-                    className={`px-card py-3 text-caption font-semibold uppercase tracking-[0.4px] text-gray-500 ${
-                      index === 5 ? 'text-right' : 'text-left'
-                    } ${index === 3 ? 'hidden lg:table-cell' : ''}`}
+                    className={`px-card ${index === 5 ? 'text-right' : ''} ${
+                      index === 3 ? 'hidden lg:table-cell' : ''
+                    }`}
                   >
                     {heading || <span className="sr-only">Open</span>}
                   </th>
@@ -115,15 +122,13 @@ export function RequestQueueTable({
 
           <tbody>
             {rows.map((row) => (
-              <tr
-                key={row.id}
-                className="border-b border-gray-100 last:border-b-0 hover:bg-gray-50"
-              >
+              <tr key={row.id} className="hover:bg-gray-50">
                 <td className="px-card py-4 align-top">
-                  <Link to={requestHref(row.id)} className="flex flex-col gap-0.5">
-                    <span className="text-body font-semibold text-text">
-                      {row.typeLabel}
-                    </span>
+                  <Link
+                    to={requestHref(row.id)}
+                    className="flex flex-col gap-0.5"
+                  >
+                    <span className="font-semibold">{row.typeLabel}</span>
                     <span className="text-caption text-gray-500">
                       {row.reference} · {formatActivityTime(row.createdAt)}
                     </span>
@@ -132,15 +137,17 @@ export function RequestQueueTable({
 
                 <td className="px-card py-4 align-top">
                   <span className="flex flex-col gap-0.5">
-                    <span className="text-body text-text">{row.resultTitle}</span>
-                    <span className="text-caption text-gray-500">{row.serviceName}</span>
+                    <span>{row.resultTitle}</span>
+                    <span className="text-caption text-gray-500">
+                      {row.serviceName}
+                    </span>
                   </span>
                 </td>
 
                 <td className="px-card py-4 align-top">
-                  <span className="flex items-center gap-2">
+                  <span className="flex min-w-0 items-center gap-2">
                     <Avatar initials={row.customer.initials} />
-                    <span className="min-w-0 truncate text-body text-text">
+                    <span className="min-w-0 truncate">
                       {row.customer.name}
                     </span>
                   </span>
@@ -148,9 +155,9 @@ export function RequestQueueTable({
 
                 <td className="hidden px-card py-4 align-top lg:table-cell">
                   {row.assignee ? (
-                    <span className="flex items-center gap-2">
+                    <span className="flex min-w-0 items-center gap-2">
                       <Avatar initials={row.assignee.initials} />
-                      <span className="min-w-0 truncate text-body text-text">
+                      <span className="min-w-0 truncate">
                         {row.assignee.name}
                       </span>
                     </span>
@@ -166,7 +173,7 @@ export function RequestQueueTable({
                 <td className="px-card py-4 text-right align-top">
                   <Link
                     to={requestHref(row.id)}
-                    className="inline-flex items-center justify-center rounded-[0.625rem] border border-primary bg-white px-4 py-2 text-[0.8125rem] font-semibold text-primary transition-colors hover:bg-primary-light"
+                    className="inline-flex items-center justify-center whitespace-nowrap rounded-[0.625rem] border border-primary bg-white px-4 py-2 text-[0.8125rem] font-semibold text-primary transition-colors hover:bg-primary-light"
                   >
                     Open
                   </Link>
@@ -190,7 +197,9 @@ export function RequestQueueTable({
                   <span className="text-body font-semibold text-text">
                     {row.typeLabel}
                   </span>
-                  <span className="text-caption text-gray-500">{row.reference}</span>
+                  <span className="text-caption text-gray-500">
+                    {row.reference}
+                  </span>
                 </span>
                 <ChevronRight
                   className="mt-0.5 size-5 shrink-0 text-gray-400"
@@ -201,7 +210,9 @@ export function RequestQueueTable({
 
               <span className="flex flex-col gap-1">
                 <span className="text-body text-text">{row.resultTitle}</span>
-                <span className="text-caption text-gray-500">{row.serviceName}</span>
+                <span className="text-caption text-gray-500">
+                  {row.serviceName}
+                </span>
               </span>
 
               <span className="flex flex-wrap items-center justify-between gap-2">

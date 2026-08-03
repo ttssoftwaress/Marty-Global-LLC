@@ -3,6 +3,7 @@ export type { SettingsSectionDef } from './settings-sections';
 export { SettingsTabs } from './SettingsTabs';
 export { SettingsMobileMenu } from './SettingsMobileMenu';
 export { ProfileInfoCard, SaveButton } from './ProfileInfoCard';
+export { AvatarCropDialog } from './AvatarCropDialog';
 export { CompanyDetailsCard } from './CompanyDetailsCard';
 export { PasswordSecurityCard } from './PasswordSecurityCard';
 export { NotificationPreferencesCard } from './NotificationPreferencesCard';

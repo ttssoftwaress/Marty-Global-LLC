@@ -413,9 +413,10 @@ const REQUEST_TYPE_TO_PRISMA: Record<MailRequestType, PrismaMailRequestType> = {
 
 /*
  * The one-line address the item forwards to, resolved from the customer's own
- * records rather than accepted from the request. Their company address is the
- * business one they gave us; the room's own address is where the mail already
- * is, so it is not a forwarding destination and is deliberately not used here.
+ * records rather than accepted from the request. It is the forwarding address
+ * they gave us in account settings (stored on their company record); the room's
+ * own address is where the mail already is, so it is not a forwarding
+ * destination and is deliberately not used here.
  */
 async function forwardingAddress(customerId: string): Promise<string | null> {
   const company = await prisma.company.findFirst({
@@ -473,7 +474,7 @@ export async function createRequest(
 
   if (type === PrismaMailRequestType.FORWARDING && !address) {
     throw AppError.businessRule(
-      'Add a company address in your account settings before requesting forwarding',
+      'Add a forwarding address in your account settings before requesting forwarding',
     );
   }
 
@@ -506,7 +507,7 @@ export async function createRequest(
    * `record` swallows its own failure (audit.service, rule 1), so it can never
    * fail the request it describes.
    *
-   * Ids and the request type only — never the shipping address or the room name
+   * Ids and the request type only — never the forwarding address or the room name
    * (a customer's own address and company name; AGENTS.md, Security & PII).
    */
   await record({

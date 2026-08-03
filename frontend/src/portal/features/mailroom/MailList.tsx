@@ -98,7 +98,11 @@ function ExpiresValue({ iso }: { iso: string }) {
     >
       {formatOrderDate(iso)}
       {soon ? (
-        <AlertTriangle className="size-3.5 shrink-0" strokeWidth={2} aria-hidden="true" />
+        <AlertTriangle
+          className="size-3.5 shrink-0"
+          strokeWidth={2}
+          aria-hidden="true"
+        />
       ) : null}
     </span>
   );
@@ -108,7 +112,11 @@ function EmptyState() {
   return (
     <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
       <span className="flex size-12 items-center justify-center rounded-[1.5rem] bg-gray-100">
-        <Inbox className="size-6 text-gray-400" strokeWidth={1.75} aria-hidden="true" />
+        <Inbox
+          className="size-6 text-gray-400"
+          strokeWidth={1.75}
+          aria-hidden="true"
+        />
       </span>
       <p className="text-body-lg font-semibold text-text">No mail here yet</p>
       <p className="max-w-[22.5rem] text-body text-gray-500">
@@ -123,14 +131,14 @@ function SkeletonRows() {
   return (
     <div className="flex flex-col gap-3 p-4 md:p-card" aria-hidden="true">
       {Array.from({ length: 5 }).map((_, index) => (
-        <div key={index} className="h-12 w-full animate-pulse rounded-input bg-gray-200" />
+        <div
+          key={index}
+          className="h-12 w-full animate-pulse rounded-input bg-gray-200"
+        />
       ))}
     </div>
   );
 }
-
-const HEADER_CLASS =
-  'text-caption font-medium uppercase tracking-[0.4px] text-gray-500';
 
 export function MailList({
   items,
@@ -153,7 +161,8 @@ export function MailList({
   );
 
   const windowIds = windowItems.map((item) => item.id);
-  const allSelected = windowIds.length > 0 && windowIds.every((id) => selected.has(id));
+  const allSelected =
+    windowIds.length > 0 && windowIds.every((id) => selected.has(id));
 
   const toggle = (id: string) =>
     setSelected((prev) => {
@@ -234,8 +243,14 @@ export function MailList({
                       Received {formatOrderDate(item.receivedAt)}
                     </p>
                     {soon ? (
-                      <p className={`flex items-center gap-1 text-small font-semibold ${AMBER}`}>
-                        <AlertTriangle className="size-3 shrink-0" strokeWidth={2} aria-hidden="true" />
+                      <p
+                        className={`flex items-center gap-1 text-small font-semibold ${AMBER}`}
+                      >
+                        <AlertTriangle
+                          className="size-3 shrink-0"
+                          strokeWidth={2}
+                          aria-hidden="true"
+                        />
                         Expires {formatOrderDate(item.storageExpiresAt)}
                       </p>
                     ) : (
@@ -250,7 +265,11 @@ export function MailList({
                 item.responseDueAt &&
                 !item.hasOpenRequest ? (
                   <div className="flex items-center gap-1.5 rounded-lg bg-[var(--color-status-review-bg)] p-2">
-                    <AlertTriangle className={`size-3.5 shrink-0 ${AMBER}`} strokeWidth={2} aria-hidden="true" />
+                    <AlertTriangle
+                      className={`size-3.5 shrink-0 ${AMBER}`}
+                      strokeWidth={2}
+                      aria-hidden="true"
+                    />
                     <span className={`text-caption font-medium ${AMBER}`}>
                       Response needed by {formatOrderDate(item.responseDueAt)}
                     </span>
@@ -267,108 +286,118 @@ export function MailList({
 
       {/* Tablet & desktop — card-wrapped table */}
       <div className="hidden w-full overflow-hidden rounded-card border border-gray-200 bg-white shadow-sm-elevation md:block">
-        <table className="w-full table-fixed border-collapse">
-          <thead>
-            <tr className="h-12 border-b border-gray-200 bg-[var(--table-header-bg)] text-left align-middle">
-              <th scope="col" className="w-[2.75rem] pl-4 lg:pl-6">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  onChange={toggleAll}
-                  aria-label="Select all mail on this page"
-                  disabled={windowIds.length === 0}
-                  className="size-[1.125rem] cursor-pointer rounded-[0.25rem] accent-primary"
-                />
-              </th>
-              <th scope="col" className={`w-[3.25rem] lg:w-[5rem] ${HEADER_CLASS}`}>
-                Preview
-              </th>
-              <th scope="col" className={HEADER_CLASS}>
-                Sender
-              </th>
-              <th scope="col" className={`hidden w-[8.75rem] lg:table-cell ${HEADER_CLASS}`}>
-                Received
-              </th>
-              <th scope="col" className="w-[7.75rem] lg:w-[11.25rem]">
-                <span className={`inline-flex items-center gap-1 ${HEADER_CLASS}`}>
-                  Storage expires
-                  <StorageExpiryInfo />
-                </span>
-              </th>
-              <th scope="col" className={`w-[7.75rem] lg:w-[10rem] ${HEADER_CLASS}`}>
-                Status
-              </th>
-              <th
-                scope="col"
-                className={`w-[5rem] pr-4 text-right lg:w-[7.5rem] lg:pr-6 ${HEADER_CLASS}`}
-              >
-                Action
-              </th>
-            </tr>
-          </thead>
+        <div className="table-scroll">
+          <table className="data-table min-w-[41rem] table-fixed lg:min-w-[58rem]">
+            <thead>
+              <tr className="h-12">
+                <th scope="col" className="w-[2.75rem] pl-4 lg:pl-6">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleAll}
+                    aria-label="Select all mail on this page"
+                    disabled={windowIds.length === 0}
+                    className="size-[1.125rem] cursor-pointer rounded-[0.25rem] accent-primary"
+                  />
+                </th>
+                <th scope="col" className="w-[3.25rem] lg:w-[5rem]">
+                  Preview
+                </th>
+                <th scope="col" className="pr-3">
+                  Sender
+                </th>
+                <th
+                  scope="col"
+                  className="hidden w-[8.75rem] pr-3 lg:table-cell"
+                >
+                  Received
+                </th>
+                <th scope="col" className="w-[7.75rem] pr-3 lg:w-[11.25rem]">
+                  <span className="inline-flex items-center gap-1">
+                    Storage expires
+                    <StorageExpiryInfo />
+                  </span>
+                </th>
+                <th scope="col" className="w-[7.75rem] pr-3 lg:w-[10rem]">
+                  Status
+                </th>
+                <th
+                  scope="col"
+                  className="w-[5rem] pr-4 text-right lg:w-[7.5rem] lg:pr-6"
+                >
+                  Action
+                </th>
+              </tr>
+            </thead>
 
-          {!showSkeleton && !isEmpty && (
-            <tbody>
-              {windowItems.map((item) => {
-                const isSelected = selected.has(item.id);
-                return (
-                  <tr
-                    key={item.id}
-                    className={`h-16 border-b border-gray-200 last:border-b-0 lg:h-[4.5rem] ${
-                      isSelected ? 'bg-primary-light' : 'bg-white'
-                    }`}
-                  >
-                    <td className="pl-4 lg:pl-6">
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => toggle(item.id)}
-                        aria-label={`Select mail from ${item.sender}`}
-                        className="size-[1.125rem] cursor-pointer rounded-[0.25rem] accent-primary"
-                      />
-                    </td>
+            {!showSkeleton && !isEmpty && (
+              <tbody>
+                {windowItems.map((item) => {
+                  const isSelected = selected.has(item.id);
+                  return (
+                    <tr
+                      key={item.id}
+                      className={`h-16 lg:h-[4.5rem] ${
+                        isSelected ? 'bg-primary-light' : 'bg-white'
+                      }`}
+                    >
+                      <td className="pl-4 lg:pl-6">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggle(item.id)}
+                          aria-label={`Select mail from ${item.sender}`}
+                          className="size-[1.125rem] cursor-pointer rounded-[0.25rem] accent-primary"
+                        />
+                      </td>
 
-                    <td>
-                      <ScanThumbnail ready={item.scanReady} />
-                    </td>
+                      <td>
+                        <ScanThumbnail ready={item.scanReady} />
+                      </td>
 
-                    <td className="min-w-0 pr-2">
-                      <p className="truncate text-body font-semibold text-text">
-                        {item.sender}
-                      </p>
-                      {item.note ? (
-                        <p className={`truncate text-small font-medium ${AMBER}`}>
-                          {item.note}
+                      <td className="min-w-0 pr-3">
+                        <p
+                          className="truncate font-semibold"
+                          title={item.sender}
+                        >
+                          {item.sender}
                         </p>
-                      ) : null}
-                      <p className="truncate text-small text-gray-500 lg:hidden">
-                        Received: {formatOrderDate(item.receivedAt)}
-                      </p>
-                    </td>
+                        {item.note ? (
+                          <p
+                            className={`truncate text-small font-medium ${AMBER}`}
+                          >
+                            {item.note}
+                          </p>
+                        ) : null}
+                        <p className="truncate text-small text-gray-500 lg:hidden">
+                          Received: {formatOrderDate(item.receivedAt)}
+                        </p>
+                      </td>
 
-                    <td className="hidden text-body text-gray-600 lg:table-cell">
-                      {formatOrderDate(item.receivedAt)}
-                    </td>
+                      <td className="hidden whitespace-nowrap pr-3 text-gray-600 lg:table-cell">
+                        {formatOrderDate(item.receivedAt)}
+                      </td>
 
-                    <td>
-                      <ExpiresValue iso={item.storageExpiresAt} />
-                    </td>
+                      <td className="pr-3">
+                        <ExpiresValue iso={item.storageExpiresAt} />
+                      </td>
 
-                    <td>
-                      <MailStatusChip status={item.status} />
-                    </td>
+                      <td className="pr-3">
+                        <MailStatusChip status={item.status} />
+                      </td>
 
-                    <td className="pr-4 text-right lg:pr-6">
-                      <div className="flex justify-end">
-                        <RowAction item={item} roomId={roomId} />
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          )}
-        </table>
+                      <td className="pr-4 text-right lg:pr-6">
+                        <div className="flex justify-end">
+                          <RowAction item={item} roomId={roomId} />
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            )}
+          </table>
+        </div>
 
         {showSkeleton && <SkeletonRows />}
         {isEmpty && <EmptyState />}

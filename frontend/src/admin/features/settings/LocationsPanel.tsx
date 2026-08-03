@@ -127,25 +127,22 @@ export function LocationsPanel({ canWrite }: { canWrite: boolean }) {
         isEmpty={!locations.isError && rows.length === 0}
       >
         {/* Table — md and up */}
-        <div className="hidden overflow-x-auto rounded-card border border-gray-200 bg-white shadow-sm-elevation md:block">
-          <table className="w-full min-w-[45rem] border-collapse">
+        <div className="table-scroll hidden rounded-card border border-gray-200 bg-white shadow-sm-elevation md:block">
+          <table className="data-table min-w-[45rem]">
             <thead>
-              <tr className="border-b border-gray-200 bg-gray-50">
+              <tr>
                 {canWrite && <SettingsTh>Order</SettingsTh>}
                 <SettingsTh>Location</SettingsTh>
                 <SettingsTh>Code</SettingsTh>
                 <SettingsTh>Used by</SettingsTh>
                 <SettingsTh>{canWrite ? 'Offered' : 'Status'}</SettingsTh>
-                <th className="w-px px-4 py-3" />
+                <th className="w-px px-4" />
               </tr>
             </thead>
 
             <tbody>
               {rows.map((location, index) => (
-                <tr
-                  key={location.code}
-                  className="border-b border-gray-200 last:border-b-0 hover:bg-gray-50"
-                >
+                <tr key={location.code} className="hover:bg-gray-50">
                   {canWrite && (
                     <td className="px-4 py-3">
                       <ReorderButtons
@@ -159,7 +156,7 @@ export function LocationsPanel({ canWrite }: { canWrite: boolean }) {
                   )}
 
                   <td className="px-4 py-3">
-                    <span className="flex items-center gap-2 text-body font-medium text-text">
+                    <span className="flex items-center gap-2 font-medium">
                       {location.flag && (
                         <span aria-hidden="true">{location.flag}</span>
                       )}
@@ -173,7 +170,7 @@ export function LocationsPanel({ canWrite }: { canWrite: boolean }) {
                     </code>
                   </td>
 
-                  <td className="px-4 py-3 text-body text-text-secondary">
+                  <td className="whitespace-nowrap px-4 py-3 text-text-secondary">
                     {formatLocationUsage(location)}
                   </td>
 
@@ -217,7 +214,9 @@ export function LocationsPanel({ canWrite }: { canWrite: boolean }) {
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 flex-col gap-1">
                   <span className="flex items-center gap-2 text-body font-medium text-text">
-                    {location.flag && <span aria-hidden="true">{location.flag}</span>}
+                    {location.flag && (
+                      <span aria-hidden="true">{location.flag}</span>
+                    )}
                     {location.label}
                   </span>
                   <code className="w-fit rounded bg-gray-100 px-1.5 py-0.5 text-caption text-gray-700">

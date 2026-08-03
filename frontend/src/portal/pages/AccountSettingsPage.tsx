@@ -14,6 +14,7 @@ import { ApiError } from '@/services/api';
 import { uploadFile } from '@/services/upload';
 import { PortalLayout } from '../components/PortalLayout';
 import {
+  AvatarCropDialog,
   CompanyDetailsCard,
   EMPTY_NOTIFICATION_PREFERENCES,
   NotificationPreferencesCard,
@@ -76,6 +77,16 @@ const SETTINGS_ROUTE = '/app/settings';
 const AVATAR_MAX_BYTES = MAX_BYTES.avatar;
 const AVATAR_MAX_MB = AVATAR_MAX_BYTES / (1024 * 1024);
 
+/*
+ * The ceiling on the file that goes *into* the cropper, which is a different
+ * limit from the one above: the crop re-encodes to a 512px square, so what is
+ * uploaded is a fraction of the source whatever the camera produced. This exists
+ * only so a browser is not asked to decode something that would exhaust a
+ * phone's memory — the 5 MB policy still governs the cropped result.
+ */
+const AVATAR_SOURCE_MAX_BYTES = 25 * 1024 * 1024;
+const AVATAR_SOURCE_MAX_MB = AVATAR_SOURCE_MAX_BYTES / (1024 * 1024);
+
 function isSettingsSection(value: string | null): value is SettingsSection {
   return SETTINGS_SECTIONS.some((section) => section.id === value);
 }
@@ -126,6 +137,9 @@ export function AccountSettingsPage() {
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
+  // The picked file waiting to be cropped. Non-null is what opens the cropper —
+  // nothing is uploaded until the customer confirms the square they chose.
+  const [photoToCrop, setPhotoToCrop] = useState<File | null>(null);
 
   // Seed from the profile record; the session fills name/email until it
   // resolves, so the fields are never blank on first paint. Re-seeds whenever
@@ -163,14 +177,15 @@ export function AccountSettingsPage() {
   const onCancel = () => setForm(initial);
 
   /*
-   * Changing the photo opens a picker, uploads the image straight to R2, and
-   * records the resulting key — the bytes never round-trip through the API
-   * (AGENTS.md, Storage). The input lives on the page rather than in the card so
-   * both the mobile and desktop renders of that card share one picker.
+   * Changing the photo opens a picker, then the cropper, and only the square the
+   * customer confirmed is uploaded straight to R2 — the bytes never round-trip
+   * through the API (AGENTS.md, Storage). The input lives on the page rather
+   * than in the card so both the mobile and desktop renders of that card share
+   * one picker.
    */
   const onChangePhoto = () => avatarInputRef.current?.click();
 
-  const onAvatarPicked = async (file: File | undefined) => {
+  const onAvatarPicked = (file: File | undefined) => {
     if (!file) return;
 
     // Type as well as size: a phone camera roll happily offers a HEIC through
@@ -180,7 +195,27 @@ export function AccountSettingsPage() {
       return;
     }
 
-    if (file.size > AVATAR_MAX_BYTES) {
+    if (file.size > AVATAR_SOURCE_MAX_BYTES) {
+      setAvatarError(`That image is larger than ${AVATAR_SOURCE_MAX_MB} MB.`);
+      return;
+    }
+
+    setAvatarError(null);
+    setPhotoToCrop(file);
+  };
+
+  const onCropCancelled = () => {
+    setPhotoToCrop(null);
+    setAvatarError(null);
+  };
+
+  /*
+   * The cropped square, on its way to storage. It is re-encoded at 512px, so the
+   * size check here is a guard rather than a realistic outcome — but it is the
+   * uploaded file the 5 MB policy applies to, not the camera original.
+   */
+  const onCropConfirmed = async (cropped: File) => {
+    if (cropped.size > AVATAR_MAX_BYTES) {
       setAvatarError(`That image is larger than ${AVATAR_MAX_MB} MB.`);
       return;
     }
@@ -189,8 +224,9 @@ export function AccountSettingsPage() {
     setIsUploadingAvatar(true);
 
     try {
-      const uploaded = await uploadFile(file, 'avatar');
+      const uploaded = await uploadFile(cropped, 'avatar');
       await updateAvatar.mutateAsync(uploaded.objectKey);
+      setPhotoToCrop(null);
     } catch (error) {
       setAvatarError(
         error instanceof ApiError
@@ -547,9 +583,22 @@ export function AccountSettingsPage() {
         className="sr-only"
         aria-label="Upload a profile photo"
         onChange={(event) => {
-          void onAvatarPicked(event.target.files?.[0]);
+          onAvatarPicked(event.target.files?.[0]);
+          // Cleared so picking the same file again still fires a change event —
+          // a customer who cancels the crop and re-picks expects it to reopen.
           event.target.value = '';
         }}
+      />
+
+      {/* The crop step sits between the picker and the upload, so what is stored
+          is the square the customer framed rather than a centre crop of whatever
+          the camera happened to shoot. */}
+      <AvatarCropDialog
+        file={photoToCrop}
+        onCancel={onCropCancelled}
+        onConfirm={(cropped) => void onCropConfirmed(cropped)}
+        isSaving={isUploadingAvatar || updateAvatar.isPending}
+        error={avatarError}
       />
     </PortalLayout>
   );

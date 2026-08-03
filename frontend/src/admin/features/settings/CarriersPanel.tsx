@@ -106,25 +106,22 @@ export function CarriersPanel({ canWrite }: { canWrite: boolean }) {
         isEmpty={!carriers.isError && rows.length === 0}
       >
         {/* Table — md and up */}
-        <div className="hidden overflow-x-auto rounded-card border border-gray-200 bg-white shadow-sm-elevation md:block">
-          <table className="w-full min-w-[40rem] border-collapse">
+        <div className="table-scroll hidden rounded-card border border-gray-200 bg-white shadow-sm-elevation md:block">
+          <table className="data-table min-w-[40rem]">
             <thead>
-              <tr className="border-b border-gray-200 bg-gray-50">
+              <tr>
                 {canWrite && <SettingsTh>Order</SettingsTh>}
                 <SettingsTh>Carrier</SettingsTh>
                 <SettingsTh>Code</SettingsTh>
                 <SettingsTh>Used by</SettingsTh>
                 <SettingsTh>{canWrite ? 'Offered' : 'Status'}</SettingsTh>
-                <th className="w-px px-4 py-3" />
+                <th className="w-px px-4" />
               </tr>
             </thead>
 
             <tbody>
               {rows.map((carrier, index) => (
-                <tr
-                  key={carrier.code}
-                  className="border-b border-gray-200 last:border-b-0 hover:bg-gray-50"
-                >
+                <tr key={carrier.code} className="hover:bg-gray-50">
                   {canWrite && (
                     <td className="px-4 py-3">
                       <ReorderButtons
@@ -137,9 +134,7 @@ export function CarriersPanel({ canWrite }: { canWrite: boolean }) {
                     </td>
                   )}
 
-                  <td className="px-4 py-3 text-body font-medium text-text">
-                    {carrier.label}
-                  </td>
+                  <td className="px-4 py-3 font-medium">{carrier.label}</td>
 
                   <td className="px-4 py-3">
                     <code className="rounded bg-gray-100 px-1.5 py-0.5 text-caption text-gray-700">
@@ -147,7 +142,7 @@ export function CarriersPanel({ canWrite }: { canWrite: boolean }) {
                     </code>
                   </td>
 
-                  <td className="px-4 py-3 text-body text-text-secondary">
+                  <td className="whitespace-nowrap px-4 py-3 text-text-secondary">
                     {formatCarrierUsage(carrier)}
                   </td>
 

@@ -141,26 +141,23 @@ export function BankAccountsPanel({ canWrite }: { canWrite: boolean }) {
         isEmpty={!accounts.isError && rows.length === 0}
       >
         {/* Table — md and up */}
-        <div className="hidden overflow-x-auto rounded-card border border-gray-200 bg-white shadow-sm-elevation md:block">
-          <table className="w-full min-w-[48rem] border-collapse">
+        <div className="table-scroll hidden rounded-card border border-gray-200 bg-white shadow-sm-elevation md:block">
+          <table className="data-table min-w-[48rem]">
             <thead>
-              <tr className="border-b border-gray-200 bg-gray-50">
+              <tr>
                 {canWrite && <SettingsTh>Order</SettingsTh>}
                 <SettingsTh>Account</SettingsTh>
                 <SettingsTh>Currency</SettingsTh>
                 <SettingsTh>Details</SettingsTh>
                 <SettingsTh>Payments</SettingsTh>
                 <SettingsTh>{canWrite ? 'Offered' : 'Status'}</SettingsTh>
-                <th className="w-px px-4 py-3" />
+                <th className="w-px px-4" />
               </tr>
             </thead>
 
             <tbody>
               {rows.map((account, index) => (
-                <tr
-                  key={account.id}
-                  className="border-b border-gray-200 last:border-b-0 hover:bg-gray-50"
-                >
+                <tr key={account.id} className="hover:bg-gray-50">
                   {canWrite && (
                     <td className="px-4 py-3">
                       <ReorderButtons
@@ -175,24 +172,22 @@ export function BankAccountsPanel({ canWrite }: { canWrite: boolean }) {
 
                   <td className="px-4 py-3">
                     <div className="flex flex-col gap-0.5">
-                      <span className="text-body font-medium text-text">
-                        {account.label}
-                      </span>
+                      <span className="font-medium">{account.label}</span>
                       <code className="w-fit rounded bg-gray-100 px-1.5 py-0.5 text-caption text-gray-700">
                         {account.code}
                       </code>
                     </div>
                   </td>
 
-                  <td className="px-4 py-3 text-body text-text-secondary">
+                  <td className="whitespace-nowrap px-4 py-3 text-text-secondary">
                     {account.currency}
                   </td>
 
-                  <td className="px-4 py-3 text-body text-text-secondary">
+                  <td className="px-4 py-3 text-text-secondary">
                     {formatAccountFields(account)}
                   </td>
 
-                  <td className="px-4 py-3 text-body text-text-secondary">
+                  <td className="whitespace-nowrap px-4 py-3 text-text-secondary">
                     {account.usage.payments}
                   </td>
 
