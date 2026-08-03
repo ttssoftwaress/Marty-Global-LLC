@@ -21,7 +21,8 @@ export const updateProfileSchema = z.object({
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 
 // Company details. `country` is an ISO 3166-1 alpha-2 code — the select resolves
-// its label from the code, so the wire value is the code.
+// its label from the code, so the wire value is the code. `address` is surfaced
+// as "Forwarding address": it is the destination the mail room forwards post to.
 export const updateCompanySchema = z.object({
   businessName: z.string().trim().max(200),
   country: z.string().trim().length(2).toUpperCase(),

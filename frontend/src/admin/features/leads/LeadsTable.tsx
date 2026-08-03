@@ -14,7 +14,11 @@ function EmptyState({ hasFilter }: { hasFilter: boolean }) {
   return (
     <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
       <span className="flex size-12 items-center justify-center rounded-[1.5rem] bg-gray-100">
-        <Inbox className="size-6 text-gray-400" strokeWidth={1.75} aria-hidden="true" />
+        <Inbox
+          className="size-6 text-gray-400"
+          strokeWidth={1.75}
+          aria-hidden="true"
+        />
       </span>
       <p className="text-body-lg font-semibold text-text">
         {hasFilter ? 'Nothing matches this view' : 'No open leads'}
@@ -32,7 +36,10 @@ function SkeletonRows() {
   return (
     <div className="flex flex-col gap-3 p-4 md:p-card" aria-hidden="true">
       {Array.from({ length: 5 }).map((_, index) => (
-        <div key={index} className="h-14 w-full animate-pulse rounded-input bg-gray-200" />
+        <div
+          key={index}
+          className="h-14 w-full animate-pulse rounded-input bg-gray-200"
+        />
       ))}
     </div>
   );
@@ -60,14 +67,18 @@ function HandledButton({
       type="button"
       onClick={() => onToggleHandled(lead)}
       disabled={pending}
-      className={`inline-flex items-center gap-1.5 rounded-[0.625rem] border px-3.5 py-2 text-[0.8125rem] font-semibold transition-colors disabled:opacity-60 ${
+      className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-[0.625rem] border px-3.5 py-2 text-[0.8125rem] font-semibold transition-colors disabled:opacity-60 ${
         lead.handled
           ? 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
           : 'border-primary bg-white text-primary hover:bg-primary-light'
       }`}
     >
       {pending ? (
-        <Loader2 className="size-4 animate-spin" strokeWidth={2} aria-hidden="true" />
+        <Loader2
+          className="size-4 animate-spin"
+          strokeWidth={2}
+          aria-hidden="true"
+        />
       ) : lead.handled ? (
         <RotateCcw className="size-4" strokeWidth={1.75} aria-hidden="true" />
       ) : (
@@ -104,17 +115,15 @@ export function LeadsTable({
   return (
     <div className="w-full rounded-card border border-gray-200 bg-white shadow-sm-elevation">
       {/* --- Table: tablet and up ------------------------------------------ */}
-      <div className="hidden overflow-x-auto md:block">
-        <table className="w-full min-w-[45rem] border-collapse">
+      <div className="table-scroll hidden md:block">
+        <table className="data-table min-w-[45rem]">
           <thead>
-            <tr className="border-b border-gray-200">
+            <tr>
               {['From', 'Message', 'Received', ''].map((heading, index) => (
                 <th
                   key={heading || index}
                   scope="col"
-                  className={`px-card py-3 text-caption font-semibold uppercase tracking-[0.4px] text-gray-500 ${
-                    index === 3 ? 'text-right' : 'text-left'
-                  }`}
+                  className={`px-card ${index === 3 ? 'text-right' : ''}`}
                 >
                   {heading || <span className="sr-only">Actions</span>}
                 </th>
@@ -124,13 +133,10 @@ export function LeadsTable({
 
           <tbody>
             {rows.map((row) => (
-              <tr
-                key={row.id}
-                className="border-b border-gray-100 last:border-b-0 hover:bg-gray-50"
-              >
+              <tr key={row.id} className="hover:bg-gray-50">
                 <td className="px-card py-4 align-top">
                   <span className="flex flex-col gap-0.5">
-                    <span className="text-body font-semibold text-text">{row.name}</span>
+                    <span className="font-semibold">{row.name}</span>
                     <a
                       href={`mailto:${row.email}`}
                       className="text-caption text-primary underline-offset-2 hover:underline"
@@ -141,10 +147,10 @@ export function LeadsTable({
                 </td>
 
                 <td className="max-w-[24rem] px-card py-4 align-top">
-                  <p className="line-clamp-2 text-body text-text">{row.message}</p>
+                  <p className="line-clamp-2">{row.message}</p>
                 </td>
 
-                <td className="px-card py-4 align-top">
+                <td className="whitespace-nowrap px-card py-4 align-top">
                   <span className="text-caption text-gray-500">
                     {formatActivityTime(row.createdAt)}
                   </span>
@@ -166,10 +172,15 @@ export function LeadsTable({
       {/* --- Cards: mobile ------------------------------------------------- */}
       <ul className="flex flex-col md:hidden">
         {rows.map((row) => (
-          <li key={row.id} className="flex flex-col gap-3 border-b border-gray-100 p-4 last:border-b-0">
+          <li
+            key={row.id}
+            className="flex flex-col gap-3 border-b border-gray-100 p-4 last:border-b-0"
+          >
             <span className="flex items-start justify-between gap-3">
               <span className="flex min-w-0 flex-col gap-0.5">
-                <span className="text-body font-semibold text-text">{row.name}</span>
+                <span className="text-body font-semibold text-text">
+                  {row.name}
+                </span>
                 <a
                   href={`mailto:${row.email}`}
                   className="text-caption text-primary underline-offset-2 hover:underline"

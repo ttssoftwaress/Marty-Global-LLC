@@ -58,7 +58,7 @@ type MailItemSlideOverProps = {
   onDownload?: () => void;
   // While a request is in flight, so the two buttons cannot be double-submitted.
   isRequesting?: boolean;
-  // Set when a request was rejected — a customer with no company address on file
+  // Set when a request was rejected — a customer with no forwarding address on file
   // cannot be forwarded to, and the reason belongs beside the button.
   requestError?: string | null;
   /*

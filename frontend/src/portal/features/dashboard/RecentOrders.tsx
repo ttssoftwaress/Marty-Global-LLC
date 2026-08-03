@@ -49,7 +49,9 @@ export function RecentOrders({ orders }: RecentOrdersProps) {
       {/* Mobile — header outside, one card per order */}
       <section className="flex w-full flex-col gap-3 md:hidden">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-body-lg font-semibold text-text">Recent orders</h2>
+          <h2 className="text-body-lg font-semibold text-text">
+            Recent orders
+          </h2>
           <SectionLink />
         </div>
 
@@ -97,60 +99,66 @@ export function RecentOrders({ orders }: RecentOrdersProps) {
         {isEmpty ? (
           <EmptyState />
         ) : (
-          <table className="w-full table-fixed border-collapse">
-            <thead>
-              <tr className="bg-[var(--table-header-bg)] text-left text-caption font-medium uppercase text-gray-500">
-                <th scope="col" className="h-12 px-5 font-medium">
-                  Service / order name
-                </th>
-                <th scope="col" className="h-12 w-[7.5rem] px-0 font-medium">
-                  Order ID
-                </th>
-                <th
-                  scope="col"
-                  className="hidden h-12 w-[7.5rem] px-0 font-medium lg:table-cell"
-                >
-                  Submitted
-                </th>
-                <th scope="col" className="h-12 w-[8.75rem] px-0 font-medium">
-                  Status
-                </th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {orders.map((order) => (
-                <tr
-                  key={order.id}
-                  className="h-[3.75rem] border-b border-gray-200 last:border-b-0 lg:h-table-row"
-                >
-                  <td className="min-w-0 px-5">
-                    <Link
-                      to={`/app/orders/${order.id}`}
-                      className="flex min-w-0 flex-col gap-0.5 lg:gap-0"
-                    >
-                      <span className="truncate text-body font-medium text-text lg:font-medium">
-                        {order.serviceName}
-                      </span>
-                      <span className="text-caption text-gray-500 lg:hidden">
-                        {formatOrderDate(order.submittedAt)}
-                      </span>
-                    </Link>
-                  </td>
-
-                  <td className="text-body text-gray-500">#{order.reference}</td>
-
-                  <td className="hidden text-body text-gray-500 lg:table-cell">
-                    {formatOrderDate(order.submittedAt)}
-                  </td>
-
-                  <td>
-                    <OrderStatusChip status={order.status} />
-                  </td>
+          <div className="table-scroll">
+            <table className="data-table min-w-[34rem] table-fixed lg:min-w-[42rem]">
+              <thead>
+                <tr>
+                  <th scope="col" className="h-12 px-5">
+                    Service / order name
+                  </th>
+                  <th scope="col" className="h-12 w-[11.5rem] pr-3">
+                    Order ID
+                  </th>
+                  <th
+                    scope="col"
+                    className="hidden h-12 w-[7.5rem] pr-3 lg:table-cell"
+                  >
+                    Submitted
+                  </th>
+                  <th scope="col" className="h-12 w-[8.75rem] pr-5">
+                    Status
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+
+              <tbody>
+                {orders.map((order) => (
+                  <tr key={order.id} className="h-[3.75rem] lg:h-table-row">
+                    <td className="min-w-0 px-5">
+                      <Link
+                        to={`/app/orders/${order.id}`}
+                        className="flex min-w-0 flex-col gap-0.5 lg:gap-0"
+                      >
+                        <span
+                          className="truncate font-medium"
+                          title={order.serviceName}
+                        >
+                          {order.serviceName}
+                        </span>
+                        <span className="text-caption text-gray-500 lg:hidden">
+                          {formatOrderDate(order.submittedAt)}
+                        </span>
+                      </Link>
+                    </td>
+
+                    <td className="pr-3 text-gray-500">
+                      <span className="block truncate" title={order.reference}>
+                        #{order.reference}
+                      </span>
+                    </td>
+
+                    <td className="hidden whitespace-nowrap pr-3 text-gray-500 lg:table-cell">
+                      {formatOrderDate(order.submittedAt)}
+                    </td>
+
+                    <td className="pr-5">
+                      <OrderStatusChip status={order.status} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
     </>

@@ -64,31 +64,26 @@ export function RegistryList<T extends RegistryListItem>({
   return (
     <>
       {/* Table — md and up */}
-      <div className="hidden overflow-x-auto rounded-card border border-gray-200 bg-white shadow-sm-elevation md:block">
-        <table className="w-full min-w-[45rem] border-collapse">
+      <div className="table-scroll hidden rounded-card border border-gray-200 bg-white shadow-sm-elevation md:block">
+        <table className="data-table min-w-[45rem]">
           <thead>
-            <tr className="border-b border-gray-200 bg-gray-50">
+            <tr>
               <Th>Field</Th>
               <Th>Key</Th>
               <Th>Type</Th>
               <Th>{usageHeading}</Th>
               <Th>Updated</Th>
-              <th className="w-px px-4 py-3" />
+              <th className="w-px px-4" />
             </tr>
           </thead>
 
           <tbody>
             {fields.map((field) => (
-              <tr
-                key={field.id}
-                className="border-b border-gray-200 last:border-b-0 hover:bg-gray-50"
-              >
+              <tr key={field.id} className="hover:bg-gray-50">
                 <td className="px-4 py-3">
                   <div className="flex flex-col gap-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-body font-medium text-text">
-                        {field.label}
-                      </span>
+                      <span className="font-medium">{field.label}</span>
                       {renderBadges?.(field)}
                       {field.archived && <ArchivedChip />}
                     </div>
@@ -112,11 +107,11 @@ export function RegistryList<T extends RegistryListItem>({
                   />
                 </td>
 
-                <td className="px-4 py-3 text-body text-text-secondary">
+                <td className="whitespace-nowrap px-4 py-3 text-text-secondary">
                   {formatUsage(field.usageCount)}
                 </td>
 
-                <td className="px-4 py-3 text-body text-text-secondary">
+                <td className="whitespace-nowrap px-4 py-3 text-text-secondary">
                   {formatFieldDate(field.updatedAt)}
                 </td>
 
@@ -268,9 +263,5 @@ function CompactEditButton<T extends RegistryListItem>({
 }
 
 function Th({ children }: { children: ReactNode }) {
-  return (
-    <th className="px-4 py-3 text-left text-caption font-medium uppercase tracking-[0.4px] text-gray-500">
-      {children}
-    </th>
-  );
+  return <th className="px-4">{children}</th>;
 }

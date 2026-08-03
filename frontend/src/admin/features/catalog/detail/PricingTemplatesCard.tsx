@@ -11,7 +11,11 @@ import type {
   ServiceFormErrors,
   ServiceRegion,
 } from '../../../types/catalog';
-import { Field, SelectInput, TextInput } from '../../../components/FormControls';
+import {
+  Field,
+  SelectInput,
+  TextInput,
+} from '../../../components/FormControls';
 import { DashedAddButton, DetailCard } from './DetailCard';
 
 /*
@@ -56,7 +60,9 @@ export function PricingTemplatesCard({
   const [editingKey, setEditingKey] = useState<string | null>(null);
 
   const updateTier = (index: number, patch: Partial<PricingTierDraft>) => {
-    onChange(tiers.map((tier, i) => (i === index ? { ...tier, ...patch } : tier)));
+    onChange(
+      tiers.map((tier, i) => (i === index ? { ...tier, ...patch } : tier)),
+    );
   };
 
   const removeTier = (index: number) => {
@@ -139,106 +145,104 @@ export function PricingTemplatesCard({
 
           {/* Tablet & desktop — the table. */}
           <div className="hidden w-full overflow-hidden rounded-card border border-gray-200 md:block">
-            <table className="w-full table-fixed border-collapse">
-              <thead>
-                <tr className="h-12 bg-[var(--table-header-bg)] text-left">
-                  <th
-                    scope="col"
-                    className="w-[15rem] border-b border-gray-200 px-4 text-caption font-medium uppercase text-gray-500 lg:w-[11.25rem]"
-                  >
-                    Region
-                  </th>
-                  <th
-                    scope="col"
-                    className="w-[7.5rem] border-b border-gray-200 px-4 text-caption font-medium uppercase text-gray-500 lg:w-[8.75rem]"
-                  >
-                    Base price
-                  </th>
-                  {/* The notes column folds under the region name on tablet. */}
-                  <th
-                    scope="col"
-                    className="hidden border-b border-gray-200 px-4 text-caption font-medium uppercase text-gray-500 lg:table-cell"
-                  >
-                    Includes / notes
-                  </th>
-                  <th
-                    scope="col"
-                    className="border-b border-gray-200 px-4 text-caption font-medium uppercase text-gray-500 lg:w-[11.25rem]"
-                  >
-                    Est. turnaround
-                  </th>
-                  <th
-                    scope="col"
-                    className="w-[6.25rem] border-b border-gray-200 px-4 text-right text-caption font-medium uppercase text-gray-500"
-                  >
-                    Action
-                  </th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {tiers.map((tier, index) =>
-                  editingKey === tier.key ? (
-                    <tr key={tier.key} className="border-b border-gray-200 last:border-b-0">
-                      <td colSpan={5} className="bg-gray-50 p-4">
-                        <TierEditor
-                          tier={tier}
-                          index={index}
-                          regions={regions}
-                          errors={errors}
-                          onChange={(patch) => updateTier(index, patch)}
-                          onRemove={() => removeTier(index)}
-                          onDone={() => setEditingKey(null)}
-                        />
-                      </td>
-                    </tr>
-                  ) : (
-                    <tr
-                      key={tier.key}
-                      className="border-b border-gray-200 bg-white last:border-b-0"
+            <div className="table-scroll">
+              <table className="data-table min-w-[42rem] table-fixed lg:min-w-[52rem]">
+                <thead>
+                  <tr className="h-12">
+                    <th
+                      scope="col"
+                      className="w-[15rem] px-4 py-0 lg:w-[11.25rem]"
                     >
-                      <td className="px-4 py-3 align-middle lg:h-table-row lg:py-0">
-                        <div className="flex flex-col gap-1">
-                          <span className="truncate text-body font-semibold text-gray-900 lg:font-medium">
-                            {tier.name || regionLabel(tier.regionCode)}
-                          </span>
-                          {/* Tablet only — desktop gives notes their own column. */}
-                          {tier.description ? (
-                            <span className="truncate text-small text-gray-500 lg:hidden">
-                              {tier.description}
+                      Region
+                    </th>
+                    <th
+                      scope="col"
+                      className="w-[7.5rem] px-4 py-0 lg:w-[8.75rem]"
+                    >
+                      Base price
+                    </th>
+                    {/* The notes column folds under the region name on tablet. */}
+                    <th scope="col" className="hidden px-4 py-0 lg:table-cell">
+                      Includes / notes
+                    </th>
+                    <th scope="col" className="px-4 py-0 lg:w-[11.25rem]">
+                      Est. turnaround
+                    </th>
+                    <th
+                      scope="col"
+                      className="w-[6.25rem] px-4 py-0 text-right"
+                    >
+                      Action
+                    </th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {tiers.map((tier, index) =>
+                    editingKey === tier.key ? (
+                      <tr key={tier.key}>
+                        <td colSpan={5} className="bg-gray-50 p-4">
+                          <TierEditor
+                            tier={tier}
+                            index={index}
+                            regions={regions}
+                            errors={errors}
+                            onChange={(patch) => updateTier(index, patch)}
+                            onRemove={() => removeTier(index)}
+                            onDone={() => setEditingKey(null)}
+                          />
+                        </td>
+                      </tr>
+                    ) : (
+                      <tr key={tier.key} className="bg-white">
+                        <td className="px-4 py-3 lg:h-table-row lg:py-0">
+                          <div className="flex min-w-0 flex-col gap-1">
+                            <span className="truncate font-semibold text-gray-900 lg:font-medium">
+                              {tier.name || regionLabel(tier.regionCode)}
                             </span>
-                          ) : null}
-                        </div>
-                      </td>
+                            {/* Tablet only — desktop gives notes their own column. */}
+                            {tier.description ? (
+                              <span className="truncate text-small text-gray-500 lg:hidden">
+                                {tier.description}
+                              </span>
+                            ) : null}
+                          </div>
+                        </td>
 
-                      <td className="px-4 py-3 align-middle text-body font-semibold text-gray-900 lg:py-0 lg:font-medium">
-                        <TierPrice tier={tier} />
-                      </td>
+                        <td className="whitespace-nowrap px-4 py-3 font-semibold text-gray-900 lg:py-0 lg:font-medium">
+                          <TierPrice tier={tier} />
+                        </td>
 
-                      <td className="hidden px-4 py-3 align-middle lg:table-cell lg:py-0">
-                        <span className="block truncate text-body text-gray-600">
-                          {tier.description || '—'}
-                        </span>
-                      </td>
+                        <td className="hidden px-4 py-3 lg:table-cell lg:py-0">
+                          <span
+                            className="block truncate text-gray-600"
+                            title={tier.description || undefined}
+                          >
+                            {tier.description || '—'}
+                          </span>
+                        </td>
 
-                      <td className="px-4 py-3 align-middle text-body text-gray-600 lg:py-0">
-                        {tier.turnaround || '—'}
-                      </td>
+                        <td className="px-4 py-3 text-gray-600 lg:py-0">
+                          <span className="block truncate">
+                            {tier.turnaround || '—'}
+                          </span>
+                        </td>
 
-                      <td className="px-4 py-3 text-right align-middle lg:py-0">
-                        <button
-                          type="button"
-                          onClick={() => setEditingKey(tier.key)}
-                          className="inline-flex h-8 w-20 items-center justify-center rounded-control border border-primary bg-white text-small font-semibold text-primary transition-colors hover:bg-primary-light focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                        >
-                          Edit
-                        </button>
-                      </td>
-                    </tr>
-                  ),
-                )}
-              </tbody>
-            </table>
+                        <td className="px-4 py-3 text-right lg:py-0">
+                          <button
+                            type="button"
+                            onClick={() => setEditingKey(tier.key)}
+                            className="inline-flex h-8 w-20 items-center justify-center rounded-control border border-primary bg-white text-small font-semibold text-primary transition-colors hover:bg-primary-light focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                          >
+                            Edit
+                          </button>
+                        </td>
+                      </tr>
+                    ),
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </>
       )}

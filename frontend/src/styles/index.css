@@ -11,19 +11,32 @@
  * the taller root, and the fixed sidebar rides up leaving blank space beneath.
  *
  * Chaining the height down to `#root` and pinning overflow at the document
- * makes the shell's `<main>` the only thing that scrolls. Marketing pages are
- * unaffected: they scroll inside `#root`, which is why `overflow` is clipped on
- * `html`/`body` but left `auto` on the root node.
+ * makes the shell's `<main>` the only thing that scrolls.
+ *
+ * That lock is scoped to `html.app-compact` — the class the product shells
+ * (portal, admin, auth) already tag the document with, and marketing never
+ * does. Applying it globally cost the public site the browser's own
+ * pull-to-refresh: that gesture is offered only on the document scroller, and a
+ * clipped `html` with `overscroll-behavior: none` disables it outright. Scoped,
+ * marketing scrolls the document and keeps the native gesture; the shells keep
+ * the lock and re-create the gesture themselves (`hooks/usePullToRefresh.ts`),
+ * because an inner scroll container is never offered it in any case.
  */
 @layer base {
   html,
-  body {
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+  html.app-compact,
+  html.app-compact body {
     height: 100%;
     overflow: hidden;
     overscroll-behavior: none;
   }
 
-  #root {
+  html.app-compact #root {
     height: 100%;
     overflow: auto;
   }
@@ -565,6 +578,94 @@
   .status-info {
     background-color: var(--color-status-info-bg);
     color: var(--color-status-info-text);
+  }
+}
+
+/*
+ * Marty Global LLC — Data Table System
+ *
+ * One table style for every list in the portal and admin: the billing ledger,
+ * the settlement queue, the mail log, the audit trail, the customer's payment
+ * history. They had been styled per file and had drifted — six header
+ * treatments (11px against 10px, medium against semibold, 0.3px against 0.6px
+ * tracking, four different greys) across twenty tables a user reads as one
+ * product.
+ *
+ * `.table-scroll` is the frame's scroll port, and it is not optional. Every one
+ * of these tables allocates its columns in rem, so a viewport narrower than the
+ * sum has to put the remainder somewhere. Under a clipping ancestor the cells
+ * that cannot shrink paint over their neighbours instead — a `nowrap` amount
+ * landing on top of a status pill — which is exactly the overlap this system
+ * exists to prevent. Scroll rather than clip, and pair it with a `min-w` on the
+ * table that is at least the sum of the fixed columns plus a readable minimum
+ * for the flexible one. A `table-fixed` table whose declared widths exceed its
+ * own `min-w` is the same bug by another route: the browser scales every column
+ * down to fit and the buttons in the action column spill sideways.
+ *
+ * Utilities sit in a later cascade layer than this one, so a table that needs a
+ * different gutter, row height, or alignment still overrides per cell.
+ */
+@layer components {
+  .table-scroll {
+    width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-gray-300) transparent;
+  }
+  .table-scroll::-webkit-scrollbar {
+    height: 0.5rem;
+  }
+  .table-scroll::-webkit-scrollbar-track {
+    background-color: transparent;
+  }
+  .table-scroll::-webkit-scrollbar-thumb {
+    background-color: var(--color-gray-300);
+    border-radius: var(--radius-pill);
+  }
+
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+  }
+
+  .data-table thead tr {
+    background-color: var(--table-header-bg);
+    border-bottom: 1px solid var(--color-gray-200);
+  }
+
+  /*
+   * A heading is a label, not content: one size, one weight, one tracking, and
+   * it never wraps to a second line — a two-line heading pushes the first row
+   * off the fold and makes two adjacent tables sit at different heights.
+   */
+  .data-table th {
+    padding-block: 0.75rem;
+    font-size: var(--text-caption);
+    line-height: var(--text-caption--line-height);
+    font-weight: var(--font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-gray-500);
+    text-align: left;
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+
+  .data-table tbody tr {
+    border-bottom: 1px solid var(--color-gray-200);
+  }
+  .data-table tbody tr:last-child {
+    border-bottom: 0;
+  }
+
+  .data-table td {
+    padding-block: 0.75rem;
+    vertical-align: middle;
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
+    color: var(--color-text);
   }
 }
 

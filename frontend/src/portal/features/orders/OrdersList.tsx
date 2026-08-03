@@ -31,6 +31,13 @@ import { OrderRowAction } from './OrderRowAction';
  * The design shows a populated list only; the empty state is added here so a
  * filter or search with no matches explains itself instead of showing a bare
  * card.
+ *
+ * The table sits in its own scroll port inside the card, with a minimum width
+ * that is the sum of the fixed columns plus a readable service column. Without
+ * one, `table-fixed` gave the fixed columns their rem widths and left the
+ * service name whatever was over — nothing at all on a narrow workspace — and
+ * the card's `overflow-hidden` meant the cells that could not shrink were
+ * painted over their neighbours rather than scrolled to.
  */
 
 type OrdersListProps = {
@@ -95,7 +102,11 @@ function EmptyState() {
   return (
     <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
       <span className="flex size-12 items-center justify-center rounded-[1.5rem] bg-gray-100">
-        <PackageOpen className="size-6 text-gray-400" strokeWidth={1.75} aria-hidden="true" />
+        <PackageOpen
+          className="size-6 text-gray-400"
+          strokeWidth={1.75}
+          aria-hidden="true"
+        />
       </span>
       <p className="text-body-lg font-semibold text-text">No orders found</p>
       <p className="max-w-[22.5rem] text-body text-gray-500">
@@ -113,7 +124,11 @@ function DateSortHeader({ onToggle }: { onToggle?: () => void }) {
       className="flex items-center gap-1 whitespace-nowrap text-caption font-semibold uppercase tracking-[0.6px] text-primary"
     >
       Date submitted
-      <ChevronDown className="size-3.5 shrink-0" strokeWidth={2} aria-hidden="true" />
+      <ChevronDown
+        className="size-3.5 shrink-0"
+        strokeWidth={2}
+        aria-hidden="true"
+      />
     </button>
   );
 }
@@ -167,88 +182,89 @@ export function OrdersList({
 
       {/* Tablet & desktop — card-wrapped table */}
       <div className="hidden w-full overflow-hidden rounded-card border border-gray-200 bg-white shadow-sm-elevation md:block">
-        <table className="w-full table-fixed border-collapse">
-          <thead>
-            <tr className="h-11 border-b border-gray-200 bg-[var(--table-header-bg)] text-left align-middle lg:h-12">
-              <th
-                scope="col"
-                className="px-4 text-caption font-semibold uppercase tracking-[0.6px] text-gray-500 lg:px-6"
-              >
-                Service / order name
-              </th>
-              <th
-                scope="col"
-                className="hidden px-0 text-caption font-semibold uppercase tracking-[0.6px] text-gray-500 lg:table-cell lg:w-[9.375rem]"
-              >
-                Order ID
-              </th>
-              <th scope="col" className="w-[8rem] px-0 lg:w-[10rem]">
-                <DateSortHeader onToggle={onToggleDateSort} />
-              </th>
-              <th
-                scope="col"
-                className="w-[8.25rem] px-0 text-caption font-semibold uppercase tracking-[0.6px] text-gray-500 lg:w-[9.375rem]"
-              >
-                Status
-              </th>
-              <th
-                scope="col"
-                className="w-[9.375rem] px-0 pr-4 text-right text-caption font-semibold uppercase tracking-[0.6px] text-gray-500 lg:w-[10.625rem] lg:pr-6"
-              >
-                Action
-              </th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {isEmpty ? (
-              <tr>
-                <td colSpan={5}>
-                  <EmptyState />
-                </td>
-              </tr>
-            ) : (
-              orders.map((order) => (
-                <tr
-                  key={order.id}
-                  {...rowProps(order.id)}
-                  className={`h-16 cursor-pointer border-b border-gray-200 transition-colors last:border-b-0 hover:bg-gray-50 active:bg-gray-100 lg:h-table-row ${ROW_FOCUS_CLASS}`}
+        <div className="table-scroll">
+          <table className="data-table min-w-[42.5rem] table-fixed lg:min-w-[57rem]">
+            <thead>
+              <tr className="h-11 lg:h-12">
+                <th scope="col" className="px-4 lg:px-6">
+                  Service / order name
+                </th>
+                <th
+                  scope="col"
+                  className="hidden px-0 lg:table-cell lg:w-[11.5rem]"
                 >
-                  <td className="min-w-0 px-4 lg:px-6">
-                    <Link
-                      to={orderDetailPath(order.id)}
-                      onClick={stopRowClick}
-                      className="block truncate text-body font-semibold text-text"
-                    >
-                      {order.serviceName}
-                    </Link>
-                    <p className="truncate text-small text-gray-500 lg:hidden">
-                      #{order.reference}
-                    </p>
-                  </td>
+                  Order ID
+                </th>
+                <th scope="col" className="w-[8rem] px-0 lg:w-[10rem]">
+                  <DateSortHeader onToggle={onToggleDateSort} />
+                </th>
+                <th scope="col" className="w-[8.25rem] px-0 lg:w-[9.375rem]">
+                  Status
+                </th>
+                <th
+                  scope="col"
+                  className="w-[9.375rem] px-0 pr-4 text-right lg:w-[10.625rem] lg:pr-6"
+                >
+                  Action
+                </th>
+              </tr>
+            </thead>
 
-                  <td className="hidden text-body text-gray-500 lg:table-cell">
-                    #{order.reference}
-                  </td>
-
-                  <td className="text-[0.8125rem] text-gray-500 lg:text-body">
-                    {formatOrderDate(order.submittedAt)}
-                  </td>
-
-                  <td>
-                    <OrderStatusChip status={order.status} />
-                  </td>
-
-                  <td className="pr-0 text-right lg:pr-6">
-                    <div className="flex justify-end" onClick={stopRowClick}>
-                      <OrderRowAction order={order} />
-                    </div>
+            <tbody>
+              {isEmpty ? (
+                <tr>
+                  <td colSpan={5} className="py-0">
+                    <EmptyState />
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                orders.map((order) => (
+                  <tr
+                    key={order.id}
+                    {...rowProps(order.id)}
+                    className={`h-16 cursor-pointer transition-colors hover:bg-gray-50 active:bg-gray-100 lg:h-table-row ${ROW_FOCUS_CLASS}`}
+                  >
+                    <td className="min-w-0 px-4 lg:px-6">
+                      <Link
+                        to={orderDetailPath(order.id)}
+                        onClick={stopRowClick}
+                        title={order.serviceName}
+                        className="block truncate font-semibold"
+                      >
+                        {order.serviceName}
+                      </Link>
+                      <p className="truncate text-small text-gray-500 lg:hidden">
+                        #{order.reference}
+                      </p>
+                    </td>
+
+                    <td className="hidden pr-4 text-gray-500 lg:table-cell">
+                      <span className="block truncate" title={order.reference}>
+                        #{order.reference}
+                      </span>
+                    </td>
+
+                    <td className="pr-3 text-[0.8125rem] text-gray-500 lg:text-body">
+                      <span className="block truncate">
+                        {formatOrderDate(order.submittedAt)}
+                      </span>
+                    </td>
+
+                    <td className="pr-3">
+                      <OrderStatusChip status={order.status} />
+                    </td>
+
+                    <td className="pr-0 text-right lg:pr-6">
+                      <div className="flex justify-end" onClick={stopRowClick}>
+                        <OrderRowAction order={order} />
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </>
   );

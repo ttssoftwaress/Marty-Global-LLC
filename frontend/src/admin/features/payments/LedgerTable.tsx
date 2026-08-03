@@ -12,7 +12,7 @@ import { PaymentStatusChip } from './PaymentStatusChip';
  *
  * One real `<table>` so the columns align and the header is announced.
  *
- * Three departures from the Figma links, all of them fixes to problems visible
+ * Four departures from the Figma links, all of them fixes to problems visible
  * in the design itself (Design.md — improve where warranted, log it):
  *
  *   1. Rows get a real height. The desktop link's ledger rows have no vertical
@@ -29,6 +29,19 @@ import { PaymentStatusChip } from './PaymentStatusChip';
  *      data disappears at a width that cannot hold eight columns — desktop keeps
  *      all three as their own columns. That is also what keeps the table inside
  *      768–1024px without a horizontal scroll clipping the action button.
+ *   4. The order ID column is sized for the reference the backend actually
+ *      issues. The design draws a short "#ORD-9021", but a real reference is
+ *      `ORD-<year>-<8 chars>` (orders.service.ts) — seventeen characters, set
+ *      `whitespace-nowrap`, in a column the design allocates 116px to. It ran
+ *      straight over the customer beside it. The column now fits the full
+ *      reference, and the cell truncates with a `title` rather than wrapping so
+ *      a longer format later degrades instead of overlapping again.
+ *   5. The table declares a minimum width at both breakpoints and scrolls below
+ *      it. Without one, `table-fixed` handed the seven fixed columns their rem
+ *      widths and left the service name whatever remained — 60px on a 1024–1150px
+ *      workspace, which truncated every service to three characters. The minimum
+ *      is the fixed columns plus a readable service column, so the frame scrolls
+ *      instead of starving it.
  *
  * Desktop's column order matches the design: ID, customer, service, amount,
  * date, status, method, action.
@@ -41,49 +54,37 @@ type LedgerTableProps = {
   sendingId?: string | null;
 };
 
-const HEAD_CELL =
-  'py-0 text-left text-caption font-medium uppercase tracking-[0.3px] text-gray-500';
-
 export function LedgerTable({ rows, onAction, sendingId }: LedgerTableProps) {
   return (
-    <div className="hidden w-full overflow-x-auto md:block">
-      <table className="w-full table-fixed border-collapse text-left lg:min-w-[65rem]">
+    <div className="table-scroll hidden md:block">
+      <table className="data-table min-w-[49rem] table-fixed lg:min-w-[75rem]">
         <thead>
-          <tr className="h-12 border-b border-gray-200 bg-[var(--table-header-bg)]">
-            <th scope="col" className={`${HEAD_CELL} w-[6.75rem] pl-4 pr-2 lg:w-[7.25rem] lg:pl-6 lg:pr-4`}>
+          <tr className="h-12">
+            <th
+              scope="col"
+              className="w-[11.75rem] pl-4 pr-2 lg:w-[12.5rem] lg:pl-6 lg:pr-4"
+            >
               Order ID
             </th>
-            <th
-              scope="col"
-              className={`${HEAD_CELL} hidden w-[10rem] pr-4 lg:table-cell`}
-            >
+            <th scope="col" className="hidden w-[9rem] pr-4 lg:table-cell">
               Customer
             </th>
-            <th scope="col" className={`${HEAD_CELL} pr-2 lg:pr-4`}>
+            <th scope="col" className="pr-2 lg:pr-4">
               Service
             </th>
-            <th scope="col" className={`${HEAD_CELL} w-[5.5rem] pr-2 lg:w-[7rem] lg:pr-4`}>
+            <th scope="col" className="w-[5.5rem] pr-2 lg:w-[6.5rem] lg:pr-4">
               Amount
             </th>
-            <th
-              scope="col"
-              className={`${HEAD_CELL} hidden w-[7.5rem] pr-4 lg:table-cell`}
-            >
+            <th scope="col" className="hidden w-[7rem] pr-4 lg:table-cell">
               Date issued
             </th>
-            <th scope="col" className={`${HEAD_CELL} w-[9.5rem] pr-2 lg:w-[10rem] lg:pr-4`}>
+            <th scope="col" className="w-[9.5rem] pr-2 lg:w-[9.5rem] lg:pr-4">
               Status
             </th>
-            <th
-              scope="col"
-              className={`${HEAD_CELL} hidden w-[11rem] pr-4 lg:table-cell`}
-            >
+            <th scope="col" className="hidden w-[9.25rem] pr-4 lg:table-cell">
               Payment method
             </th>
-            <th
-              scope="col"
-              className={`${HEAD_CELL} w-[8.75rem] pr-4 text-right lg:w-[8.5rem] lg:pr-6`}
-            >
+            <th scope="col" className="w-[9.25rem] pr-4 text-right lg:pr-6">
               Action
             </th>
           </tr>
@@ -91,27 +92,27 @@ export function LedgerTable({ rows, onAction, sendingId }: LedgerTableProps) {
 
         <tbody>
           {rows.map((row) => (
-            <tr
-              key={row.id}
-              className="border-b border-gray-200 transition-colors last:border-b-0 hover:bg-gray-50"
-            >
-              <td className="py-3 pl-4 pr-3 align-middle lg:pl-6 lg:pr-4">
+            <tr key={row.id} className="transition-colors hover:bg-gray-50">
+              <td className="py-3 pl-4 pr-3 lg:pl-6 lg:pr-4">
                 <Link
                   to={row.to}
-                  className="whitespace-nowrap text-body font-semibold text-primary hover:underline"
+                  title={row.reference}
+                  className="block truncate font-semibold text-primary hover:underline"
                 >
                   {row.reference}
                 </Link>
               </td>
 
-              <td className="hidden py-3 pr-4 align-middle lg:table-cell">
-                <span className="block truncate text-body text-text">
+              <td className="hidden py-3 pr-4 lg:table-cell">
+                <span className="block truncate" title={row.customer.name}>
                   {row.customer.name}
                 </span>
               </td>
 
-              <td className="py-3 pr-2 align-middle lg:pr-4">
-                <span className="block truncate text-body text-text">{row.service}</span>
+              <td className="py-3 pr-2 lg:pr-4">
+                <span className="block truncate" title={row.service}>
+                  {row.service}
+                </span>
                 {/*
                  * Tablet folds the customer, the date, and the method under the
                  * service — an extension of that link's own idea — so nothing is
@@ -124,25 +125,28 @@ export function LedgerTable({ rows, onAction, sendingId }: LedgerTableProps) {
                 </span>
               </td>
 
-              <td className="py-3 pr-3 align-middle lg:pr-4">
-                <span className="whitespace-nowrap text-body font-medium text-text">
+              <td className="py-3 pr-3 lg:pr-4">
+                <span className="block truncate font-medium">
                   {formatMoney(row.amount)}
                 </span>
               </td>
 
-              <td className="hidden py-3 pr-4 align-middle lg:table-cell">
-                <span className="whitespace-nowrap text-body text-gray-600">
+              <td className="hidden py-3 pr-4 lg:table-cell">
+                <span className="block truncate text-gray-600">
                   {formatOrderDate(row.issuedAt)}
                 </span>
               </td>
 
-              <td className="py-3 pr-3 align-middle lg:pr-4">
-                <PaymentStatusChip status={row.status} label={row.statusLabel} />
+              <td className="py-3 pr-3 lg:pr-4">
+                <PaymentStatusChip
+                  status={row.status}
+                  label={row.statusLabel}
+                />
               </td>
 
-              <td className="hidden py-3 pr-4 align-middle lg:table-cell">
+              <td className="hidden py-3 pr-4 lg:table-cell">
                 <span
-                  className={`block truncate text-body ${
+                  className={`block truncate ${
                     row.method ? 'text-text-secondary' : 'text-gray-400'
                   }`}
                 >
@@ -150,9 +154,9 @@ export function LedgerTable({ rows, onAction, sendingId }: LedgerTableProps) {
                 </span>
               </td>
 
-              <td className="py-3 pl-2 pr-4 align-middle text-right lg:pr-6">
+              <td className="py-3 pl-2 pr-4 text-right lg:pr-6">
                 {row.action.kind === 'none' ? (
-                  <span className="text-body text-gray-400">{EM_DASH}</span>
+                  <span className="text-gray-400">{EM_DASH}</span>
                 ) : (
                   <LedgerRowAction
                     row={row}

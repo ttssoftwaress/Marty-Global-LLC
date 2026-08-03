@@ -1,7 +1,9 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { useCompactScale } from '@/hooks/useCompactScale';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { useUnreadCounts } from '@/hooks/useUnreadCounts';
 import {
   NotificationsPanel,
@@ -13,6 +15,7 @@ import {
 import { SupportWidget } from '../features/support';
 import type { Notification } from '../types/notifications';
 import { AccountMenu, type AccountMenuAnchor } from './account-menu';
+import { PullToRefreshIndicator } from './PullToRefreshIndicator';
 import { PortalSidebar, type SidebarUser } from './sidebar';
 import { PortalTopBar } from './topbar';
 
@@ -23,6 +26,11 @@ import { PortalTopBar } from './topbar';
  * The sidebar is fixed-height and the workspace scrolls on its own so the nav
  * and top bar stay put on long pages. Mobile has no persistent sidebar, so the
  * drawer's open state lives here — the top bar's hamburger toggles it.
+ *
+ * Because the workspace — not the document — is the scroller, the browser never
+ * offers its own pull-to-refresh on any portal screen. `usePullToRefresh` puts
+ * the gesture back on the element that actually scrolls; releasing it refetches
+ * every query the current screen has mounted.
  *
  * Notifications are owned here rather than passed in per page, for the reason
  * the admin shell already records: the bell is in the top bar of every portal
@@ -54,6 +62,7 @@ export function PortalLayout({ user, onLogout, children }: PortalLayoutProps) {
 
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const queryClient = useQueryClient();
   const panel = useNotificationPanel();
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllNotificationsRead();
@@ -69,6 +78,15 @@ export function PortalLayout({ user, onLogout, children }: PortalLayoutProps) {
     () => panel.data?.notifications ?? [],
     [panel.data],
   );
+
+  // Only the queries the current screen has mounted — refetching the whole cache
+  // would pull data for screens the customer is not looking at.
+  const pullToRefresh = usePullToRefresh({
+    onRefresh: useCallback(
+      () => queryClient.refetchQueries({ type: 'active' }),
+      [queryClient],
+    ),
+  });
 
   // Opening a row marks it read and then navigates. The row is a Link, so the
   // navigation would happen on its own; doing it here keeps both halves in one
@@ -116,12 +134,22 @@ export function PortalLayout({ user, onLogout, children }: PortalLayoutProps) {
          * `translate` on this element, which is a containing block for the
          * `position: fixed` slide-overs the pages inside render.
          */}
-        <main
-          key={pathname.split('/').slice(0, 3).join('/')}
-          className="min-h-0 flex-1 animate-fade-in overflow-y-auto motion-reduce:animate-none"
-        >
-          {children}
-        </main>
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          <PullToRefreshIndicator
+            offset={pullToRefresh.offset}
+            progress={pullToRefresh.progress}
+            refreshing={pullToRefresh.refreshing}
+            dragging={pullToRefresh.dragging}
+          />
+
+          <main
+            key={pathname.split('/').slice(0, 3).join('/')}
+            ref={pullToRefresh.setScroller}
+            className="min-h-0 flex-1 animate-fade-in overflow-y-auto overscroll-y-contain motion-reduce:animate-none"
+          >
+            {children}
+          </main>
+        </div>
       </div>
 
       <NotificationsPanel
