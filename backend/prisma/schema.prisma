@@ -114,9 +114,10 @@ model Company {
 //
 // A member's granted areas are a string array rather than a Json map: the write
 // side sends a map, but what we store is the set of keys that are on, which is
-// what every read then checks membership against. The area catalogue itself is
-// server-owned (lib/permissions.ts), so adding an admin section is a backend
-// change — never a frontend deploy.
+// what every read then checks membership against. The *area catalogue* is still
+// server-owned code (lib/permissions.ts) — an area maps one-to-one onto a guarded
+// router, so adding one is a backend change. Which areas a *role* grants is data,
+// edited by an admin on the Team & staff screen.
 
 enum StaffStatus {
   ACTIVE
@@ -140,17 +141,75 @@ enum StaffAvailability {
   AWAY
 }
 
+/*
+ * A job role an admin defines on the Team & staff screen — "Reviewer /
+ * Compliance", "Mail Room Operator", or whatever the org invents next.
+ *
+ * It carries the grant set every member holding it starts from, and `authRole`,
+ * the coarse Better Auth role those members are given on the user row. The two
+ * are distinct on purpose: `authRole` is the only thing the guards read, while
+ * this row's `permissions` decide which admin sections open once past them.
+ *
+ * `isSystem` marks the five roles provisioned on boot. An admin may relabel one
+ * and change what it grants, but not delete it or repoint its `authRole` — they
+ * are what an empty install is bootstrapped with, and `super-admin` in
+ * particular is the role that can grant access back.
+ *
+ * `lockedPermissions` are keys that may not be denied on this role, per member
+ * or on the role itself. Only `super-admin`'s `team` uses it: an org that can
+ * deny team management to its own super-admin can lock itself out.
+ */
+model StaffRole {
+  id String @id @default(cuid())
+  // Stable slug, immutable after creation — StaffProfile points at it, and
+  // audit metadata records it. The label is what changes when wording does.
+  key   String @unique
+  label String
+  // 'staff' | 'admin' (lib/roles.ts). Members of this role carry it on user.role.
+  authRole String
+  // Granted permission-area keys, plus their `.all` scope companions.
+  permissions String[]
+  // Keys this role always holds; the per-member grid renders them disabled.
+  lockedPermissions String[]
+  isSystem  Boolean @default(false)
+  sortOrder Int     @default(100)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  profiles StaffProfile[]
+
+  @@map("staff_role")
+}
+
 model StaffProfile {
   id     String @id @default(cuid())
   userId String @unique
-  // The job role's stable key ("super-admin", "reviewer"), resolved to its label
-  // from lib/permissions.ts. Distinct from user.role, which is the auth role.
+  // The job role's stable key ("super-admin", "reviewer"). Distinct from
+  // user.role, which is the auth role the guards read.
   roleKey String
   status  StaffStatus @default(INVITED)
   // The agent's own Online/Away switch in the admin shell. Defaults to ONLINE so
   // an existing team is reachable the moment live chat ships.
   availability StaffAvailability @default(ONLINE)
-  // Granted permission-area keys. Absent from the array = not granted.
+  /*
+   * This member's deliberate deviations from their role's grant set, as
+   * `{ key: boolean }` — true where an admin switched something on the role does
+   * not give, false where they switched one off that it does.
+   *
+   * The override is what makes the per-member switches an override rather than a
+   * copy: editing the role moves everyone who holds it, except on the keys an
+   * admin has personally decided for this one account. A key absent here follows
+   * the role.
+   */
+  permissionOverrides Json @default("{}")
+  /*
+   * The effective grant set — role ∪ overrides, locked keys forced on, orphan
+   * `.all` scopes dropped. Materialized rather than derived per read because it
+   * is what the guards check on every request, and what the two assignee queries
+   * filter on in SQL (`permissions: { has: 'orders' }`). Recomputed by
+   * lib/staff-permissions.ts on every write that can change it — including a role
+   * edit, which recomputes every member holding that role.
+   */
   permissions String[]
   // What the support inbox's narrow capsules print ("Marcus T."), snapshotted so
   // a thread reads correctly without re-deriving it from the full name.
@@ -163,6 +222,9 @@ model StaffProfile {
   deletedAt   DateTime? @db.Timestamptz(3)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Restrict, not Cascade: deleting a role must never quietly delete the staff
+  // holding it. The service refuses the delete while any member still points here.
+  role StaffRole @relation(fields: [roleKey], references: [key], onDelete: Restrict, onUpdate: Cascade)
 
   @@index([status, roleKey])
   @@map("staff_profile")

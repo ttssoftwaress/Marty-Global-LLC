@@ -139,4 +139,23 @@ export type AdminTeamSummary = {
    * `GET /admin/team/:memberId`.
    */
   permissionAreas: TeamPermissionArea[];
+  /*
+   * What each role grants, keyed by role key.
+   *
+   * The add-staff form seeds its grid from this the moment a role is picked, so
+   * the switches show what the account will actually get rather than opening
+   * blank. It is also what tells both forms whether a switch has been moved away
+   * from the role — the only way an override is visible as an override.
+   *
+   * Roles are admin-defined, so this arrives with the summary rather than being
+   * a frontend constant: a role created this morning has an entry here without a
+   * deploy.
+   */
+  rolePermissions: Record<string, Record<string, boolean>>;
+  /*
+   * Roles whose members bypass the grid entirely — the backend's guards
+   * short-circuit on the authorization role, so anyone holding one of these
+   * reaches every admin section whatever the switches say. The forms warn.
+   */
+  fullAccessRoles: string[];
 };

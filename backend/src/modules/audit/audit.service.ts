@@ -188,6 +188,15 @@ export const AuditAction = {
   STAFF_CREATED: 'team.member_created',
   STAFF_UPDATED: 'team.member_updated',
   STAFF_DELETED: 'team.member_deleted',
+  /*
+   * A job role's own definition. Separate from the three above because the blast
+   * radius is different in kind: editing a member changes one account, while
+   * editing a role changes every account holding it at once — which is the whole
+   * reason roles exist and the reason this needs its own row in the trail.
+   */
+  STAFF_ROLE_CREATED: 'team.role_created',
+  STAFF_ROLE_UPDATED: 'team.role_updated',
+  STAFF_ROLE_DELETED: 'team.role_deleted',
   CONVERSATION_ASSIGNED: 'support.conversation_assigned',
   CONVERSATION_STATUS_CHANGED: 'support.conversation_status_changed',
   /*

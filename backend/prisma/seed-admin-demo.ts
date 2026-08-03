@@ -16,6 +16,9 @@ import {
   StaffStatus,
 } from '@prisma/client';
 
+import { resolveMemberPermissions } from '../src/lib/staff-permissions.js';
+import { ensureSystemStaffRoles } from '../src/lib/staff-roles.js';
+
 /*
  * Development fixture data for the admin portal.
  *
@@ -48,14 +51,24 @@ const hoursFromNow = (hours: number) =>
   new Date(NOW.getTime() + hours * 60 * 60 * 1000);
 
 // --- Staff ---------------------------------------------------------------
+/*
+ * A member is a role plus their own deviations from it. `overrides` is the
+ * per-account decisions an admin took on the team screen — `false` for something
+ * the role grants but this person is denied, `true` for something the role does
+ * not grant. The effective set is computed from the two, exactly as the service
+ * does, so the fixture cannot drift from the rule.
+ *
+ * Two members carry one deliberately, so the screen has an override to show:
+ * Sarah cannot confirm wire payments despite managing operations, and Lena is a
+ * reviewer with the reports section closed.
+ */
 type SeedStaff = {
   id: string;
   name: string;
   email: string;
-  authRole: 'admin' | 'staff';
   roleKey: string;
   status: StaffStatus;
-  permissions: string[];
+  overrides: Record<string, boolean>;
   joinedDaysAgo: number | null;
 };
 
@@ -64,60 +77,57 @@ const STAFF: SeedStaff[] = [
     id: 'staff-sarah',
     name: 'Sarah Whitfield',
     email: 'sarah.whitfield@martyglobal.test',
-    authRole: 'admin',
     roleKey: 'operations-manager',
     status: StaffStatus.ACTIVE,
-    permissions: ['orders', 'customers', 'catalog', 'payments', 'mailroom', 'support', 'reports'],
+    // Runs the pipeline, but confirming a wire arrived is somebody else's call.
+    overrides: { 'payments.settle': false },
     joinedDaysAgo: 420,
   },
   {
     id: 'staff-marcus',
     name: 'Marcus Tavares',
     email: 'marcus.tavares@martyglobal.test',
-    authRole: 'staff',
     roleKey: 'reviewer',
     status: StaffStatus.ACTIVE,
-    permissions: ['orders', 'customers', 'reports'],
+    overrides: {},
     joinedDaysAgo: 210,
   },
   {
     id: 'staff-priya',
     name: 'Priya Raghunathan',
     email: 'priya.raghunathan@martyglobal.test',
-    authRole: 'staff',
     roleKey: 'support-agent',
     status: StaffStatus.ACTIVE,
-    permissions: ['support', 'customers', 'orders'],
+    overrides: {},
     joinedDaysAgo: 95,
   },
   {
     id: 'staff-diego',
     name: 'Diego Fernández',
     email: 'diego.fernandez@martyglobal.test',
-    authRole: 'staff',
     roleKey: 'mail-operator',
     status: StaffStatus.ACTIVE,
-    permissions: ['mailroom', 'customers'],
+    overrides: {},
     joinedDaysAgo: 60,
   },
   {
     id: 'staff-lena',
     name: 'Lena Kowalski',
     email: 'lena.kowalski@martyglobal.test',
-    authRole: 'staff',
     roleKey: 'reviewer',
     status: StaffStatus.ACTIVE,
-    permissions: ['orders', 'customers'],
+    // The same role as Marcus, one section short — which is the point of the
+    // per-member switches, and the pair the team screen reads best against.
+    overrides: { reports: false },
     joinedDaysAgo: 20,
   },
   {
     id: 'staff-tom',
     name: 'Tom Beckett',
     email: 'tom.beckett@martyglobal.test',
-    authRole: 'staff',
     roleKey: 'support-agent',
     status: StaffStatus.DEACTIVATED,
-    permissions: [],
+    overrides: {},
     joinedDaysAgo: 300,
   },
 ];
@@ -554,7 +564,25 @@ async function upsertById(
 
 export async function seedAdminDemo(prisma: PrismaClient): Promise<void> {
   // --- Staff -------------------------------------------------------------
+  /*
+   * Roles first — a StaffProfile points at one by foreign key, and the seed runs
+   * against databases the server may never have booted against. Provisioning is
+   * create-only, so re-seeding never widens a role an admin narrowed.
+   */
+  await ensureSystemStaffRoles(prisma);
+
+  const roles = new Map(
+    (await prisma.staffRole.findMany()).map((role) => [role.key, role]),
+  );
+
   for (const member of STAFF) {
+    const role = roles.get(member.roleKey);
+
+    if (!role) {
+      console.warn(`  ! skipped ${member.name}: role "${member.roleKey}" is missing`);
+      continue;
+    }
+
     await prisma.user.upsert({
       where: { id: member.id },
       create: {
@@ -562,13 +590,16 @@ export async function seedAdminDemo(prisma: PrismaClient): Promise<void> {
         name: member.name,
         email: member.email,
         emailVerified: true,
-        role: member.authRole,
+        // The job role decides the authorization role the guards read, exactly
+        // as the team service does it.
+        role: role.authRole,
       },
-      update: { name: member.name, email: member.email, role: member.authRole },
+      update: { name: member.name, email: member.email, role: role.authRole },
     });
 
     const shortName = member.name.split(' ')[0];
     const lastInitial = member.name.split(' ').at(-1)?.[0] ?? '';
+    const permissions = resolveMemberPermissions(role, member.overrides);
 
     await prisma.staffProfile.upsert({
       where: { userId: member.id },
@@ -576,7 +607,8 @@ export async function seedAdminDemo(prisma: PrismaClient): Promise<void> {
         userId: member.id,
         roleKey: member.roleKey,
         status: member.status,
-        permissions: member.permissions,
+        permissionOverrides: member.overrides,
+        permissions,
         shortName: `${shortName} ${lastInitial}.`,
         joinedAt: member.joinedDaysAgo === null ? null : daysFromNow(-member.joinedDaysAgo),
         lastActiveAt: member.status === StaffStatus.ACTIVE ? daysFromNow(-1) : null,
@@ -584,7 +616,8 @@ export async function seedAdminDemo(prisma: PrismaClient): Promise<void> {
       update: {
         roleKey: member.roleKey,
         status: member.status,
-        permissions: member.permissions,
+        permissionOverrides: member.overrides,
+        permissions,
         joinedAt: member.joinedDaysAgo === null ? null : daysFromNow(-member.joinedDaysAgo),
       },
     });
@@ -608,10 +641,13 @@ export async function seedAdminDemo(prisma: PrismaClient): Promise<void> {
         userId: bootstrapAdmin.id,
         roleKey: 'super-admin',
         status: StaffStatus.ACTIVE,
-        permissions: [
-          'orders', 'customers', 'catalog', 'payments',
-          'mailroom', 'support', 'reports', 'team',
-        ],
+        // No overrides: the account you sign in with holds exactly what the
+        // Super Admin role gives, so narrowing it is a deliberate act on screen.
+        permissionOverrides: {},
+        permissions: resolveMemberPermissions(
+          roles.get('super-admin') ?? { permissions: [], lockedPermissions: [] },
+          {},
+        ),
         shortName: bootstrapAdmin.name.split(' ')[0] ?? 'Admin',
         joinedAt: bootstrapAdmin.createdAt,
         lastActiveAt: NOW,

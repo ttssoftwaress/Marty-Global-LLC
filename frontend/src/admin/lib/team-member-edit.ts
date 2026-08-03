@@ -1,5 +1,6 @@
 import type {
   AdminTeamMemberDetail,
+  TeamPermissionArea,
   TeamMemberCreateDraft,
   TeamMemberCreatePayload,
   TeamMemberEditDraft,
@@ -58,19 +59,49 @@ export function draftFromMember(
 }
 
 /*
- * An empty "Add staff member" form. The role defaults to the first option the
- * API offers rather than a hardcoded key, and the permission grid starts empty
- * — the backend applies the role's defaults when the map is left untouched, so
- * the switches show what was actually granted once the account comes back.
+ * Seed a permission grid from what a role grants.
+ *
+ * Rebuilt over the area list rather than copied across, for the same reason
+ * `draftFromMember` does it: every row the grid draws needs a boolean behind it,
+ * or the switch goes uncontrolled. Both keys on a row are seeded — the area and,
+ * where it has one, its scope companion — because the payload is the whole map,
+ * so a key the draft never held reads to the backend as one the admin turned off.
  */
-export function emptyCreateDraft(defaultRole: string): TeamMemberCreateDraft {
+export function permissionsFromRole(
+  areas: TeamPermissionArea[],
+  roleGrants: Record<string, boolean>,
+): Record<string, boolean> {
+  const permissions: Record<string, boolean> = {};
+
+  for (const area of areas) {
+    permissions[area.key] = roleGrants[area.key] === true;
+
+    if (area.scopeKey) {
+      permissions[area.scopeKey] = roleGrants[area.scopeKey] === true;
+    }
+  }
+
+  return permissions;
+}
+
+/*
+ * An empty "Add staff member" form. The role defaults to the first option the
+ * API offers rather than a hardcoded key, and the grid is seeded from what that
+ * role grants — so the switches show what the account will actually get instead
+ * of opening blank and reading as "no access".
+ */
+export function emptyCreateDraft(
+  defaultRole: string,
+  areas: TeamPermissionArea[] = [],
+  roleGrants: Record<string, boolean> = {},
+): TeamMemberCreateDraft {
   return {
     name: '',
     email: '',
     password: '',
     isActive: true,
     role: defaultRole,
-    permissions: {},
+    permissions: permissionsFromRole(areas, roleGrants),
   };
 }
 
@@ -130,23 +161,24 @@ export function payloadFromDraft(
 }
 
 /*
- * The POST body. Unlike the PATCH the password is always carried, and the
- * permission map only when the admin actually touched it — an empty map lets
- * the backend apply the role's defaults rather than creating an account with
- * every area denied.
+ * The POST body. Unlike the PATCH the password is always carried.
+ *
+ * The permission map always goes too, because the form seeds it from the role
+ * and the backend diffs it back against that same role — a grid the admin never
+ * touched produces no overrides, and one they adjusted produces exactly the keys
+ * they moved. Omitting it to mean "use the role's defaults" was the old contract
+ * and is now indistinguishable from sending them.
  */
 export function payloadFromCreateDraft(
   draft: TeamMemberCreateDraft,
 ): TeamMemberCreatePayload {
-  const touched = Object.keys(draft.permissions).length > 0;
-
   return {
     name: draft.name.trim(),
     email: draft.email.trim(),
     password: draft.password,
     isActive: draft.isActive,
     role: draft.role,
-    ...(touched ? { permissions: draft.permissions } : {}),
+    permissions: draft.permissions,
   };
 }
 

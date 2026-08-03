@@ -3,7 +3,6 @@ import { StaffStatus } from '@prisma/client';
 import type { AuthContext } from '../../../guards/index.js';
 import {
   PERMISSION_AREAS,
-  staffRoleLabel,
   type PermissionKey,
 } from '../../../lib/permissions.js';
 import { prisma } from '../../../lib/prisma.js';
@@ -75,7 +74,15 @@ export async function getAdminMe(auth: AuthContext): Promise<AdminMe> {
     }),
     prisma.staffProfile.findFirst({
       where: { userId: auth.userId, deletedAt: null },
-      select: { roleKey: true, status: true, permissions: true },
+      select: {
+        roleKey: true,
+        status: true,
+        permissions: true,
+        // The label is the admin's own wording for the role, so it is read off
+        // the row rather than resolved from a code catalogue that no longer
+        // knows every role there is.
+        role: { select: { label: true } },
+      },
     }),
   ]);
 
@@ -93,7 +100,7 @@ export async function getAdminMe(auth: AuthContext): Promise<AdminMe> {
     email: user?.email ?? auth.email,
     role: auth.role,
     roleKey: profile?.roleKey ?? null,
-    roleLabel: profile ? staffRoleLabel(profile.roleKey) : fallbackLabel(auth.role),
+    roleLabel: profile?.role.label ?? fallbackLabel(auth.role),
     permissions: isAdmin
       ? ALL_AREAS
       : ALL_AREAS.filter((area) => granted.includes(area)),

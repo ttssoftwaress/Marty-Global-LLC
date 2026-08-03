@@ -12,6 +12,8 @@ import { env } from './config/env.js';
 import { scheduleGuestChatPurge } from './jobs/queues.js';
 import { closeWorkers, registerWorkers } from './jobs/workers.js';
 import { logger } from './lib/logger.js';
+import { prisma } from './lib/prisma.js';
+import { ensureSystemStaffRoles } from './lib/staff-roles.js';
 import { ensureAdminAccount } from './modules/auth/admin-bootstrap.service.js';
 import { createSocketServer } from './sockets/index.js';
 
@@ -24,10 +26,17 @@ const io = createSocketServer(server);
 // One process: API + job workers (AGENTS.md "Backend").
 registerWorkers();
 
-// Reconcile the env-defined admin account before we accept traffic. It is
-// idempotent, so this runs on every boot. A failure here means nobody can reach
-// /admin/*, which is a misconfiguration worth refusing to start over.
+/*
+ * Reconcile the job-role catalogue and the env-defined admin account before we
+ * accept traffic. Both are idempotent, so this runs on every boot, and the roles
+ * go first: the admin account's StaffProfile points at `super-admin` by foreign
+ * key, so the row has to exist before it can be provisioned.
+ *
+ * A failure here means nobody can reach /admin/*, which is a misconfiguration
+ * worth refusing to start over.
+ */
 try {
+  await ensureSystemStaffRoles(prisma);
   await ensureAdminAccount();
 } catch (err) {
   logger.fatal({ err }, 'Admin account bootstrap failed');

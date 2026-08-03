@@ -22,6 +22,7 @@ import { adminPaymentsRouter } from './payments/payments.routes.js';
 import { adminQuotesRouter } from './quotes/quotes.routes.js';
 import { adminReportsRouter } from './reports/reports.routes.js';
 import { adminResultFieldsRouter } from './result-fields/result-fields.routes.js';
+import { adminRolesRouter } from './roles/roles.routes.js';
 import { adminSettingsRouter } from './settings/settings.routes.js';
 import { adminSupportRouter } from './support/support.routes.js';
 import { adminTeamRouter } from './team/team.routes.js';
@@ -103,6 +104,9 @@ router.use('/payment-settings', adminPaymentSettingsRouter);
 router.use('/payments', adminPaymentsRouter);
 router.use('/mailroom', adminMailroomRouter);
 router.use('/team', adminTeamRouter);
+// The job roles behind that screen's dropdown — the same `team` grant, its own
+// mount so `/team/:memberId` cannot swallow the path (roles.routes.ts).
+router.use('/roles', adminRolesRouter);
 router.use('/support', adminSupportRouter);
 // Order conversations the signed-in staff member is responsible for. Distinct
 // from `/support`, which is the shared helpdesk queue any agent may claim from.
