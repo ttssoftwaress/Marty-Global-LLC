@@ -18,6 +18,12 @@ FROM node:24-alpine AS production
 WORKDIR /app
 ENV NODE_ENV=production
 
+# GHCR links a package to a repository by reading this label on push, and a
+# linked package inherits that repository's permissions. Without it the image
+# name (marty-global-llc/backend) matches no repository name, so the release
+# workflow's GITHUB_TOKEN has no claim on the package and the push 403s.
+LABEL org.opencontainers.image.source="https://github.com/ttssoftwaress/Marty-Global-LLC"
+
 COPY package*.json ./
 RUN npm ci --omit=dev
 
@@ -35,4 +41,5 @@ CMD ["node", "dist/server.js"]
 # prisma.config.ts is never copied there. Building FROM build keeps both, and
 # DATABASE_URL is supplied at run time, which is when the config resolves it.
 FROM build AS migrate
+LABEL org.opencontainers.image.source="https://github.com/ttssoftwaress/Marty-Global-LLC"
 CMD ["npx", "prisma", "migrate", "deploy"]
