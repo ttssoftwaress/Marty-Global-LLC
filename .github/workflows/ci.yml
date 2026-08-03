@@ -99,6 +99,17 @@ jobs:
             --to-schema prisma/schema.prisma \
             --exit-code
 
+      # The order-form tests exercise the catalog's field registry and each
+      # service's form schema — required fields, select options, field labels —
+      # and that shape is what prisma/seed.ts defines. Rebuilding it inline would
+      # duplicate the seed and stop testing the real catalog.
+      #
+      # Seeding a throwaway CI database is not what AGENTS.md forbids: that rule
+      # is about production. Reference data an admin maintains (regions,
+      # locations) is still never seeded — the tests create the rows they need.
+      - name: Seed the catalog
+        run: npm run db:seed
+
       - run: npm test
 
       # Reported, not blocking. A transitive advisory should not stop a copy
