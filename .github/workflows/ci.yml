@@ -1,0 +1,149 @@
+# Gates only — this workflow never deploys. Releases are tag-driven (release.yml).
+#
+# Path-filtered so a marketing copy change does not spin up Postgres and run the
+# whole backend suite.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [dev, main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    runs-on: ubuntu-24.04
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:  ['backend/**', '.github/workflows/**']
+            frontend: ['frontend/**', '.github/workflows/**']
+
+  backend:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: marty
+          POSTGRES_PASSWORD: marty
+          POSTGRES_DB: marty_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U marty"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+      redis:
+        image: redis:8-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DATABASE_URL: postgresql://marty:marty@localhost:5432/marty_test
+      REDIS_URL: redis://localhost:6379
+      NODE_ENV: test
+      FRONTEND_ORIGIN: http://localhost:5173
+      BETTER_AUTH_SECRET: ci-only-secret-at-least-32-characters-long
+      BETTER_AUTH_URL: http://localhost:4000
+      TRON_NETWORK: nile
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run typecheck
+
+      # Migrations must apply cleanly to an empty database. This is the same
+      # command the deploy runs, so a migration that only works against a
+      # developer's existing data fails here instead of in production.
+      - name: Apply migrations
+        run: npx prisma migrate deploy
+
+      # Drift gate. AGENTS.md forbids hand-editing the database; this catches a
+      # schema.prisma edit that shipped without a migration, which is the exact
+      # failure that breaks a production `migrate deploy`.
+      #
+      # Compares the database the migrations just produced against the datamodel
+      # in schema.prisma. --exit-code returns 2 when they differ, which fails the
+      # job. (Prisma 7 flag names: --from-config-datasource / --to-schema. The
+      # older --from-schema-datasource / --to-schema-datamodel no longer exist.)
+      - name: Check schema matches migrations
+        run: |
+          npx prisma migrate diff \
+            --from-config-datasource \
+            --to-schema prisma/schema.prisma \
+            --exit-code
+
+      - run: npm test
+
+      # Reported, not blocking. A transitive advisory should not stop a copy
+      # change at 4pm; review the output rather than ignoring a red build.
+      - name: Audit (report only)
+        run: npm audit --audit-level=high || true
+
+  frontend:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+      # The production build is the real type gate for the app code, and it also
+      # proves public/ (_headers, _redirects, robots.txt, sitemap.xml) ships.
+      - run: npm run build
+        env:
+          VITE_API_URL: https://api.martygloballlc.com/v1
+          VITE_AUTH_URL: https://api.martygloballlc.com
+          VITE_SITE_URL: https://martygloballlc.com
+
+      - name: Confirm Pages files reached dist
+        run: |
+          for f in _headers _redirects robots.txt sitemap.xml; do
+            test -f "dist/$f" || { echo "MISSING dist/$f"; exit 1; }
+          done
+
+  secrets-scan:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # Run the tool directly rather than via gitleaks-action, which gates on a
+      # licence key for organisation accounts. --redact keeps any finding out of
+      # the build log.
+      - name: gitleaks
+        run: |
+          docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:latest \
+            detect --source /repo --redact --no-banner
