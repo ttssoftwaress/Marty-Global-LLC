@@ -25,9 +25,15 @@ export function AdminNavBadge({ count, decorative, className }: AdminNavBadgePro
   if (count <= 0) return null;
 
   return (
+    /*
+     * Keyed on the count so a notification arriving over the socket replays the
+     * pop — same call the portal's badge makes, and for the same reason: a live
+     * update that does not move is indistinguishable from a stale render.
+     */
     <span
+      key={count}
       aria-hidden={decorative ? 'true' : undefined}
-      className={`inline-flex min-w-5 shrink-0 items-center justify-center rounded-pill bg-accent px-1.5 py-0.5 text-caption font-semibold leading-none text-white ${className ?? ''}`}
+      className={`inline-flex min-w-5 shrink-0 animate-pop items-center justify-center rounded-pill bg-accent px-1.5 py-0.5 text-caption font-semibold leading-none text-white motion-reduce:animate-none ${className ?? ''}`}
     >
       {count > 9 ? '9+' : count}
       {/* The number alone reads as "9" to a screen reader with no idea what of. */}

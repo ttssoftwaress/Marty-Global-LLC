@@ -41,7 +41,7 @@ export function MailRoomCard({ room }: { room: MailRoom }) {
   return (
     <Link
       to={roomHref(room.id)}
-      className="group block rounded-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+      className="press-soft group block rounded-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
     >
       {/* Mobile — icon + title on one row, meta line below */}
       <div className="flex flex-col gap-4 rounded-card border border-gray-200 bg-white p-4 shadow-sm-elevation transition-all group-hover:border-gray-300 group-hover:shadow-md-elevation md:hidden">

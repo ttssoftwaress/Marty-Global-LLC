@@ -73,7 +73,7 @@ export function SupportWidget() {
       {open ? (
         <section
           aria-label="Support chat"
-          className="fixed bottom-24 right-4 z-40 flex h-[min(35rem,calc(100dvh-8rem))] w-[min(23.75rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-card border border-gray-200 bg-white shadow-lg-elevation md:right-6"
+          className="fixed bottom-24 right-4 z-40 flex h-[min(35rem,calc(100dvh-8rem))] w-[min(23.75rem,calc(100vw-2rem))] translate-y-0 flex-col overflow-hidden rounded-card border border-gray-200 bg-white opacity-100 shadow-lg-elevation transition-[opacity,translate] duration-200 ease-out starting:translate-y-4 starting:opacity-0 motion-reduce:transition-none md:right-6"
         >
           <header className="flex shrink-0 items-start justify-between gap-3 border-b border-gray-200 p-4">
             <div className="flex min-w-0 flex-col gap-0.5">
@@ -148,7 +148,7 @@ export function SupportWidget() {
         onClick={() => setOpen((value) => !value)}
         aria-label={open ? 'Close support chat' : 'Open support chat'}
         aria-expanded={open}
-        className="fixed bottom-6 right-4 z-40 flex size-14 items-center justify-center rounded-full bg-primary text-white shadow-lg-elevation transition-colors hover:bg-primary-hover md:right-6"
+        className="fixed bottom-6 right-4 z-40 flex size-14 items-center justify-center rounded-full bg-primary text-white shadow-lg-elevation transition-colors hover:bg-primary-hover hover:shadow-md-elevation md:right-6"
       >
         {open ? (
           <X className="size-6" strokeWidth={2} aria-hidden="true" />
@@ -159,7 +159,7 @@ export function SupportWidget() {
             on a floating bubble competes with the top bar's own badge. */}
         {!open && unread ? (
           <span
-            className="absolute right-1 top-1 size-3 rounded-full border-2 border-white bg-accent"
+            className="absolute right-1 top-1 size-3 animate-pop rounded-full border-2 border-white bg-accent motion-reduce:animate-none"
             aria-hidden="true"
           />
         ) : null}

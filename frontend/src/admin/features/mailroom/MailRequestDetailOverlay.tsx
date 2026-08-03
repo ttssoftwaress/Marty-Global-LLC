@@ -43,7 +43,7 @@ function OverlayFrame({
   return (
     <div className="fixed inset-0 z-50">
       <div
-        className="absolute inset-0 bg-gray-900/50"
+        className="absolute inset-0 bg-gray-900/50 transition-opacity duration-300 starting:opacity-0 motion-reduce:transition-none"
         onClick={onClose}
         aria-hidden="true"
       />

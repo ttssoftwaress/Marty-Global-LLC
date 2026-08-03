@@ -84,14 +84,14 @@ export function NewConversationDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 md:items-center md:p-6">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 opacity-100 transition-opacity duration-200 starting:opacity-0 motion-reduce:transition-none md:items-center md:p-6">
       <div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="new-conversation-title"
         tabIndex={-1}
-        className="flex max-h-full w-full max-w-[32.5rem] flex-col gap-5 overflow-y-auto rounded-t-card bg-white p-5 outline-none md:rounded-card md:p-6"
+        className="flex max-h-full w-full max-w-[32.5rem] translate-y-0 flex-col gap-5 overflow-y-auto rounded-t-card bg-white p-5 outline-none transition-transform duration-300 ease-out starting:translate-y-8 motion-reduce:transition-none md:rounded-card md:p-6"
       >
         <div className="flex items-start justify-between gap-4">
           <div className="flex flex-col gap-1">
