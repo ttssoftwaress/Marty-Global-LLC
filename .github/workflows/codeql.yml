@@ -1,0 +1,46 @@
+# Static security analysis. Free on public repositories; this workflow was left
+# out of the original pipeline because it requires GitHub Advanced Security on a
+# private one and would have failed on every run.
+#
+# Findings appear under the repository's Security tab, not as build output — a
+# CodeQL alert is something to read and judge, not a gate that blocks a merge.
+name: CodeQL
+
+on:
+  pull_request:
+    branches: [dev, main]
+  push:
+    branches: [main]
+  schedule:
+    # Mondays, 03:17 UTC. Off the hour because everyone schedules on the hour and
+    # the runner queue is shorter a few minutes past.
+    - cron: '17 3 * * 1'
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  # Required to upload results to the Security tab.
+  security-events: write
+  actions: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: github/codeql-action/init@v3
+        with:
+          # One language covers both apps — they share no code, but CodeQL reads
+          # the whole tree and the frontend is as worth analysing as the backend.
+          languages: javascript-typescript
+          # JavaScript and TypeScript are analysed from source; there is nothing
+          # to compile first, so no autobuild step is needed.
+          build-mode: none
+
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: /language:javascript-typescript
