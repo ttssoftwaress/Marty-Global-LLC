@@ -39,6 +39,17 @@ const NUDGE = 8;
 
 type Natural = { width: number; height: number };
 
+/*
+ * The blob URL is minted by the browser, but the file behind it is read out of
+ * a `<input type="file">`, so as far as static analysis is concerned the string
+ * handed to `<img src>` is DOM-derived input (CodeQL js/xss-through-dom) — and
+ * a URL in `src` that carried a `javascript:` scheme would be an XSS sink.
+ * Nothing but a `blob:` URL this dialog created is ever rendered or kept.
+ */
+function isSafeObjectUrl(url: string) {
+  return url.startsWith('blob:');
+}
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
@@ -102,12 +113,20 @@ export function AvatarCropDialog({
     }
 
     const url = URL.createObjectURL(file);
-    setObjectUrl(url);
     setNatural(null);
-    setLoadFailed(false);
     setZoom(MIN_ZOOM);
     setOffset({ x: 0, y: 0 });
     setCropError(null);
+
+    if (!isSafeObjectUrl(url)) {
+      URL.revokeObjectURL(url);
+      setObjectUrl(null);
+      setLoadFailed(true);
+      return;
+    }
+
+    setObjectUrl(url);
+    setLoadFailed(false);
 
     return () => URL.revokeObjectURL(url);
   }, [file]);
@@ -391,7 +410,7 @@ export function AvatarCropDialog({
                 isReady ? 'cursor-grab active:cursor-grabbing' : ''
               }`}
             >
-              {objectUrl ? (
+              {objectUrl && isSafeObjectUrl(objectUrl) ? (
                 <img
                   ref={imageRef}
                   src={objectUrl}
