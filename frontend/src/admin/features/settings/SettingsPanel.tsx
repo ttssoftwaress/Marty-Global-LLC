@@ -53,7 +53,11 @@ export function SettingsPanel({
         </div>
 
         {canWrite && (
-          <AddButton label={addLabel} onClick={onAdd} className="hidden lg:flex" />
+          <AddButton
+            label={addLabel}
+            onClick={onAdd}
+            className="hidden lg:flex"
+          />
         )}
       </div>
 
@@ -75,8 +79,12 @@ export function SettingsPanel({
       ) : isEmpty ? (
         <div className="flex flex-col items-center gap-3 rounded-card border border-dashed border-gray-300 px-6 py-12 text-center">
           <p className="text-body-lg font-medium text-text">{emptyTitle}</p>
-          <p className="max-w-[28.75rem] text-body text-text-secondary">{emptyBody}</p>
-          {canWrite && <AddButton label={addLabel} onClick={onAdd} className="mt-1" />}
+          <p className="max-w-[28.75rem] text-body text-text-secondary">
+            {emptyBody}
+          </p>
+          {canWrite && (
+            <AddButton label={addLabel} onClick={onAdd} className="mt-1" />
+          )}
         </div>
       ) : (
         <>
@@ -116,11 +124,7 @@ function AddButton({
 }
 
 export function SettingsTh({ children }: { children?: ReactNode }) {
-  return (
-    <th className="px-4 py-3 text-left text-caption font-medium uppercase tracking-[0.4px] text-gray-500">
-      {children}
-    </th>
-  );
+  return <th className="px-4">{children}</th>;
 }
 
 // The on/off state as a chip. "Off" rather than "Archived", because the row is

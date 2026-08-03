@@ -29,9 +29,15 @@ function EmptyState() {
   return (
     <div className="flex flex-col items-center gap-3 px-6 py-14 text-center">
       <span className="flex size-12 items-center justify-center rounded-[1.5rem] bg-[var(--color-status-approved-bg)]">
-        <FileCheck2 className="size-6 text-success" strokeWidth={1.75} aria-hidden="true" />
+        <FileCheck2
+          className="size-6 text-success"
+          strokeWidth={1.75}
+          aria-hidden="true"
+        />
       </span>
-      <p className="text-body-lg font-semibold text-text">You're all caught up</p>
+      <p className="text-body-lg font-semibold text-text">
+        You're all caught up
+      </p>
       <p className="max-w-[22.5rem] text-body text-gray-500">
         No quotes are awaiting payment right now. New quotes will appear here.
       </p>
@@ -62,7 +68,9 @@ export function QuotesAwaitingPayment({ quotes }: { quotes: BillingQuote[] }) {
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 flex-col gap-1">
-                  <p className="text-body font-semibold text-text">{quote.serviceName}</p>
+                  <p className="text-body font-semibold text-text">
+                    {quote.serviceName}
+                  </p>
                   <p className="text-body-lg font-bold text-text">
                     {formatMoney(quote.amount)}
                   </p>
@@ -71,7 +79,11 @@ export function QuotesAwaitingPayment({ quotes }: { quotes: BillingQuote[] }) {
               </div>
 
               <p className="flex items-center gap-1.5 text-small font-medium text-[var(--color-status-review-text)]">
-                <Calendar className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                <Calendar
+                  className="size-3.5 shrink-0"
+                  strokeWidth={1.75}
+                  aria-hidden="true"
+                />
                 Valid until {formatOrderDate(quote.validUntil)}
               </p>
 
@@ -90,104 +102,102 @@ export function QuotesAwaitingPayment({ quotes }: { quotes: BillingQuote[] }) {
 
       {/* Tablet & desktop — card-wrapped table */}
       <div className="hidden w-full overflow-hidden rounded-card border border-gray-200 bg-white shadow-sm-elevation md:block">
-        <table className="w-full table-fixed border-collapse">
-          <thead>
-            <tr className="h-12 border-b border-gray-200 bg-[var(--table-header-bg)] text-left align-middle">
-              <th
-                scope="col"
-                className="px-4 text-caption font-semibold uppercase tracking-[0.6px] text-gray-500 lg:px-6"
-              >
-                Service / order
-              </th>
-              <th
-                scope="col"
-                className="w-[6.25rem] text-caption font-semibold uppercase tracking-[0.6px] text-gray-500 lg:w-[8.75rem]"
-              >
-                Quote amount
-              </th>
-              <th
-                scope="col"
-                className="hidden text-caption font-semibold uppercase tracking-[0.6px] text-gray-500 lg:table-cell lg:w-[8.75rem]"
-              >
-                Date issued
-              </th>
-              <th
-                scope="col"
-                className="w-[7.5rem] text-caption font-semibold uppercase tracking-[0.6px] text-gray-500 lg:w-[10rem]"
-              >
-                Valid until
-              </th>
-              <th
-                scope="col"
-                className="w-[6.875rem] text-caption font-semibold uppercase tracking-[0.6px] text-gray-500 lg:w-[9.375rem]"
-              >
-                Status
-              </th>
-              <th
-                scope="col"
-                className="w-[8.125rem] px-4 text-right text-caption font-semibold uppercase tracking-[0.6px] text-gray-500 lg:w-[11.25rem] lg:px-6"
-              >
-                Action
-              </th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {isEmpty ? (
-              <tr>
-                <td colSpan={6}>
-                  <EmptyState />
-                </td>
-              </tr>
-            ) : (
-              quotes.map((quote) => (
-                <tr
-                  key={quote.id}
-                  className="h-14 border-b border-gray-200 last:border-b-0"
+        <div className="table-scroll">
+          <table className="data-table min-w-[42rem] table-fixed lg:min-w-[55rem]">
+            <thead>
+              <tr className="h-12">
+                <th scope="col" className="px-4 lg:px-6">
+                  Service / order
+                </th>
+                <th scope="col" className="w-[6.25rem] pr-3 lg:w-[8rem]">
+                  Quote amount
+                </th>
+                <th
+                  scope="col"
+                  className="hidden pr-3 lg:table-cell lg:w-[8rem]"
                 >
-                  <td className="min-w-0 px-4 lg:px-6">
-                    <Link
-                      to={payHref(quote.id)}
-                      className="block truncate text-[0.8125rem] font-semibold text-primary hover:underline lg:text-body"
-                    >
-                      {quote.serviceName}
-                    </Link>
-                  </td>
+                  Date issued
+                </th>
+                <th scope="col" className="w-[7.5rem] pr-3 lg:w-[9rem]">
+                  Valid until
+                </th>
+                <th scope="col" className="w-[6.875rem] pr-3 lg:w-[9rem]">
+                  Status
+                </th>
+                <th
+                  scope="col"
+                  className="w-[8.125rem] px-4 text-right lg:w-[9rem] lg:px-6"
+                >
+                  Action
+                </th>
+              </tr>
+            </thead>
 
-                  <td className="text-[0.8125rem] font-semibold text-text lg:text-body">
-                    {formatMoney(quote.amount)}
-                  </td>
-
-                  <td className="hidden text-body text-gray-600 lg:table-cell">
-                    {formatOrderDate(quote.issuedAt)}
-                  </td>
-
-                  <td>
-                    <span className="flex items-center gap-1.5 text-[0.8125rem] font-medium text-[var(--color-status-review-text)] lg:text-body">
-                      <Clock className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
-                      {formatOrderDate(quote.validUntil)}
-                    </span>
-                  </td>
-
-                  <td>
-                    <QuoteStatusChip status={quote.status} />
-                  </td>
-
-                  <td className="px-4 lg:px-6">
-                    <div className="flex items-center justify-end gap-2">
-                      <Link
-                        to={payHref(quote.id)}
-                        className="btn btn-accent h-9 whitespace-nowrap rounded-input px-4 text-[0.8125rem] lg:h-10 lg:text-body"
-                      >
-                        Pay now
-                      </Link>
-                    </div>
+            <tbody>
+              {isEmpty ? (
+                <tr>
+                  <td colSpan={6} className="py-0">
+                    <EmptyState />
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                quotes.map((quote) => (
+                  <tr key={quote.id} className="h-14">
+                    <td className="min-w-0 px-4 lg:px-6">
+                      <Link
+                        to={payHref(quote.id)}
+                        title={quote.serviceName}
+                        className="block truncate text-[0.8125rem] font-semibold text-primary hover:underline lg:text-body"
+                      >
+                        {quote.serviceName}
+                      </Link>
+                    </td>
+
+                    <td className="pr-3 text-[0.8125rem] font-semibold lg:text-body">
+                      <span className="block truncate">
+                        {formatMoney(quote.amount)}
+                      </span>
+                    </td>
+
+                    <td className="hidden pr-3 text-gray-600 lg:table-cell">
+                      <span className="block truncate">
+                        {formatOrderDate(quote.issuedAt)}
+                      </span>
+                    </td>
+
+                    <td className="pr-3">
+                      <span className="flex min-w-0 items-center gap-1.5 text-[0.8125rem] font-medium text-[var(--color-status-review-text)] lg:text-body">
+                        <Clock
+                          className="size-3.5 shrink-0"
+                          strokeWidth={1.75}
+                          aria-hidden="true"
+                        />
+                        <span className="truncate">
+                          {formatOrderDate(quote.validUntil)}
+                        </span>
+                      </span>
+                    </td>
+
+                    <td className="pr-3">
+                      <QuoteStatusChip status={quote.status} />
+                    </td>
+
+                    <td className="px-4 lg:px-6">
+                      <div className="flex items-center justify-end gap-2">
+                        <Link
+                          to={payHref(quote.id)}
+                          className="btn btn-accent h-9 whitespace-nowrap rounded-input px-4 text-[0.8125rem] lg:h-10 lg:text-body"
+                        >
+                          Pay now
+                        </Link>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </section>
   );

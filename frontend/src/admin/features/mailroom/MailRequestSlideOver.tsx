@@ -25,7 +25,7 @@ import { MailRequestTypeBadge } from './MailRequestBadges';
  *
  * The two request types share this component rather than splitting into two:
  * the links are the same panel with three differences, all of which are
- * conditional here — forwarding shows a shipping-address row and collects a
+ * conditional here — forwarding shows a forwarding-address row and collects a
  * tracking number and carrier; shredding drops the address, adds the
  * irreversible-action warning, and turns the footer button red.
  *
@@ -255,7 +255,7 @@ export function MailRequestSlideOver({
 
             {/* Only forwarding ships anywhere, so only forwarding shows this. */}
             {!isShredding && request.shippingAddress ? (
-              <DetailRow label="Shipping address" align="start">
+              <DetailRow label="Forwarding address" align="start">
                 <p className="max-w-[16.25rem] text-right text-body text-text">
                   {request.shippingAddress}
                 </p>

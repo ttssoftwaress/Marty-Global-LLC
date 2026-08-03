@@ -3,7 +3,11 @@ import { Link } from 'react-router-dom';
 import { formatOrderDate } from '../../lib/format';
 import type { AdminOrderRow } from '../../types/orders';
 import { OrderStatusChip } from './OrderStatusChip';
-import { ROW_FOCUS_CLASS, stopRowClick, useOrderRowProps } from './rowNavigation';
+import {
+  ROW_FOCUS_CLASS,
+  stopRowClick,
+  useOrderRowProps,
+} from './rowNavigation';
 
 /*
  * The queue table — the desktop and tablet presentation (mobile renders cards
@@ -35,6 +39,12 @@ import { ROW_FOCUS_CLASS, stopRowClick, useOrderRowProps } from './rowNavigation
  * The row carries the row props rather than a bare `onClick`, so it is a tab
  * stop that Enter/Space opens as well — the enlarged target is not pointer-only.
  * It keeps its native `row` role (see rowNavigation for why no `role="button"`).
+ *
+ * The order ID column is sized for the reference the backend issues, not the
+ * short one the design draws: `ORD-<year>-<8 chars>` is seventeen characters
+ * (orders.service.ts), and at the design's 100px it ran over the customer name
+ * beside it. It truncates with a `title` at `md`, where the width is fixed, and
+ * sizes to the full reference at `lg`, where the table is `table-auto`.
  */
 
 type OrdersTableProps = {
@@ -43,9 +53,6 @@ type OrdersTableProps = {
   onToggleRow: (id: string) => void;
   onToggleAll: () => void;
 };
-
-const HEAD_CELL =
-  'px-0 py-0 text-left text-caption font-medium uppercase tracking-[0.3px] text-gray-500';
 
 export function OrdersTable({
   orders,
@@ -58,10 +65,10 @@ export function OrdersTable({
   const rowProps = useOrderRowProps();
 
   return (
-    <div className="hidden w-full overflow-x-auto md:block">
-      <table className="w-full min-w-[42.5rem] table-fixed border-collapse text-left lg:min-w-[56.25rem] lg:table-auto">
+    <div className="table-scroll hidden md:block">
+      <table className="data-table min-w-[51rem] table-fixed lg:min-w-[56.25rem] lg:table-auto">
         <thead>
-          <tr className="h-12 border-b border-gray-200 bg-[var(--table-header-bg)]">
+          <tr className="h-12">
             <th scope="col" className="w-10 pl-4 pr-2 lg:pl-6">
               <input
                 type="checkbox"
@@ -74,28 +81,34 @@ export function OrdersTable({
                 className="size-[1.125rem] cursor-pointer rounded-[0.25rem] border-[1.5px] border-gray-300 accent-primary"
               />
             </th>
-            <th scope="col" className={`${HEAD_CELL} w-[6.25rem] pr-3 lg:w-[6.875rem] lg:pr-4`}>
+            <th scope="col" className="w-[9.5rem] pr-3 lg:w-auto lg:pr-4">
               Order ID
             </th>
-            <th scope="col" className={`${HEAD_CELL} w-[8.125rem] pr-3 lg:w-auto lg:pr-4`}>
+            <th scope="col" className="w-[8.125rem] pr-3 lg:w-auto lg:pr-4">
               Customer
             </th>
-            <th scope="col" className={`${HEAD_CELL} pr-3 lg:pr-4`}>
+            <th scope="col" className="pr-3 lg:pr-4">
               Service
             </th>
-            <th scope="col" className={`${HEAD_CELL} hidden w-[6.875rem] pr-4 lg:table-cell`}>
+            <th scope="col" className="hidden w-[6.875rem] pr-4 lg:table-cell">
               Region
             </th>
-            <th scope="col" className={`${HEAD_CELL} w-[5.9375rem] pr-3 lg:w-[6.875rem] lg:pr-4`}>
+            <th
+              scope="col"
+              className="w-[5.9375rem] pr-3 lg:w-[6.875rem] lg:pr-4"
+            >
               Submitted
             </th>
-            <th scope="col" className={`${HEAD_CELL} w-[7.5rem] pr-3 lg:w-[8.125rem] lg:pr-4`}>
+            <th scope="col" className="w-[7.5rem] pr-3 lg:w-[8.125rem] lg:pr-4">
               Status
             </th>
-            <th scope="col" className={`${HEAD_CELL} hidden w-[9.375rem] pr-4 lg:table-cell`}>
+            <th scope="col" className="hidden w-[9.375rem] pr-4 lg:table-cell">
               Assigned to
             </th>
-            <th scope="col" className={`${HEAD_CELL} w-[6.25rem] pr-4 text-right lg:w-auto lg:pr-6`}>
+            <th
+              scope="col"
+              className="w-[6.25rem] pr-4 text-right lg:w-auto lg:pr-6"
+            >
               <span className="inline-block w-full text-right">Action</span>
             </th>
           </tr>
@@ -109,14 +122,14 @@ export function OrdersTable({
               <tr
                 key={order.id}
                 {...rowProps(order.to)}
-                className={`cursor-pointer border-b border-gray-200 transition-colors last:border-b-0 ${ROW_FOCUS_CLASS} ${
+                className={`cursor-pointer transition-colors ${ROW_FOCUS_CLASS} ${
                   isSelected
                     ? 'bg-primary-light/40'
                     : 'hover:bg-gray-50 active:bg-gray-100'
                 }`}
               >
                 <td
-                  className="h-14 pl-4 pr-2 align-middle lg:pl-6"
+                  className="h-14 py-0 pl-4 pr-2 lg:pl-6"
                   onClick={stopRowClick}
                 >
                   <input
@@ -128,32 +141,39 @@ export function OrdersTable({
                   />
                 </td>
 
-                <td className="py-2 pr-3 align-middle lg:pr-4">
+                <td className="py-2 pr-3 lg:pr-4">
                   <Link
                     to={order.to}
                     onClick={stopRowClick}
-                    className="whitespace-nowrap text-body font-medium text-primary hover:underline"
+                    title={order.reference}
+                    className="block truncate font-medium text-primary hover:underline"
                   >
                     {order.reference}
                   </Link>
                 </td>
 
-                <td className="py-2 pr-3 align-middle lg:pr-4">
-                  <div className="flex items-center gap-2">
+                <td className="py-2 pr-3 lg:pr-4">
+                  <div className="flex min-w-0 items-center gap-2">
                     <span
                       aria-hidden="true"
                       className="flex size-6 shrink-0 items-center justify-center rounded-full bg-gray-200 text-[0.625rem] font-semibold text-gray-700"
                     >
                       {order.customer.initials}
                     </span>
-                    <span className="truncate text-body text-gray-900">
+                    <span
+                      className="truncate text-gray-900"
+                      title={order.customer.name}
+                    >
                       {order.customer.name}
                     </span>
                   </div>
                 </td>
 
-                <td className="py-2 pr-3 align-middle lg:pr-4">
-                  <span className="block truncate text-body text-gray-700">
+                <td className="py-2 pr-3 lg:pr-4">
+                  <span
+                    className="block truncate text-gray-700"
+                    title={order.service}
+                  >
                     {order.service}
                   </span>
                   {/* Tablet folds the region under the service; `lg` has its own column. */}
@@ -162,8 +182,8 @@ export function OrdersTable({
                   </span>
                 </td>
 
-                <td className="hidden py-2 pr-4 align-middle lg:table-cell">
-                  <span className="flex items-center gap-1.5 whitespace-nowrap text-body text-gray-900">
+                <td className="hidden py-2 pr-4 lg:table-cell">
+                  <span className="flex items-center gap-1.5 whitespace-nowrap text-gray-900">
                     {order.region.flag ? (
                       <span aria-hidden="true">{order.region.flag}</span>
                     ) : null}
@@ -171,14 +191,17 @@ export function OrdersTable({
                   </span>
                 </td>
 
-                <td className="py-2 pr-3 align-middle lg:pr-4">
-                  <span className="whitespace-nowrap text-body text-gray-500">
+                <td className="py-2 pr-3 lg:pr-4">
+                  <span className="block truncate text-gray-500">
                     {formatOrderDate(order.submittedAt)}
                   </span>
                 </td>
 
-                <td className="py-2 pr-3 align-middle lg:pr-4">
-                  <OrderStatusChip status={order.status} label={order.statusLabel} />
+                <td className="py-2 pr-3 lg:pr-4">
+                  <OrderStatusChip
+                    status={order.status}
+                    label={order.statusLabel}
+                  />
                   {/* Tablet folds the assignee under the status. */}
                   <span
                     className={`mt-0.5 block truncate text-small lg:hidden ${
@@ -189,29 +212,29 @@ export function OrdersTable({
                   </span>
                 </td>
 
-                <td className="hidden py-2 pr-4 align-middle lg:table-cell">
+                <td className="hidden py-2 pr-4 lg:table-cell">
                   {order.assignee ? (
-                    <div className="flex items-center gap-2">
+                    <div className="flex min-w-0 items-center gap-2">
                       <span
                         aria-hidden="true"
                         className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary-light text-[0.5625rem] font-semibold text-primary"
                       >
                         {order.assignee.initials}
                       </span>
-                      <span className="truncate text-body text-gray-700">
+                      <span className="truncate text-gray-700">
                         {order.assignee.name}
                       </span>
                     </div>
                   ) : (
-                    <span className="text-body italic text-gray-400">Unassigned</span>
+                    <span className="italic text-gray-400">Unassigned</span>
                   )}
                 </td>
 
-                <td className="py-2 pl-2 pr-4 align-middle text-right lg:pr-6">
+                <td className="py-2 pl-2 pr-4 text-right lg:pr-6">
                   <Link
                     to={order.to}
                     onClick={stopRowClick}
-                    className="inline-flex h-10 items-center justify-center rounded-input border border-primary px-4 text-body font-semibold text-primary transition-colors hover:bg-primary-light"
+                    className="inline-flex h-10 items-center justify-center whitespace-nowrap rounded-input border border-primary px-4 font-semibold text-primary transition-colors hover:bg-primary-light"
                   >
                     {order.actionLabel}
                   </Link>

@@ -74,10 +74,16 @@ function EmptyState({
   return (
     <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
       <span className="flex size-12 items-center justify-center rounded-[1.5rem] bg-gray-100">
-        <FolderOpen className="size-6 text-gray-400" strokeWidth={1.75} aria-hidden="true" />
+        <FolderOpen
+          className="size-6 text-gray-400"
+          strokeWidth={1.75}
+          aria-hidden="true"
+        />
       </span>
       <p className="text-body-lg font-semibold text-text">
-        {hasFilter ? 'Nothing matches this view' : `No ${service.noun}s here yet`}
+        {hasFilter
+          ? 'Nothing matches this view'
+          : `No ${service.noun}s here yet`}
       </p>
       <p className="max-w-[23.75rem] text-body text-gray-500">
         {hasFilter
@@ -100,7 +106,10 @@ function SkeletonRows() {
   return (
     <div className="flex flex-col gap-3 p-4 md:p-card" aria-hidden="true">
       {Array.from({ length: 4 }).map((_, index) => (
-        <div key={index} className="h-12 w-full animate-pulse rounded-input bg-gray-200" />
+        <div
+          key={index}
+          className="h-12 w-full animate-pulse rounded-input bg-gray-200"
+        />
       ))}
     </div>
   );
@@ -147,14 +156,11 @@ export function ResultList({
   return (
     <div className="w-full rounded-card border border-gray-200 bg-white shadow-sm-elevation">
       {/* --- Table: tablet and up ------------------------------------------ */}
-      <div className="hidden overflow-x-auto md:block">
-        <table className="w-full min-w-[40rem] border-collapse">
+      <div className="table-scroll hidden md:block">
+        <table className="data-table min-w-[40rem]">
           <thead>
-            <tr className="border-b border-gray-200">
-              <th
-                scope="col"
-                className="px-card py-3 text-left text-caption font-semibold uppercase tracking-[0.4px] text-gray-500"
-              >
+            <tr>
+              <th scope="col" className="px-card">
                 {columns[0]?.label ?? service.noun}
               </th>
 
@@ -164,13 +170,13 @@ export function ResultList({
                 <th
                   key={column.name}
                   scope="col"
-                  className="hidden px-card py-3 text-left text-caption font-semibold uppercase tracking-[0.4px] text-gray-500 lg:table-cell"
+                  className="hidden px-card lg:table-cell"
                 >
                   {column.label}
                 </th>
               ))}
 
-              <th scope="col" className="px-card py-3 text-right">
+              <th scope="col" className="px-card text-right">
                 <span className="sr-only">View</span>
               </th>
             </tr>
@@ -178,12 +184,12 @@ export function ResultList({
 
           <tbody>
             {rows.map((row) => (
-              <tr
-                key={row.id}
-                className="group border-b border-gray-100 last:border-b-0 hover:bg-gray-50"
-              >
+              <tr key={row.id} className="group hover:bg-gray-50">
                 <td className="px-card py-4 align-top">
-                  <Link to={recordHref(row.id)} className="block focus:outline-none">
+                  <Link
+                    to={recordHref(row.id)}
+                    className="block focus:outline-none"
+                  >
                     <RowTitle row={row} />
                   </Link>
 
@@ -192,7 +198,10 @@ export function ResultList({
                   {secondary.length > 0 ? (
                     <span className="mt-2 flex flex-col gap-1 lg:hidden">
                       {secondary.map((column) => (
-                        <span key={column.name} className="flex items-baseline gap-1.5">
+                        <span
+                          key={column.name}
+                          className="flex items-baseline gap-1.5"
+                        >
                           <span className="text-caption text-gray-500">
                             {column.label}:
                           </span>
@@ -213,7 +222,11 @@ export function ResultList({
                     className="hidden px-card py-4 align-top lg:table-cell"
                     title={resultValueText(column, row.values[column.name])}
                   >
-                    <ResultValueView field={column} value={row.values[column.name]} compact />
+                    <ResultValueView
+                      field={column}
+                      value={row.values[column.name]}
+                      compact
+                    />
                   </td>
                 ))}
 

@@ -31,30 +31,24 @@ type CustomersTableProps = {
   customers: AdminCustomerRow[];
 };
 
-const HEAD_CELL =
-  'px-0 py-0 text-left text-caption font-semibold uppercase tracking-[0.6px] text-gray-500 lg:font-medium';
-
 export function CustomersTable({ customers }: CustomersTableProps) {
   return (
-    <div className="hidden w-full overflow-x-auto md:block">
-      <table className="w-full min-w-[40rem] table-fixed border-collapse text-left lg:min-w-[56.25rem] lg:table-auto">
+    <div className="table-scroll hidden md:block">
+      <table className="data-table min-w-[42rem] table-fixed lg:min-w-[56.25rem] lg:table-auto">
         <thead>
-          <tr className="h-11 border-b border-gray-200 bg-[var(--table-header-bg)] lg:h-12">
-            <th scope="col" className={`${HEAD_CELL} pl-4 pr-3 lg:pl-6 lg:pr-4`}>
+          <tr className="h-11 lg:h-12">
+            <th scope="col" className="pl-4 pr-3 lg:pl-6 lg:pr-4">
               Customer
             </th>
-            <th
-              scope="col"
-              className={`${HEAD_CELL} hidden w-[15rem] pr-4 lg:table-cell`}
-            >
+            <th scope="col" className="hidden w-[15rem] pr-4 lg:table-cell">
               Email
             </th>
-            <th scope="col" className={`${HEAD_CELL} w-[6.25rem] pr-3 lg:pr-4`}>
+            <th scope="col" className="w-[6.25rem] pr-3 lg:pr-4">
               Region
             </th>
             <th
               scope="col"
-              className={`${HEAD_CELL} w-[6.25rem] pr-3 text-right lg:w-[7.5rem] lg:pr-4`}
+              className="w-[6.25rem] pr-3 text-right lg:w-[7.5rem] lg:pr-4"
             >
               <span className="inline-block w-full text-right">
                 {/* Desktop spells the two figure columns out; tablet abbreviates. */}
@@ -62,24 +56,18 @@ export function CustomersTable({ customers }: CustomersTableProps) {
                 <span className="hidden lg:inline">Total orders</span>
               </span>
             </th>
-            <th
-              scope="col"
-              className={`${HEAD_CELL} w-[7.5rem] pr-3 text-right lg:pr-4`}
-            >
+            <th scope="col" className="w-[7.5rem] pr-3 text-right lg:pr-4">
               <span className="inline-block w-full text-right">
                 <span className="lg:hidden">Spent</span>
                 <span className="hidden lg:inline">Total spent</span>
               </span>
             </th>
-            <th
-              scope="col"
-              className={`${HEAD_CELL} hidden w-[8.75rem] pr-4 lg:table-cell`}
-            >
+            <th scope="col" className="hidden w-[8.75rem] pr-4 lg:table-cell">
               Last activity
             </th>
             <th
               scope="col"
-              className={`${HEAD_CELL} w-[6.25rem] pr-4 text-right lg:w-[8.125rem] lg:min-w-[8.125rem] lg:pr-6`}
+              className="w-[6.25rem] pr-4 text-right lg:w-[8.125rem] lg:min-w-[8.125rem] lg:pr-6"
             >
               <span className="inline-block w-full text-right">Action</span>
             </th>
@@ -90,9 +78,9 @@ export function CustomersTable({ customers }: CustomersTableProps) {
           {customers.map((customer) => (
             <tr
               key={customer.id}
-              className="border-b border-gray-200 transition-colors last:border-b-0 hover:bg-gray-50"
+              className="transition-colors hover:bg-gray-50"
             >
-              <td className="h-16 py-3 pl-4 pr-3 align-middle lg:h-table-row lg:pl-6 lg:pr-4">
+              <td className="h-16 py-3 pl-4 pr-3 lg:h-table-row lg:pl-6 lg:pr-4">
                 <div className="flex items-center gap-3">
                   <CustomerAvatar
                     id={customer.id}
@@ -101,7 +89,10 @@ export function CustomersTable({ customers }: CustomersTableProps) {
                   />
 
                   <div className="flex min-w-0 flex-col gap-0.5">
-                    <span className="truncate text-body font-semibold text-text">
+                    <span
+                      className="truncate font-semibold"
+                      title={customer.name}
+                    >
                       {customer.name}
                     </span>
                     {/* Tablet folds the email under the name; `lg` has its own column. */}
@@ -112,17 +103,18 @@ export function CustomersTable({ customers }: CustomersTableProps) {
                 </div>
               </td>
 
-              <td className="hidden py-3 pr-4 align-middle lg:table-cell">
+              <td className="hidden py-3 pr-4 lg:table-cell">
                 <a
                   href={`mailto:${customer.email}`}
-                  className="block truncate text-body text-gray-500 hover:text-primary hover:underline"
+                  title={customer.email}
+                  className="block truncate text-gray-500 hover:text-primary hover:underline"
                 >
                   {customer.email}
                 </a>
               </td>
 
-              <td className="py-3 pr-3 align-middle lg:pr-4">
-                <span className="flex items-center gap-1.5 truncate text-body text-text">
+              <td className="py-3 pr-3 lg:pr-4">
+                <span className="flex min-w-0 items-center gap-1.5">
                   {customer.region.flag ? (
                     <span aria-hidden="true">{customer.region.flag}</span>
                   ) : null}
@@ -130,28 +122,32 @@ export function CustomersTable({ customers }: CustomersTableProps) {
                 </span>
               </td>
 
-              <td className="py-3 pr-3 text-right align-middle text-body text-text lg:pr-4">
+              <td className="py-3 pr-3 text-right lg:pr-4">
                 {formatCount(customer.totalOrders)}
               </td>
 
-              <td className="py-3 pr-3 text-right align-middle text-body font-semibold text-text lg:pr-4 lg:font-medium">
+              <td className="py-3 pr-3 text-right font-semibold lg:pr-4 lg:font-medium">
                 {formatMoneyCompact(customer.totalSpent)}
               </td>
 
-              <td className="hidden py-3 pr-4 align-middle lg:table-cell">
-                <span className="whitespace-nowrap text-body text-gray-500">
+              <td className="hidden py-3 pr-4 lg:table-cell">
+                <span className="whitespace-nowrap text-gray-500">
                   {formatLastActivity(customer.lastActivityAt)}
                 </span>
               </td>
 
-              <td className="py-3 pl-2 pr-4 text-right align-middle lg:pr-6">
+              <td className="py-3 pl-2 pr-4 text-right lg:pr-6">
                 {/* Tablet's compact icon button. */}
                 <Link
                   to={customer.to}
                   aria-label={`View ${customer.name}'s profile`}
                   className="inline-flex size-[2.125rem] items-center justify-center rounded-[0.5rem] border border-primary bg-white text-primary transition-colors hover:bg-primary-light lg:hidden"
                 >
-                  <User className="size-4" strokeWidth={1.75} aria-hidden="true" />
+                  <User
+                    className="size-4"
+                    strokeWidth={1.75}
+                    aria-hidden="true"
+                  />
                 </Link>
 
                 {/* Desktop's labelled button. */}

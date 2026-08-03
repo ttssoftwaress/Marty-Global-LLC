@@ -27,6 +27,7 @@ export { assertFound, assertOwner, isStaff } from './ownership.js';
 export {
   apiRateLimit,
   chatRateLimit,
+  gatewayRateLimit,
   publicRateLimit,
   sensitiveRateLimit,
   uploadRateLimit,

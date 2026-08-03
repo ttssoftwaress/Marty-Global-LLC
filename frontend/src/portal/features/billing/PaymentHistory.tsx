@@ -52,7 +52,11 @@ function InvoiceIconButton({ payment }: { payment: PaymentRecord }) {
         aria-label="Invoice not ready yet"
         className={`${base} cursor-default opacity-40`}
       >
-        <Download className="size-[1.125rem] shrink-0 lg:size-5" strokeWidth={1.75} aria-hidden="true" />
+        <Download
+          className="size-[1.125rem] shrink-0 lg:size-5"
+          strokeWidth={1.75}
+          aria-hidden="true"
+        />
       </button>
     );
   }
@@ -64,7 +68,11 @@ function InvoiceIconButton({ payment }: { payment: PaymentRecord }) {
       aria-label={label}
       className={`${base} hover:bg-gray-100`}
     >
-      <Download className="size-[1.125rem] shrink-0 lg:size-5" strokeWidth={1.75} aria-hidden="true" />
+      <Download
+        className="size-[1.125rem] shrink-0 lg:size-5"
+        strokeWidth={1.75}
+        aria-hidden="true"
+      />
     </a>
   );
 }
@@ -73,7 +81,11 @@ function InvoiceTextLink({ payment }: { payment: PaymentRecord }) {
   if (!payment.invoiceHref) {
     return (
       <span className="flex items-center gap-1.5 text-small font-semibold text-gray-400">
-        <Download className="size-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+        <Download
+          className="size-4 shrink-0"
+          strokeWidth={1.75}
+          aria-hidden="true"
+        />
         Invoice
       </span>
     );
@@ -86,7 +98,11 @@ function InvoiceTextLink({ payment }: { payment: PaymentRecord }) {
       aria-label={`Download invoice for ${payment.serviceName}`}
       className="flex items-center gap-1.5 text-small font-semibold text-primary hover:underline"
     >
-      <Download className="size-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+      <Download
+        className="size-4 shrink-0"
+        strokeWidth={1.75}
+        aria-hidden="true"
+      />
       Invoice
     </a>
   );
@@ -96,7 +112,11 @@ function EmptyState() {
   return (
     <div className="flex flex-col items-center gap-3 px-6 py-14 text-center">
       <span className="flex size-12 items-center justify-center rounded-[1.5rem] bg-gray-100">
-        <Receipt className="size-6 text-gray-400" strokeWidth={1.75} aria-hidden="true" />
+        <Receipt
+          className="size-6 text-gray-400"
+          strokeWidth={1.75}
+          aria-hidden="true"
+        />
       </span>
       <p className="text-body-lg font-semibold text-text">No payments yet</p>
       <p className="max-w-[22.5rem] text-body text-gray-500">
@@ -110,7 +130,10 @@ function SkeletonRows() {
   return (
     <div className="flex flex-col gap-3 p-4 md:p-card" aria-hidden="true">
       {Array.from({ length: 5 }).map((_, index) => (
-        <div key={index} className="h-10 w-full animate-pulse rounded-input bg-gray-200" />
+        <div
+          key={index}
+          className="h-10 w-full animate-pulse rounded-input bg-gray-200"
+        />
       ))}
     </div>
   );
@@ -145,7 +168,9 @@ export function PaymentHistory({
   return (
     <section className="flex w-full flex-col gap-4">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <h2 className="text-h6 font-semibold text-text lg:text-h4">Payment history</h2>
+        <h2 className="text-h6 font-semibold text-text lg:text-h4">
+          Payment history
+        </h2>
         <PaymentHistoryControls
           search={search}
           onSearchChange={onSearchChange}
@@ -208,90 +233,93 @@ export function PaymentHistory({
 
       {/* Tablet & desktop — card-wrapped table with a paging footer */}
       <div className="hidden w-full overflow-hidden rounded-card border border-gray-200 bg-white shadow-sm-elevation md:block">
-        <table className="w-full table-fixed border-collapse">
-          <thead>
-            <tr className="h-12 border-b border-gray-200 bg-[var(--table-header-bg)] text-left align-middle">
-              <th
-                scope="col"
-                className="w-[6.25rem] px-4 text-caption font-semibold uppercase tracking-[0.6px] text-gray-500 lg:w-[8.75rem] lg:px-6"
-              >
-                Date
-              </th>
-              <th
-                scope="col"
-                className="text-caption font-semibold uppercase tracking-[0.6px] text-gray-500"
-              >
-                Service / order
-              </th>
-              <th
-                scope="col"
-                className="w-[6.25rem] text-caption font-semibold uppercase tracking-[0.6px] text-gray-500 lg:w-[8.75rem]"
-              >
-                Amount
-              </th>
-              <th
-                scope="col"
-                className="hidden text-caption font-semibold uppercase tracking-[0.6px] text-gray-500 lg:table-cell lg:w-[13.75rem]"
-              >
-                Payment method
-              </th>
-              <th
-                scope="col"
-                className="w-[6.875rem] text-caption font-semibold uppercase tracking-[0.6px] text-gray-500 lg:w-[10rem]"
-              >
-                Status
-              </th>
-              <th
-                scope="col"
-                className="w-[5rem] px-4 text-right text-caption font-semibold uppercase tracking-[0.6px] text-gray-500 lg:w-[6.875rem] lg:px-6"
-              >
-                Invoice
-              </th>
-            </tr>
-          </thead>
-
-          {!showSkeleton && !isEmpty && (
-            <tbody>
-              {windowPayments.map((payment) => (
-                <tr
-                  key={payment.id}
-                  className="h-14 border-b border-gray-200 last:border-b-0"
+        <div className="table-scroll">
+          <table className="data-table min-w-[38rem] table-fixed lg:min-w-[56.5rem]">
+            <thead>
+              <tr className="h-12">
+                <th
+                  scope="col"
+                  className="w-[6.25rem] px-4 lg:w-[8rem] lg:px-6"
                 >
-                  <td className="px-4 text-[0.8125rem] text-gray-600 lg:px-6 lg:text-body">
-                    {formatOrderDate(payment.paidAt)}
-                  </td>
+                  Date
+                </th>
+                <th scope="col" className="pr-4">
+                  Service / order
+                </th>
+                <th scope="col" className="w-[6.25rem] pr-3 lg:w-[8rem]">
+                  Amount
+                </th>
+                <th
+                  scope="col"
+                  className="hidden pr-3 lg:table-cell lg:w-[11rem]"
+                >
+                  Payment method
+                </th>
+                <th scope="col" className="w-[6.875rem] pr-3 lg:w-[9.5rem]">
+                  Status
+                </th>
+                <th
+                  scope="col"
+                  className="w-[5rem] px-4 text-right lg:w-[6rem] lg:px-6"
+                >
+                  Invoice
+                </th>
+              </tr>
+            </thead>
 
-                  <td className="min-w-0 pr-4">
-                    <p className="truncate text-[0.8125rem] font-medium text-text lg:text-body">
-                      {payment.serviceName}
-                    </p>
-                  </td>
+            {!showSkeleton && !isEmpty && (
+              <tbody>
+                {windowPayments.map((payment) => (
+                  <tr key={payment.id} className="h-14">
+                    <td className="px-4 text-[0.8125rem] text-gray-600 lg:px-6 lg:text-body">
+                      <span className="block truncate">
+                        {formatOrderDate(payment.paidAt)}
+                      </span>
+                    </td>
 
-                  <td className="text-[0.8125rem] font-semibold text-text lg:text-body">
-                    {formatMoney(payment.amount)}
-                  </td>
+                    <td className="min-w-0 pr-4">
+                      <p
+                        className="truncate text-[0.8125rem] font-medium lg:text-body"
+                        title={payment.serviceName}
+                      >
+                        {payment.serviceName}
+                      </p>
+                    </td>
 
-                  <td className="hidden lg:table-cell">
-                    <span className="flex items-center gap-1.5 text-body text-gray-700">
-                      <Wallet className="size-4 shrink-0 text-gray-400" strokeWidth={1.75} aria-hidden="true" />
-                      {payment.method}
-                    </span>
-                  </td>
+                    <td className="pr-3 text-[0.8125rem] font-semibold lg:text-body">
+                      <span className="block truncate">
+                        {formatMoney(payment.amount)}
+                      </span>
+                    </td>
 
-                  <td>
-                    <PaymentStatusChip status={payment.status} />
-                  </td>
+                    <td className="hidden pr-3 lg:table-cell">
+                      <span className="flex min-w-0 items-center gap-1.5 text-gray-700">
+                        <Wallet
+                          className="size-4 shrink-0 text-gray-400"
+                          strokeWidth={1.75}
+                          aria-hidden="true"
+                        />
+                        <span className="truncate" title={payment.method}>
+                          {payment.method}
+                        </span>
+                      </span>
+                    </td>
 
-                  <td className="px-4 lg:px-6">
-                    <div className="flex justify-end">
-                      <InvoiceIconButton payment={payment} />
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          )}
-        </table>
+                    <td className="pr-3">
+                      <PaymentStatusChip status={payment.status} />
+                    </td>
+
+                    <td className="px-4 lg:px-6">
+                      <div className="flex justify-end">
+                        <InvoiceIconButton payment={payment} />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            )}
+          </table>
+        </div>
 
         {showSkeleton && <SkeletonRows />}
         {isEmpty && <EmptyState />}

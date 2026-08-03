@@ -38,9 +38,6 @@ type TeamTableProps = {
   onDelete: (member: AdminTeamMemberRow) => void;
 };
 
-const HEAD_CELL =
-  'px-0 py-0 text-left text-caption font-semibold uppercase tracking-[0.6px] text-gray-500';
-
 export function TeamTable({
   members,
   onEdit,
@@ -48,34 +45,28 @@ export function TeamTable({
   onDelete,
 }: TeamTableProps) {
   return (
-    <div className="hidden w-full overflow-x-auto md:block">
-      <table className="w-full min-w-[40rem] table-fixed border-collapse text-left lg:min-w-[56.25rem] lg:table-auto">
+    <div className="table-scroll hidden md:block">
+      <table className="data-table min-w-[46rem] table-fixed lg:min-w-[56.25rem] lg:table-auto">
         <thead>
-          <tr className="h-12 border-b border-gray-200 bg-[var(--table-header-bg)]">
-            <th scope="col" className={`${HEAD_CELL} pl-5 pr-4 lg:w-[13.75rem] lg:pl-card`}>
+          <tr className="h-12">
+            <th scope="col" className="pl-5 pr-4 lg:w-[13.75rem] lg:pl-card">
               Name
             </th>
-            <th
-              scope="col"
-              className={`${HEAD_CELL} hidden w-[15rem] pr-4 lg:table-cell`}
-            >
+            <th scope="col" className="hidden w-[15rem] pr-4 lg:table-cell">
               Email
             </th>
-            <th scope="col" className={`${HEAD_CELL} w-[11.25rem] pr-4`}>
+            <th scope="col" className="w-[11.25rem] pr-4">
               Role
             </th>
-            <th scope="col" className={`${HEAD_CELL} w-[8.75rem] pr-4`}>
+            <th scope="col" className="w-[8.75rem] pr-4">
               Status
             </th>
-            <th
-              scope="col"
-              className={`${HEAD_CELL} hidden w-[8.75rem] pr-4 lg:table-cell`}
-            >
+            <th scope="col" className="hidden w-[8.75rem] pr-4 lg:table-cell">
               Date joined
             </th>
             <th
               scope="col"
-              className={`${HEAD_CELL} w-[12.5rem] pr-5 text-right lg:w-[16.25rem] lg:pr-card`}
+              className="w-[12.5rem] pr-5 text-right lg:w-[16.25rem] lg:pr-card"
             >
               <span className="inline-block w-full text-right">Action</span>
             </th>
@@ -90,10 +81,10 @@ export function TeamTable({
             return (
               <tr
                 key={member.id}
-                className="border-b border-gray-200 transition-colors last:border-b-0 hover:bg-gray-50"
+                className="transition-colors hover:bg-gray-50"
               >
-                <td className="h-table-row py-3 pl-5 pr-4 align-middle lg:pl-card">
-                  <div className="flex items-center gap-3">
+                <td className="h-table-row py-3 pl-5 pr-4 lg:pl-card">
+                  <div className="flex min-w-0 items-center gap-3">
                     <TeamMemberAvatar
                       id={member.id}
                       initials={member.initials}
@@ -101,7 +92,10 @@ export function TeamTable({
                     />
 
                     <div className="flex min-w-0 flex-col gap-0.5">
-                      <span className="truncate text-body font-semibold text-text">
+                      <span
+                        className="truncate font-semibold"
+                        title={member.name}
+                      >
                         {member.name}
                       </span>
                       {/* Tablet folds the email under the name; `lg` has its own
@@ -113,35 +107,36 @@ export function TeamTable({
                   </div>
                 </td>
 
-                <td className="hidden py-3 pr-4 align-middle lg:table-cell">
+                <td className="hidden py-3 pr-4 lg:table-cell">
                   <a
                     href={`mailto:${member.email}`}
-                    className="block truncate text-body text-gray-500 hover:text-primary hover:underline"
+                    title={member.email}
+                    className="block truncate text-gray-500 hover:text-primary hover:underline"
                   >
                     {member.email}
                   </a>
                 </td>
 
-                <td className="py-3 pr-4 align-middle">
-                  <span className="block truncate text-body text-text">
+                <td className="py-3 pr-4">
+                  <span className="block truncate" title={member.roleLabel}>
                     {member.roleLabel}
                   </span>
                 </td>
 
-                <td className="py-3 pr-4 align-middle">
+                <td className="py-3 pr-4">
                   <TeamStatusChip
                     status={member.status}
                     label={member.statusLabel}
                   />
                 </td>
 
-                <td className="hidden py-3 pr-4 align-middle lg:table-cell">
-                  <span className="whitespace-nowrap text-body text-text-secondary">
+                <td className="hidden py-3 pr-4 lg:table-cell">
+                  <span className="whitespace-nowrap text-text-secondary">
                     {member.joinedAt ? formatOrderDate(member.joinedAt) : '—'}
                   </span>
                 </td>
 
-                <td className="py-3 pl-2 pr-5 align-middle lg:pr-card">
+                <td className="py-3 pl-2 pr-5 lg:pr-card">
                   <div className="flex items-center justify-end gap-2 lg:gap-2">
                     {/* Tablet draws both actions as plain text; desktop gives
                         Edit an outlined button. */}

@@ -19,7 +19,10 @@ import { MailOpsCustomerAvatar } from './MailOpsCustomerAvatar';
  *     buys the room; 16px gutters, a 60px row
  *
  * `table-fixed` holds the column allocation at both widths so a long mail-item
- * title truncates instead of pushing the action off the edge.
+ * title truncates instead of pushing the action off the edge. The widths sum to
+ * the table's own minimum rather than overrunning it — a `table-fixed` table
+ * whose columns are wider than the table scales every one of them down, and the
+ * View button then sits under the date beside it.
  *
  * The desktop link zebra-stripes alternate rows. That reads as banding rather
  * than a state, but it fights the hover tint every other admin table uses, so
@@ -31,36 +34,30 @@ type MailLogTableProps = {
   onView: (entry: MailLogRow) => void;
 };
 
-const HEAD_CELL =
-  'px-0 py-0 text-left text-[0.625rem] font-medium uppercase tracking-[0.6px] text-text-secondary lg:text-caption';
-
 export function MailLogTable({ entries, onView }: MailLogTableProps) {
   return (
-    <div className="hidden w-full overflow-x-auto md:block">
-      <table className="w-full min-w-[42.5rem] table-fixed border-collapse text-left lg:min-w-[60rem]">
+    <div className="table-scroll hidden md:block">
+      <table className="data-table min-w-[45rem] table-fixed lg:min-w-[60rem]">
         <thead>
-          <tr className="h-12 border-b border-gray-200 bg-[var(--table-header-bg)]">
+          <tr className="h-12">
             <th
               scope="col"
-              className={`${HEAD_CELL} w-[11.25rem] pl-4 pr-3 lg:w-[13.75rem] lg:pl-5 lg:pr-4`}
+              className="w-[11.25rem] pl-4 pr-3 lg:w-[13.5rem] lg:pl-5 lg:pr-4"
             >
               Customer
             </th>
-            <th
-              scope="col"
-              className={`${HEAD_CELL} w-[11.25rem] pr-3 lg:w-[15rem] lg:pr-4`}
-            >
+            <th scope="col" className="w-[11.25rem] pr-3 lg:w-[14rem] lg:pr-4">
               Mail item
             </th>
             <th
               scope="col"
-              className={`${HEAD_CELL} w-[9.375rem] pr-3 lg:w-[11.25rem] lg:pr-4`}
+              className="w-[9.375rem] pr-3 lg:w-[10.5rem] lg:pr-4"
             >
               Final action
             </th>
             <th
               scope="col"
-              className={`${HEAD_CELL} w-[8.125rem] pr-3 lg:w-[8.75rem] lg:pr-4`}
+              className="w-[8.125rem] pr-3 lg:w-[8.25rem] lg:pr-4"
             >
               Date closed
             </th>
@@ -69,16 +66,13 @@ export function MailLogTable({ entries, onView }: MailLogTableProps) {
              * Tablet folds the processor under the date instead of giving it a
              * column, so the heading only exists from `lg` up.
              */}
-            <th
-              scope="col"
-              className={`${HEAD_CELL} hidden w-[10rem] pr-4 lg:table-cell`}
-            >
+            <th scope="col" className="hidden w-[7.5rem] pr-4 lg:table-cell">
               Processed by
             </th>
 
             <th
               scope="col"
-              className={`${HEAD_CELL} w-[5rem] pr-4 text-right lg:w-[6.25rem] lg:pr-5`}
+              className="w-[5rem] pr-4 text-right lg:w-[6.25rem] lg:pr-5"
             >
               <span className="inline-block w-full text-right">Action</span>
             </th>
@@ -89,9 +83,9 @@ export function MailLogTable({ entries, onView }: MailLogTableProps) {
           {entries.map((entry) => (
             <tr
               key={entry.id}
-              className="h-[3.75rem] border-b border-gray-200 transition-colors last:border-b-0 hover:bg-gray-50 lg:h-table-row"
+              className="h-[3.75rem] transition-colors hover:bg-gray-50 lg:h-table-row"
             >
-              <td className="py-2 pl-4 pr-3 align-middle lg:pl-5 lg:pr-4">
+              <td className="py-2 pl-4 pr-3 lg:pl-5 lg:pr-4">
                 <div className="flex items-center gap-2 lg:gap-2.5">
                   <MailOpsCustomerAvatar
                     id={entry.customer.id}
@@ -105,7 +99,10 @@ export function MailLogTable({ entries, onView }: MailLogTableProps) {
                    * are fixed and another column would squeeze every one of them.
                    */}
                   <span className="flex min-w-0 flex-col">
-                    <span className="truncate text-[0.8125rem] font-medium text-text lg:text-body lg:font-normal">
+                    <span
+                      className="truncate text-[0.8125rem] font-medium lg:text-body lg:font-normal"
+                      title={entry.customer.name}
+                    >
                       {entry.customer.name}
                     </span>
                     <span className="truncate text-[0.6875rem] text-gray-400 lg:text-small">
@@ -115,21 +112,24 @@ export function MailLogTable({ entries, onView }: MailLogTableProps) {
                 </div>
               </td>
 
-              <td className="py-2 pr-3 align-middle lg:pr-4">
-                <span className="block truncate text-[0.8125rem] text-text lg:text-body lg:text-text-secondary">
+              <td className="py-2 pr-3 lg:pr-4">
+                <span
+                  className="block truncate text-[0.8125rem] lg:text-body lg:text-text-secondary"
+                  title={entry.mailItem}
+                >
                   {entry.mailItem}
                 </span>
               </td>
 
-              <td className="py-2 pr-3 align-middle lg:pr-4">
+              <td className="py-2 pr-3 lg:pr-4">
                 <MailLogActionBadge
                   action={entry.action}
                   label={entry.actionLabel}
                 />
               </td>
 
-              <td className="py-2 pr-3 align-middle lg:pr-4">
-                <span className="block whitespace-nowrap text-[0.8125rem] text-text lg:text-body lg:text-text-secondary">
+              <td className="py-2 pr-3 lg:pr-4">
+                <span className="block truncate text-[0.8125rem] lg:text-body lg:text-text-secondary">
                   {formatOrderDate(entry.closedAt)}
                 </span>
 
@@ -139,13 +139,16 @@ export function MailLogTable({ entries, onView }: MailLogTableProps) {
                 </span>
               </td>
 
-              <td className="hidden py-2 pr-4 align-middle lg:table-cell">
-                <span className="block truncate text-body text-text-secondary">
+              <td className="hidden py-2 pr-4 lg:table-cell">
+                <span
+                  className="block truncate text-text-secondary"
+                  title={entry.processedBy}
+                >
                   {entry.processedBy}
                 </span>
               </td>
 
-              <td className="py-2 pl-2 pr-4 align-middle lg:pr-5">
+              <td className="py-2 pl-2 pr-4 lg:pr-5">
                 <div className="flex justify-end">
                   <button
                     type="button"

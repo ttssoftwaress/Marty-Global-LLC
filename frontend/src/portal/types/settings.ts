@@ -31,7 +31,8 @@ export type ProfileInfoUpdate = {
 
 // The customer's company as edited on the Company-details frame. All four fields
 // arrive from the company record once its endpoint lands; the country is stored
-// as a code so the select can resolve its label.
+// as a code so the select can resolve its label. `address` is labelled
+// "Forwarding address" — it is where the mail room ships forwarded post.
 export type CompanyDetails = {
   businessName: string;
   country: string;

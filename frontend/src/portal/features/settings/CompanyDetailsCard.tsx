@@ -116,13 +116,15 @@ export function CompanyDetailsCard({
           />
         </div>
 
-        {/* Registered business address — multi-line */}
+        {/* Forwarding address — multi-line. This is the destination the mail
+            room ships forwarded post to, so the label names that use rather
+            than the record it happens to live on. */}
         <div className="flex w-full flex-col gap-1.5">
-          <FieldLabel htmlFor="company-address">
-            Registered business address
+          <FieldLabel htmlFor="forwarding-address">
+            Forwarding address
           </FieldLabel>
           <textarea
-            id="company-address"
+            id="forwarding-address"
             autoComplete="street-address"
             rows={3}
             value={value.address}
@@ -130,7 +132,8 @@ export function CompanyDetailsCard({
             className="input-field h-24 resize-none py-3 leading-[1.4]"
           />
           <p className="text-caption text-gray-400">
-            These details help us tailor services to your region's requirements.
+            Where we ship mail you ask us to forward. These details also help us
+            tailor services to your region's requirements.
           </p>
         </div>
       </div>

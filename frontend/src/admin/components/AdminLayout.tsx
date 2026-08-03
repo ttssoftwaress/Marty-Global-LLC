@@ -1,4 +1,5 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import {
@@ -10,9 +11,11 @@ import {
 } from '@/admin/features/notifications';
 import { useAdminMe } from '@/admin/queries/admin-me';
 import { useCompactScale } from '@/hooks/useCompactScale';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { useUnreadCounts } from '@/hooks/useUnreadCounts';
 import type { AdminNotification } from '@/admin/types/notifications';
 import { AdminAccountMenu, type AdminAccountMenuAnchor } from './account-menu';
+import { PullToRefreshIndicator } from './PullToRefreshIndicator';
 import { AdminSidebar, type AdminSidebarUser } from './sidebar';
 import { AdminTopBar } from './topbar';
 
@@ -23,6 +26,12 @@ import { AdminTopBar } from './topbar';
  * The sidebar is fixed-height and the workspace scrolls on its own so the nav
  * and top bar stay put on long pages. Mobile has no persistent sidebar, so the
  * drawer's open state lives here — the top bar's hamburger toggles it.
+ *
+ * Because the workspace — not the document — is the scroller, the browser never
+ * offers its own pull-to-refresh on any admin screen. `usePullToRefresh` puts
+ * the gesture back on the element that actually scrolls; releasing it refetches
+ * every query the current screen has mounted, which is what a queue screen
+ * wants on a phone.
  *
  * Notifications are owned here rather than passed in per page. The bell is in
  * the top bar of every admin screen, so its feed and its unread badge have to
@@ -74,6 +83,7 @@ export function AdminLayout({
 
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const queryClient = useQueryClient();
   const me = useAdminMe();
   const panel = useAdminNotificationPanel();
   const markRead = useMarkAdminNotificationRead();
@@ -107,6 +117,15 @@ export function AdminLayout({
     () => panel.data?.notifications ?? [],
     [panel.data],
   );
+
+  // Only the queries the current screen has mounted — refetching the whole cache
+  // would pull data for screens nobody is looking at.
+  const pullToRefresh = usePullToRefresh({
+    onRefresh: useCallback(
+      () => queryClient.refetchQueries({ type: 'active' }),
+      [queryClient],
+    ),
+  });
 
   // The fetched count seeds the badge; the socket keeps it right afterwards, so
   // a notification arriving while a member sits on a screen moves it without a
@@ -165,12 +184,22 @@ export function AdminLayout({
          * entrance transform would leave a permanent `translate` here, which is
          * a containing block for the `position: fixed` panels pages render.
          */}
-        <main
-          key={pathname.split('/').slice(0, 3).join('/')}
-          className="min-h-0 flex-1 animate-fade-in overflow-y-auto motion-reduce:animate-none"
-        >
-          {children}
-        </main>
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          <PullToRefreshIndicator
+            offset={pullToRefresh.offset}
+            progress={pullToRefresh.progress}
+            refreshing={pullToRefresh.refreshing}
+            dragging={pullToRefresh.dragging}
+          />
+
+          <main
+            key={pathname.split('/').slice(0, 3).join('/')}
+            ref={pullToRefresh.setScroller}
+            className="min-h-0 flex-1 animate-fade-in overflow-y-auto overscroll-y-contain motion-reduce:animate-none"
+          >
+            {children}
+          </main>
+        </div>
       </div>
 
       <AdminNotificationsPanel

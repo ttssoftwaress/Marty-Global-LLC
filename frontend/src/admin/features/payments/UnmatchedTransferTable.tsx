@@ -32,9 +32,6 @@ type UnmatchedTransferTableProps = {
   onResolve: (row: UnmatchedTransferRow) => void;
 };
 
-const HEAD_CELL =
-  'py-0 text-left text-caption font-medium uppercase tracking-[0.3px] text-gray-500';
-
 // Middle-truncation: a Tron hash differs from its neighbours at both ends, so
 // clipping only the tail would make two transfers read identically.
 export function shortHash(hash: string, lead = 10, tail = 8) {
@@ -49,29 +46,32 @@ export function UnmatchedTransferTable({
   onResolve,
 }: UnmatchedTransferTableProps) {
   return (
-    <div className="hidden w-full overflow-x-auto md:block">
-      <table className="w-full min-w-[45rem] table-fixed border-collapse text-left lg:min-w-[61.25rem]">
+    <div className="table-scroll hidden md:block">
+      <table className="data-table min-w-[47rem] table-fixed lg:min-w-[63rem]">
         <thead>
-          <tr className="h-12 border-b border-gray-200 bg-[var(--table-header-bg)]">
+          <tr className="h-12">
             <th
               scope="col"
-              className={`${HEAD_CELL} w-[10.5rem] pl-4 pr-3 lg:w-[12.5rem] lg:pl-6 lg:pr-4`}
+              className="w-[10.5rem] pl-4 pr-3 lg:w-[12.5rem] lg:pl-6 lg:pr-4"
             >
               Transaction
             </th>
-            <th scope="col" className={`${HEAD_CELL} w-[7.5rem] pr-3 lg:w-[8.75rem] lg:pr-4`}>
+            <th scope="col" className="w-[7.5rem] pr-3 lg:w-[8.75rem] lg:pr-4">
               Amount
             </th>
-            <th scope="col" className={`${HEAD_CELL} hidden w-[11.25rem] pr-4 lg:table-cell`}>
+            <th scope="col" className="hidden w-[11.25rem] pr-4 lg:table-cell">
               From
             </th>
-            <th scope="col" className={`${HEAD_CELL} w-[9.375rem] pr-3 lg:w-[10.625rem] lg:pr-4`}>
+            <th
+              scope="col"
+              className="w-[9.375rem] pr-3 lg:w-[10.625rem] lg:pr-4"
+            >
               Seen
             </th>
-            <th scope="col" className={`${HEAD_CELL} pr-3 lg:pr-4`}>
+            <th scope="col" className="pr-3 lg:pr-4">
               Status
             </th>
-            <th scope="col" className={`${HEAD_CELL} w-[7.5rem] pr-4 text-right lg:pr-6`}>
+            <th scope="col" className="w-[8.5rem] pr-4 text-right lg:pr-6">
               <span className="sr-only">Action</span>
             </th>
           </tr>
@@ -82,26 +82,23 @@ export function UnmatchedTransferTable({
             const resolved = Boolean(row.resolvedAt);
 
             return (
-              <tr
-                key={row.id}
-                className="border-b border-gray-200 transition-colors last:border-b-0 hover:bg-gray-50"
-              >
-                <td className="py-3 pl-4 pr-3 align-middle lg:pl-6 lg:pr-4">
+              <tr key={row.id} className="transition-colors hover:bg-gray-50">
+                <td className="py-3 pl-4 pr-3 lg:pl-6 lg:pr-4">
                   <span
-                    className="block truncate font-mono text-small text-text"
+                    className="block truncate font-mono text-small"
                     title={row.transactionHash}
                   >
                     {shortHash(row.transactionHash)}
                   </span>
                 </td>
 
-                <td className="py-3 pr-3 align-middle lg:pr-4">
-                  <span className="whitespace-nowrap text-body font-semibold text-text">
+                <td className="py-3 pr-3 lg:pr-4">
+                  <span className="block truncate font-semibold">
                     {row.amountDisplay} USDT
                   </span>
                 </td>
 
-                <td className="hidden py-3 pr-4 align-middle lg:table-cell">
+                <td className="hidden py-3 pr-4 lg:table-cell">
                   <span
                     className="block truncate font-mono text-small text-gray-600"
                     title={row.fromAddress}
@@ -110,8 +107,8 @@ export function UnmatchedTransferTable({
                   </span>
                 </td>
 
-                <td className="py-3 pr-3 align-middle lg:pr-4">
-                  <span className="whitespace-nowrap text-body text-gray-600">
+                <td className="py-3 pr-3 lg:pr-4">
+                  <span className="block truncate text-gray-600">
                     {formatOrderDate(row.blockAt)}
                   </span>
                   <span className="mt-0.5 block truncate text-caption text-gray-400">
@@ -121,11 +118,15 @@ export function UnmatchedTransferTable({
                   </span>
                 </td>
 
-                <td className="py-3 pr-3 align-middle lg:pr-4">
+                <td className="py-3 pr-3 lg:pr-4">
                   {resolved ? (
                     <div className="flex min-w-0 flex-col gap-1">
                       <span className="inline-flex w-fit items-center gap-1.5 rounded-pill px-2.5 py-1 text-caption font-semibold leading-4 status-approved">
-                        <CheckCircle2 className="size-3.5 shrink-0" strokeWidth={2} aria-hidden="true" />
+                        <CheckCircle2
+                          className="size-3.5 shrink-0"
+                          strokeWidth={2}
+                          aria-hidden="true"
+                        />
                         Reconciled
                       </span>
                       {row.resolutionNote ? (
@@ -140,15 +141,19 @@ export function UnmatchedTransferTable({
                     </div>
                   ) : (
                     <span className="inline-flex w-fit items-center gap-1.5 rounded-pill px-2.5 py-1 text-caption font-semibold leading-4 status-review">
-                      <AlertCircle className="size-3.5 shrink-0" strokeWidth={2} aria-hidden="true" />
+                      <AlertCircle
+                        className="size-3.5 shrink-0"
+                        strokeWidth={2}
+                        aria-hidden="true"
+                      />
                       Unattributed
                     </span>
                   )}
                 </td>
 
-                <td className="py-3 pr-4 text-right align-middle lg:pr-6">
+                <td className="py-3 pr-4 text-right lg:pr-6">
                   {resolved || !canResolve ? (
-                    <span aria-hidden="true" className="text-body text-gray-300">
+                    <span aria-hidden="true" className="text-gray-300">
                       —
                     </span>
                   ) : (
@@ -156,7 +161,7 @@ export function UnmatchedTransferTable({
                       type="button"
                       onClick={() => onResolve(row)}
                       disabled={resolvingId === row.id}
-                      className="rounded-control border border-primary px-3 py-1.5 text-small font-semibold text-primary transition-colors hover:bg-primary-light disabled:cursor-not-allowed disabled:opacity-50"
+                      className="whitespace-nowrap rounded-control border border-primary px-3 py-1.5 text-small font-semibold text-primary transition-colors hover:bg-primary-light disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       Reconcile
                     </button>

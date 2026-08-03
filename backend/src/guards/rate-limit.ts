@@ -14,22 +14,41 @@ const message = {
   },
 };
 
+/*
+ * The per-IP bucket key. `ipKeyGenerator` normalises IPv6 to a /64 so a single
+ * host can't cycle addresses to reset its own limit.
+ *
+ * `req.ip` is undefined whenever Express cannot resolve one — a misconfigured
+ * `trust proxy`, or a socket already destroyed by the time the limiter runs.
+ * Passing '' straight through would hash every such caller to the SAME bucket,
+ * so fall back to the raw socket address first and only then to an explicit
+ * shared bucket for callers we genuinely cannot identify.
+ */
+function ipKey(req: Request): string {
+  const address = req.ip ?? req.socket.remoteAddress;
+  return address ? ipKeyGenerator(address) : 'unresolved-ip';
+}
+
 // Signed-in callers are limited per user; anonymous ones per IP. Without this a
-// whole office behind one NAT shares a single bucket. ipKeyGenerator normalises
-// IPv6 to a /64 so a single host can't cycle addresses to reset its own limit.
+// whole office behind one NAT shares a single bucket.
 function keyGenerator(req: Request): string {
-  return req.auth ? `user:${req.auth.userId}` : `ip:${ipKeyGenerator(req.ip ?? '')}`;
+  return req.auth ? `user:${req.auth.userId}` : `ip:${ipKey(req)}`;
 }
 
 // `name` namespaces the limiter's counters in Redis. Each limiter gets its own
 // prefix so the buckets stay separate — sharing one would mean a caller who had
 // spent their upload budget arrived at the payments endpoint already limited,
 // since both key on the same `user:<id>`.
-function make(name: string, windowMs: number, limit: number) {
+function make(
+  name: string,
+  windowMs: number,
+  limit: number,
+  key: (req: Request) => string = keyGenerator,
+) {
   return rateLimit({
     windowMs,
     limit,
-    keyGenerator,
+    keyGenerator: key,
     standardHeaders: 'draft-7',
     legacyHeaders: false,
     message,
@@ -40,6 +59,24 @@ function make(name: string, windowMs: number, limit: number) {
     skip: () => env.NODE_ENV === 'test',
   });
 }
+
+/*
+ * The outermost limiter on /v1, mounted ahead of the default-deny guard in
+ * routes.ts. Every other limiter in this file runs AFTER the session has been
+ * resolved, which leaves the resolution itself — a Better Auth session lookup,
+ * i.e. a database round trip — reachable without any limit at all. An
+ * unauthenticated caller can therefore make the API do real work on every
+ * request while never getting past 401, which is the denial-of-service the
+ * per-route limiters cannot see.
+ *
+ * Keyed per IP, not per user, because there is no user yet: the whole point is
+ * to run before the lookup. That makes it a blunt instrument shared by everyone
+ * behind one NAT, so the ceiling is deliberately high — this bounds abuse, it
+ * does not police normal use. The SPA fires on the order of 20-30 calls per page
+ * load, so 600/min leaves an office of ~20 people comfortable while capping a
+ * single address at ten session lookups a second.
+ */
+export const gatewayRateLimit = make('gateway', 60 * 1000, 600, ipKey);
 
 // Public, unauthenticated surface — contact form, anything a bot can reach.
 export const publicRateLimit = make('public', 15 * 60 * 1000, 10);
