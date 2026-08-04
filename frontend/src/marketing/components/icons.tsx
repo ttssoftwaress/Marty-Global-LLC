@@ -7,20 +7,26 @@ import {
   Check,
   ChevronDown,
   Clock,
+  Cpu,
   CreditCard,
+  Download,
   Eye,
   FileText,
   Globe,
+  KeyRound,
   Landmark,
   type LucideProps,
   Mail,
   MailOpen,
   MapPin,
   Menu,
+  Monitor,
+  Palette,
   Phone,
   PiggyBank,
   ScanLine,
   Search,
+  Server,
   Shield,
   ShieldCheck,
   ShoppingCart,
@@ -30,6 +36,7 @@ import {
   TrendingUp,
   Truck,
   User,
+  Users,
   X,
   Zap,
 } from 'lucide-react';
@@ -141,6 +148,34 @@ export function MapPinIcon(props: LucideProps) {
 
 export function ShredIcon(props: LucideProps) {
   return <Trash2 strokeWidth={1.75} aria-hidden="true" {...props} />;
+}
+
+export function MonitorIcon(props: LucideProps) {
+  return <Monitor strokeWidth={1.75} aria-hidden="true" {...props} />;
+}
+
+export function PaletteIcon(props: LucideProps) {
+  return <Palette strokeWidth={1.75} aria-hidden="true" {...props} />;
+}
+
+export function ServerIcon(props: LucideProps) {
+  return <Server strokeWidth={1.75} aria-hidden="true" {...props} />;
+}
+
+export function CpuIcon(props: LucideProps) {
+  return <Cpu strokeWidth={1.75} aria-hidden="true" {...props} />;
+}
+
+export function UsersIcon(props: LucideProps) {
+  return <Users strokeWidth={1.75} aria-hidden="true" {...props} />;
+}
+
+export function DownloadIcon(props: LucideProps) {
+  return <Download strokeWidth={1.75} aria-hidden="true" {...props} />;
+}
+
+export function KeyIcon(props: LucideProps) {
+  return <KeyRound strokeWidth={1.75} aria-hidden="true" {...props} />;
 }
 
 export function ShieldIcon(props: LucideProps) {

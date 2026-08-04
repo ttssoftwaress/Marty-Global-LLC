@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Clock, Inbox } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { ApiError } from '@/services/api';
@@ -22,6 +22,7 @@ import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { usePortalShell } from '../hooks/usePortalShell';
 import type {
   MailItem,
+  MailRequestType,
   MailRoomTab,
   MailStatusFilter,
 } from '../types/mailroom';
@@ -36,8 +37,9 @@ import type {
  * ⇄ pills). The list is an infinite query over the cursor stream (AGENTS.md):
  * mobile "Load more" appends and the whole loaded set stays on screen, desktop
  * Prev/Next steps a page window; status, search, counts, and pagination are the
- * backend's to resolve. Requests and History are placeholder views until their
- * data and design land.
+ * backend's to resolve. All three views render the same list over three scopes
+ * of that one stream — everything, what has an open request against it, and what
+ * has been closed out — so the tabs differ by copy and query, not by component.
  *
  * Nothing is hardcoded customer data: the room detail and its items come from
  * the backend (endpoints land later, two-apps sync rule), so the screen renders
@@ -97,31 +99,26 @@ function InboxSkeleton() {
   );
 }
 
-function ComingSoonPanel({ tab }: { tab: Exclude<MailRoomTab, 'inbox'> }) {
-  const copy =
-    tab === 'requests'
-      ? {
-          title: 'No requests yet',
-          body: 'Forwarding, scanning, and shredding requests for this room will appear here.',
-          icon: Clock,
-        }
-      : {
-          title: 'No history yet',
-          body: 'A record of everything that has happened in this room will appear here.',
-          icon: Inbox,
-        };
-  const Icon = copy.icon;
-
-  return (
-    <div className="flex flex-col items-center gap-3 rounded-card border border-gray-200 bg-white px-6 py-16 text-center shadow-sm-elevation">
-      <span className="flex size-12 items-center justify-center rounded-[1.5rem] bg-primary-light">
-        <Icon className="size-6 text-primary" strokeWidth={1.75} aria-hidden="true" />
-      </span>
-      <p className="text-body-lg font-semibold text-text">{copy.title}</p>
-      <p className="max-w-[22.5rem] text-body text-gray-500">{copy.body}</p>
-    </div>
-  );
-}
+/*
+ * What "nothing here" means per tab. The three tabs are one list over three
+ * scopes of the same stream, so they share the list component — but an empty
+ * Requests tab means nothing is outstanding, which is the opposite of what an
+ * empty Inbox means.
+ */
+const EMPTY_COPY: Record<MailRoomTab, { title: string; body: string }> = {
+  inbox: {
+    title: 'No mail here yet',
+    body: 'Nothing matches this view. Try another status, clear your search, or check back once new mail arrives.',
+  },
+  requests: {
+    title: 'Nothing outstanding',
+    body: 'Scanning, forwarding, and shredding requests you have made appear here until we settle them.',
+  },
+  history: {
+    title: 'No history yet',
+    body: 'Mail we have forwarded, shredded, or that you have downloaded appears here once it is closed out.',
+  },
+};
 
 export function MailRoomInboxPage() {
   const { user, onLogout } = usePortalShell();
@@ -191,11 +188,11 @@ export function MailRoomInboxPage() {
     : -1;
 
   /*
-   * Asking us to forward or shred a piece of mail. The backend resolves the
-   * forwarding address from the customer's own company record, so the payload
-   * carries only the intent — and a customer with no address on file gets a
-   * business-rule message back, which belongs beside the button rather than in a
-   * toast that scrolls away.
+   * Asking us to scan, forward, or shred a piece of mail. The backend resolves
+   * the forwarding address from the customer's own company record, so the
+   * payload carries only the intent — and a customer with no address on file
+   * gets a business-rule message back, which belongs beside the button rather
+   * than in a toast that scrolls away.
    */
   const createRequest = useCreateMailRequest(roomId);
   const recordDownload = useRecordMailDownload(roomId);
@@ -203,9 +200,25 @@ export function MailRoomInboxPage() {
   const requestError =
     createRequest.error instanceof ApiError ? createRequest.error.message : null;
 
-  const requestHandling = (type: 'forwarding' | 'shredding') => {
+  const requestHandling = (type: MailRequestType) => {
     if (!itemId) return;
     createRequest.mutate({ itemId, type });
+  };
+
+  /*
+   * The list's own Scan button, for an item that is not open in the viewer. It
+   * is the same mutation the viewer submits — one path, one set of
+   * invalidations — and the pending item id is tracked so only the row that was
+   * pressed shows as in flight.
+   */
+  const [scanningItemId, setScanningItemId] = useState<string | null>(null);
+
+  const requestScanFromList = (id: string) => {
+    setScanningItemId(id);
+    createRequest.mutate(
+      { itemId: id, type: 'scan' },
+      { onSettled: () => setScanningItemId(null) },
+    );
   };
 
   const itemPath = (id: string) => `/app/mailroom/${roomId}/${id}`;
@@ -264,32 +277,29 @@ export function MailRoomInboxPage() {
                   onSearchChange={setSearch}
                 />
 
-                {tab === 'inbox' ? (
-                  <>
-                    <MailList
-                      items={loadedItems}
-                      roomId={roomId}
-                      page={pageIndex + 1}
-                      pageSize={PAGE_SIZE}
-                      totalItems={totalItems}
-                      isLoading={items.isLoading}
-                    />
+                <MailList
+                  items={loadedItems}
+                  roomId={roomId}
+                  page={pageIndex + 1}
+                  pageSize={PAGE_SIZE}
+                  totalItems={totalItems}
+                  isLoading={items.isLoading}
+                  onRequestScan={requestScanFromList}
+                  scanningItemId={scanningItemId}
+                  empty={EMPTY_COPY[tab]}
+                />
 
-                    {totalItems > 0 && (
-                      <InboxPagination
-                        page={pageIndex + 1}
-                        totalPages={totalPages}
-                        totalItems={totalItems}
-                        loadedCount={loadedItems.length}
-                        hasMore={canLoadMore}
-                        onPrev={goPrev}
-                        onNext={goNext}
-                        onLoadMore={onLoadMore}
-                      />
-                    )}
-                  </>
-                ) : (
-                  <ComingSoonPanel tab={tab} />
+                {totalItems > 0 && (
+                  <InboxPagination
+                    page={pageIndex + 1}
+                    totalPages={totalPages}
+                    totalItems={totalItems}
+                    loadedCount={loadedItems.length}
+                    hasMore={canLoadMore}
+                    onPrev={goPrev}
+                    onNext={goNext}
+                    onLoadMore={onLoadMore}
+                  />
                 )}
               </div>
             </>
@@ -313,6 +323,7 @@ export function MailRoomInboxPage() {
           onNext={goNextItem}
           onRequestForwarding={() => requestHandling('forwarding')}
           onRequestShredding={() => requestHandling('shredding')}
+          onRequestScan={() => requestHandling('scan')}
           onDownload={() => recordDownload.mutate(slideOverItem.id)}
           isRequesting={createRequest.isPending}
           requestError={requestError}

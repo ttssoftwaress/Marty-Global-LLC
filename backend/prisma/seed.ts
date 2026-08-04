@@ -4,6 +4,7 @@ import {
   FeedNotificationCategory,
   MailItemStatus,
   MailRoomStatus,
+  MailScanKind,
   MessageAuthor,
   OrderActivityAuthor,
   OrderDocumentSource,
@@ -257,6 +258,8 @@ async function seedDemoCustomer(): Promise<void> {
       responseDueAt: daysFromNow(9),
     },
     {
+      // A sealed envelope: photographed from the outside, not yet opened. The
+      // customer's inbox offers a Scan button on this one and nothing to read.
       id: 'demo-mail-bank',
       roomId: mailRoom.id,
       sender: 'Unknown Sender',
@@ -267,31 +270,48 @@ async function seedDemoCustomer(): Promise<void> {
     },
   ]);
 
-  // Scan pages for the two ready items — object keys only; the service layer
-  // presigns them at read time (AGENTS.md, Security & PII).
+  // The files hanging off each item — object keys only; the service layer
+  // presigns them at read time (AGENTS.md, Security & PII). `kind` is what keeps
+  // an envelope and the letter inside it on one item rather than two.
   await upsertManyBy(
     'mailItemScan',
     (row) => ({
-      mailItemId_pageNumber: {
+      mailItemId_kind_pageNumber: {
         mailItemId: row.mailItemId as string,
+        kind: row.kind as MailScanKind,
         pageNumber: row.pageNumber as number,
       },
     }),
     [
       {
         mailItemId: 'demo-mail-registry',
+        kind: MailScanKind.ENVELOPE,
+        pageNumber: 1,
+        objectKey: 'demo/mail/demo-mail-registry/envelope-1.png',
+      },
+      {
+        mailItemId: 'demo-mail-registry',
+        kind: MailScanKind.CONTENTS,
         pageNumber: 1,
         objectKey: 'demo/mail/demo-mail-registry/page-1.png',
       },
       {
         mailItemId: 'demo-mail-registry',
+        kind: MailScanKind.CONTENTS,
         pageNumber: 2,
         objectKey: 'demo/mail/demo-mail-registry/page-2.png',
       },
       {
         mailItemId: 'demo-mail-irs',
+        kind: MailScanKind.CONTENTS,
         pageNumber: 1,
         objectKey: 'demo/mail/demo-mail-irs/page-1.png',
+      },
+      {
+        mailItemId: 'demo-mail-bank',
+        kind: MailScanKind.ENVELOPE,
+        pageNumber: 1,
+        objectKey: 'demo/mail/demo-mail-bank/envelope-1.png',
       },
     ],
   );

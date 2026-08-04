@@ -1,8 +1,12 @@
-import { Check, MessageSquare } from 'lucide-react';
+import { Ban, Check, Clock, MessageSquare, ShieldCheck } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import { formatCustomerSince } from '../../lib/customer-detail';
-import type { AdminCustomerDetail } from '../../types/customer-detail';
+import type {
+  AdminCustomerDetail,
+  CustomerAccountStatus,
+} from '../../types/customer-detail';
 import { CustomerAvatar } from '../customers/CustomerAvatar';
 
 /*
@@ -29,18 +33,63 @@ import { CustomerAvatar } from '../customers/CustomerAvatar';
  * The Message button is a link to the customer's conversation when the record
  * carries one, and is disabled when it does not — the control is never a dead
  * target.
+ *
+ * Beside it sits the account's suspension control, for the members who hold
+ * `customers.ban` — the backend answers that on the record itself (`canBan`), so
+ * the button is absent rather than dead for everyone else. A suspended account
+ * shows the reason under the identity line: whoever opens the record next is the
+ * whole audience for that note, and it is the first thing they need.
  */
 
 type CustomerDetailHeaderProps = {
   customer: AdminCustomerDetail;
+  onSuspend: () => void;
+  onRestore: () => void;
 };
 
 const MESSAGE_LABEL = 'Message customer';
 
-function StatusPill({ label }: { label: string }) {
+/*
+ * The pill reads the status rather than always printing Active with a tick. It
+ * had been hardcoded green, which is the one state it must never claim wrongly:
+ * a suspended account rendering as Active is a member reading a closed account
+ * as open, right where they would go to check.
+ */
+const STATUS_STYLES: Record<
+  CustomerAccountStatus,
+  { className: string; icon: LucideIcon }
+> = {
+  active: {
+    className:
+      'bg-[var(--color-status-approved-bg)] text-[var(--color-status-approved-text)]',
+    icon: Check,
+  },
+  inactive: {
+    className:
+      'bg-[var(--color-status-draft-bg)] text-[var(--color-status-draft-text)]',
+    icon: Clock,
+  },
+  suspended: {
+    className:
+      'bg-[var(--color-status-missing-bg)] text-[var(--color-status-missing-text)]',
+    icon: Ban,
+  },
+};
+
+function StatusPill({
+  status,
+  label,
+}: {
+  status: CustomerAccountStatus;
+  label: string;
+}) {
+  const { className, icon: Icon } = STATUS_STYLES[status];
+
   return (
-    <span className="flex shrink-0 items-center gap-1 rounded-pill bg-[var(--color-status-approved-bg)] px-2.5 py-1 text-caption font-semibold text-[var(--color-status-approved-text)]">
-      <Check className="size-2.5 shrink-0" strokeWidth={3} aria-hidden="true" />
+    <span
+      className={`flex shrink-0 items-center gap-1 rounded-pill px-2.5 py-1 text-caption font-semibold ${className}`}
+    >
+      <Icon className="size-2.5 shrink-0" strokeWidth={3} aria-hidden="true" />
       {label}
     </span>
   );
@@ -69,7 +118,11 @@ function CountryChip({
   );
 }
 
-export function CustomerDetailHeader({ customer }: CustomerDetailHeaderProps) {
+export function CustomerDetailHeader({
+  customer,
+  onSuspend,
+  onRestore,
+}: CustomerDetailHeaderProps) {
   const since = formatCustomerSince(customer.customerSince);
 
   const messageButton = (className: string) =>
@@ -84,6 +137,47 @@ export function CustomerDetailHeader({ customer }: CustomerDetailHeaderProps) {
         {MESSAGE_LABEL}
       </button>
     );
+
+  /*
+   * Both directions are outline buttons, never a filled destructive one: this
+   * sits beside the primary action at every width, and a solid red block in the
+   * header would read as the thing to press.
+   */
+  const suspensionButton = (className: string) => {
+    if (!customer.canBan) return null;
+
+    return customer.isBanned ? (
+      <button
+        type="button"
+        onClick={onRestore}
+        className={`${className} border-primary text-primary hover:bg-primary-light`}
+      >
+        <ShieldCheck className="size-[1.125rem] shrink-0" strokeWidth={1.75} aria-hidden="true" />
+        Restore access
+      </button>
+    ) : (
+      <button
+        type="button"
+        onClick={onSuspend}
+        className={`${className} border-error/40 text-error hover:bg-error/5`}
+      >
+        <Ban className="size-[1.125rem] shrink-0" strokeWidth={1.75} aria-hidden="true" />
+        Suspend account
+      </button>
+    );
+  };
+
+  // Why the account is closed, for whoever opened the record next. Absent unless
+  // the suspension is live and carried a note.
+  const suspensionNote = customer.isBanned ? (
+    <p className="flex items-start gap-2 rounded-card border border-error/25 bg-error/5 px-3.5 py-3 text-small leading-5 text-error">
+      <Ban className="mt-0.5 size-4 shrink-0" strokeWidth={2} aria-hidden="true" />
+      <span>
+        This account is suspended — they cannot sign in.
+        {customer.banReason ? ` Reason: ${customer.banReason}` : ''}
+      </span>
+    </p>
+  ) : null;
 
   return (
     <>
@@ -113,74 +207,93 @@ export function CustomerDetailHeader({ customer }: CustomerDetailHeaderProps) {
 
         {since ? <p className="text-small text-gray-400">{since}</p> : null}
 
+        {suspensionNote}
+
         {messageButton(
           'flex h-input w-full items-center justify-center gap-2 rounded-input bg-primary text-body-lg font-semibold text-white transition-colors hover:bg-primary-hover',
+        )}
+
+        {suspensionButton(
+          'flex h-input w-full items-center justify-center gap-2 rounded-input border bg-white text-body-lg font-semibold transition-colors',
         )}
       </div>
 
       {/* ---------- Tablet & desktop: on the page background ---------- */}
-      <div className="hidden w-full flex-col gap-4 md:flex lg:flex-row lg:items-center lg:justify-between lg:gap-6">
-        <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-center lg:gap-4">
-          <div className="flex min-w-0 items-center gap-4">
-            <CustomerAvatar
-              id={customer.id}
-              initials={customer.initials}
-              className="size-16 text-[1.375rem] font-semibold leading-7 lg:size-14 lg:text-[1.25rem]"
-            />
+      {/* The suspension notice takes the full content width under the header
+          row, so the desktop row keeps its two-column shape. */}
+      <div className="hidden w-full flex-col gap-4 md:flex">
+        <div className="flex w-full flex-col gap-4 lg:flex-row lg:items-center lg:justify-between lg:gap-6">
+          <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-center lg:gap-4">
+            <div className="flex min-w-0 items-center gap-4">
+              <CustomerAvatar
+                id={customer.id}
+                initials={customer.initials}
+                className="size-16 text-[1.375rem] font-semibold leading-7 lg:size-14 lg:text-[1.25rem]"
+              />
 
-            <div className="flex min-w-0 flex-col gap-1.5">
-              <div className="flex min-w-0 flex-wrap items-center gap-3 lg:gap-2.5">
-                <h1 className="truncate text-[1.5rem] font-semibold leading-8 text-text lg:text-[2rem] lg:leading-10">
-                  {customer.name}
-                </h1>
-                <CountryChip country={customer.country} />
-                {/* The Active pill is a tablet-link element; it reads as useful
-                    context at every width, so desktop keeps it too. */}
-                <StatusPill label={customer.statusLabel} />
+              <div className="flex min-w-0 flex-col gap-1.5">
+                <div className="flex min-w-0 flex-wrap items-center gap-3 lg:gap-2.5">
+                  <h1 className="truncate text-[1.5rem] font-semibold leading-8 text-text lg:text-[2rem] lg:leading-10">
+                    {customer.name}
+                  </h1>
+                  <CountryChip country={customer.country} />
+                  {/* The status pill is a tablet-link element; it reads as useful
+                      context at every width, so desktop keeps it too. */}
+                  <StatusPill status={customer.status} label={customer.statusLabel} />
+                </div>
+
+                {/* Desktop keeps the contact line tucked under the name; tablet
+                    gives it the full content width on its own row below. */}
+                <p className="hidden text-body text-gray-500 lg:block">
+                  <span>{customer.email}</span>
+                  {customer.phone ? (
+                    <>
+                      <span aria-hidden="true"> · </span>
+                      <span>{customer.phone}</span>
+                    </>
+                  ) : null}
+                  {since ? (
+                    <>
+                      <span aria-hidden="true"> · </span>
+                      <span>{since}</span>
+                    </>
+                  ) : null}
+                </p>
               </div>
-
-              {/* Desktop keeps the contact line tucked under the name; tablet
-                  gives it the full content width on its own row below. */}
-              <p className="hidden text-body text-gray-500 lg:block">
-                <span>{customer.email}</span>
-                {customer.phone ? (
-                  <>
-                    <span aria-hidden="true"> · </span>
-                    <span>{customer.phone}</span>
-                  </>
-                ) : null}
-                {since ? (
-                  <>
-                    <span aria-hidden="true"> · </span>
-                    <span>{since}</span>
-                  </>
-                ) : null}
-              </p>
             </div>
+
+            <p className="text-body text-text-secondary lg:hidden">
+              <span>{customer.email}</span>
+              {customer.phone ? (
+                <>
+                  <span aria-hidden="true">{'  ·  '}</span>
+                  <span>{customer.phone}</span>
+                </>
+              ) : null}
+              {since ? (
+                <>
+                  <span aria-hidden="true">{'  ·  '}</span>
+                  <span>{since}</span>
+                </>
+              ) : null}
+            </p>
           </div>
 
-          <p className="text-body text-text-secondary lg:hidden">
-            <span>{customer.email}</span>
-            {customer.phone ? (
-              <>
-                <span aria-hidden="true">{'  ·  '}</span>
-                <span>{customer.phone}</span>
-              </>
-            ) : null}
-            {since ? (
-              <>
-                <span aria-hidden="true">{'  ·  '}</span>
-                <span>{since}</span>
-              </>
-            ) : null}
-          </p>
+          {/* Tablet's outline button sits under the contact line; desktop's solid
+              one is pinned to the right of the header row. The suspension control
+              sits beside it and stays an outline at both widths. */}
+          <div className="flex shrink-0 flex-wrap items-center gap-3 self-start lg:self-auto">
+            {messageButton(
+              'flex h-10 shrink-0 items-center justify-center gap-2 rounded-input border border-primary bg-white px-5 text-body font-semibold text-primary transition-colors hover:bg-primary-light lg:h-input lg:border-transparent lg:bg-primary lg:text-white lg:hover:bg-primary-hover',
+            )}
+
+            {suspensionButton(
+              'flex h-10 shrink-0 items-center justify-center gap-2 rounded-input border bg-white px-5 text-body font-semibold transition-colors lg:h-input',
+            )}
+          </div>
         </div>
 
-        {/* Tablet's outline button sits under the contact line; desktop's solid
-            one is pinned to the right of the header row. */}
-        {messageButton(
-          'flex h-10 shrink-0 items-center justify-center gap-2 self-start rounded-input border border-primary bg-white px-5 text-body font-semibold text-primary transition-colors hover:bg-primary-light lg:h-input lg:self-auto lg:border-transparent lg:bg-primary lg:text-white lg:hover:bg-primary-hover',
-        )}
+        {suspensionNote}
       </div>
     </>
   );

@@ -4,6 +4,7 @@ import {
   MailRequestStatus as PrismaMailRequestStatus,
   MailRequestType as PrismaMailRequestType,
   MailRoomStatus,
+  MailScanKind,
   Prisma,
 } from '@prisma/client';
 
@@ -60,11 +61,8 @@ const VIEW_TO_ITEM_STATUS: Record<
 };
 
 // "New mail" is what the customer hasn't opened yet; an item stays NEW until it
-// is viewed. "Pending requests" is the one status that needs the customer to act.
+// is viewed.
 const NEW_MAIL_STATUSES: MailItemStatus[] = [MailItemStatus.NEW];
-const PENDING_REQUEST_STATUSES: MailItemStatus[] = [
-  MailItemStatus.ACTION_REQUESTED,
-];
 
 const liveItem: Prisma.MailItemWhereInput = { deletedAt: null };
 
@@ -79,6 +77,30 @@ const openRequest: Prisma.MailRequestWhereInput = {
   status: {
     in: [PrismaMailRequestStatus.PENDING, PrismaMailRequestStatus.PROCESSING],
   },
+};
+
+/*
+ * Everything still outstanding on an item, from either direction: post we are
+ * waiting on the customer to answer (ACTION_REQUESTED with nothing asked of us),
+ * and anything they have asked us for and we haven't settled.
+ *
+ * The open request half is not optional now that scanning is a request: asking
+ * us to open an envelope deliberately does NOT move the item to
+ * ACTION_REQUESTED — the item needs nothing from the customer, and the red
+ * "Action requested" pill would say the opposite — so counting statuses alone
+ * would leave every scan request out of the figure that exists to count it.
+ */
+const outstandingItem: Prisma.MailItemWhereInput = {
+  OR: [
+    { status: MailItemStatus.ACTION_REQUESTED },
+    { requests: { some: openRequest } },
+  ],
+};
+
+const REQUEST_TYPE_TO_VIEW: Record<PrismaMailRequestType, MailRequestType> = {
+  [PrismaMailRequestType.FORWARDING]: 'forwarding',
+  [PrismaMailRequestType.SHREDDING]: 'shredding',
+  [PrismaMailRequestType.SCAN]: 'scan',
 };
 
 /*
@@ -126,7 +148,15 @@ export async function getOverview(
     where: { customerId: auth.userId, deletedAt: null },
     orderBy: { createdAt: 'asc' },
     include: {
-      items: { where: liveItem, select: { status: true } },
+      items: {
+        where: liveItem,
+        select: {
+          status: true,
+          // One open request is enough to know the item is outstanding; take(1)
+          // keeps a room's whole request history out of an overview query.
+          requests: { where: openRequest, select: { id: true }, take: 1 },
+        },
+      },
     },
   });
 
@@ -134,8 +164,10 @@ export async function getOverview(
     const newMail = room.items.filter((item) =>
       NEW_MAIL_STATUSES.includes(item.status),
     ).length;
-    const pendingRequests = room.items.filter((item) =>
-      PENDING_REQUEST_STATUSES.includes(item.status),
+    const pendingRequests = room.items.filter(
+      (item) =>
+        item.status === MailItemStatus.ACTION_REQUESTED ||
+        item.requests.length > 0,
     ).length;
 
     return {
@@ -186,9 +218,7 @@ export async function getRoomDetail(
   const [totalItems, newMail, pendingRequests] = await Promise.all([
     prisma.mailItem.count({ where: scope }),
     prisma.mailItem.count({ where: { ...scope, status: { in: NEW_MAIL_STATUSES } } }),
-    prisma.mailItem.count({
-      where: { ...scope, status: { in: PENDING_REQUEST_STATUSES } },
-    }),
+    prisma.mailItem.count({ where: { ...scope, ...outstandingItem } }),
   ]);
 
   return {
@@ -217,6 +247,13 @@ export type MailItemView = {
    * for a request they themselves submitted.
    */
   hasOpenRequest: boolean;
+  /*
+   * WHICH request is open, when one is. `hasOpenRequest` alone cannot drive the
+   * viewer any more: "we're working on your forwarding request" and "your scan
+   * request is with the mail room" are different sentences about a different
+   * piece of work, and only one of them ends with the item still readable.
+   */
+  openRequestType?: MailRequestType;
   // Presigned page images, in order — what the viewer draws inline.
   scanPages?: string[];
   // The item's PDF, when one of the uploaded files was a PDF.
@@ -226,12 +263,22 @@ export type MailItemView = {
    * inline (a PDF among the images) is still reachable one file at a time. The
    * object key is never included — only the short-lived URL.
    */
-  files?: {
-    name: string;
-    contentType: string | null;
-    sizeBytes: number | null;
-    url: string;
-  }[];
+  files?: MailItemFileView[];
+  /*
+   * The sealed envelope as it arrived, kept apart from the contents above.
+   *
+   * They hang off the same mail item on purpose — one letter is one row in the
+   * customer's inbox, before and after we open it — so the only thing that
+   * separates them is which set a file belongs to.
+   */
+  envelopeFiles?: MailItemFileView[];
+};
+
+export type MailItemFileView = {
+  name: string;
+  contentType: string | null;
+  sizeBytes: number | null;
+  url: string;
 };
 
 export type MailItemsPage = {
@@ -284,8 +331,16 @@ export async function listItems(
     take: query.limit + 1,
     ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
     // One open request is enough to answer `hasOpenRequest` — take(1) keeps this
-    // from loading a request history the list never renders.
-    include: { requests: { where: openRequest, select: { id: true }, take: 1 } },
+    // from loading a request history the list never renders. Newest first, so
+    // the one reported is the one still being worked.
+    include: {
+      requests: {
+        where: openRequest,
+        select: { type: true },
+        orderBy: { requestedAt: 'desc' },
+        take: 1,
+      },
+    },
   });
 
   const hasMore = rows.length > query.limit;
@@ -302,6 +357,9 @@ export async function listItems(
       note: item.note ?? undefined,
       responseDueAt: item.responseDueAt?.toISOString(),
       hasOpenRequest: item.requests.length > 0,
+      openRequestType: item.requests[0]
+        ? REQUEST_TYPE_TO_VIEW[item.requests[0].type]
+        : undefined,
     })),
     totalItems,
     totalPages: Math.max(1, Math.ceil(totalItems / query.limit)),
@@ -323,7 +381,12 @@ export async function getItem(
     where: { id: itemId, roomId: ownedRoomId, deletedAt: null },
     include: {
       pages: { orderBy: { pageNumber: 'asc' } },
-      requests: { where: openRequest, select: { id: true }, take: 1 },
+      requests: {
+        where: openRequest,
+        select: { type: true },
+        orderBy: { requestedAt: 'desc' },
+        take: 1,
+      },
     },
   });
 
@@ -341,20 +404,22 @@ export async function getItem(
   }
 
   /*
-   * Every uploaded file is presigned once, then split two ways: the images
-   * become the inline page strip the viewer draws, and the full list (images and
-   * PDFs alike) is returned so nothing an operator attached is unreachable.
+   * Every uploaded file is presigned once, then split by what it is a picture
+   * OF: the sealed envelope, or what we found inside it. Both hang off this one
+   * item — the customer's inbox holds one row for a letter whether or not we
+   * have opened it — so this is the only thing that tells them apart.
    *
-   * A file whose signature failed is dropped from both rather than rendered as a
-   * broken link — `presignObject` already returns undefined instead of throwing.
+   * A file whose signature failed is dropped rather than rendered as a broken
+   * link — `presignObject` already returns undefined instead of throwing.
    */
-  const files = (
+  const presigned = (
     await Promise.all(
       item.pages.map(async (page) => {
         const url = await presignObject(page.objectKey);
         if (!url) return null;
 
         return {
+          kind: page.kind,
           name: page.fileName ?? `Page ${page.pageNumber}`,
           contentType: page.contentType,
           sizeBytes: page.sizeBytes,
@@ -363,6 +428,15 @@ export async function getItem(
       }),
     )
   ).filter((file): file is NonNullable<typeof file> => file !== null);
+
+  const strip = ({ kind: _kind, ...file }: (typeof presigned)[number]) => file;
+
+  const files = presigned
+    .filter((page) => page.kind === MailScanKind.CONTENTS)
+    .map(strip);
+  const envelopeFiles = presigned
+    .filter((page) => page.kind === MailScanKind.ENVELOPE)
+    .map(strip);
 
   // Only images can be drawn inline. A legacy row predating `contentType` has
   // none recorded; those were all page images, so they stay in the strip.
@@ -384,9 +458,13 @@ export async function getItem(
     note: item.note ?? undefined,
     responseDueAt: item.responseDueAt?.toISOString(),
     hasOpenRequest: item.requests.length > 0,
+    openRequestType: item.requests[0]
+      ? REQUEST_TYPE_TO_VIEW[item.requests[0].type]
+      : undefined,
     scanPages: scanPages.length > 0 ? scanPages : undefined,
     pdfUrl: await presignObject(item.pdfObjectKey),
     files: files.length > 0 ? files : undefined,
+    envelopeFiles: envelopeFiles.length > 0 ? envelopeFiles : undefined,
   };
 }
 
@@ -409,6 +487,7 @@ export type MailRequestView = {
 const REQUEST_TYPE_TO_PRISMA: Record<MailRequestType, PrismaMailRequestType> = {
   forwarding: PrismaMailRequestType.FORWARDING,
   shredding: PrismaMailRequestType.SHREDDING,
+  scan: PrismaMailRequestType.SCAN,
 };
 
 /*
@@ -438,7 +517,12 @@ export async function createRequest(
 
   const item = await prisma.mailItem.findFirst({
     where: { id: itemId, roomId: ownedRoomId, deletedAt: null },
-    select: { id: true, status: true, room: { select: { name: true } } },
+    select: {
+      id: true,
+      status: true,
+      scanReady: true,
+      room: { select: { name: true } },
+    },
   });
 
   if (!item) throw AppError.notFound('Mail item not found');
@@ -449,6 +533,13 @@ export async function createRequest(
     item.status === MailItemStatus.ARCHIVED
   ) {
     throw AppError.businessRule('This item has already been handled');
+  }
+
+  // An envelope is opened once. The contents are filed onto this same item, so a
+  // second scan request would ask us to re-open something already open — and the
+  // customer is looking at the result of the first one.
+  if (input.type === 'scan' && item.scanReady) {
+    throw AppError.businessRule('This item has already been scanned');
   }
 
   // One open request per item. Without this a double-tap on the button would put
@@ -478,6 +569,18 @@ export async function createRequest(
     );
   }
 
+  /*
+   * Forwarding and shredding take the item out of circulation, so it moves to
+   * ACTION_REQUESTED and stays there until an operator settles it.
+   *
+   * A scan request deliberately does not. ACTION_REQUESTED is the portal's "we
+   * are waiting on YOU" state — a red pill and a Respond button — and asking us
+   * to open an envelope needs nothing further from the customer. The item stays
+   * exactly as it reads, and the open request is what says work is in flight
+   * (`openRequestType`).
+   */
+  const movesItem = type !== PrismaMailRequestType.SCAN;
+
   // One transaction: an item flagged as needing action must always have the
   // request that explains why, and vice versa.
   const request = await prisma.$transaction(async (tx) => {
@@ -491,10 +594,12 @@ export async function createRequest(
       },
     });
 
-    await tx.mailItem.update({
-      where: { id: item.id },
-      data: { status: MailItemStatus.ACTION_REQUESTED },
-    });
+    if (movesItem) {
+      await tx.mailItem.update({
+        where: { id: item.id },
+        data: { status: MailItemStatus.ACTION_REQUESTED },
+      });
+    }
 
     return created;
   });

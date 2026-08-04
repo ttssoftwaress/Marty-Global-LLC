@@ -67,7 +67,42 @@ async function deliver(notice: MailNotice): Promise<void> {
   }
 }
 
+/*
+ * Post arrived. `sealed` is the envelope-first case: nothing has been opened, so
+ * the message must not promise something to read — what the customer has is a
+ * photograph of the outside and a button asking us to open it. Telling them it
+ * is "ready to read" and landing them on an unopened envelope is the one way
+ * this notice can be wrong.
+ */
 export async function notifyMailScanFiled(input: {
+  customerId: string;
+  customerEmail: string;
+  roomId: string;
+  roomName: string;
+  sender: string;
+  sealed?: boolean;
+}): Promise<void> {
+  await deliver({
+    customerId: input.customerId,
+    customerEmail: input.customerEmail,
+    message: `New mail from ${input.sender} arrived in ${input.roomName}.`,
+    subject: 'New mail in your virtual mail room',
+    heading: 'You have new mail',
+    body: input.sealed
+      ? `An envelope from ${input.sender} has arrived at ${input.roomName}. Open it in your mail room to see the envelope and ask us to scan what is inside.`
+      : `A new item from ${input.sender} has been scanned into ${input.roomName} and is ready to read.`,
+    href: `/app/mailroom/${input.roomId}`,
+    actionLabel: 'View mail',
+  });
+}
+
+/*
+ * The envelope the customer asked us to open has been opened and scanned. The
+ * one notice in this module that answers a request the customer made of us
+ * rather than announcing something that happened to them, so it says the scan is
+ * ready rather than that mail arrived — the mail arrived days ago.
+ */
+export async function notifyMailContentsScanned(input: {
   customerId: string;
   customerEmail: string;
   roomId: string;
@@ -77,12 +112,12 @@ export async function notifyMailScanFiled(input: {
   await deliver({
     customerId: input.customerId,
     customerEmail: input.customerEmail,
-    message: `New mail from ${input.sender} arrived in ${input.roomName}.`,
-    subject: 'New mail in your virtual mail room',
-    heading: 'You have new mail',
-    body: `A new item from ${input.sender} has been scanned into ${input.roomName} and is ready to read.`,
+    message: `Your mail from ${input.sender} has been scanned and is ready to read.`,
+    subject: 'Your mail has been scanned',
+    heading: 'Your scan is ready',
+    body: `We opened the envelope from ${input.sender} at ${input.roomName} and scanned what was inside. It is ready to read in your mail room.`,
     href: `/app/mailroom/${input.roomId}`,
-    actionLabel: 'View mail',
+    actionLabel: 'Read your mail',
   });
 }
 

@@ -1,4 +1,12 @@
-import { Check, Clock, Download, Loader, Send, Trash2 } from 'lucide-react';
+import {
+  Check,
+  Clock,
+  Download,
+  Loader,
+  ScanLine,
+  Send,
+  Trash2,
+} from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 import type {
@@ -31,6 +39,13 @@ const NEUTRAL: BadgeStyle = {
 };
 
 const REQUEST_TYPE_STYLES: Record<MailRequestType, BadgeStyle> = {
+  // The one type with a sealed envelope physically waiting on it, so it takes
+  // the sky "processing" pair rather than sharing forwarding's navy.
+  scan: {
+    icon: ScanLine,
+    className:
+      'bg-[var(--color-status-processing-bg)] text-[var(--color-status-processing-text)]',
+  },
   forwarding: { icon: Send, className: 'bg-primary-light text-primary' },
   shredding: {
     icon: Trash2,

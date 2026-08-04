@@ -5,6 +5,7 @@ import type {
   ServiceField,
 } from '../../types/order-new-service';
 import {
+  answerDisplayValue,
   answersByServiceFrom,
   buildApplicationSteps,
   descendantFieldNames,
@@ -303,6 +304,32 @@ describe('visibleOptions', () => {
 
   it('returns the whole list for an independent dropdown', () => {
     expect(visibleOptions(asSelect(country), {})).toHaveLength(2);
+  });
+});
+
+/*
+ * The review screen prints answers back for confirmation, so a stored value must
+ * read as what the customer picked. A select holds an admin key — asking someone
+ * to confirm "tx_1" is not asking them to confirm an address.
+ */
+describe('answerDisplayValue', () => {
+  it('resolves a dropdown answer to its option label', () => {
+    expect(answerDisplayValue(state, { state: 'tx' })).toBe('Texas');
+  });
+
+  it('returns a typed answer unchanged', () => {
+    expect(answerDisplayValue(companyName, { company_name: 'Acme LLC' })).toBe(
+      'Acme LLC',
+    );
+  });
+
+  it('falls back to the raw value when no option matches', () => {
+    expect(answerDisplayValue(state, { state: 'zz' })).toBe('zz');
+  });
+
+  it('reports an unanswered question as empty', () => {
+    expect(answerDisplayValue(companyName, { company_name: '   ' })).toBe('');
+    expect(answerDisplayValue(state, {})).toBe('');
   });
 });
 

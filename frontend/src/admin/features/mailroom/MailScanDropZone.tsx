@@ -52,6 +52,13 @@ type MailScanDropZoneProps = {
   // upload so the list cannot change under the request in flight.
   progress?: number | null;
   disabled?: boolean;
+  /*
+   * What the operator is being asked to attach. The same control takes
+   * photographs of a sealed envelope and scans of what was inside it, and an
+   * operator holding an unopened envelope should not be told to "upload scan".
+   */
+  emptyLabel?: string;
+  addLabel?: string;
 };
 
 export function MailScanDropZone({
@@ -60,6 +67,8 @@ export function MailScanDropZone({
   onRemove,
   progress = null,
   disabled = false,
+  emptyLabel = 'Drag & drop or click to upload scan',
+  addLabel = 'Add another page',
 }: MailScanDropZoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -166,9 +175,7 @@ export function MailScanDropZone({
           aria-hidden="true"
         />
         <span className="text-body font-medium text-text-secondary">
-          {files.length > 0
-            ? 'Add another page'
-            : 'Drag & drop or click to upload scan'}
+          {files.length > 0 ? addLabel : emptyLabel}
         </span>
         <span className="text-small text-gray-400">
           {TYPE_LABEL} · max {SCAN_MAX_MB} MB each

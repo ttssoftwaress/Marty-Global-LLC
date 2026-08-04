@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { AlertTriangle, Inbox } from 'lucide-react';
+import { AlertTriangle, Inbox, ScanLine } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import { formatOrderDate } from '../../lib/format';
@@ -28,6 +28,12 @@ import { StorageExpiryInfo } from './StorageExpiryInfo';
  * icon flags items nearing their shred date. The design shows a populated list;
  * the empty and loading states are added so a filter with no matches, or a
  * first load, explains itself.
+ *
+ * Post now arrives sealed (the mail room files the envelope, the customer
+ * decides whether it is opened), so a row can be at one of three stages and the
+ * list has to show which: the preview says sealed / scanning / scanned, and an
+ * unopened envelope's action is "Scan" — the ask that puts it in the mail room's
+ * queue — beside the "View" that opens the envelope shot.
  */
 
 // Amber warning text (approaching shred date / action reason). Uses the review
@@ -43,49 +49,96 @@ type MailListProps = {
   pageSize: number;
   totalItems: number;
   isLoading?: boolean;
+  /*
+   * Ask the mail room to open a sealed envelope and scan what is inside. Raised
+   * to the page rather than fired here, because it is the same mutation the item
+   * viewer submits and both must invalidate the same queries.
+   */
+  onRequestScan?: (itemId: string) => void;
+  // The item whose scan request is in flight, so only its own button waits.
+  scanningItemId?: string | null;
+  /*
+   * What "nothing here" means for the view being shown. The same list serves the
+   * room's three tabs, and an empty Requests tab is good news where an empty
+   * Inbox is not — one sentence cannot be right for both.
+   */
+  empty?: { title: string; body: string };
 };
 
 function itemHref(roomId: string, itemId: string) {
   return `/app/mailroom/${roomId}/${itemId}`;
 }
 
+/*
+ * A row's actions. Usually one; a sealed envelope has two, because looking at
+ * the envelope and asking us to open it are different things and the customer
+ * may want either first.
+ *
+ * "Respond" is only for an item WE need something on. Once the customer has
+ * submitted a request the item is still `action_requested`, but the ball is in
+ * our court — there is nothing to respond to, and the backend would reject a
+ * second request as a conflict. So an item with an open request keeps the plain
+ * "View" action.
+ */
 function RowAction({
   item,
   roomId,
   fullWidth,
+  onRequestScan,
+  isScanning = false,
 }: {
   item: MailItem;
   roomId: string;
   fullWidth?: boolean;
+  onRequestScan?: (itemId: string) => void;
+  isScanning?: boolean;
 }) {
   const width = fullWidth ? 'w-full' : 'w-full lg:w-auto lg:min-w-[5rem]';
-  const base = `inline-flex items-center justify-center rounded-[0.5rem] px-4 py-2 text-[0.8125rem] font-semibold transition-colors lg:rounded-[0.625rem] ${width}`;
+  const base = `inline-flex items-center justify-center gap-1.5 rounded-[0.5rem] px-4 py-2 text-[0.8125rem] font-semibold transition-colors lg:rounded-[0.625rem] ${width}`;
+  const primary = `${base} bg-primary text-white hover:bg-primary-hover`;
+  const secondary = `${base} border border-primary bg-white text-primary hover:bg-primary-light`;
 
-  /*
-   * "Respond" is only for an item WE need something on. Once the customer has
-   * submitted a forwarding/shredding request the item is still
-   * `action_requested`, but the ball is in our court — there is nothing to
-   * respond to, and the backend would reject a second request as a conflict. So
-   * an item with an open request keeps the plain "View" action.
-   */
-  if (item.status === 'action_requested' && !item.hasOpenRequest) {
-    return (
-      <Link
-        to={itemHref(roomId, item.id)}
-        className={`${base} bg-primary text-white hover:bg-primary-hover`}
-      >
-        Respond
-      </Link>
-    );
-  }
-  return (
-    <Link
-      to={itemHref(roomId, item.id)}
-      className={`${base} border border-primary bg-white text-primary hover:bg-primary-light`}
-    >
-      View
+  const view = (className: string, label = 'View') => (
+    <Link to={itemHref(roomId, item.id)} className={className}>
+      {label}
     </Link>
   );
+
+  /*
+   * A sealed envelope nobody has been asked to open: the useful action is asking
+   * us to open it, with viewing the envelope beside it.
+   *
+   * Post that has already been forwarded or shredded is excluded even though it
+   * is technically still unopened — it is not in the building any more, and the
+   * backend refuses the request. Offering a button that can only fail is worse
+   * than not offering it.
+   */
+  const handled = item.status === 'forwarded' || item.status === 'archived';
+
+  if (!item.scanReady && !item.hasOpenRequest && !handled && onRequestScan) {
+    return (
+      <div
+        className={`flex gap-2 ${fullWidth ? 'w-full' : 'w-full lg:w-auto lg:justify-end'}`}
+      >
+        <button
+          type="button"
+          onClick={() => onRequestScan(item.id)}
+          disabled={isScanning}
+          className={`${primary} disabled:cursor-default disabled:bg-gray-300 disabled:hover:bg-gray-300`}
+        >
+          <ScanLine className="size-3.5 shrink-0" strokeWidth={2} aria-hidden="true" />
+          {isScanning ? 'Sending…' : 'Scan'}
+        </button>
+        {view(secondary)}
+      </div>
+    );
+  }
+
+  if (item.status === 'action_requested' && !item.hasOpenRequest) {
+    return view(primary, 'Respond');
+  }
+
+  return view(secondary);
 }
 
 function ExpiresValue({ iso }: { iso: string }) {
@@ -108,7 +161,12 @@ function ExpiresValue({ iso }: { iso: string }) {
   );
 }
 
-function EmptyState() {
+const DEFAULT_EMPTY = {
+  title: 'No mail here yet',
+  body: 'Nothing matches this view. Try another status, clear your search, or check back once new mail arrives.',
+};
+
+function EmptyState({ title, body }: { title: string; body: string }) {
   return (
     <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
       <span className="flex size-12 items-center justify-center rounded-[1.5rem] bg-gray-100">
@@ -118,11 +176,8 @@ function EmptyState() {
           aria-hidden="true"
         />
       </span>
-      <p className="text-body-lg font-semibold text-text">No mail here yet</p>
-      <p className="max-w-[22.5rem] text-body text-gray-500">
-        Nothing matches this view. Try another status, clear your search, or
-        check back once new mail is scanned.
-      </p>
+      <p className="text-body-lg font-semibold text-text">{title}</p>
+      <p className="max-w-[22.5rem] text-body text-gray-500">{body}</p>
     </div>
   );
 }
@@ -147,6 +202,9 @@ export function MailList({
   pageSize,
   totalItems,
   isLoading,
+  onRequestScan,
+  scanningItemId = null,
+  empty = DEFAULT_EMPTY,
 }: MailListProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
@@ -217,7 +275,7 @@ export function MailList({
           </div>
         ) : isEmpty ? (
           <div className="rounded-card border border-gray-200 bg-white">
-            <EmptyState />
+            <EmptyState title={empty.title} body={empty.body} />
           </div>
         ) : (
           items.map((item) => {
@@ -261,6 +319,21 @@ export function MailList({
                   </div>
                 </div>
 
+                {/* Mobile has no preview thumbnail to carry the stage, so the
+                    one piece of mail that is waiting on US says so in words. */}
+                {item.openRequestType === 'scan' ? (
+                  <div className="flex items-center gap-1.5 rounded-lg bg-primary-light p-2">
+                    <ScanLine
+                      className="size-3.5 shrink-0 text-primary"
+                      strokeWidth={2}
+                      aria-hidden="true"
+                    />
+                    <span className="text-caption font-medium text-primary">
+                      We&apos;re opening and scanning this envelope
+                    </span>
+                  </div>
+                ) : null}
+
                 {item.status === 'action_requested' &&
                 item.responseDueAt &&
                 !item.hasOpenRequest ? (
@@ -277,7 +350,13 @@ export function MailList({
                 ) : null}
 
                 <div className="h-px w-full bg-gray-200" />
-                <RowAction item={item} roomId={roomId} fullWidth />
+                <RowAction
+                  item={item}
+                  roomId={roomId}
+                  fullWidth
+                  onRequestScan={onRequestScan}
+                  isScanning={scanningItemId === item.id}
+                />
               </div>
             );
           })
@@ -321,9 +400,11 @@ export function MailList({
                 <th scope="col" className="w-[7.75rem] pr-3 lg:w-[10rem]">
                   Status
                 </th>
+                {/* Wider than the other links draw it: a sealed envelope
+                    carries two actions, Scan and View, rather than one. */}
                 <th
                   scope="col"
-                  className="w-[5rem] pr-4 text-right lg:w-[7.5rem] lg:pr-6"
+                  className="w-[7.5rem] pr-4 text-right lg:w-[11.5rem] lg:pr-6"
                 >
                   Action
                 </th>
@@ -352,7 +433,10 @@ export function MailList({
                       </td>
 
                       <td>
-                        <ScanThumbnail ready={item.scanReady} />
+                        <ScanThumbnail
+                          ready={item.scanReady}
+                          scanRequested={item.openRequestType === 'scan'}
+                        />
                       </td>
 
                       <td className="min-w-0 pr-3">
@@ -388,7 +472,12 @@ export function MailList({
 
                       <td className="pr-4 text-right lg:pr-6">
                         <div className="flex justify-end">
-                          <RowAction item={item} roomId={roomId} />
+                          <RowAction
+                            item={item}
+                            roomId={roomId}
+                            onRequestScan={onRequestScan}
+                            isScanning={scanningItemId === item.id}
+                          />
                         </div>
                       </td>
                     </tr>
@@ -400,7 +489,7 @@ export function MailList({
         </div>
 
         {showSkeleton && <SkeletonRows />}
-        {isEmpty && <EmptyState />}
+        {isEmpty && <EmptyState title={empty.title} body={empty.body} />}
       </div>
     </section>
   );

@@ -280,6 +280,30 @@ export function descendantFieldNames(
   return [...found];
 }
 
+/*
+ * What an answer READS as, for the review screen.
+ *
+ * A select's answer is stored as the option's `value` — an admin key like `us`
+ * or `tx_1`. Printing that back on a review screen would ask the customer to
+ * confirm a code they never saw, so it resolves to the option's label. The
+ * unfiltered option list is searched deliberately: an answer given under a
+ * parent that has since changed is cleared, so anything still held here belongs
+ * to a choice that was legitimately offered.
+ *
+ * An unknown value falls back to itself rather than to an empty string — showing
+ * the raw answer is honest; showing nothing would read as "not provided".
+ */
+export function answerDisplayValue(
+  field: ServiceField,
+  answers: ServiceFieldAnswers,
+): string {
+  const value = (answers[field.name] ?? '').trim();
+  if (!value) return '';
+  if (field.type !== 'select') return value;
+
+  return field.options.find((option) => option.value === value)?.label ?? value;
+}
+
 // Every required field on a step has a non-empty answer. Optional fields never
 // gate progress.
 export function isStepComplete(

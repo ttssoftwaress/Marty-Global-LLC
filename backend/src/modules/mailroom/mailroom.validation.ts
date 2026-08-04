@@ -22,16 +22,21 @@ export const mailStatusFilter = z.enum([
 export type MailStatusFilter = z.infer<typeof mailStatusFilter>;
 
 /*
- * What the customer asks us to do with a piece of mail — the two buttons on the
- * item slide-over. The request lands in the admin mail-ops queue; the backend
- * decides what happens next, so the payload carries nothing but the intent and
- * an optional note (AGENTS.md — business logic lives in services).
+ * What the customer asks us to do with a piece of mail — the buttons on the item
+ * slide-over. The request lands in the admin mail-ops queue; the backend decides
+ * what happens next, so the payload carries nothing but the intent and an
+ * optional note (AGENTS.md — business logic lives in services).
  *
  * The forwarding address is not accepted from the client: it is resolved from
  * the customer's own record at request time and snapshotted onto the row, so a
  * caller cannot redirect someone else's mail to an address they chose.
+ *
+ * `scan` is the envelope-first flow's ask: post is filed sealed, and this is the
+ * customer telling us to open it. It is the only one of the three that does not
+ * dispose of the item — the contents come back onto the same mail item, which is
+ * why the inbox never grows a second row for the same letter.
  */
-export const mailRequestType = z.enum(['forwarding', 'shredding']);
+export const mailRequestType = z.enum(['forwarding', 'shredding', 'scan']);
 export type MailRequestType = z.infer<typeof mailRequestType>;
 
 export const createMailRequestSchema = z.object({

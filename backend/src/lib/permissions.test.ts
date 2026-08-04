@@ -298,8 +298,8 @@ describe('permissionAreasFor', () => {
 
   it('emits no scopeKey on areas with no ownership to narrow to', () => {
     // A service's price and the staff directory are org-wide; `orders.assign`
-    // is a write grant, not a section.
-    for (const key of ['catalog', 'team', 'orders.assign'] as const) {
+    // and `customers.ban` are write grants, not sections.
+    for (const key of ['catalog', 'team', 'orders.assign', 'customers.ban'] as const) {
       expect(byKey.get(key)).toBeDefined();
       expect(byKey.get(key)).not.toHaveProperty('scopeKey');
     }

@@ -342,9 +342,20 @@ const CATALOG: Record<string, Entry> = {
     severity: 'notice',
   },
   [AuditAction.MAIL_SCAN_UPLOADED]: {
-    label: 'Mail scan uploaded',
+    label: 'Mail filed',
     category: 'mailroom',
     severity: 'normal',
+  },
+  /*
+   * A notice, not a normal event: this is the moment a sealed envelope was
+   * opened and read. It is the one step in the mail flow a customer may later
+   * ask us to account for, so it should stand out in the trail rather than sit
+   * alongside routine filing.
+   */
+  [AuditAction.MAIL_CONTENTS_SCANNED]: {
+    label: 'Envelope opened and scanned',
+    category: 'mailroom',
+    severity: 'notice',
   },
   [AuditAction.MAIL_REQUEST_CREATED]: {
     label: 'Mail request raised',

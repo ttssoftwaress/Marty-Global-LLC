@@ -8,6 +8,7 @@ import type {
   MailRequestResolution,
 } from '../../types/mailroom';
 import { MailRequestTypeBadge } from './MailRequestBadges';
+import { MailScanDropZone } from './MailScanDropZone';
 
 /*
  * A pending request opened from the queue. One overlay, two chromes by
@@ -23,11 +24,20 @@ import { MailRequestTypeBadge } from './MailRequestBadges';
  * form — because the design is one panel whose only difference across the links
  * is which edge it enters from.
  *
- * The two request types share this component rather than splitting into two:
- * the links are the same panel with three differences, all of which are
+ * The request types share this component rather than splitting into one panel
+ * each: the links are the same panel with a few differences, all of which are
  * conditional here — forwarding shows a forwarding-address row and collects a
  * tracking number and carrier; shredding drops the address, adds the
  * irreversible-action warning, and turns the footer button red.
+ *
+ * A SCAN request is the third, and the one the design predates. It is settled by
+ * doing the work rather than by reporting it: the operator opens the envelope,
+ * attaches what was inside, and filing it closes the request. So its form is the
+ * same drop zone the filing screen uses, plus the two fields an operator can
+ * only fill in once the envelope is open — a deadline read off the letter and
+ * the note that explains it. There is nothing to "mark as" here, and no carrier:
+ * the post has not gone anywhere. The scan lands on the customer's existing mail
+ * item, so nothing in this panel creates a second piece of post.
  *
  * States the design does not draw, filled in here (Design.md): the detail
  * fetch's loading and error cases, a disabled "Preview document" while the scan
@@ -46,6 +56,19 @@ type MailRequestSlideOverProps = {
   onResolve: (resolution: MailRequestResolution) => void;
   isResolving: boolean;
   errorMessage?: string | null;
+  /*
+   * Settle a scan request by filing what was inside the envelope. The raw files
+   * are handed up rather than uploaded here: the bytes go straight to R2 and
+   * only the object keys reach the API (AGENTS.md, Storage), and that two-step
+   * belongs with the mutation, not in a render.
+   */
+  onFileContents?: (input: {
+    files: File[];
+    notes?: string;
+    responseDueOn?: string;
+  }) => void;
+  // 0–1 while the scans upload to R2, null when idle.
+  scanUploadProgress?: number | null;
 };
 
 function DetailRow({
@@ -75,18 +98,24 @@ export function MailRequestSlideOver({
   onResolve,
   isResolving,
   errorMessage,
+  onFileContents,
+  scanUploadProgress = null,
 }: MailRequestSlideOverProps) {
   // The wrapper holding both shells — the overlay's focus scope, so the trap
   // spans whichever of the two the breakpoint has rendered.
   const overlayRef = useRef<HTMLDivElement>(null);
   const fieldId = useId();
 
+  const isScan = request.type === 'scan';
   const isShredding = request.type === 'shredding';
   const isSettled = request.status === 'completed';
 
   const [trackingNumber, setTrackingNumber] = useState('');
   const [carrier, setCarrier] = useState(request.carriers[0]?.value ?? '');
   const [notes, setNotes] = useState('');
+  // The scan form. Held as `File` objects until submit, when they go to R2.
+  const [scans, setScans] = useState<File[]>([]);
+  const [responseDueOn, setResponseDueOn] = useState('');
 
   /*
    * Both shells stay mounted because their entrance animations differ (the
@@ -113,21 +142,39 @@ export function MailRequestSlideOver({
    * empty picker and no way to satisfy the footer. Called out in the panel
    * rather than left as a permanently disabled button with no explanation.
    */
-  const hasNoCarriers = !isShredding && request.carriers.length === 0;
+  const hasNoCarriers = !isShredding && !isScan && request.carriers.length === 0;
+
+  // A deadline is a demand, and the note is the only thing that says what for —
+  // the same rule the filing form holds to.
+  const scanNoteRequired = Boolean(responseDueOn);
 
   /*
    * A forwarding request is only settled once we can tell the customer where
    * their mail went, so the footer waits on a tracking number and a carrier.
    * Shredding has nothing to collect — its notes field is optional — so it can
-   * be submitted as soon as the panel is open. The backend re-validates either
-   * way (AGENTS.md — the guard is server-side).
+   * be submitted as soon as the panel is open. A scan is settled by the scan, so
+   * it waits on at least one file. The backend re-validates every case
+   * (AGENTS.md — the guard is server-side).
    */
-  const canSubmit = isShredding
-    ? true
-    : Boolean(trackingNumber.trim() && carrier);
+  const canSubmit = isScan
+    ? scans.length > 0 && (!responseDueOn || Boolean(notes.trim()))
+    : isShredding
+      ? true
+      : Boolean(trackingNumber.trim() && carrier);
+
+  const isBusy = isResolving || scanUploadProgress !== null;
 
   const onSubmit = () => {
-    if (!canSubmit || isResolving) return;
+    if (!canSubmit || isBusy) return;
+
+    if (isScan) {
+      onFileContents?.({
+        files: scans,
+        notes: notes.trim() || undefined,
+        responseDueOn: responseDueOn || undefined,
+      });
+      return;
+    }
 
     onResolve({
       requestId: request.id,
@@ -138,7 +185,11 @@ export function MailRequestSlideOver({
     });
   };
 
-  const submitLabel = isShredding ? 'Mark as shredded' : 'Mark as forwarded';
+  const submitLabel = isScan
+    ? 'File scan & close request'
+    : isShredding
+      ? 'Mark as shredded'
+      : 'Mark as forwarded';
 
   /*
    * The panel's content, rendered into whichever of the two shells below the
@@ -154,6 +205,7 @@ export function MailRequestSlideOver({
       tracking: `${fieldId}-${variant}-tracking`,
       carrier: `${fieldId}-${variant}-carrier`,
       notes: `${fieldId}-${variant}-notes`,
+      responseDue: `${fieldId}-${variant}-response-due`,
     };
 
     return (
@@ -231,7 +283,11 @@ export function MailRequestSlideOver({
                 <button
                   type="button"
                   disabled
-                  title="The scan becomes available once it has finished processing"
+                  title={
+                    isScan
+                      ? 'No envelope photograph was filed with this item'
+                      : 'The scan becomes available once it has finished processing'
+                  }
                   className="flex h-10 w-fit cursor-default items-center justify-center rounded-control border border-gray-300 px-4 text-body font-semibold text-gray-400"
                 >
                   Preview document
@@ -287,6 +343,91 @@ export function MailRequestSlideOver({
               This request has been settled — there is nothing left to work on
               it.
             </p>
+          ) : isScan ? (
+            /*
+             * Settling a scan request IS the scan. No carrier, no tracking, and
+             * nothing to "mark as": the operator opens the envelope, attaches
+             * what was inside, and the request closes behind it.
+             */
+            <div className="flex w-full flex-col gap-6">
+              <div className="flex w-full flex-col gap-2">
+                <p className="text-form-label text-gray-800">
+                  Scanned contents
+                </p>
+                <MailScanDropZone
+                  files={scans.map((file) => ({
+                    name: file.name,
+                    size: file.size,
+                  }))}
+                  onAdd={(added) =>
+                    setScans((previous) => [...previous, ...added])
+                  }
+                  onRemove={(index) =>
+                    setScans((previous) =>
+                      previous.filter((_, position) => position !== index),
+                    )
+                  }
+                  progress={scanUploadProgress}
+                />
+                <p className="text-small text-gray-500">
+                  These pages are filed onto the customer&apos;s existing mail
+                  item, beside the envelope — they never appear as a second
+                  piece of post.
+                </p>
+              </div>
+
+              <div className="flex w-full flex-col gap-2">
+                <label
+                  htmlFor={ids.responseDue}
+                  className="text-form-label text-gray-800"
+                >
+                  Response needed by (optional)
+                </label>
+                {/*
+                 * This is the first moment anyone has read the letter, so a
+                 * deadline inside it can only be entered now — the filing form
+                 * was looking at a sealed envelope.
+                 */}
+                <input
+                  id={ids.responseDue}
+                  type="date"
+                  value={responseDueOn}
+                  onChange={(event) => setResponseDueOn(event.target.value)}
+                  className="input-field px-3.5"
+                />
+              </div>
+
+              <div className="flex w-full flex-col gap-2">
+                <label
+                  htmlFor={ids.notes}
+                  className="text-form-label text-gray-800"
+                >
+                  {scanNoteRequired
+                    ? 'Note for the customer'
+                    : 'Note for the customer (optional)'}
+                </label>
+                <textarea
+                  id={ids.notes}
+                  value={notes}
+                  onChange={(event) => setNotes(event.target.value)}
+                  rows={3}
+                  placeholder="e.g. Forwarding address required"
+                  aria-required={scanNoteRequired}
+                  className="input-field h-[5rem] resize-none px-3 py-3"
+                />
+                {scanNoteRequired && !notes.trim() ? (
+                  <p role="alert" className="text-small text-error">
+                    Say what the customer needs to do before the response date.
+                  </p>
+                ) : null}
+              </div>
+
+              {errorMessage ? (
+                <p role="alert" className="text-small text-error">
+                  {errorMessage}
+                </p>
+              ) : null}
+            </div>
           ) : (
             <div className="flex w-full flex-col gap-6">
               {/* Forwarding collects where the mail went; shredding does not. */}
@@ -398,12 +539,12 @@ export function MailRequestSlideOver({
             <button
               type="button"
               onClick={onSubmit}
-              disabled={!canSubmit || isResolving}
+              disabled={!canSubmit || isBusy}
               className={`btn w-full disabled:cursor-default disabled:bg-gray-300 disabled:text-white disabled:hover:bg-gray-300 ${
                 isShredding ? 'btn-danger' : 'btn-primary'
               }`}
             >
-              {isResolving ? 'Saving…' : submitLabel}
+              {isBusy ? 'Saving…' : submitLabel}
             </button>
           )}
         </footer>

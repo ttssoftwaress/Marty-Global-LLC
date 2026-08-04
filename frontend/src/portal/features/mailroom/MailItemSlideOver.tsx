@@ -5,6 +5,7 @@ import {
   ChevronRight,
   Clock,
   FileText,
+  Mail,
   ScanLine,
   X,
 } from 'lucide-react';
@@ -29,9 +30,16 @@ import type { MailItem, MailItemFile } from '../../types/mailroom';
  * browser's own viewer does the job, handles PDFs, and leaves nothing to go
  * stale when a presigned link expires mid-session.
  *
+ * The body is TWO sections of one item, never two items: the envelope as it
+ * arrived, and — once we have been asked to open it — what was inside. Post is
+ * filed sealed, so the second section is usually absent, and the primary action
+ * is "Scan this envelope": the customer's ask that puts it in the mail room's
+ * queue. Once the contents are filed they attach to this same item, so the
+ * envelope and the letter never appear as separate pieces of mail.
+ *
  * The body still distinguishes the states the list cannot: the detail fetch in
- * flight, that fetch having failed, and an item the operator has not scanned
- * yet ("Scan in progress", the same vocabulary as ScanThumbnail).
+ * flight, that fetch having failed, an envelope nobody has opened, and one the
+ * mail room is opening right now.
  *
  * Overlay behaviour the design implies is filled in: scrim click / Esc / the
  * back arrow close, ArrowLeft/ArrowRight step through the list, focus moves
@@ -52,6 +60,9 @@ type MailItemSlideOverProps = {
   onNext: () => void;
   onRequestForwarding?: () => void;
   onRequestShredding?: () => void;
+  // Ask the mail room to open this envelope and scan what is inside. The result
+  // lands on this same item, which is why there is no second screen for it.
+  onRequestScan?: () => void;
   onMarkRead?: () => void;
   // Fires alongside the actual download so the backend can log the "Downloaded
   // only" disposal — the browser still follows the link either way.
@@ -100,17 +111,42 @@ function IconButton({
   );
 }
 
-function ScanProcessingState() {
+// A section label above a set of files. Both sets belong to one piece of mail,
+// so they are headed rather than separated into tabs or screens.
+function SectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <p className="px-1 text-caption font-semibold uppercase tracking-[0.6px] text-gray-500">
+      {children}
+    </p>
+  );
+}
+
+function PlaceholderState({
+  icon: Icon,
+  title,
+  body,
+  tone = 'neutral',
+}: {
+  icon: typeof ScanLine;
+  title: string;
+  body: string;
+  tone?: 'neutral' | 'primary';
+}) {
   return (
     <div className="flex w-full flex-col items-center justify-center gap-3 rounded-input border border-dashed border-gray-300 bg-white p-6 text-center">
-      <span className="flex size-12 items-center justify-center rounded-[1.5rem] bg-gray-100">
-        <ScanLine className="size-6 text-gray-400" strokeWidth={1.75} aria-hidden="true" />
+      <span
+        className={`flex size-12 items-center justify-center rounded-[1.5rem] ${
+          tone === 'primary' ? 'bg-primary-light' : 'bg-gray-100'
+        }`}
+      >
+        <Icon
+          className={`size-6 ${tone === 'primary' ? 'text-primary' : 'text-gray-400'}`}
+          strokeWidth={1.75}
+          aria-hidden="true"
+        />
       </span>
-      <p className="text-body-lg font-semibold text-text">Scan in progress</p>
-      <p className="max-w-[17.5rem] text-body text-gray-500">
-        This item is still being scanned. The document will appear here once
-        it&apos;s ready.
-      </p>
+      <p className="text-body-lg font-semibold text-text">{title}</p>
+      <p className="max-w-[17.5rem] text-body text-gray-500">{body}</p>
     </div>
   );
 }
@@ -186,6 +222,7 @@ export function MailItemSlideOver({
   onNext,
   onRequestForwarding,
   onRequestShredding,
+  onRequestScan,
   onMarkRead,
   onDownload,
   isRequesting = false,
@@ -198,6 +235,8 @@ export function MailItemSlideOver({
   const scrollerRef = useRef<HTMLDivElement>(null);
 
   const hasOpenRequest = Boolean(item.hasOpenRequest);
+  // The mail room is opening this envelope right now, on the customer's own ask.
+  const scanInProgress = item.openRequestType === 'scan';
   /*
    * Every attached file, each opened on its own. `files` is the complete set;
    * an item whose detail predates it — or that carries only a PDF — still has
@@ -210,13 +249,25 @@ export function MailItemSlideOver({
         ? [{ name: 'Scanned document.pdf', contentType: 'application/pdf', sizeBytes: null, url: item.pdfUrl }]
         : [];
   const hasFiles = files.length > 0;
+  const envelopeFiles = item.envelopeFiles ?? [];
+  const hasEnvelope = envelopeFiles.length > 0;
   /*
-   * Four states, in priority order: files we can offer, the fetch failed, the
-   * fetch is still running, or the operator hasn't scanned it yet. Loading is
-   * the query's own state — deriving it from `scanReady && !files` made a
-   * failed fetch indistinguishable from a pending one and pulsed forever.
+   * Five states for the contents, in priority order: files we can offer, the
+   * fetch failed, the fetch is still running, the mail room is opening the
+   * envelope, or nobody has asked us to. Loading is the query's own state —
+   * deriving it from `scanReady && !files` made a failed fetch
+   * indistinguishable from a pending one and pulsed forever.
    */
   const scanLoading = !hasFiles && !scanError && (isScanLoading || item.scanReady);
+  /*
+   * Only a sealed envelope with nothing already in flight can be asked for —
+   * and only one still in the building. Post already forwarded or shredded is
+   * unopened forever, and the backend refuses the request, so the button would
+   * exist only to fail.
+   */
+  const handled = item.status === 'forwarded' || item.status === 'archived';
+  const canRequestScan =
+    !item.scanReady && !hasOpenRequest && !handled && Boolean(onRequestScan);
 
   // Escape, the Tab trap, focus in and back out, and the scroll lock. The
   // overlay is mounted only while open, so `open` is constant here.
@@ -311,11 +362,26 @@ export function MailItemSlideOver({
           </div>
         </header>
 
-        {/* Attached scans — one card per file, each opening in a new tab */}
+        {/*
+         * The item's files, in two headed sections — the envelope it arrived in,
+         * and what was inside it once we have opened it. One item, two stages;
+         * they are never two entries in the inbox.
+         */}
         <div
           ref={scrollerRef}
           className="flex min-h-0 w-full flex-1 flex-col gap-3 overflow-y-auto bg-gray-50 p-4 md:p-5"
         >
+          {hasEnvelope ? (
+            <>
+              <SectionLabel>Envelope</SectionLabel>
+              {envelopeFiles.map((file) => (
+                <DocumentCard key={file.url} file={file} />
+              ))}
+              {/* Only headed once there is a second section to tell it from. */}
+              <SectionLabel>Scanned contents</SectionLabel>
+            </>
+          ) : null}
+
           {hasFiles ? (
             files.map((file) => (
               <DocumentCard key={file.url} file={file} onOpen={onDownload} />
@@ -327,8 +393,29 @@ export function MailItemSlideOver({
               className="h-[6.5rem] w-full animate-pulse rounded-input bg-gray-200"
               aria-hidden="true"
             />
+          ) : scanInProgress ? (
+            <PlaceholderState
+              icon={ScanLine}
+              tone="primary"
+              title="We're scanning this for you"
+              body="The mail room is opening this envelope and scanning what's inside. It will appear here as soon as it's done."
+            />
+          ) : handled ? (
+            <PlaceholderState
+              icon={Mail}
+              title="This envelope was never opened"
+              body={
+                item.status === 'forwarded'
+                  ? 'It was forwarded to your address on file sealed, so there is nothing scanned to show.'
+                  : 'It was shredded sealed, so there is nothing scanned to show.'
+              }
+            />
           ) : (
-            <ScanProcessingState />
+            <PlaceholderState
+              icon={Mail}
+              title="This envelope hasn't been opened"
+              body="We keep your post sealed until you ask for it. Request a scan and we'll open it and add the contents here."
+            />
           )}
         </div>
 
@@ -344,22 +431,62 @@ export function MailItemSlideOver({
            * With a request already open there is nothing left to ask for — the
            * backend allows one at a time and would reject a second as a
            * conflict. Say where the item stands instead of offering buttons that
-           * can only fail.
+           * can only fail, and say WHICH request: "we're opening your envelope"
+           * and "we're forwarding your post" are not the same news.
            */}
-          {hasOpenRequest ? (
-            <p className="flex items-center justify-center gap-1.5 rounded-lg bg-[var(--color-status-review-bg)] px-3 py-2 text-center text-small font-medium text-[color:var(--color-status-review-text)]">
-              <Clock className="size-3.5 shrink-0" strokeWidth={2} aria-hidden="true" />
-              We&apos;re working on your request for this item
+          {/*
+           * Post that has been forwarded or shredded is gone; every request
+           * button on it can only fail. The History tab lists exactly these
+           * items, so the state is reachable and has to say so.
+           */}
+          {handled ? (
+            <p className="rounded-lg bg-gray-100 px-3 py-2 text-center text-small font-medium text-gray-600">
+              {item.status === 'forwarded'
+                ? 'This item has been forwarded to your address on file.'
+                : 'This item has been shredded.'}
             </p>
+          ) : hasOpenRequest ? (
+            scanInProgress ? (
+              <p className="flex items-center justify-center gap-1.5 rounded-lg bg-primary-light px-3 py-2 text-center text-small font-medium text-primary">
+                <ScanLine className="size-3.5 shrink-0" strokeWidth={2} aria-hidden="true" />
+                We&apos;re opening and scanning this envelope
+              </p>
+            ) : (
+              <p className="flex items-center justify-center gap-1.5 rounded-lg bg-[var(--color-status-review-bg)] px-3 py-2 text-center text-small font-medium text-[color:var(--color-status-review-text)]">
+                <Clock className="size-3.5 shrink-0" strokeWidth={2} aria-hidden="true" />
+                We&apos;re working on your request for this item
+              </p>
+            )
           ) : (
             <>
+              {/*
+               * On a sealed envelope this is the whole point of the screen, so
+               * it takes the primary button and the other two step back to
+               * secondary — forwarding an envelope unopened is a real choice,
+               * just not the usual one.
+               */}
+              {canRequestScan ? (
+                <button
+                  type="button"
+                  onClick={onRequestScan}
+                  disabled={isRequesting}
+                  className="btn btn-primary flex w-full items-center justify-center gap-2 md:text-body disabled:opacity-50"
+                >
+                  <ScanLine className="size-4 shrink-0" strokeWidth={2} aria-hidden="true" />
+                  {isRequesting ? 'Sending request…' : 'Scan this envelope'}
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={onRequestForwarding}
                 disabled={isRequesting}
-                className="btn btn-primary w-full md:text-body disabled:opacity-50"
+                className={`btn w-full md:text-body disabled:opacity-50 ${
+                  canRequestScan ? 'btn-secondary px-2 text-body' : 'btn-primary'
+                }`}
               >
-                {isRequesting ? 'Sending request…' : 'Request forwarding'}
+                {isRequesting && !canRequestScan
+                  ? 'Sending request…'
+                  : 'Request forwarding'}
               </button>
               <button
                 type="button"
@@ -387,7 +514,7 @@ export function MailItemSlideOver({
               <button
                 type="button"
                 disabled
-                title="The PDF becomes available once the scan is ready"
+                title="The PDF becomes available once we've opened and scanned this envelope"
                 className="btn btn-secondary min-w-0 flex-1 px-2 text-body opacity-50 disabled:pointer-events-none"
               >
                 Download PDF

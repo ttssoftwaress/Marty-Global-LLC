@@ -19,7 +19,10 @@ import {
  *
  * The design covers only the open panel; the overlay behaviour it implies —
  * scrim, Escape to close, focus moved into the drawer, background scroll lock —
- * is added here so the drawer is usable and accessible.
+ * is added here so the drawer is usable and accessible. The list itself is a
+ * `.nav-scroll`, the same port the other two variants use, so a phone in
+ * landscape fades the nav where it runs out instead of showing a scrollbar
+ * against the navy.
  *
  * `items` arrives already filtered to what this member may open, so the three
  * variants cannot disagree about which sections exist.
@@ -102,7 +105,7 @@ export function AdminSidebarMobileDrawer({
             </button>
           </div>
 
-          <nav aria-label="Admin" className="min-h-0 w-full overflow-y-auto">
+          <nav aria-label="Admin" className="nav-scroll -mr-2 min-h-0 w-[calc(100%+0.5rem)] pr-2">
             <ul className="flex w-full flex-col gap-1">
               {items.map((item) => {
                 const active = isAdminNavItemActive(item.to, pathname);

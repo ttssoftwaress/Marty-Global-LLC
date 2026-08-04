@@ -31,7 +31,7 @@ const SERVICES_FAQS: Faq[] = [
   {
     question: 'Which jurisdictions do you support for LLC and LTD formation?',
     answer:
-      'We support legal entity filing in all 50 US states (Delaware and Wyoming are most popular for non-residents), as well as UK, Canada, and EEA European Union jurisdictions.',
+      'We file in 46 US states plus DC, Guam, and Puerto Rico — Delaware and Wyoming are the most popular for non-residents — and in eleven more countries across the UK, Ireland, Europe, Canada, Singapore, Taiwan, and Brazil. Open the coverage list on any service card above to see the states and regions inside each one.',
   },
   {
     question: 'How does the Virtual Mail Room work for international clients?',
@@ -64,7 +64,7 @@ export function ServicesPage() {
         <ServicesGridSection />
         <WhyChooseUsSection />
         <JurisdictionsStripSection />
-        <TestimonialsSection />
+        <TestimonialsSection showPartners={false} />
         <FaqSection faqs={SERVICES_FAQS} />
         <FinalCtaSection />
       </main>

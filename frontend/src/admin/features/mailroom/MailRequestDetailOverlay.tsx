@@ -1,9 +1,15 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { XCircle } from 'lucide-react';
 
+import { ApiError } from '@/services/api';
+import { uploadFiles } from '@/services/upload';
 import { useOverlay } from '../../../hooks/useOverlay';
 import { MailRequestSlideOver } from './MailRequestSlideOver';
-import { useAdminMailRequestDetail, useResolveMailRequest } from './queries';
+import {
+  useAdminMailRequestDetail,
+  useFileMailContents,
+  useResolveMailRequest,
+} from './queries';
 
 /*
  * The pending-requests overlay's data shell. It owns the detail fetch and the
@@ -79,6 +85,59 @@ export function MailRequestDetailOverlay({
 }: MailRequestDetailOverlayProps) {
   const detail = useAdminMailRequestDetail(requestId);
   const resolveRequest = useResolveMailRequest();
+  const fileContents = useFileMailContents();
+
+  // 0–1 while the scans upload to R2, null when idle. Separate from the
+  // mutation's own pending state because the upload happens before it.
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  /*
+   * Settling a scan request is two steps: the files go straight to R2 through
+   * `services/upload.ts`, and only the resulting object keys are sent to the API
+   * (AGENTS.md, Storage — the bytes never round-trip through the API process).
+   *
+   * The upload is awaited before the mutation because the keys ARE the payload:
+   * a failure here leaves the panel open with everything still attached, so the
+   * operator retries the upload rather than re-scanning the envelope.
+   */
+  const onFileContents = async (
+    mailItemId: string,
+    input: { files: File[]; notes?: string; responseDueOn?: string },
+  ) => {
+    setUploadError(null);
+    setUploadProgress(0);
+
+    try {
+      const uploaded = await uploadFiles(input.files, 'mail-scan', {
+        onProgress: setUploadProgress,
+      });
+
+      fileContents.mutate(
+        {
+          itemId: mailItemId,
+          files: uploaded.map((file) => ({
+            objectKey: file.objectKey,
+            fileName: file.name,
+            contentType: file.contentType,
+            sizeBytes: file.sizeBytes,
+          })),
+          notes: input.notes,
+          responseDueOn: input.responseDueOn,
+        },
+        // A settled request leaves the queue, so the panel closes behind it.
+        { onSuccess: onClose },
+      );
+    } catch (error) {
+      setUploadError(
+        error instanceof ApiError
+          ? error.message
+          : 'Those scans could not be uploaded. Try again.',
+      );
+    } finally {
+      setUploadProgress(null);
+    }
+  };
 
   if (requestId === null) return null;
 
@@ -140,15 +199,20 @@ export function MailRequestDetailOverlay({
     <MailRequestSlideOver
       request={detail.data}
       onClose={onClose}
-      isResolving={resolveRequest.isPending}
+      isResolving={resolveRequest.isPending || fileContents.isPending}
       errorMessage={
-        resolveRequest.isError
+        uploadError ??
+        (resolveRequest.isError || fileContents.isError
           ? 'That request could not be settled. Try again.'
-          : null
+          : null)
       }
       // A settled request leaves the queue, so the panel closes behind it.
       onResolve={(resolution) =>
         resolveRequest.mutate(resolution, { onSuccess: onClose })
+      }
+      scanUploadProgress={uploadProgress}
+      onFileContents={(input) =>
+        void onFileContents(detail.data.mailItemId, input)
       }
     />
   );
