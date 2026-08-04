@@ -4,6 +4,7 @@ import { logger } from '../lib/logger.js';
 import { countUnreadFeed } from '../modules/notifications/notifications.service.js';
 import * as support from '../modules/support/support.service.js';
 import {
+  ORDERS_ALL_ROOM,
   SUPPORT_ALL_ROOM,
   ServerEvent,
   conversationRoom,
@@ -72,9 +73,31 @@ export type ConversationChange = {
  * the receiving end.
  */
 export function emitConversationChanged(change: ConversationChange): void {
+  broadcastChange(SUPPORT_ALL_ROOM, change);
+}
+
+/*
+ * The same three audiences for an ORDER thread, addressed through the orders
+ * supervisor room instead of the support one.
+ *
+ * It needs its own entry point because the two queues are governed by two
+ * different grants: "My conversations" scopes itself with `canSeeAll(…, 'orders')`,
+ * so a member holding the whole order queue but not the support inbox has to be
+ * told here and must not be told by the call above.
+ *
+ * This is also the only live signal an order thread has. Both sides of it post
+ * over REST — there is no socket transport for that conversation — so without
+ * this the assignee's list only learned about a customer's message when they
+ * reloaded the page.
+ */
+export function emitOrderConversationChanged(change: ConversationChange): void {
+  broadcastChange(ORDERS_ALL_ROOM, change);
+}
+
+function broadcastChange(supervisorRoom: string, change: ConversationChange): void {
   if (!io) return;
 
-  const rooms = new Set<string>([SUPPORT_ALL_ROOM]);
+  const rooms = new Set<string>([supervisorRoom]);
   if (change.assigneeId) rooms.add(userRoom(change.assigneeId));
   if (change.previousAssigneeId) rooms.add(userRoom(change.previousAssigneeId));
 
