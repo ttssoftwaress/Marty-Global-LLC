@@ -19,6 +19,7 @@ import {
 import { pushUnread } from './broadcast.js';
 import {
   ClientEvent,
+  ORDERS_ALL_ROOM,
   ServerEvent,
   STAFF_ROOM,
   SUPPORT_ALL_ROOM,
@@ -334,6 +335,13 @@ async function onConnect(
      */
     if (await canSeeAll(auth, 'support')) {
       await socket.join(SUPPORT_ALL_ROOM);
+    }
+
+    // The same rule for order threads, asked through the ORDERS scope — which is
+    // the predicate the "My conversations" list itself uses, so the two agree on
+    // who is a supervisor of that queue.
+    if (await canSeeAll(auth, 'orders')) {
+      await socket.join(ORDERS_ALL_ROOM);
     }
 
     await presence.loadStaffAvailability(auth.userId);

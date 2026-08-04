@@ -95,15 +95,20 @@ export type AdminOrderStatusOption = {
   allowed: boolean;
   current: boolean;
   /*
-   * Why a step is out of reach, when the reason is the order's own history rather
-   * than the pipeline or this actor's role. Only `quote_required` today: an order
-   * cannot be approved before it has been priced, because APPROVED is what tells
-   * the customer to go and pay.
+   * Why a step is out of reach, when the reason is the order's own state rather
+   * than the pipeline or this actor's role.
    *
-   * The screen prints this as an explanation and points at the quote composer.
-   * The backend enforces it — a hand-crafted PATCH gets a 422 either way.
+   *   - `quote_required` — an order cannot be approved before it has been priced,
+   *     because APPROVED is what tells the customer to go and pay.
+   *   - `items_pending` — an order cannot be completed while a service line is
+   *     still open, because COMPLETED is what tells the customer their filing is
+   *     done and a service that delivers a record is only completed by
+   *     delivering it.
+   *
+   * The screen prints these as explanations and points at what resolves them.
+   * The backend enforces both — a hand-crafted PATCH gets a 422 either way.
    */
-  blockedReason?: 'quote_required';
+  blockedReason?: 'quote_required' | 'items_pending';
 };
 
 // A staff member the order can be assigned to — active, and holding the orders

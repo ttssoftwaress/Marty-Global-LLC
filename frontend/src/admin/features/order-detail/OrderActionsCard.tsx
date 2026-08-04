@@ -40,13 +40,15 @@ function statusSelectOptions(order: AdminOrderDetail): ActionSelectOption[] {
     label: option.label,
     hint: option.current
       ? 'Current status'
-      : // The one block worth naming in the list itself: every other dimmed row is
+      : // The two blocks worth naming in the list itself: every other dimmed row is
         // out of reach because of where the order stands, which the pipeline order
-        // already shows. "Needs a quote" is about something the reviewer can go and
-        // do right now.
+        // already shows. These are about something the reviewer can go and do right
+        // now — price the order, or deliver the outstanding services.
         option.blockedReason === 'quote_required'
         ? 'Needs a quote'
-        : undefined,
+        : option.blockedReason === 'items_pending'
+          ? 'Services not delivered'
+          : undefined,
     // The current status stays selectable so the control can be put back after a
     // stray pick; everything the pipeline does not offer is out of reach.
     disabled: !option.allowed && !option.current,
@@ -106,6 +108,22 @@ export function OrderActionsCard({ order }: OrderActionsCardProps) {
   const needsQuote = order.statusOptions.some(
     (option) => option.blockedReason === 'quote_required' && !option.current,
   );
+
+  /*
+   * Completing is blocked because a service line is still open. Same signpost
+   * reasoning as the quote above: the reviewer's next action is the Services card
+   * on this same screen, where a service that returns a record is completed by
+   * filling in and delivering its result form — so naming the outstanding
+   * services is more use than a dimmed row.
+   */
+  const undelivered = order.items
+    .filter((item) => item.status !== 'completed')
+    .map((item) => item.serviceName);
+
+  const itemsPending =
+    order.statusOptions.some(
+      (option) => option.blockedReason === 'items_pending' && !option.current,
+    ) && undelivered.length > 0;
 
   const onSave = () => {
     if (!dirty || update.isPending) return;
@@ -189,6 +207,13 @@ export function OrderActionsCard({ order }: OrderActionsCardProps) {
         <p className="text-small text-gray-500">
           This order can&apos;t be approved until it has been priced. Send the
           customer a quote below — that approves it in the same step.
+        </p>
+      ) : null}
+
+      {itemsPending ? (
+        <p className="text-small text-gray-500">
+          This order can&apos;t be completed until every service is delivered.
+          Still open: {undelivered.join(', ')}.
         </p>
       ) : null}
 
