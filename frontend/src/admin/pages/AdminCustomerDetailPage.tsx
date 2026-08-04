@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 
 import { AdminLayout } from '../components/AdminLayout';
@@ -11,8 +11,12 @@ import {
   CustomerOrdersPanel,
   CustomerSectionPlaceholder,
   customerTabPanelId,
+  RestoreCustomerDialog,
+  SuspendCustomerDialog,
   useAdminCustomer,
   useAdminCustomerOrders,
+  useBanCustomer,
+  useUnbanCustomer,
 } from '../features/customer-detail';
 import { useAdminShell } from '../hooks/useAdminShell';
 import type { CustomerDetailTab, CustomerOrderRow } from '../types/customer-detail';
@@ -46,6 +50,10 @@ import { ApiError } from '@/services/api';
  *
  * Only the Orders panel is built; the other four render the placeholder in the
  * same frame, so no tab dead-ends on a blank page.
+ *
+ * The one write on this screen is the account's suspension, and it is offered
+ * only to members the record says hold it (`canBan`) — the backend answers that
+ * with the same predicate its route guard runs.
  */
 
 const TAB_PARAM = 'tab';
@@ -128,6 +136,20 @@ export function AdminCustomerDetailPage() {
 
   const customer = useAdminCustomer(customerId);
 
+  /*
+   * The suspension dialogs. Which one is open is state rather than a URL param:
+   * ending somebody's access is not a screen to deep-link into, and a pasted link
+   * that opens a confirm dialog is a trap.
+   *
+   * Both close only after the write lands, so a failure keeps the dialog up with
+   * its message rather than dismissing over a change that did not happen.
+   */
+  const [suspendOpen, setSuspendOpen] = useState(false);
+  const [restoreOpen, setRestoreOpen] = useState(false);
+
+  const ban = useBanCustomer(customerId);
+  const unban = useUnbanCustomer(customerId);
+
   const orders = useAdminCustomerOrders(customerId);
   const loadedOrders = useMemo<CustomerOrderRow[]>(
     () => orders.data?.pages.flatMap((page) => page.orders) ?? [],
@@ -171,7 +193,17 @@ export function AdminCustomerDetailPage() {
             />
           ) : customer.data ? (
             <>
-              <CustomerDetailHeader customer={customer.data} />
+              <CustomerDetailHeader
+                customer={customer.data}
+                onSuspend={() => {
+                  ban.reset();
+                  setSuspendOpen(true);
+                }}
+                onRestore={() => {
+                  unban.reset();
+                  setRestoreOpen(true);
+                }}
+              />
 
               <CustomerMetricCards metrics={customer.data.metrics} />
 
@@ -216,6 +248,28 @@ export function AdminCustomerDetailPage() {
                   <CustomerSectionPlaceholder title={activeTabLabel} />
                 )}
               </div>
+
+              <SuspendCustomerDialog
+                customer={suspendOpen ? customer.data : null}
+                isSubmitting={ban.isPending}
+                error={ban.error}
+                onSubmit={(reason) =>
+                  ban.mutate(reason, { onSuccess: () => setSuspendOpen(false) })
+                }
+                onClose={() => setSuspendOpen(false)}
+              />
+
+              <RestoreCustomerDialog
+                customer={restoreOpen ? customer.data : null}
+                isSubmitting={unban.isPending}
+                error={unban.error}
+                onSubmit={() =>
+                  unban.mutate(undefined, {
+                    onSuccess: () => setRestoreOpen(false),
+                  })
+                }
+                onClose={() => setRestoreOpen(false)}
+              />
             </>
           ) : (
             <NotFoundState />

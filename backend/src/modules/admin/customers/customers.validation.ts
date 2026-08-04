@@ -31,3 +31,14 @@ export const listCustomerOrdersQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(10),
 });
 export type ListCustomerOrdersQuery = z.infer<typeof listCustomerOrdersQuerySchema>;
+
+/*
+ * Suspending an account. The reason is optional and short: it is staff-written
+ * text stored on the user row and shown back on the record, so the next person to
+ * open it knows why the account is closed rather than guessing. It is never shown
+ * to the customer — the sign-in refusal says nothing about it.
+ */
+export const banCustomerSchema = z.object({
+  reason: z.string().trim().min(1).max(200).optional(),
+});
+export type BanCustomerInput = z.infer<typeof banCustomerSchema>;

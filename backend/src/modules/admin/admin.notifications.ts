@@ -184,18 +184,25 @@ export async function notifyStaffPaymentMismatched(input: {
 }
 
 /*
- * A customer raised a mail request — forwarding or shredding — that an operator
- * has to act on.
+ * A customer raised a mail request — forwarding, shredding, or opening a sealed
+ * envelope — that an operator has to act on.
+ *
+ * A scan request is the one with a physical envelope waiting on a desk for it,
+ * so it says so in as many words rather than reading as "New scan request",
+ * which an operator could take for something already digitised.
  */
 export async function notifyStaffMailRequest(input: {
   requestId: string;
-  type: 'forwarding' | 'shredding';
+  type: 'forwarding' | 'shredding' | 'scan';
   roomName: string;
 }): Promise<void> {
   try {
     await fanOut(await recipientsFor('mailroom'), {
       category: FeedNotificationCategory.MAILROOM,
-      message: `New ${input.type} request in ${input.roomName}.`,
+      message:
+        input.type === 'scan'
+          ? `A customer asked us to open and scan an envelope in ${input.roomName}.`
+          : `New ${input.type} request in ${input.roomName}.`,
       href: '/admin/mailroom',
     });
   } catch (error) {

@@ -6,7 +6,8 @@ import { toInitials } from '../../../lib/initials.js';
 import { cursorArgs, takePage, totalPages } from '../../../lib/pagination.js';
 import { prisma } from '../../../lib/prisma.js';
 import { Role } from '../../../lib/roles.js';
-import { canSeeAll } from '../admin.guards.js';
+import { AuditAction, record } from '../../audit/audit.service.js';
+import { canSeeAll, hasPermission } from '../admin.guards.js';
 import {
   customerScope,
   type DataScope,
@@ -27,18 +28,23 @@ import {
   type RegionView,
 } from '../admin.views.js';
 import type {
+  BanCustomerInput,
   CustomerSegment,
   ListCustomerOrdersQuery,
   ListCustomersQuery,
 } from './customers.validation.js';
 
 /*
- * Admin customers — the list, one customer's record, and their orders. All
- * Prisma access for these screens lives here.
+ * Admin customers — the list, one customer's record, their orders, and the one
+ * write these screens have: suspending an account. All Prisma access for these
+ * screens lives here.
  *
- * Read-only by design: nothing on these screens edits a customer. Their account
+ * Nothing here edits a customer's own details. Their name, address, and contact
  * details are theirs to change in the portal (`modules/profile`), and an admin
- * changing them behind their back is a decision nobody has asked for.
+ * changing them behind their back is a decision nobody has asked for. Ending
+ * their access is a different thing entirely, which is why it is the exception —
+ * and why it takes its own grant (`customers.ban`) rather than riding on the area
+ * that opens the record.
  *
  * MONEY: `totalSpent` is a sum of integer minor units, added as integers and
  * passed through untouched (AGENTS.md, Money).
@@ -340,6 +346,15 @@ export type AdminCustomerDetail = {
   country: { code: string; name: string; flag?: string };
   status: 'active' | 'inactive' | 'suspended';
   statusLabel: string;
+  /*
+   * The suspension, as three separate answers the screen needs at once: whether
+   * the account is closed right now, why (the note whoever closed it left), and
+   * whether this actor may change it. `canBan` is the same predicate the route
+   * guard runs, so the screen never offers a control the endpoint would refuse.
+   */
+  isBanned: boolean;
+  banReason: string | null;
+  canBan: boolean;
   customerSince: string | null;
   metrics: {
     id: string;
@@ -354,6 +369,26 @@ const STATUS_LABEL = {
   inactive: 'Inactive',
   suspended: 'Suspended',
 } as const;
+
+/*
+ * Is this account suspended *right now*?
+ *
+ * Better Auth's admin plugin stores an optional expiry, and a lapsed ban is no
+ * longer a ban — `guards/require-auth.ts` reads it exactly this way on every
+ * request. This screen has to agree with the guard: an account the guard lets in
+ * must not be printed as suspended, and the suspend button must not be missing
+ * from an account that can sign in.
+ *
+ * Nothing in this module ever sets an expiry — a suspension made here is
+ * permanent until somebody lifts it — but the plugin's own routes can, so the
+ * column is read rather than assumed.
+ */
+function isBanActive(
+  user: { banned: boolean | null; banExpires: Date | null },
+  now = new Date(),
+): boolean {
+  return Boolean(user.banned) && (!user.banExpires || user.banExpires > now);
+}
 
 export async function getCustomer(
   actor: AuthContext,
@@ -437,7 +472,9 @@ export async function getCustomer(
   );
   const lastSeen = seen.length > 0 ? seen.reduce((a, b) => (a > b ? a : b)) : null;
 
-  const status: AdminCustomerDetail['status'] = user.banned
+  const banned = isBanActive(user, now);
+
+  const status: AdminCustomerDetail['status'] = banned
     ? 'suspended'
     : lastSeen && lastSeen >= activeCutoff(now)
       ? 'active'
@@ -456,6 +493,11 @@ export async function getCustomer(
     },
     status,
     statusLabel: STATUS_LABEL[status],
+    isBanned: banned,
+    // Only while the ban is live. A stale note under a restored account reads as
+    // a standing accusation against someone whose access is back.
+    banReason: banned ? user.banReason : null,
+    canBan: await hasPermission(actor, 'customers.ban'),
     customerSince: iso(user.createdAt),
     metrics: [
       { id: 'total-orders', label: 'Total orders', value: { kind: 'count', count: totalOrders } },
@@ -543,6 +585,124 @@ export async function listCustomerOrders(
     nextCursor: page.nextCursor,
     totalResults,
   };
+}
+
+// --- Suspending an account -----------------------------------------------
+
+/*
+ * Suspend a customer, and lift a suspension.
+ *
+ * A ban closes two doors and both are needed. `banned` on the user row is what
+ * Better Auth checks at sign-in and what `guards/require-auth.ts` re-checks on
+ * every request; deleting the sessions is what ends the ones already issued,
+ * since a cookie stays valid until it expires. Without the second half a
+ * suspended customer keeps working in an open tab until they happen to sign out.
+ *
+ * Both writes claim the state they are changing FROM in the `where` — the same
+ * shape as settling a payment. Two staff pressing Suspend on the same account
+ * land one write and one 409, rather than a second audit entry saying an already
+ * closed account was closed again.
+ *
+ * The suspension is permanent until somebody lifts it: no expiry is written. A
+ * ban that quietly ends on its own is not a decision anybody made, and nothing
+ * on this screen would show it was coming.
+ *
+ * What a ban does NOT do is delete anything. The customer's filings, payments,
+ * and mail are under regulatory retention (AGENTS.md, Database) and are exactly
+ * what the team still needs to read after the account is closed.
+ */
+export async function banCustomer(
+  actor: AuthContext,
+  customerId: string,
+  input: BanCustomerInput,
+): Promise<AdminCustomerDetail> {
+  const now = new Date();
+  const reason = input.reason ?? null;
+
+  // Scoped like every read here, so a member who cannot open this record cannot
+  // suspend it either — and an out-of-scope id 404s rather than confirming the
+  // account exists.
+  const scope = await customerScope(actor);
+
+  const target = await prisma.user.findFirst({
+    where: { id: customerId, ...CUSTOMER_SCOPE, ...scope },
+    select: { id: true, banned: true, banExpires: true },
+  });
+
+  if (!target) throw AppError.notFound('Customer not found');
+
+  const claimed = await prisma.$transaction(async (tx) => {
+    const { count } = await tx.user.updateMany({
+      // "Not currently banned", spelled the way the guard reads it: never
+      // banned, un-banned, or holding a ban that has already lapsed.
+      where: {
+        id: customerId,
+        ...CUSTOMER_SCOPE,
+        OR: [{ banned: null }, { banned: false }, { banExpires: { lte: now } }],
+      },
+      data: { banned: true, banReason: reason, banExpires: null },
+    });
+
+    if (count === 0) return false;
+
+    // Every session, not just the current one — a customer may be signed in on
+    // several devices, and each cookie is a separate way back in.
+    await tx.session.deleteMany({ where: { userId: customerId } });
+    return true;
+  });
+
+  if (!claimed) throw AppError.conflict('This account is already suspended');
+
+  void record({
+    actor,
+    action: AuditAction.ACCOUNT_BANNED,
+    // The user row is what this happens to, matching `audit.auth-hook.ts` — the
+    // two paths that can suspend an account write the same shape of entry.
+    entityType: 'User',
+    entityId: customerId,
+    // The reason is staff-written text about our own decision, not the
+    // customer's data, so it belongs in the trail: "why was this account closed"
+    // is the question asked months later.
+    metadata: { via: 'admin-portal', ...(reason === null ? {} : { reason }) },
+  });
+
+  return getCustomer(actor, customerId);
+}
+
+export async function unbanCustomer(
+  actor: AuthContext,
+  customerId: string,
+): Promise<AdminCustomerDetail> {
+  const scope = await customerScope(actor);
+
+  const target = await prisma.user.findFirst({
+    where: { id: customerId, ...CUSTOMER_SCOPE, ...scope },
+    select: { id: true },
+  });
+
+  if (!target) throw AppError.notFound('Customer not found');
+
+  // A lapsed ban is claimed by this too, and that is deliberate: the row still
+  // says `banned`, the screen still has to be able to clear it, and clearing it
+  // changes nothing the guard was doing anyway.
+  const { count } = await prisma.user.updateMany({
+    where: { id: customerId, ...CUSTOMER_SCOPE, banned: true },
+    data: { banned: false, banReason: null, banExpires: null },
+  });
+
+  if (count === 0) throw AppError.conflict('This account is not suspended');
+
+  void record({
+    actor,
+    action: AuditAction.ACCOUNT_UNBANNED,
+    entityType: 'User',
+    entityId: customerId,
+    metadata: { via: 'admin-portal' },
+  });
+
+  // Restoring access does not restore the sessions the ban ended — the customer
+  // signs in again, which is the correct outcome and not worth a second write.
+  return getCustomer(actor, customerId);
 }
 
 /*

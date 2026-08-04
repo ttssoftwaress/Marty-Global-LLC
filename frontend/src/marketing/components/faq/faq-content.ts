@@ -53,7 +53,7 @@ export const FAQ_CATEGORIES: FaqCategory[] = [
       {
         question: 'Which jurisdictions do you support?',
         answer:
-          'We support company formation, business addresses, and banking routes across the United States (all 50 states), the United Kingdom, Canada, and the European Economic Area. Delaware and Wyoming are the most common US choices for founders based outside the country.',
+          'We hold addresses in 46 US states plus DC, Guam, and Puerto Rico, and in eleven more countries — the United Kingdom, Ireland, the Netherlands, Spain, Italy, Austria, Switzerland, Canada, Singapore, Taiwan, and Brazil. Delaware and Wyoming are the most common US choices for founders based outside the country, and the full state-by-state list is on the Services page.',
       },
     ],
   },

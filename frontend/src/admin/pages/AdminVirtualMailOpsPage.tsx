@@ -23,7 +23,11 @@ import {
 } from '../features/mailroom';
 import { useAdminShell } from '../hooks/useAdminShell';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
-import type { MailOpsRoom, MailOpsTab } from '../types/mailroom';
+import type {
+  MailFilingKind,
+  MailOpsRoom,
+  MailOpsTab,
+} from '../types/mailroom';
 
 /*
  * Virtual mail room — operations. The admin screen for filing scanned mail into
@@ -102,7 +106,9 @@ export function AdminVirtualMailOpsPage() {
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search, SEARCH_DEBOUNCE_MS);
 
-  // The scan form.
+  // The filing form. Sealed by default: post is logged from the outside and the
+  // customer decides whether it is opened.
+  const [kind, setKind] = useState<MailFilingKind>('envelope');
   const [sender, setSender] = useState('');
   const [receivedOn, setReceivedOn] = useState('');
   const [notes, setNotes] = useState('');
@@ -143,6 +149,9 @@ export function AdminVirtualMailOpsPage() {
     setSearch('');
   };
 
+  // `kind` deliberately survives a submit: an operator works through a tray of
+  // post one way, and re-picking "sealed envelope" for every envelope in it
+  // would be the most repeated click on the screen.
   const resetForm = () => {
     setSender('');
     setReceivedOn('');
@@ -190,6 +199,7 @@ export function AdminVirtualMailOpsPage() {
       uploadScan.mutate(
         {
           roomId: selected.id,
+          kind,
           sender: sender.trim(),
           receivedOn,
           files: uploaded.map((file) => ({
@@ -286,6 +296,8 @@ export function AdminVirtualMailOpsPage() {
                     />
 
                     <MailScanDetailsForm
+                      kind={kind}
+                      onKindChange={setKind}
                       sender={sender}
                       onSenderChange={setSender}
                       receivedOn={receivedOn}

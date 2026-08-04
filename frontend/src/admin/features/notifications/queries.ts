@@ -62,13 +62,19 @@ export function useAdminNotificationFeed(filter: AdminNotificationFilter) {
 /*
  * The top-bar panel's feed. Mounted in the admin shell, so it runs on every
  * `/admin/*` screen — which is also what feeds the bell's unread badge.
+ *
+ * `filter=unread` on purpose: the panel is the bell's contents, and the bell
+ * claims a count of unread rows. A read row lingering under it made the panel
+ * disagree with its own badge and pushed work that still needs picking up out of
+ * the eight. Marking a row read (or all of them) therefore empties it — the full
+ * history stays one click away at `/admin/notifications`.
  */
 export function useAdminNotificationPanel() {
   return useQuery({
     queryKey: adminNotificationPanelKey(),
     queryFn: () =>
       apiFetch<ApiSuccess<AdminNotificationFeedPage>>(
-        `/admin/notifications?filter=all&limit=${PANEL_LIMIT}`,
+        `/admin/notifications?filter=unread&limit=${PANEL_LIMIT}`,
       ).then((res) => res.data),
   });
 }

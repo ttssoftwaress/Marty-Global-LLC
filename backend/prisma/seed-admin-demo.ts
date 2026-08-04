@@ -7,6 +7,7 @@ import {
   MailRequestStatus,
   MailRequestType,
   MailRoomStatus,
+  MailScanKind,
   MessageAuthor,
   OrderStatus,
   PaymentProvider,
@@ -914,7 +915,9 @@ export async function seedAdminDemo(prisma: PrismaClient): Promise<void> {
       scanReady: true,
     },
     {
-      // Still processing — the inbox renders a "Scanning" preview for this one.
+      // A sealed envelope the customer has asked us to open — the state the
+      // whole envelope-first flow turns on, and what the operator's "Open &
+      // scan" queue has to have something in.
       id: 'mail-demo-5',
       roomId: 'room-tobias',
       sender: 'Unknown Sender',
@@ -934,29 +937,59 @@ export async function seedAdminDemo(prisma: PrismaClient): Promise<void> {
     },
   ]);
 
-  for (const [itemId, pages] of Object.entries({
-    'mail-demo-1': 2,
-    'mail-demo-2': 3,
-    'mail-demo-3': 1,
-    'mail-demo-4': 1,
-    'mail-demo-6': 2,
+  /*
+   * The pages hanging off each item. `mail-demo-5` is the envelope-first state:
+   * a sealed envelope photographed front and back, no contents, and the scan
+   * request below queued against it — which is what the "Open & scan" tab of the
+   * operator's queue is worked from.
+   */
+  for (const [itemId, sets] of Object.entries<
+    Partial<Record<MailScanKind, number>>
+  >({
+    'mail-demo-1': { CONTENTS: 2 },
+    'mail-demo-2': { CONTENTS: 3 },
+    'mail-demo-3': { CONTENTS: 1 },
+    'mail-demo-4': { CONTENTS: 1 },
+    'mail-demo-5': { ENVELOPE: 2 },
+    'mail-demo-6': { ENVELOPE: 1, CONTENTS: 2 },
   })) {
-    for (let page = 1; page <= pages; page += 1) {
-      await prisma.mailItemScan.upsert({
-        where: { mailItemId_pageNumber: { mailItemId: itemId, pageNumber: page } },
-        create: {
-          mailItemId: itemId,
-          pageNumber: page,
-          // An object key, never a URL — the service presigns at read time.
-          objectKey: `demo/mail/${itemId}/page-${page}.png`,
-        },
-        update: {},
-      });
+    for (const [kind, pages] of Object.entries(sets) as [
+      MailScanKind,
+      number,
+    ][]) {
+      for (let page = 1; page <= pages; page += 1) {
+        await prisma.mailItemScan.upsert({
+          where: {
+            mailItemId_kind_pageNumber: {
+              mailItemId: itemId,
+              kind,
+              pageNumber: page,
+            },
+          },
+          create: {
+            mailItemId: itemId,
+            kind,
+            pageNumber: page,
+            // An object key, never a URL — the service presigns at read time.
+            objectKey: `demo/mail/${itemId}/${kind.toLowerCase()}-${page}.png`,
+          },
+          update: {},
+        });
+      }
     }
   }
 
-  // The operator's queue: one waiting, one in flight, one already settled.
+  // The operator's queue: a sealed envelope waiting to be opened, one forwarding
+  // waiting, one shredding in flight, one already settled.
   await upsertById(prisma, 'mailRequest', [
+    {
+      id: 'mailreq-demo-0',
+      mailItemId: 'mail-demo-5',
+      customerId: 'cust-tobias',
+      type: MailRequestType.SCAN,
+      status: MailRequestStatus.PENDING,
+      requestedAt: hoursFromNow(-4),
+    },
     {
       id: 'mailreq-demo-1',
       mailItemId: 'mail-demo-2',

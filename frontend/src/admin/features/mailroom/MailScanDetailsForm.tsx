@@ -1,9 +1,19 @@
+import { Mail, ScanLine } from 'lucide-react';
+
 import { MailScanDropZone } from './MailScanDropZone';
-import type { MailScanAttachment } from '../../types/mailroom';
+import type { MailFilingKind, MailScanAttachment } from '../../types/mailroom';
 
 /*
- * "New mail scan details" — the form that files a scan into the selected mail
- * room's inbox.
+ * "New mail details" — the form that files post into the selected mail room's
+ * inbox.
+ *
+ * The first choice is what is being filed, because everything under it follows
+ * from it. The default is a SEALED envelope: post is logged from the outside,
+ * the customer sees it and presses Scan, and an operator opens it and files the
+ * contents onto that same item from the pending queue. Filing the contents in
+ * one step stays available for post the customer has standing instructions to
+ * open. Both produce one mail item — the envelope and the letter inside it are
+ * never two entries in a customer's inbox.
  *
  * The field order is the same at every width, so one tree covers all three
  * links. What changes is the first row: desktop sets Sender name and Date
@@ -36,7 +46,29 @@ import type { MailScanAttachment } from '../../types/mailroom';
  * beside the deadline, and a deadline without one is a demand with no ask.
  */
 
+const FILING_OPTIONS: {
+  value: MailFilingKind;
+  label: string;
+  hint: string;
+  icon: typeof Mail;
+}[] = [
+  {
+    value: 'envelope',
+    label: 'Sealed envelope',
+    hint: 'Photograph the outside. The customer asks us to open it.',
+    icon: Mail,
+  },
+  {
+    value: 'contents',
+    label: 'Opened & scanned',
+    hint: 'Already opened. The contents are readable straight away.',
+    icon: ScanLine,
+  },
+];
+
 type MailScanDetailsFormProps = {
+  kind: MailFilingKind;
+  onKindChange: (kind: MailFilingKind) => void;
   sender: string;
   onSenderChange: (value: string) => void;
   receivedOn: string;
@@ -59,6 +91,8 @@ type MailScanDetailsFormProps = {
 };
 
 export function MailScanDetailsForm({
+  kind,
+  onKindChange,
   sender,
   onSenderChange,
   receivedOn,
@@ -78,6 +112,7 @@ export function MailScanDetailsForm({
   onSubmit,
 }: MailScanDetailsFormProps) {
   const notesRequired = Boolean(responseDueOn);
+  const sealed = kind === 'envelope';
 
   return (
     <form
@@ -89,7 +124,56 @@ export function MailScanDetailsForm({
       }}
       className="flex w-full flex-col gap-5 rounded-card border border-gray-200 bg-white p-4 shadow-sm-elevation lg:gap-card lg:p-card"
     >
-      <h2 className="text-h6 text-text">New mail scan details</h2>
+      <h2 className="text-h6 text-text">New mail details</h2>
+
+      {/*
+       * What is being filed. A radio group rather than a toggle: these are two
+       * named choices with consequences an operator has to read, not an option
+       * being switched on — and a radio group is arrow-navigable by keyboard
+       * without any script of ours.
+       */}
+      <fieldset className="flex w-full flex-col gap-2">
+        <legend className="mb-2 text-form-label text-text">
+          What are you filing?
+        </legend>
+        <div className="grid w-full gap-2 md:grid-cols-2">
+          {FILING_OPTIONS.map((option) => {
+            const Icon = option.icon;
+            const checked = kind === option.value;
+
+            return (
+              <label
+                key={option.value}
+                className={`flex cursor-pointer items-start gap-3 rounded-input border p-3 transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-primary ${
+                  checked
+                    ? 'border-primary bg-primary-light'
+                    : 'border-gray-300 bg-gray-50 hover:border-primary'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name={`${formId}-kind`}
+                  value={option.value}
+                  checked={checked}
+                  onChange={() => onKindChange(option.value)}
+                  className="mt-0.5 size-4 shrink-0 cursor-pointer accent-primary"
+                />
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  <span className="flex items-center gap-1.5 text-body font-semibold text-text">
+                    <Icon
+                      className={`size-4 shrink-0 ${checked ? 'text-primary' : 'text-gray-400'}`}
+                      strokeWidth={1.75}
+                      aria-hidden="true"
+                    />
+                    {option.label}
+                  </span>
+                  <span className="text-small text-gray-500">{option.hint}</span>
+                </span>
+              </label>
+            );
+          })}
+        </div>
+      </fieldset>
 
       {/* Desktop pairs the first two fields on one row; the narrower links stack. */}
       <div className="flex w-full flex-col gap-5 lg:flex-row lg:gap-4">
@@ -126,6 +210,12 @@ export function MailScanDetailsForm({
         onAdd={onFilesAdd}
         onRemove={onFileRemove}
         progress={uploadProgress}
+        emptyLabel={
+          sealed
+            ? 'Drag & drop or click to upload the envelope'
+            : 'Drag & drop or click to upload scan'
+        }
+        addLabel={sealed ? 'Add another side' : 'Add another page'}
       />
 
       <div className="flex w-full flex-col gap-2">
@@ -188,6 +278,7 @@ export function MailScanDetailsForm({
         >
           {isSubmitting ? 'Adding…' : 'Add to mail room inbox'}
         </button>
+
       </div>
     </form>
   );

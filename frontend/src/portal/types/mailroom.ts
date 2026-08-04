@@ -32,7 +32,14 @@ export type MailRoom = {
  * the backend resolves it from the customer's own company record, so it is never
  * something the client chooses or needs to hold.
  */
-export type MailRequestType = 'forwarding' | 'shredding';
+/*
+ * `scan` is the envelope-first flow's ask. Post arrives sealed: the mail room
+ * photographs the outside and files it, and this is the customer saying "open
+ * it". It is the only one of the three that does not dispose of the item — the
+ * contents come back onto the same mail item, so the inbox never grows a second
+ * row for the same letter.
+ */
+export type MailRequestType = 'forwarding' | 'shredding' | 'scan';
 
 export type MailRequest = {
   id: string;
@@ -85,7 +92,15 @@ export type MailItem = {
   receivedAt: string; // ISO-8601 UTC
   storageExpiresAt: string; // ISO-8601 UTC — the shred date unless forwarding is requested
   status: MailStatus;
-  scanReady: boolean; // false → the scan is still processing ("Scanning" preview)
+  /*
+   * Whether what is INSIDE the envelope can be read.
+   *
+   * False is the normal state of newly arrived post: the mail room files the
+   * sealed envelope, and the item stays unopened until the customer presses
+   * Scan and an operator files the contents onto this same item. It is not a
+   * "still processing" flag — nothing is processing, nobody has opened it.
+   */
+  scanReady: boolean;
   note?: string; // e.g. "Forwarding address required" — the reason an item needs action
   responseDueAt?: string; // ISO-8601 UTC — the deadline for an action-requested item
   /*
@@ -96,6 +111,13 @@ export type MailItem = {
    * customer to respond to, and the row keeps its plain "View" action.
    */
   hasOpenRequest?: boolean;
+  /*
+   * WHICH request is open, when one is. The boolean above cannot drive the
+   * viewer on its own any more: "we're forwarding this" and "we're opening this
+   * envelope" are different pieces of work, and only one of them leaves the
+   * item readable at the end.
+   */
+  openRequestType?: MailRequestType;
   scanPages?: string[]; // presigned page-image URLs, in order — for the detail view
   pdfUrl?: string; // presigned PDF download, once available
   /*
@@ -106,6 +128,14 @@ export type MailItem = {
    * No object key is ever included — only the URL, minted per request.
    */
   files?: MailItemFile[];
+  /*
+   * The sealed envelope as it arrived, kept apart from the contents above.
+   *
+   * Both hang off the same item on purpose: one letter is one row in the inbox,
+   * before and after we open it. The viewer draws them as two sections of one
+   * item rather than as two items, which is the whole point of the flow.
+   */
+  envelopeFiles?: MailItemFile[];
 };
 
 // One uploaded file of a scan. `contentType` is what tells the viewer whether to

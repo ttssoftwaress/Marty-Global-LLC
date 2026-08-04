@@ -12,6 +12,7 @@ import {
   ScanLineIcon,
   ShieldCheckIcon,
 } from '../../icons';
+import { US_STATE_COUNT } from '../coverage';
 import type { QuickFact } from '../detail/ServiceDetailHero';
 import type { ServiceFeature } from '../detail/ServiceFeatureGrid';
 import type { RelatedService } from '../detail/ServiceRelatedSection';
@@ -31,7 +32,7 @@ import type { ServiceStep } from '../detail/ServiceStepGrid';
  */
 
 export const AGENT_QUICK_FACTS: QuickFact[] = [
-  { Icon: LandmarkIcon, label: 'All 50 US states' },
+  { Icon: LandmarkIcon, label: `${US_STATE_COUNT} US states, DC & territories` },
   { Icon: ShieldCheckIcon, label: 'One year included with US formation' },
   { Icon: ScanLineIcon, label: 'Legal notices scanned same day' },
 ];
@@ -143,7 +144,7 @@ export const AGENT_FAQS: Faq[] = [
   {
     question: 'Is it included with company formation?',
     answer:
-      'Yes — one year of Registered Agent service comes with every US formation, in any of the 50 states. After that first year it renews annually, and you will get a reminder before it does.',
+      'Yes — one year of Registered Agent service comes with every US formation, in every state we hold an address in. After that first year it renews annually, and you will get a reminder before it does.',
   },
   {
     question: 'I already have a company. Can I switch to you?',

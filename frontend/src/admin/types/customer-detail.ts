@@ -90,6 +90,20 @@ export type AdminCustomerDetail = {
   country: { code: string; name: string; flag?: string };
   status: CustomerAccountStatus;
   statusLabel: string;
+  /*
+   * The suspension. `isBanned` is the live state — a lapsed ban reads as false,
+   * because the backend's guards let that account sign in and the screen must not
+   * disagree with them. `banReason` is the note whoever suspended it left, and is
+   * only present while the suspension is live.
+   *
+   * `canBan` is the backend answering whether this member holds `customers.ban`.
+   * The screen reads it rather than deriving one from the permission list, so the
+   * control is never offered where the endpoint would refuse it — and, like every
+   * other guard in this app, it hides nothing the server would have released.
+   */
+  isBanned: boolean;
+  banReason: string | null;
+  canBan: boolean;
   customerSince: string | null; // ISO-8601 UTC
   metrics: CustomerMetric[];
   messageThreadTo: string | null; // the conversation the Message button opens

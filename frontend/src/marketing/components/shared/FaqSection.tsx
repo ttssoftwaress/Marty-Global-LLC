@@ -36,7 +36,7 @@ const HOME_FAQS: Faq[] = [
   {
     question: 'What jurisdictions do you support?',
     answer:
-      'We currently support legal company formation, addresses, and banking routes across the United States (all 50 states), UK, Canada, and EEA European Union nations.',
+      'We hold addresses in 46 US states plus DC, Guam, and Puerto Rico, and in eleven more countries across the UK, Europe, Canada, Asia, and South America. The full list, state by state, is on the Services page.',
   },
   {
     question: 'Can non-US residents open a US bank account?',
