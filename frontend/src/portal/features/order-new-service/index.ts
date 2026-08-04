@@ -2,8 +2,10 @@ export { AdditionalNotesCard } from './AdditionalNotesCard';
 export { ApplicationField } from './ApplicationField';
 export { ApplicationFileField } from './ApplicationFileField';
 export { ApplicationFooterActions } from './ApplicationFooterActions';
+export { ApplicationReviewCard } from './ApplicationReviewCard';
 export { ApplicationStepCard } from './ApplicationStepCard';
 export {
+  answerDisplayValue,
   answersByServiceFrom,
   buildApplicationSteps,
   isStepComplete,

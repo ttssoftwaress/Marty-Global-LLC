@@ -41,6 +41,7 @@ export {
   useAdminMailOpsSummary,
   useAdminMailRequestDetail,
   useAdminMailRequests,
+  useFileMailContents,
   useProcessMailRequest,
   useResolveMailRequest,
   useUploadMailScan,

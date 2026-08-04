@@ -1,4 +1,9 @@
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 
 import { apiFetch } from '@/services/api';
 import type { ApiSuccess } from '@/types/api';
@@ -63,5 +68,58 @@ export function useAdminCustomerOrders(customerId: string) {
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.nextCursor,
     enabled: Boolean(customerId),
+  });
+}
+
+/*
+ * Suspending an account, and restoring it.
+ *
+ * Both endpoints answer with the customer record, so the response seeds the
+ * detail cache directly and the header flips without a second round trip. The
+ * *list* queries are invalidated rather than written: they carry their own
+ * segment counts and rows, and a suspension changes what "Active" means for this
+ * account.
+ */
+function useSuspensionWrite(customerId: string) {
+  const queryClient = useQueryClient();
+
+  return (customer: AdminCustomerDetail) => {
+    queryClient.setQueryData(adminCustomerKey(customerId), customer);
+    void queryClient.invalidateQueries({ queryKey: ['admin', 'customers', 'list'] });
+    void queryClient.invalidateQueries({ queryKey: ['admin', 'customers', 'summary'] });
+  };
+}
+
+// POST /v1/admin/customers/:customerId/ban — takes the `customers.ban` grant.
+export function useBanCustomer(customerId: string) {
+  const onWritten = useSuspensionWrite(customerId);
+
+  return useMutation({
+    mutationFn: (reason: string) =>
+      apiFetch<ApiSuccess<AdminCustomerDetail>>(
+        `/admin/customers/${customerId}/ban`,
+        {
+          method: 'POST',
+          // Blank is omitted rather than sent: the note is optional, and an empty
+          // string would fail the backend's length check instead of meaning
+          // "no reason given".
+          body: JSON.stringify(reason.trim() ? { reason: reason.trim() } : {}),
+        },
+      ).then((res) => res.data),
+    onSuccess: onWritten,
+  });
+}
+
+// POST /v1/admin/customers/:customerId/unban.
+export function useUnbanCustomer(customerId: string) {
+  const onWritten = useSuspensionWrite(customerId);
+
+  return useMutation({
+    mutationFn: () =>
+      apiFetch<ApiSuccess<AdminCustomerDetail>>(
+        `/admin/customers/${customerId}/unban`,
+        { method: 'POST' },
+      ).then((res) => res.data),
+    onSuccess: onWritten,
   });
 }

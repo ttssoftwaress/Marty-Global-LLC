@@ -1,3 +1,4 @@
+import { ServiceCoverageDisclosure } from '../components/services/detail/ServiceCoverageDisclosure';
 import { ServiceDetailHero } from '../components/services/detail/ServiceDetailHero';
 import { ServiceFeatureGrid } from '../components/services/detail/ServiceFeatureGrid';
 import { ServiceQuoteBand } from '../components/services/detail/ServiceQuoteBand';
@@ -66,6 +67,11 @@ export function ServiceMailRoomPage() {
         />
         <MailRoomUsesSection />
         <JurisdictionsStripSection />
+        <ServiceCoverageDisclosure
+          variant="full"
+          heading="Where You Can Have an Address"
+          what="a mail desk"
+        />
         <ServiceQuoteBand lead="A mail room is an annual subscription per address, priced by the market the address sits in — your dashboard shows each room's renewal date." />
         <FaqSection
           heading="Virtual Mail Room Questions"

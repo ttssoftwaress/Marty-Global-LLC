@@ -1317,6 +1317,15 @@ model MailItem {
   status   MailItemStatus @default(NEW)
   receivedAt       DateTime  @db.Timestamptz(3)
   storageExpiresAt DateTime  @db.Timestamptz(3)
+  /*
+   * Whether the CONTENTS of the envelope are readable. It is the one bit that
+   * separates the two halves of the envelope-first flow: post is logged from the
+   * outside first (envelope photographed, `scanReady` false), and only opened
+   * once the customer asks — filing the contents onto this same row flips it
+   * true. There is deliberately no second "is this an envelope" column: an
+   * unopened item is exactly one whose contents are not ready, and a second
+   * answer to the same question is what the dropped SCANNED status already was.
+   */
   scanReady        Boolean   @default(false)
   // Why an item needs action ("Forwarding address required") and by when. Both
   // are set by the operator when they file the scan: a due date is what puts the
@@ -1350,9 +1359,23 @@ model MailItem {
 // may attach several images (one sheet each) or a single multi-page PDF, and we
 // deliberately do not split a PDF server-side — the viewer renders images inline
 // and hands a PDF to the browser whole. `contentType` is what tells it which.
+//
+// `kind` is what keeps the envelope and what was inside it on ONE mail item.
+// Post is logged from the outside first, so an item accumulates its envelope
+// shots and later its contents; filing the contents as a second MailItem would
+// show the customer the same letter twice, which is exactly what this column
+// exists to prevent. The two sets number their pages independently — page 1 of
+// the envelope and page 1 of the contents both exist — so `kind` is part of the
+// unique key rather than a label beside it.
+enum MailScanKind {
+  ENVELOPE
+  CONTENTS
+}
+
 model MailItemScan {
   id         String @id @default(cuid())
   mailItemId String
+  kind       MailScanKind @default(CONTENTS)
   pageNumber Int
   // R2 object key — presigned at read time, never stored as a URL.
   objectKey  String
@@ -1366,7 +1389,7 @@ model MailItemScan {
 
   mailItem MailItem @relation(fields: [mailItemId], references: [id], onDelete: Cascade)
 
-  @@unique([mailItemId, pageNumber])
+  @@unique([mailItemId, kind, pageNumber])
   @@map("mail_item_scan")
 }
 
@@ -1379,9 +1402,16 @@ model MailItemScan {
 // `customerId` is denormalised off the room so the queue can scope and search by
 // customer without joining two levels up on every row.
 
+// SCAN is the envelope-first flow's hinge: the customer sees the envelope, asks
+// us to open it, and that ask is a queued request like any other. It settles
+// differently from the other two — by filing the contents onto the item, not by
+// a resolution form — so it never carries a carrier or a tracking number, and it
+// is the one type that leaves the item alive afterwards rather than disposing of
+// it (admin/mailroom/mailroom.service.ts, `fileContents`).
 enum MailRequestType {
   FORWARDING
   SHREDDING
+  SCAN
 }
 
 enum MailRequestStatus {

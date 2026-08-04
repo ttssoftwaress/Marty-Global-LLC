@@ -29,6 +29,8 @@ const SERVICES: FooterLink[] = [
   { label: 'Bank Account Opening', href: '/services/banking' },
   { label: 'Virtual Mail Room', href: '/services/mailroom' },
   { label: 'Registered Agent', href: '/services/registered-agent' },
+  { label: 'Remote Desktop (RDP)', href: '/services/remote-desktop' },
+  { label: 'Website Design', href: '/services/website' },
   { label: 'Corporate Compliance', href: '/services' },
 ];
 

@@ -39,6 +39,21 @@ export const PERMISSION_AREAS = [
   { key: 'orders.assign', label: 'Assign orders to staff' },
   { key: 'customers', label: 'Customer records' },
   /*
+   * Suspending a customer's account — banning it, and lifting the ban.
+   *
+   * Its own area rather than part of `customers`, and the same shape as
+   * `payments.settle`: reading a customer's record is the ordinary work of nearly
+   * every admin section, while cutting off their access is a decision about the
+   * relationship. A ban ends every session the account holds and refuses the next
+   * sign-in, so the customer discovers it by being locked out of a portal they
+   * pay for — that is not a side effect of opening a record.
+   *
+   * A write grant, not a section, so it carries no `.all` companion: which
+   * accounts a member may ban is already answered by `customers.all`, which
+   * decides whose records they can reach at all.
+   */
+  { key: 'customers.ban', label: 'Suspend / restore customer accounts' },
+  /*
    * Follow-up requests customers raise against a delivered service — the
    * `/admin/requests` queue.
    *
@@ -127,11 +142,12 @@ export type PermissionAreaKey = (typeof PERMISSION_AREAS)[number]['key'];
  * themselves, which is why `hasPermission` answers both kinds of question
  * without knowing the difference.
  *
- * `orders.assign`, `support.assign`, and `payments.settle` are deliberately NOT
- * derived from this: they grant a *write* (choosing who owns a filing or a chat,
- * or declaring that money arrived), not a view, so each stays its own area with
- * its own row. The two assign grants do still widen their queue — distributing
- * work you cannot see is impossible — which `canSeeAll` folds in.
+ * `orders.assign`, `support.assign`, `payments.settle`, and `customers.ban` are
+ * deliberately NOT derived from this: they grant a *write* (choosing who owns a
+ * filing or a chat, declaring that money arrived, or cutting off an account), not
+ * a view, so each stays its own area with its own row. The two assign grants do
+ * still widen their queue — distributing work you cannot see is impossible —
+ * which `canSeeAll` folds in.
  */
 const SCOPE_SUFFIX = '.all';
 
@@ -140,8 +156,8 @@ const SCOPE_SUFFIX = '.all';
  * absent on purpose — a service's price, the staff directory, and the location
  * list are org-wide records with no owner to scope them to, so an "All data"
  * switch there would be a control that changes nothing. `orders.assign`,
- * `support.assign`, and `payments.settle` are absent because they are write
- * grants, not sections.
+ * `support.assign`, `payments.settle`, and `customers.ban` are absent because
+ * they are write grants, not sections.
  */
 export const SCOPED_AREAS = [
   'orders',
@@ -406,6 +422,10 @@ export const SYSTEM_STAFF_ROLES: readonly SystemStaffRole[] = [
       // Distributing work across the team is what this role is for.
       'orders.assign',
       'customers',
+      // Cutting off an account that is abusing the service is an operational
+      // call, made the day it happens — the same reasoning as `payments.settle`
+      // below.
+      'customers.ban',
       'requests',
       'catalog',
       'payments',

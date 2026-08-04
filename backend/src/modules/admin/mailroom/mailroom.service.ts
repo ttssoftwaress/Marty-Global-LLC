@@ -4,6 +4,7 @@ import {
   MailRequestStatus,
   MailRequestType,
   MailRoomStatus,
+  MailScanKind,
   Prisma,
 } from '@prisma/client';
 
@@ -16,6 +17,7 @@ import { Role } from '../../../lib/roles.js';
 import { presignObject } from '../../../lib/storage.js';
 import { AuditAction, record } from '../../audit/audit.service.js';
 import {
+  notifyMailContentsScanned,
   notifyMailRequestResolved,
   notifyMailScanFiled,
 } from '../../mailroom/mailroom.notifications.js';
@@ -31,6 +33,7 @@ import {
 } from '../admin.scope.js';
 import { iso } from '../admin.views.js';
 import type {
+  FileContentsInput,
   ListLogQuery,
   ListRequestsQuery,
   ListScansQuery,
@@ -90,9 +93,19 @@ export async function getSummary(actor: AuthContext): Promise<MailOpsSummary> {
         status: { in: [...OPEN_REQUEST_STATUSES] },
       },
     }),
-    // Filed but not yet processed into pages — the operator's own backlog.
-    prisma.mailItem.count({
-      where: { ...itemWhere, deletedAt: null, scanReady: false },
+    /*
+     * Sealed envelopes a customer has asked us to open. Deliberately not "every
+     * item without contents": an envelope nobody has asked about is filed and
+     * waiting, not work — counting those would put a number on this card that no
+     * amount of scanning brings down.
+     */
+    prisma.mailRequest.count({
+      where: {
+        ...requestWhere,
+        deletedAt: null,
+        type: MailRequestType.SCAN,
+        status: { in: [...OPEN_REQUEST_STATUSES] },
+      },
     }),
     prisma.mailActionLog.count({ where: logWhere }),
   ]);
@@ -102,7 +115,11 @@ export async function getSummary(actor: AuthContext): Promise<MailOpsSummary> {
     kpis: [
       { id: 'filed-today', label: 'Scans filed today', value: String(filedToday) },
       { id: 'pending-requests', label: 'Pending requests', value: String(openRequests) },
-      { id: 'awaiting-scan', label: 'Awaiting scan', value: String(awaitingScan) },
+      {
+        id: 'awaiting-scan',
+        label: 'Envelopes to open',
+        value: String(awaitingScan),
+      },
     ],
     // A null count prints no badge, which is what the two undesigned tabs want.
     tabs: [
@@ -310,12 +327,19 @@ export async function listScans(
 }
 
 /*
- * File a scan into a mail room's inbox.
+ * File mail into a mail room's inbox.
  *
  * The room is named by the operator rather than derived from a customer. A
  * customer may hold several rooms and an envelope arrives at exactly one of
  * them; picking "their active one" filed every scan into whichever room happened
  * to be created last, which is wrong the moment a second room exists.
+ *
+ * Two shapes, one row. Normally the operator files the SEALED envelope — front
+ * and back, nothing opened — and the customer decides whether it is worth
+ * opening. Filing the contents in one step stays available for post with
+ * standing instructions. Either way this creates exactly one MailItem, and the
+ * contents scan later attaches to it (`fileContents`) rather than becoming a
+ * second piece of mail.
  */
 export async function uploadScan(
   actor: AuthContext,
@@ -387,15 +411,23 @@ export async function uploadScan(
     assertKeyKind('mail-scan', file.objectKey);
   }
 
+  const sealed = input.kind === 'envelope';
+
   /*
    * The item's downloadable PDF, when one of the uploads is a PDF. We do not
    * merge images into a PDF or split a PDF into pages — there is no document
    * library in the stack budget (AGENTS.md) — so this points at the first PDF
    * the operator attached, and images stay images the viewer draws inline.
+   *
+   * A sealed envelope has none: `pdfUrl` is what the portal's "Download PDF"
+   * offers as the customer's copy of their letter, and a photograph of an
+   * unopened envelope is not that.
    */
-  const pdf = input.files.find(
-    (file) => file.contentType.toLowerCase() === 'application/pdf',
-  );
+  const pdf = sealed
+    ? undefined
+    : input.files.find(
+        (file) => file.contentType.toLowerCase() === 'application/pdf',
+      );
 
   const item = await prisma.mailItem.create({
     data: {
@@ -412,15 +444,20 @@ export async function uploadScan(
       receivedAt,
       storageExpiresAt,
       responseDueAt,
-      // The objects exist — the operator uploaded them before submitting — so the
-      // item is readable immediately rather than sitting in a scanning state.
-      scanReady: true,
+      /*
+       * Whether what is INSIDE the envelope can be read. A sealed filing is
+       * false — the customer has a picture of the outside and a Scan button —
+       * and stays false until an operator files the contents onto this row.
+       */
+      scanReady: !sealed,
       note: input.notes ?? null,
       pdfObjectKey: pdf?.objectKey ?? null,
       // Position in the upload IS the page number; the operator attached them in
-      // the order the envelope reads.
+      // the order the envelope reads. The two kinds number independently, so a
+      // sealed filing's page 1 and its contents' page 1 both exist.
       pages: {
         create: input.files.map((file, index) => ({
+          kind: sealed ? MailScanKind.ENVELOPE : MailScanKind.CONTENTS,
           pageNumber: index + 1,
           objectKey: file.objectKey,
           fileName: file.fileName,
@@ -442,6 +479,7 @@ export async function uploadScan(
     metadata: {
       roomId: room.id,
       customerId: room.customerId,
+      kind: input.kind,
       files: input.files.length,
       responseRequested: Boolean(responseDueAt),
     },
@@ -459,6 +497,7 @@ export async function uploadScan(
     roomId: room.id,
     roomName: room.name,
     sender: item.sender,
+    sealed,
   });
 
   return {
@@ -470,6 +509,197 @@ export async function uploadScan(
   };
 }
 
+/*
+ * Open a sealed envelope and file what was inside it onto the item already in
+ * the customer's inbox.
+ *
+ * This is the other half of the envelope-first flow, and the whole reason it
+ * writes no new MailItem: the customer is looking at a row for this letter
+ * already, and a second row would show them the same post twice — once as an
+ * envelope and once as its contents — with no way to tell that they are the same
+ * thing. So the pages attach as CONTENTS, `scanReady` flips, and the row they
+ * have been watching simply becomes readable.
+ *
+ * One transaction across three writes: the pages land, the item opens, and the
+ * customer's scan request closes. A partial apply would leave a readable item
+ * with a request still queued against it — an operator would open the same
+ * envelope twice.
+ */
+export async function fileContents(
+  actor: AuthContext,
+  itemId: string,
+  input: FileContentsInput,
+): Promise<MailOpsRecentUpload> {
+  // Scoped on the way in, exactly like `uploadScan`: out of scope reads as "no
+  // such item", so a failure never confirms the item is real.
+  const item = await prisma.mailItem.findFirst({
+    where: { ...(await mailItemScope(actor)), id: itemId, deletedAt: null },
+    include: {
+      room: { include: { customer: { select: customerSelect } } },
+      requests: {
+        where: {
+          deletedAt: null,
+          type: MailRequestType.SCAN,
+          status: { in: [...OPEN_REQUEST_STATUSES] },
+        },
+        select: { id: true },
+      },
+    },
+  });
+
+  if (!item) {
+    throw AppError.notFound('Mail item not found');
+  }
+
+  if (item.scanReady) {
+    throw AppError.businessRule('This item has already been scanned');
+  }
+
+  // Forwarded or shredded post is not in the building any more.
+  if (
+    item.status === MailItemStatus.FORWARDED ||
+    item.status === MailItemStatus.ARCHIVED
+  ) {
+    throw AppError.businessRule('This item has already been handled');
+  }
+
+  for (const file of input.files) {
+    assertKeyKind('mail-scan', file.objectKey);
+  }
+
+  /*
+   * A deadline read off the letter itself — the operator could not have known it
+   * while the envelope was sealed. Anchored at the END of the named day and
+   * refused if it predates the post, for the same reasons as the filing form.
+   */
+  const responseDueAt = input.responseDueOn
+    ? new Date(`${input.responseDueOn}T23:59:59.999Z`)
+    : null;
+
+  if (responseDueAt) {
+    if (Number.isNaN(responseDueAt.getTime())) {
+      throw AppError.validation('responseDueOn is not a real date');
+    }
+
+    if (responseDueAt < item.receivedAt) {
+      throw AppError.validation(
+        'The response date cannot be before the day the mail arrived',
+      );
+    }
+  }
+
+  const pdf = input.files.find(
+    (file) => file.contentType.toLowerCase() === 'application/pdf',
+  );
+
+  const actorName = await prisma.user.findUnique({
+    where: { id: actor.userId },
+    select: { name: true },
+  });
+
+  await prisma.$transaction(async (tx) => {
+    /*
+     * The item opens FIRST, and only if it is still sealed. Two operators
+     * working the same envelope both pass the check above — it ran outside this
+     * transaction — and the loser here writes nothing, so the pages are filed
+     * exactly once instead of colliding on the page-number unique key and
+     * surfacing as an unexplained failure.
+     */
+    const opened = await tx.mailItem.updateMany({
+      where: { id: item.id, scanReady: false },
+      data: {
+        scanReady: true,
+        pdfObjectKey: pdf?.objectKey ?? null,
+        /*
+         * Back to unread. The customer asked for this scan and has not seen a
+         * page of it, so it belongs in their "New mail" figure — leaving it
+         * VIEWED would mean the one thing they are waiting for is the one thing
+         * their inbox does not flag. A deadline found inside the envelope takes
+         * precedence, exactly as it does when post is filed already open.
+         */
+        status: responseDueAt
+          ? MailItemStatus.ACTION_REQUESTED
+          : MailItemStatus.NEW,
+        // Only overwritten when the operator wrote something: the note filed
+        // with the envelope is still true, and blanking it would drop the reason
+        // printed beside an existing deadline.
+        ...(input.notes ? { note: input.notes } : {}),
+        ...(responseDueAt ? { responseDueAt } : {}),
+      },
+    });
+
+    if (opened.count === 0) {
+      throw AppError.conflict('This item has already been scanned');
+    }
+
+    await tx.mailItemScan.createMany({
+      data: input.files.map((file, index) => ({
+        mailItemId: item.id,
+        kind: MailScanKind.CONTENTS,
+        pageNumber: index + 1,
+        objectKey: file.objectKey,
+        fileName: file.fileName,
+        contentType: file.contentType,
+        sizeBytes: file.sizeBytes ?? null,
+      })),
+    });
+
+    /*
+     * Every open scan request on this item closes, not just one. There should
+     * only ever be a single one — `createRequest` refuses a second while one is
+     * open — but the envelope is now open either way, and a request that
+     * outlived it would put the same item back in the queue.
+     */
+    if (item.requests.length > 0) {
+      await tx.mailRequest.updateMany({
+        where: { id: { in: item.requests.map((request) => request.id) } },
+        data: {
+          status: MailRequestStatus.COMPLETED,
+          processedById: actor.userId,
+          processedByName: actorName?.name ?? 'Marty Global team',
+          processedAt: new Date(),
+        },
+      });
+    }
+  });
+
+  void record({
+    actor,
+    action: AuditAction.MAIL_CONTENTS_SCANNED,
+    entityType: 'MailItem',
+    entityId: item.id,
+    // Ids and counts only — the sender is off an envelope and the note is the
+    // contents of someone's post (AGENTS.md, Security & PII).
+    metadata: {
+      roomId: item.roomId,
+      customerId: item.room.customerId,
+      files: input.files.length,
+      requested: item.requests.length > 0,
+      responseRequested: Boolean(responseDueAt),
+    },
+  });
+
+  /*
+   * The customer asked us to open this and we have. Queued, preference-gated,
+   * and never awaited — the scan is filed either way (AGENTS.md).
+   */
+  void notifyMailContentsScanned({
+    customerId: item.room.customerId,
+    customerEmail: item.room.customer.email,
+    roomId: item.roomId,
+    roomName: item.room.name,
+    sender: item.sender,
+  });
+
+  return {
+    id: item.id,
+    customer: toCustomer(item.room.customer),
+    room: { id: item.room.id, name: item.room.name },
+    sender: item.sender,
+    uploadedAt: iso(new Date()),
+  };
+}
+
 // --- Pending requests ----------------------------------------------------
 export type MailRequestRow = {
   id: string;
@@ -478,7 +708,13 @@ export type MailRequestRow = {
   // queue needs the address, not only whose post it is.
   room: MailOpsRoomRef;
   mailItem: string;
-  type: 'forwarding' | 'shredding';
+  /*
+   * The mail item behind the request. A scan request is settled by filing the
+   * contents onto that item, so the panel needs its id — the other two never
+   * address the item directly and only name it.
+   */
+  mailItemId: string;
+  type: 'forwarding' | 'shredding' | 'scan';
   typeLabel: string;
   status: 'pending' | 'processing' | 'completed';
   statusLabel: string;
@@ -488,11 +724,15 @@ export type MailRequestRow = {
 const TYPE_VIEW: Record<MailRequestType, MailRequestRow['type']> = {
   [MailRequestType.FORWARDING]: 'forwarding',
   [MailRequestType.SHREDDING]: 'shredding',
+  [MailRequestType.SCAN]: 'scan',
 };
 
 const TYPE_LABEL: Record<MailRequestType, string> = {
   [MailRequestType.FORWARDING]: 'Forwarding',
   [MailRequestType.SHREDDING]: 'Shredding',
+  // "Scan" alone reads as something already digitised. What is queued is a
+  // sealed envelope on a desk, and the label is what an operator works from.
+  [MailRequestType.SCAN]: 'Open & scan',
 };
 
 const REQUEST_STATUS_VIEW: Record<MailRequestStatus, MailRequestRow['status']> = {
@@ -509,6 +749,8 @@ const REQUEST_STATUS_LABEL: Record<MailRequestStatus, string> = {
 
 function requestFilterWhere(filter: ListRequestsQuery['filter']): Prisma.MailRequestWhereInput {
   switch (filter) {
+    case 'scan':
+      return { type: MailRequestType.SCAN, status: { in: [...OPEN_REQUEST_STATUSES] } };
     case 'forwarding':
       return { type: MailRequestType.FORWARDING, status: { in: [...OPEN_REQUEST_STATUSES] } };
     case 'shredding':
@@ -526,14 +768,26 @@ const requestInclude = {
   customer: { select: customerSelect },
   mailItem: {
     select: {
+      id: true,
       sender: true,
+      scanReady: true,
       pdfObjectKey: true,
       // The room the item sits in, so settling a request can link the customer
       // straight to the inbox it came from — and so the queue can name which of
       // their addresses the post arrived at.
       roomId: true,
       room: { select: { id: true, name: true } },
-      pages: { orderBy: { pageNumber: 'asc' }, take: 1, select: { objectKey: true } },
+      /*
+       * The first file of each kind. A scan request has no contents yet — the
+       * whole point of it — so the panel's preview falls back to the envelope
+       * photograph, which is what an operator matches against the post in their
+       * hand. Taking one of each keeps that fallback to a single query.
+       */
+      pages: {
+        orderBy: { pageNumber: 'asc' },
+        select: { objectKey: true, kind: true },
+        take: 2,
+      },
     },
   },
 } satisfies Prisma.MailRequestInclude;
@@ -546,6 +800,7 @@ function toRequestRow(request: RequestRow): MailRequestRow {
     customer: toCustomer(request.customer),
     room: { id: request.mailItem.room.id, name: request.mailItem.room.name },
     mailItem: request.mailItem.sender,
+    mailItemId: request.mailItem.id,
     type: TYPE_VIEW[request.type],
     typeLabel: TYPE_LABEL[request.type],
     status: REQUEST_STATUS_VIEW[request.status],
@@ -611,6 +866,27 @@ export type MailRequestDetail = MailRequestRow & {
 };
 
 /*
+ * The one file the panel previews.
+ *
+ * The contents come first when they exist, because that is the document the
+ * request is about. A scan request has none — the envelope is still sealed — so
+ * it falls back to the envelope photograph, which is exactly what the operator
+ * needs to find the right envelope in the tray.
+ */
+function previewKeyFor(mailItem: RequestRow['mailItem']): string | null {
+  if (mailItem.pdfObjectKey) return mailItem.pdfObjectKey;
+
+  const contents = mailItem.pages.find(
+    (page) => page.kind === MailScanKind.CONTENTS,
+  );
+  const envelope = mailItem.pages.find(
+    (page) => page.kind === MailScanKind.ENVELOPE,
+  );
+
+  return contents?.objectKey ?? envelope?.objectKey ?? null;
+}
+
+/*
  * The scope matters more here than anywhere else in the module: this is the one
  * read that mints a presigned URL to a customer's scanned mail (AGENTS.md,
  * Security & PII — files are served only after an ownership check in the service
@@ -634,17 +910,21 @@ export async function getRequest(
     select: { code: true, label: true },
   });
 
-  // The scan's combined PDF if it exists, else its first page. Presigned only
-  // here, for the one request the operator opened — minting short-TTL URLs for
-  // every row of a list both wastes them and widens what the list exposes.
-  const objectKey =
-    request.mailItem.pdfObjectKey ?? request.mailItem.pages[0]?.objectKey ?? null;
+  // Presigned only here, for the one request the operator opened — minting
+  // short-TTL URLs for every row of a list both wastes them and widens what the
+  // list exposes.
+  const objectKey = previewKeyFor(request.mailItem);
+  const sealed = !request.mailItem.scanReady;
 
   return {
     ...toRequestRow(request),
     document: {
-      fileName: `${request.mailItem.sender} scan.pdf`,
-      // Null while the scan is still processing — the card disables "Preview
+      // Named for what it actually is: on a scan request the operator is
+      // previewing a photograph of an unopened envelope, not a scan of a letter.
+      fileName: sealed
+        ? `${request.mailItem.sender} — envelope`
+        : `${request.mailItem.sender} scan.pdf`,
+      // Null when there is nothing filed to preview — the card disables "Preview
       // document" rather than pointing at a dead link.
       previewUrl: (await presignObject(objectKey)) ?? null,
     },
@@ -698,12 +978,22 @@ export async function processRequest(
   return toRequestRow(updated);
 }
 
-const RESOLUTION_ACTION: Record<MailRequestType, MailLogAction> = {
+/*
+ * The two request types this form settles, and what settling each one means.
+ *
+ * SCAN is deliberately absent rather than mapped to something. Both of these
+ * dispose of the post — it leaves the building and the item closes into the mail
+ * log — and a scan does the opposite: the item stays, and becomes readable. It
+ * is settled by `fileContents` instead, and `resolveRequest` refuses it below.
+ */
+type DisposalType = typeof MailRequestType.FORWARDING | typeof MailRequestType.SHREDDING;
+
+const RESOLUTION_ACTION: Record<DisposalType, MailLogAction> = {
   [MailRequestType.FORWARDING]: MailLogAction.FORWARDED,
   [MailRequestType.SHREDDING]: MailLogAction.SHREDDED,
 };
 
-const RESOLUTION_ITEM_STATUS: Record<MailRequestType, MailItemStatus> = {
+const RESOLUTION_ITEM_STATUS: Record<DisposalType, MailItemStatus> = {
   [MailRequestType.FORWARDING]: MailItemStatus.FORWARDED,
   [MailRequestType.SHREDDING]: MailItemStatus.ARCHIVED,
 };
@@ -734,7 +1024,21 @@ export async function resolveRequest(
     throw AppError.businessRule('This request has already been completed');
   }
 
-  if (request.type === MailRequestType.FORWARDING && !input.carrier) {
+  /*
+   * A scan request has no resolution form. Settling one means opening the
+   * envelope and filing what was inside onto the item, which `fileContents` does
+   * — and which closes the request as part of the same transaction. Marking it
+   * settled here would close the queue row while the envelope stayed sealed.
+   */
+  if (request.type === MailRequestType.SCAN) {
+    throw AppError.businessRule(
+      'A scan request is settled by uploading the scanned contents',
+    );
+  }
+
+  const type: DisposalType = request.type;
+
+  if (type === MailRequestType.FORWARDING && !input.carrier) {
     throw AppError.validation('A forwarding request needs the carrier it shipped with');
   }
 
@@ -763,14 +1067,14 @@ export async function resolveRequest(
 
     await tx.mailItem.update({
       where: { id: request.mailItemId },
-      data: { status: RESOLUTION_ITEM_STATUS[request.type] },
+      data: { status: RESOLUTION_ITEM_STATUS[type] },
     });
 
     await tx.mailActionLog.create({
       data: {
         mailItemId: request.mailItemId,
         customerId: request.customerId,
-        action: RESOLUTION_ACTION[request.type],
+        action: RESOLUTION_ACTION[type],
         // Snapshotted: the log must still read after the item is purged on its
         // storage-expiry date.
         mailItemLabel: request.mailItem.sender,
@@ -816,7 +1120,7 @@ export async function resolveRequest(
     customerEmail: request.customer.email,
     roomId: request.mailItem.roomId,
     mailItemLabel: request.mailItem.sender,
-    type: TYPE_VIEW[request.type],
+    type: type === MailRequestType.FORWARDING ? 'forwarding' : 'shredding',
     trackingNumber: input.trackingNumber ?? null,
     carrierLabel,
   });

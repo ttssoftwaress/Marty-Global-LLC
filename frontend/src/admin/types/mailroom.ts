@@ -143,10 +143,37 @@ export type MailScanFile = {
  * requested" and their inbox prints "Response needed by …". It requires `notes`
  * — that is the reason shown beside the deadline.
  */
+/*
+ * What the operator is filing.
+ *
+ * `envelope` is the normal case and the form's default: post is logged sealed
+ * from the outside, the customer sees it and presses Scan, and the contents are
+ * filed onto that same item later. `contents` covers post the customer has
+ * standing instructions to open, filed already opened in one step.
+ */
+export type MailFilingKind = 'envelope' | 'contents';
+
 export type MailScanDraft = {
   roomId: string;
+  kind: MailFilingKind;
   sender: string;
   receivedOn: string; // yyyy-MM-dd
+  files: MailScanFile[];
+  notes?: string;
+  responseDueOn?: string; // yyyy-MM-dd
+};
+
+/*
+ * Opening a sealed envelope and filing what was inside it onto the mail item
+ * already sitting in the customer's inbox.
+ *
+ * No room and no sender: the item exists and carries both. Re-sending them would
+ * let a scan be filed against one envelope under another's identity — and it is
+ * the item, not a new record, that this has to land on, because a second item
+ * would show the customer the same letter twice.
+ */
+export type MailContentsDraft = {
+  itemId: string;
   files: MailScanFile[];
   notes?: string;
   responseDueOn?: string; // yyyy-MM-dd
@@ -169,7 +196,7 @@ export type MailScanAttachment = {
  * tint are derived from this, so a new kind added server-side surfaces as a
  * neutral badge rather than an unstyled one.
  */
-export type MailRequestType = 'forwarding' | 'shredding';
+export type MailRequestType = 'forwarding' | 'shredding' | 'scan';
 
 /*
  * Where the request has got to. `pending` is waiting on an operator,
@@ -182,13 +209,16 @@ export type MailRequestStatus = 'pending' | 'processing' | 'completed';
  * it is kept separate from `MailRequestStatus` rather than widened into it.
  */
 export type MailRequestFilter =
-  'all' | 'forwarding' | 'shredding' | 'completed';
+  'all' | 'scan' | 'forwarding' | 'shredding' | 'completed';
 
+// Scanning leads the strip because it is the queue with a physical envelope
+// waiting on it — the only one where nothing moves until an operator acts.
 export const MAIL_REQUEST_FILTERS: {
   value: MailRequestFilter;
   label: string;
 }[] = [
   { value: 'all', label: 'All' },
+  { value: 'scan', label: 'Open & scan' },
   { value: 'forwarding', label: 'Forwarding' },
   { value: 'shredding', label: 'Shredding' },
   { value: 'completed', label: 'Completed' },
@@ -208,6 +238,12 @@ export type MailRequestRow = {
   // queue needs the address, not only whose post it is.
   room: MailOpsRoomRef;
   mailItem: string;
+  /*
+   * The mail item behind the request. A scan request is settled by filing the
+   * contents onto that item, so the panel needs its id; the other two never
+   * address the item directly and only name it.
+   */
+  mailItemId: string;
   type: MailRequestType;
   typeLabel: string;
   status: MailRequestStatus;

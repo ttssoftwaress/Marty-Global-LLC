@@ -60,23 +60,28 @@ export function useNotificationFeed(filter: NotificationFilter) {
 
 /*
  * The top-bar panel reads the same endpoint as the page, just the newest few
- * rows and unfiltered — it shows a preview of the feed, not a paginated stream,
- * so it is a plain query rather than an infinite one. `unreadCount` off the same
- * response backs the bell's badge, so the badge and the panel can never
- * disagree.
+ * rows — it shows what still needs attention, not a paginated stream, so it is a
+ * plain query rather than an infinite one. `unreadCount` off the same response
+ * backs the bell's badge, so the badge and the panel can never disagree.
+ *
+ * It asks for `filter=unread` on purpose: the panel is the bell's contents, and
+ * the bell claims a count of unread rows. A read row lingering under it made the
+ * panel disagree with its own badge and pushed the rows that do need attention
+ * out of the eight. Marking a row read (or all of them) therefore empties it —
+ * the full history stays one click away at `/app/notifications`.
  */
 
 const PANEL_LIMIT = 8;
 
 export const notificationPanelKey = () => [...ROOT_KEY, 'panel'] as const;
 
-// GET /v1/notifications?filter=all&limit=
+// GET /v1/notifications?filter=unread&limit=
 export function useNotificationPanel() {
   return useQuery({
     queryKey: notificationPanelKey(),
     queryFn: () =>
       apiFetch<ApiSuccess<NotificationFeedPage>>(
-        `/notifications?filter=all&limit=${PANEL_LIMIT}`,
+        `/notifications?filter=unread&limit=${PANEL_LIMIT}`,
       ).then((res) => res.data),
   });
 }

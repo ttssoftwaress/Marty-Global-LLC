@@ -3,9 +3,12 @@ import { Link } from 'react-router-dom';
 
 import {
   BriefcaseIcon,
+  CpuIcon,
   MailOpenIcon,
+  MonitorIcon,
   PiggyBankIcon,
   ShieldCheckIcon,
+  ShoppingCartIcon,
 } from './icons';
 
 /*
@@ -52,6 +55,22 @@ const SERVICES: Service[] = [
   },
 ];
 
+// The services without a card above — each has its own detail page.
+const MORE_SERVICES = [
+  {
+    Icon: ShieldCheckIcon,
+    label: 'Registered Agent',
+    to: '/services/registered-agent',
+  },
+  {
+    Icon: ShoppingCartIcon,
+    label: 'E-Commerce Setup',
+    to: '/services/ecommerce',
+  },
+  { Icon: CpuIcon, label: 'Remote Desktop', to: '/services/remote-desktop' },
+  { Icon: MonitorIcon, label: 'Website Design', to: '/services/website' },
+];
+
 export function ServicesSection() {
   return (
     <section className="flex w-full flex-col items-center gap-10 bg-white px-4 py-16 md:gap-12 md:px-10 md:py-20 lg:gap-16 lg:px-20 lg:py-24">
@@ -74,18 +93,31 @@ export function ServicesSection() {
         ))}
       </div>
 
-      <div className="flex items-center justify-center gap-1.5 pt-2 md:gap-2">
-        <ShieldCheckIcon className="size-3.5 shrink-0 text-accent md:size-4" />
-        <p className="text-[12px] font-medium text-text-secondary md:text-[14px]">
-          Plus:{' '}
-          <Link
-            to="/services/registered-agent"
-            className="font-semibold text-primary hover:underline"
-          >
-            Registered Agent services
-          </Link>{' '}
-          available in all US states
+      {/* The other four services. The three cards above are the ones most
+       * visitors arrive for; these have their own pages and used to be
+       * reachable only from the footer. */}
+      <div className="flex w-full flex-col items-center gap-3 border-t border-gray-200 pt-6 md:gap-4 md:pt-8">
+        <p className="text-[12px] font-semibold uppercase tracking-wide text-gray-400 md:text-[13px]">
+          Also from Marty Global
         </p>
+        <div className="flex flex-wrap items-center justify-center gap-2 md:gap-3">
+          {MORE_SERVICES.map((service) => (
+            <Link
+              key={service.label}
+              to={service.to}
+              className="press-soft flex items-center gap-1.5 rounded-pill border border-gray-200 bg-white px-3.5 py-2 text-[12px] font-semibold text-text transition-colors hover:border-primary hover:text-primary md:px-4 md:py-2.5 md:text-[13px]"
+            >
+              <service.Icon className="size-3.5 shrink-0 text-primary md:size-4" />
+              {service.label}
+            </Link>
+          ))}
+        </div>
+        <Link
+          to="/services"
+          className="text-[13px] font-semibold text-primary hover:underline md:text-[14px]"
+        >
+          See all services &rarr;
+        </Link>
       </div>
     </section>
   );

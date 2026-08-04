@@ -11,6 +11,7 @@ import type {
   MailItem,
   MailItemsPage,
   MailRequest,
+  MailRequestType,
   MailRoomDetail,
   MailRoomOverview,
   MailRoomTab,
@@ -113,8 +114,14 @@ export function useMailItems(params: MailItemsParams) {
     queryFn: ({ pageParam }) => fetchMailItemsPage(params, pageParam),
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.nextCursor,
-    // Only the inbox lists items; requests/history are placeholder views.
-    enabled: Boolean(params.roomId) && params.tab === 'inbox',
+    /*
+     * All three tabs list items — they are one query with three scopes, and the
+     * backend narrows the same stream (everything / an open request against it /
+     * closed out). The Requests tab stopped being decorative the moment scanning
+     * became a request, so gating this on `inbox` would have hidden the tab that
+     * best answers "where has my scan got to".
+     */
+    enabled: Boolean(params.roomId),
     // Keep the previous filter's results on screen while the next load resolves,
     // so changing status/search doesn't flash the skeleton.
     placeholderData: (previous) => previous,
@@ -122,8 +129,8 @@ export function useMailItems(params: MailItemsParams) {
 }
 
 /*
- * POST /v1/mailrooms/:roomId/items/:itemId/requests — ask us to forward or shred
- * a piece of mail.
+ * POST /v1/mailrooms/:roomId/items/:itemId/requests — ask us to scan, forward,
+ * or shred a piece of mail.
  *
  * The forwarding address is not sent: the backend resolves it from the
  * customer's own company record and snapshots it onto the request, so a caller
@@ -143,7 +150,7 @@ export function useCreateMailRequest(roomId: string) {
       notes,
     }: {
       itemId: string;
-      type: 'forwarding' | 'shredding';
+      type: MailRequestType;
       notes?: string;
     }) =>
       apiFetch<ApiSuccess<MailRequest>>(

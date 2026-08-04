@@ -64,9 +64,22 @@ export type ScanFileInput = z.infer<typeof scanFileSchema>;
  * a single multi-page PDF. `files` is therefore ordered — position is what
  * becomes the page number — and at least one is required.
  */
+/*
+ * What the operator is filing.
+ *
+ * `envelope` is the default because it is the normal flow: post is logged sealed
+ * from the outside, the customer asks us to open it, and the contents are
+ * scanned onto that same item later (`fileContentsSchema` below). `contents`
+ * covers post the customer has standing instructions to open, filed opened in
+ * one step — it is the same item shape, just with both halves at once.
+ */
+export const mailFilingKind = z.enum(['envelope', 'contents']);
+export type MailFilingKind = z.infer<typeof mailFilingKind>;
+
 export const uploadScanSchema = z
   .object({
     roomId: z.string().min(1).max(60),
+    kind: mailFilingKind.default('envelope'),
     sender: z.string().trim().min(1).max(160),
     // A plain calendar date — the day the physical mail arrived. It has no
     // time-of-day, so it must not be built from a zoneless timestamp
@@ -96,10 +109,40 @@ export const uploadScanSchema = z
   });
 export type UploadScanInput = z.infer<typeof uploadScanSchema>;
 
+/*
+ * Opening a sealed envelope and filing what was inside it onto the item already
+ * in the customer's inbox.
+ *
+ * There is no `roomId` or `sender` here: the item exists, and both are already
+ * on it. Re-accepting them would let a scan be filed against one envelope with
+ * another's identity, which is the mistake this endpoint is shaped to make
+ * impossible.
+ *
+ * `notes` and `responseDueOn` are accepted because opening the envelope is when
+ * an operator first sees the letter — a deadline read off it can only be entered
+ * now — and they follow the same rule as the filing form: a deadline needs the
+ * note that says what it is for.
+ */
+export const fileContentsSchema = z
+  .object({
+    files: z.array(scanFileSchema).min(1).max(50),
+    notes: z.string().trim().max(500).optional(),
+    responseDueOn: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected yyyy-MM-dd')
+      .optional(),
+  })
+  .refine((input) => !input.responseDueOn || Boolean(input.notes), {
+    path: ['notes'],
+    message: 'Say what the customer needs to do before setting a response date',
+  });
+export type FileContentsInput = z.infer<typeof fileContentsSchema>;
+
 // The pending queue's filter strip. `all` and `completed` are not request types
-// — they widen or narrow the queue — so they sit alongside the two that are.
+// — they widen or narrow the queue — so they sit alongside the three that are.
 export const mailRequestFilter = z.enum([
   'all',
+  'scan',
   'forwarding',
   'shredding',
   'completed',

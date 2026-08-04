@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { BuildingIcon, CheckIcon, GlobeIcon, LandmarkIcon } from '../../icons';
+import { US_STATE_COUNT } from '../coverage';
 
 /*
  * Entity types — the three structures we file, one card each. Over a Gray-50
@@ -28,7 +29,7 @@ const ENTITY_TYPES: EntityType[] = [
     Icon: BuildingIcon,
     code: 'LLC',
     title: 'Limited Liability Company',
-    regions: 'United States — all 50 states',
+    regions: `United States — ${US_STATE_COUNT} states, DC & territories`,
     description:
       'The structure most non-resident founders file in the US. Delaware and Wyoming are the most commonly requested states, and we file in any of them.',
     points: [
@@ -42,7 +43,7 @@ const ENTITY_TYPES: EntityType[] = [
     Icon: LandmarkIcon,
     code: 'INC',
     title: 'Corporation',
-    regions: 'United States — all 50 states',
+    regions: `United States — ${US_STATE_COUNT} states, DC & territories`,
     description:
       'Filed where a corporate structure is needed — a share register, a board, or an investor who expects one. The same filing route as an LLC, with corporate documents instead.',
     points: [

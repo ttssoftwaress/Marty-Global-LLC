@@ -21,7 +21,9 @@ import {
  * Labels are invisible here, so every control carries its nav label as both an
  * accessible name and a native tooltip — otherwise the rail is unusable with a
  * screen reader and ambiguous with a mouse. A full nav list overflows a short
- * viewport, so the icon column scrolls while the logo mark and footer stay put.
+ * viewport, so the icon column scrolls while the logo mark and footer stay put —
+ * on `.nav-scroll`, same as the other two variants, which fades the cut-off edge
+ * instead of cutting a hard line across a 72px rail.
  *
  * `items` arrives already filtered to what this member may open, so the three
  * variants cannot disagree about which sections exist.
@@ -61,7 +63,7 @@ export function AdminSidebarTablet({
           M
         </Link>
 
-        <nav aria-label="Admin" className="min-h-0 w-full overflow-y-auto">
+        <nav aria-label="Admin" className="nav-scroll -mr-1.5 min-h-0 w-[calc(100%+0.375rem)] pr-1.5">
           <ul className="flex w-full flex-col items-center gap-3">
             {items.map((item) => {
               const active = isAdminNavItemActive(item.to, pathname);

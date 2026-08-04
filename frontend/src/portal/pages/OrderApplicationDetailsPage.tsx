@@ -6,6 +6,7 @@ import { PortalLayout } from '../components/PortalLayout';
 import {
   AdditionalNotesCard,
   ApplicationFooterActions,
+  ApplicationReviewCard,
   ApplicationStepCard,
   OrderStepIndicator,
   SelectedServicesSummaryStrip,
@@ -49,6 +50,13 @@ import type {
  * held by field name (the merged shape) and fanned back out to every service
  * that asked for them at submit by `answersByServiceFrom`, so the payload the
  * backend receives — and every `OrderItem` it writes — is unchanged.
+ *
+ * The flow ends on a READ-ONLY review screen: every merged step, every answer,
+ * the attached files, and the notes on one page, each section with an Edit that
+ * returns to the screen that owns it. Nothing is submitted until that screen's
+ * button, so a customer who has been answering one screen at a time sees the
+ * whole application before it goes anywhere. Submit lives there and nowhere
+ * else.
  *
  * Selection flows from Step 1 via router `state` (an array of service ids).
  * Step 2 resolves those ids against the catalog (a prop until the endpoint
@@ -221,23 +229,36 @@ export function OrderApplicationDetailsPage({
 
   const setNotes = (notes: string) => setDraft((prev) => ({ ...prev, notes }));
 
-  // The last screen carries the documents, notes, and Submit — so there is
-  // always one more screen than there are configured steps.
-  const screenCount = applicationSteps.length + 1;
+  /*
+   * Two screens follow the configured steps: the documents/notes screen, then
+   * the review. Submit is on the review screen alone — the documents screen used
+   * to carry it, which meant the application was sent from a screen showing none
+   * of the answers.
+   */
+  const screenCount = applicationSteps.length + 2;
   const [screenIndex, setScreenIndex] = useState(0);
+
+  /*
+   * Whether this screen was opened by an Edit on the review. Fixing one answer
+   * should not make a customer walk forward through every remaining screen
+   * again, so Continue returns them straight to the review they came from.
+   */
+  const [editingFromReview, setEditingFromReview] = useState(false);
 
   // A changed selection invalidates the position: the flow it indexed into no
   // longer exists, so restart at its first screen.
   useEffect(() => {
     setScreenIndex(0);
+    setEditingFromReview(false);
   }, [applicationSteps.length]);
 
   const currentStep =
     screenIndex < applicationSteps.length ? applicationSteps[screenIndex] : null;
-  const isFinalScreen = screenIndex === screenCount - 1;
+  const isDocumentsScreen = screenIndex === applicationSteps.length;
+  const isReviewScreen = screenIndex === screenCount - 1;
 
   /*
-   * Continue is gated on the current screen only. The final screen's Submit is
+   * Continue is gated on the current screen only. The review screen's Submit is
    * gated on every step, because a customer can reach it by going back and
    * forward again without having completed one in between.
    */
@@ -252,14 +273,15 @@ export function OrderApplicationDetailsPage({
   );
 
   /*
-   * The wizard's labels: Step 1 (already done), one per merged step, then the
-   * review screen. The indicator is 1-based and Step 1 is behind us, so the
-   * current position is offset by two.
+   * The wizard's labels: Step 1 (already done), one per merged step, the
+   * documents screen, then the review. The indicator is 1-based and Step 1 is
+   * behind us, so the current position is offset by two.
    */
   const stepLabels = useMemo(
     () => [
       'Select services',
       ...applicationSteps.map((step) => step.title),
+      'Documents & notes',
       'Review & submit',
     ],
     [applicationSteps],
@@ -267,19 +289,35 @@ export function OrderApplicationDetailsPage({
 
   const goToStep1 = () => navigate(STEP_1_ROUTE);
 
+  // Review's per-section Edit: back to the screen that owns those answers, with
+  // the draft untouched — there is one set of controls, not a second inline one.
+  const editFromReview = (index: number) => {
+    setEditingFromReview(true);
+    setScreenIndex(index);
+    window.scrollTo({ top: 0 });
+  };
+
   // Back from the first screen leaves the flow; otherwise it walks the wizard.
   const onBack = () => {
     if (screenIndex === 0) {
       goToStep1();
       return;
     }
+    setEditingFromReview(false);
     setScreenIndex((index) => index - 1);
     window.scrollTo({ top: 0 });
   };
 
   const onContinue = () => {
     if (!canAdvance) return;
-    setScreenIndex((index) => Math.min(index + 1, screenCount - 1));
+
+    if (editingFromReview) {
+      setEditingFromReview(false);
+      setScreenIndex(screenCount - 1);
+    } else {
+      setScreenIndex((index) => Math.min(index + 1, screenCount - 1));
+    }
+
     window.scrollTo({ top: 0 });
   };
 
@@ -395,13 +433,19 @@ export function OrderApplicationDetailsPage({
               <header className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex flex-col gap-1 lg:max-w-[40rem]">
                   <h1 className="text-h4 font-semibold text-text md:text-[1.75rem] md:leading-[2.25rem] lg:text-h3">
-                    {currentStep ? currentStep.title : 'Review & submit'}
+                    {currentStep
+                      ? currentStep.title
+                      : isDocumentsScreen
+                        ? 'Documents & notes'
+                        : 'Review & submit'}
                   </h1>
                   <p className="text-body text-text-secondary">
                     {currentStep
                       ? (currentStep.description ??
                         'Fill in the details for this part of your application.')
-                      : 'Attach any supporting documents and add notes before submitting.'}
+                      : isDocumentsScreen
+                        ? 'Attach any supporting documents and add notes before you review your application.'
+                        : 'Check every answer below. Use Edit to change anything — nothing is submitted until you choose to.'}
                   </p>
                 </div>
 
@@ -427,7 +471,7 @@ export function OrderApplicationDetailsPage({
                     onFilesChange={setFieldFiles}
                     labelsByField={labelsByField}
                   />
-                ) : (
+                ) : isDocumentsScreen ? (
                   <>
                     <SupportingDocumentsCard
                       files={draft.documents}
@@ -436,6 +480,17 @@ export function OrderApplicationDetailsPage({
 
                     <AdditionalNotesCard value={draft.notes} onChange={setNotes} />
                   </>
+                ) : (
+                  <ApplicationReviewCard
+                    steps={applicationSteps}
+                    answers={draft.answers}
+                    filesByField={draft.filesByField}
+                    services={selectedServices}
+                    documents={draft.documents}
+                    notes={draft.notes}
+                    onEditStep={editFromReview}
+                    onEditDocuments={() => editFromReview(applicationSteps.length)}
+                  />
                 )}
               </div>
 
@@ -472,15 +527,22 @@ export function OrderApplicationDetailsPage({
               <ApplicationFooterActions
                 onBack={onBack}
                 onSubmit={
-                  isFinalScreen
+                  isReviewScreen
                     ? () => {
                         void onSubmit();
                       }
                     : onContinue
                 }
-                canSubmit={isFinalScreen ? canSubmit : canAdvance}
+                canSubmit={isReviewScreen ? canSubmit : canAdvance}
                 isSubmitting={createOrder.isPending || isUploading}
-                isFinalStep={isFinalScreen}
+                isFinalStep={isReviewScreen}
+                continueLabel={
+                  editingFromReview
+                    ? 'Back to review'
+                    : isDocumentsScreen
+                      ? 'Review application'
+                      : 'Continue'
+                }
               />
             </>
           )}

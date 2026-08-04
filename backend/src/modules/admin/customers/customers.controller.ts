@@ -5,6 +5,7 @@ import { AppError } from '../../../lib/app-error.js';
 import { pathParam } from '../../../lib/params.js';
 import * as service from './customers.service.js';
 import {
+  banCustomerSchema,
   listCustomerOrdersQuerySchema,
   listCustomersQuerySchema,
 } from './customers.validation.js';
@@ -73,6 +74,47 @@ export async function listCustomerOrders(
       parsed.data,
     );
     res.json({ data: page });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// Both suspension routes answer with the customer record the screen already
+// renders, so the header reflects the new state without a second fetch.
+
+export async function banCustomer(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const parsed = banCustomerSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      throw AppError.validation('Invalid suspension', parsed.error.issues);
+    }
+
+    const customer = await service.banCustomer(
+      getAuth(req),
+      pathParam(req, 'customerId'),
+      parsed.data,
+    );
+    res.json({ data: customer });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function unbanCustomer(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const customer = await service.unbanCustomer(
+      getAuth(req),
+      pathParam(req, 'customerId'),
+    );
+    res.json({ data: customer });
   } catch (error) {
     next(error);
   }
