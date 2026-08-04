@@ -670,6 +670,106 @@
 }
 
 /*
+ * Marty Global LLC — Dark nav scroll port
+ *
+ * The admin nav list is longer than a short viewport, so it scrolls on its own
+ * while the brand mark and the user block stay put. Same idea as
+ * `.table-scroll`: keep the scroll, restyle the furniture. On a navy column the
+ * platform scrollbar paints a bright grey slab down the sidebar, which reads as
+ * a seam in the shell rather than as a control.
+ *
+ * The thumb is white at low alpha so it belongs to the surface instead of
+ * sitting on it, and it is invisible until the column is hovered or something
+ * inside it holds focus — an unused nav shows no chrome at all. The track keeps
+ * its width the whole time, so the pills never shift sideways as the thumb
+ * appears; `:focus-within` is what keeps it reachable by keyboard.
+ *
+ * The fade is the part that does the real work: the list dissolves at whichever
+ * edge it is actually cut off at, so there is a visible cue that more nav exists
+ * without any scrollbar being drawn. Each edge is driven by that edge's own
+ * scroll distance, so the top is solid at the top of the list and the bottom is
+ * solid at the end of it. Both custom properties start at zero, which is also
+ * what a browser without scroll-driven animations — and a viewport tall enough
+ * that nothing overflows, where the timeline is inactive — will render: no mask,
+ * no fade, no phantom edge on a list that fits.
+ */
+@property --nav-fade-top {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0rem;
+}
+@property --nav-fade-bottom {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0rem;
+}
+
+@layer components {
+  .nav-scroll {
+    --nav-fade-size: 1.5rem;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+  .nav-scroll:hover,
+  .nav-scroll:focus-within {
+    scrollbar-color: rgb(255 255 255 / 0.28) transparent;
+  }
+  .nav-scroll::-webkit-scrollbar {
+    width: 0.25rem;
+  }
+  .nav-scroll::-webkit-scrollbar-track {
+    background-color: transparent;
+  }
+  .nav-scroll::-webkit-scrollbar-thumb {
+    background-color: transparent;
+    border-radius: var(--radius-pill);
+    transition: background-color var(--motion-fast) var(--ease-standard);
+  }
+  .nav-scroll:hover::-webkit-scrollbar-thumb,
+  .nav-scroll:focus-within::-webkit-scrollbar-thumb {
+    background-color: rgb(255 255 255 / 0.28);
+  }
+
+  @supports (animation-timeline: scroll(self block)) {
+    .nav-scroll {
+      mask-image: linear-gradient(
+        to bottom,
+        transparent 0,
+        #000 var(--nav-fade-top),
+        #000 calc(100% - var(--nav-fade-bottom)),
+        transparent 100%
+      );
+      animation:
+        nav-fade-top linear both,
+        nav-fade-bottom linear both;
+      animation-timeline: scroll(self block), scroll(self block);
+      animation-range:
+        0 var(--nav-fade-size),
+        calc(100% - var(--nav-fade-size)) 100%;
+    }
+  }
+
+  @keyframes nav-fade-top {
+    from {
+      --nav-fade-top: 0rem;
+    }
+    to {
+      --nav-fade-top: var(--nav-fade-size);
+    }
+  }
+  @keyframes nav-fade-bottom {
+    from {
+      --nav-fade-bottom: var(--nav-fade-size);
+    }
+    to {
+      --nav-fade-bottom: 0rem;
+    }
+  }
+}
+
+/*
  * Marty Global LLC — Motion System
  *
  * The single source of truth for movement. Corporate restraint is the brief:

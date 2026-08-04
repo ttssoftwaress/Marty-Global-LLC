@@ -34,6 +34,13 @@ type ApplicationFooterActionsProps = {
    * note is about what happens after submitting, so it only appears there too.
    */
   isFinalStep?: boolean;
+  /*
+   * What the forward button says while it is not the submit. Defaults to
+   * "Continue"; the screen before the review names where it goes ("Review
+   * application"), so the customer knows a check comes before the submit rather
+   * than fearing the next tap sends it.
+   */
+  continueLabel?: string;
 };
 
 function LockNote({ className }: { className?: string }) {
@@ -51,12 +58,13 @@ export function ApplicationFooterActions({
   canSubmit,
   isSubmitting = false,
   isFinalStep = true,
+  continueLabel = 'Continue',
 }: ApplicationFooterActionsProps) {
   const submitLabel = isFinalStep
     ? isSubmitting
       ? 'Submitting…'
       : 'Submit application'
-    : 'Continue';
+    : continueLabel;
   const submitDisabled = !canSubmit || isSubmitting;
 
   return (

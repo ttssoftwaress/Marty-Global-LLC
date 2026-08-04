@@ -17,8 +17,9 @@ import {
  * line and scrolls the strip sideways rather than wrapping, matching how the
  * tab strip above already behaves at that width.
  *
- * Rendered as a real tablist so the four pills announce as one mutually
- * exclusive choice.
+ * Rendered as a real tablist so the pills announce as one mutually exclusive
+ * choice. The strip scrolls sideways rather than wrapping, which is what let
+ * "Open & scan" join it without the row reflowing at any width.
  */
 
 type MailRequestFiltersProps = {

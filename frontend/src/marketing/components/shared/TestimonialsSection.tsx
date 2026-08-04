@@ -62,7 +62,18 @@ const PARTNER_LOGOS = [
   'Shopify EU Networks',
 ];
 
-export function TestimonialsSection() {
+type TestimonialsSectionProps = {
+  /**
+   * The partner-logo strip. Off on `/services`, where the page is already a long
+   * scroll of service cards, coverage lists, and value props — the logos were
+   * the least load-bearing band on it.
+   */
+  showPartners?: boolean;
+};
+
+export function TestimonialsSection({
+  showPartners = true,
+}: TestimonialsSectionProps = {}) {
   return (
     <section className="flex w-full flex-col items-center gap-10 bg-white px-4 py-16 md:gap-12 md:px-10 md:py-20 lg:gap-16 lg:px-20 lg:py-24">
       <h2 className="w-full text-center font-marketing text-[28px] font-bold leading-[1.2] text-text md:text-[32px] lg:text-[40px]">
@@ -75,25 +86,27 @@ export function TestimonialsSection() {
         ))}
       </div>
 
-      <div className="flex w-full flex-col items-center gap-4 md:gap-5 md:pt-6 lg:gap-6 lg:pt-6">
-        <p className="text-[11px] font-semibold uppercase text-gray-400 lg:text-[12px]">
-          Trusted by leading platforms
-        </p>
-        <div className="flex w-full flex-wrap justify-center gap-2.5 md:gap-3 lg:flex-nowrap lg:justify-between">
-          {PARTNER_LOGOS.map((logo, index) => (
-            <div
-              key={logo}
-              className={`flex flex-1 items-center justify-center rounded-lg border border-gray-200 bg-gray-100 px-4 py-2.5 md:flex-none lg:px-6 lg:py-3 ${
-                index === 4 ? 'hidden md:flex' : ''
-              }`}
-            >
-              <p className="whitespace-nowrap font-marketing text-[11px] font-bold text-gray-500 md:text-[12px] lg:text-[14px]">
-                {logo}
-              </p>
-            </div>
-          ))}
+      {showPartners && (
+        <div className="flex w-full flex-col items-center gap-4 md:gap-5 md:pt-6 lg:gap-6 lg:pt-6">
+          <p className="text-[11px] font-semibold uppercase text-gray-400 lg:text-[12px]">
+            Trusted by leading platforms
+          </p>
+          <div className="flex w-full flex-wrap justify-center gap-2.5 md:gap-3 lg:flex-nowrap lg:justify-between">
+            {PARTNER_LOGOS.map((logo, index) => (
+              <div
+                key={logo}
+                className={`flex flex-1 items-center justify-center rounded-lg border border-gray-200 bg-gray-100 px-4 py-2.5 md:flex-none lg:px-6 lg:py-3 ${
+                  index === 4 ? 'hidden md:flex' : ''
+                }`}
+              >
+                <p className="whitespace-nowrap font-marketing text-[11px] font-bold text-gray-500 md:text-[12px] lg:text-[14px]">
+                  {logo}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </section>
   );
 }

@@ -1,3 +1,5 @@
+import { US_STATE_COUNT } from '../components/services/coverage';
+import { ServiceCoverageDisclosure } from '../components/services/detail/ServiceCoverageDisclosure';
 import { ServiceDetailHero } from '../components/services/detail/ServiceDetailHero';
 import { ServiceFeatureGrid } from '../components/services/detail/ServiceFeatureGrid';
 import { ServiceQuoteBand } from '../components/services/detail/ServiceQuoteBand';
@@ -36,7 +38,7 @@ export function ServiceRegisteredAgentPage() {
   return (
     <div className="flex min-h-screen flex-col bg-white">
       <Seo
-        title="Registered Agent Service — All 50 US States | Marty Global LLC"
+        title={`Registered Agent Service — ${US_STATE_COUNT} US States & 11 Countries | Marty Global LLC`}
         description="We act as your registered agent and registered office: the address on the public record, service of process and state notices scanned to your dashboard the same day, and a reminder before the annual renewal."
         path="/services/registered-agent"
       />
@@ -45,7 +47,7 @@ export function ServiceRegisteredAgentPage() {
         <ServiceDetailHero
           eyebrow="Registered Agent"
           breadcrumb="Registered Agent"
-          title="The Address the State Serves — Covered in All 50 States"
+          title="The Address the State Serves, Held Wherever You File"
           subtitle="We act as your registered agent and registered office: our address goes on the public record, anything the state serves on your company is scanned to your dashboard the day it arrives, and we keep the appointment current year after year."
           primaryCtaLabel="Appoint Us as Your Agent"
           quickFacts={AGENT_QUICK_FACTS}
@@ -63,6 +65,11 @@ export function ServiceRegisteredAgentPage() {
           columns={4}
           tone="gray"
           footerLink={{ to: '/how-it-works', label: 'See how ordering works' }}
+        />
+        <ServiceCoverageDisclosure
+          variant="full"
+          heading="Where We Can Act as Your Agent"
+          what="a registered-agent address"
         />
         <ServiceQuoteBand lead="Registered Agent is an annual appointment per company, priced by the state or country it is filed in — and the first year is included with every US formation." />
         <FaqSection

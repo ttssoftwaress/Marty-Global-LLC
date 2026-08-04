@@ -12,6 +12,7 @@ import {
   ShieldCheckIcon,
   TrendingUpIcon,
 } from '../../icons';
+import { US_STATE_COUNT } from '../coverage';
 import type { QuickFact } from '../detail/ServiceDetailHero';
 import type { ServiceFeature } from '../detail/ServiceFeatureGrid';
 import type { RelatedService } from '../detail/ServiceRelatedSection';
@@ -25,7 +26,7 @@ import type { ServiceStep } from '../detail/ServiceStepGrid';
  */
 
 export const FORMATION_QUICK_FACTS: QuickFact[] = [
-  { Icon: GlobeIcon, label: 'USA, UK, Canada & Europe' },
+  { Icon: GlobeIcon, label: `${US_STATE_COUNT} US states & 11 more countries` },
   { Icon: ShieldCheckIcon, label: 'Registered Agent included (US)' },
   { Icon: CheckIcon, label: 'EIN / Tax ID application support' },
 ];
@@ -150,7 +151,7 @@ export const FORMATION_FAQS: Faq[] = [
   {
     question: 'Which state should I register my LLC in?',
     answer:
-      'Delaware and Wyoming are the states non-residents ask for most often, and we file in all 50. Which one fits your business is your decision — we are a filing service provider, not a law firm, and we do not give legal or tax advice.',
+      `Delaware and Wyoming are the states non-residents ask for most often. We file in ${US_STATE_COUNT} states today, plus DC, Guam, and Puerto Rico — the full list is on this page. Which one fits your business is your decision: we are a filing service provider, not a law firm, and we do not give legal or tax advice.`,
   },
   {
     question: 'Do I get an EIN or tax number with my formation?',
@@ -160,7 +161,7 @@ export const FORMATION_FAQS: Faq[] = [
   {
     question: 'Is Registered Agent service included?',
     answer:
-      'Yes — one year of Registered Agent service is included with every US formation, in any of the 50 states. US states require an agent available during business hours to receive official notices on the company’s behalf.',
+      'Yes — one year of Registered Agent service is included with every US formation, in every state we hold an address in. US states require an agent available during business hours to receive official notices on the company’s behalf.',
   },
   {
     question: 'Do I need a business address as well?',

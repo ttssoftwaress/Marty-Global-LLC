@@ -1,3 +1,4 @@
+import { ServiceCoverageDisclosure } from '../components/services/detail/ServiceCoverageDisclosure';
 import { ServiceDetailHero } from '../components/services/detail/ServiceDetailHero';
 import { ServiceFeatureGrid } from '../components/services/detail/ServiceFeatureGrid';
 import { ServiceQuoteBand } from '../components/services/detail/ServiceQuoteBand';
@@ -57,6 +58,11 @@ export function ServiceFormationPage() {
           features={FORMATION_FEATURES}
         />
         <FormationJurisdictionsSection />
+        <ServiceCoverageDisclosure
+          variant="full"
+          heading="Every Place We Can File For You"
+          what="a registered address"
+        />
         <ServiceStepGrid
           heading="How a Formation Runs"
           subheading="Five steps from the application to the certificate, tracked in your dashboard the whole way."

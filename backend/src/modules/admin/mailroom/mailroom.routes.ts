@@ -34,6 +34,15 @@ router.get('/rooms', apiRateLimit, controller.listRoomsByName);
 router.get('/scans', apiRateLimit, controller.listScans);
 router.post('/scans', sensitiveRateLimit, controller.uploadScan);
 
+/*
+ * The second half of the envelope-first flow: opening a sealed envelope already
+ * in a customer's inbox and filing what was inside onto that same item. It hangs
+ * off the item rather than off the request that asked for it, because post can be
+ * opened on standing instructions with no request in front of it — and the item
+ * is the thing that must not be duplicated.
+ */
+router.post('/scans/:itemId/contents', sensitiveRateLimit, controller.fileContents);
+
 // The literal segments are declared before `/:requestId` so a route like
 // `/requests/detail` could never be read as an id.
 router.get('/requests', apiRateLimit, controller.listRequests);

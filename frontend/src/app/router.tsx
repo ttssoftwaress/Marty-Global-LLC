@@ -100,6 +100,26 @@ export const router = createBrowserRouter([
         },
       },
       {
+        path: '/services/website',
+        lazy: async () => {
+          const { ServiceWebsitePage } = await import(
+            '@/marketing/pages/ServiceWebsitePage'
+          );
+          return { Component: ServiceWebsitePage };
+        },
+      },
+      {
+        // Remote Desktop is not one of the four grid cards either — the grid is
+        // the company-setup services. The footer links here.
+        path: '/services/remote-desktop',
+        lazy: async () => {
+          const { ServiceRemoteDesktopPage } = await import(
+            '@/marketing/pages/ServiceRemoteDesktopPage'
+          );
+          return { Component: ServiceRemoteDesktopPage };
+        },
+      },
+      {
         // Registered Agent has no card on the Services grid — it is sold with
         // formation and named in the note under the grid, which links here.
         path: '/services/registered-agent',

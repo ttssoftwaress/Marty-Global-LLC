@@ -8,6 +8,7 @@ import {
 import { apiFetch } from '@/services/api';
 import type { ApiSuccess } from '@/types/api';
 import type {
+  MailContentsDraft,
   MailLogFilters,
   MailLogPage,
   MailOpsRecentUpload,
@@ -116,11 +117,12 @@ export function useAdminMailOpsRecentUploads() {
 }
 
 /*
- * POST /v1/admin/mailroom/scans — file a scan into a customer's inbox.
+ * POST /v1/admin/mailroom/scans — file mail into a customer's inbox, sealed or
+ * already opened.
  *
  * The body carries the R2 object key the scan was uploaded under, not the file
  * itself (AGENTS.md, Storage). Both the feed and the summary are invalidated on
- * success, since a filed scan moves the "new scans" figure as well as the list.
+ * success, since a filing moves the KPI figures as well as the list.
  */
 export function useUploadMailScan() {
   const queryClient = useQueryClient();
@@ -132,6 +134,35 @@ export function useUploadMailScan() {
         body: JSON.stringify(draft),
       }).then((res) => res.data),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: adminMailOpsRecentKey() });
+      void queryClient.invalidateQueries({ queryKey: adminMailOpsSummaryKey() });
+    },
+  });
+}
+
+/*
+ * POST /v1/admin/mailroom/scans/:itemId/contents — open a sealed envelope and
+ * file what was inside it onto the item already in the customer's inbox.
+ *
+ * Addressed to the ITEM, not to the request that asked for it: post can be
+ * opened on standing instructions with no request in front of it, and the item
+ * is the thing that must not be duplicated. The backend closes any open scan
+ * request in the same transaction, which is why the queue is invalidated here
+ * even though this call never names one.
+ */
+export function useFileMailContents() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ itemId, ...body }: MailContentsDraft) =>
+      apiFetch<ApiSuccess<MailOpsRecentUpload>>(
+        `/admin/mailroom/scans/${itemId}/contents`,
+        { method: 'POST', body: JSON.stringify(body) },
+      ).then((res) => res.data),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ['admin', 'mailroom', 'requests'],
+      });
       void queryClient.invalidateQueries({ queryKey: adminMailOpsRecentKey() });
       void queryClient.invalidateQueries({ queryKey: adminMailOpsSummaryKey() });
     },

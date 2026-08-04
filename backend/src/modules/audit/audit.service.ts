@@ -161,6 +161,13 @@ export const AuditAction = {
   // service provisions one.
   MAIL_ROOM_PROVISIONED: 'mailroom.room_provisioned',
   MAIL_SCAN_UPLOADED: 'mailroom.scan_uploaded',
+  /*
+   * Opening a sealed envelope and scanning what was inside it. Separate from
+   * filing the envelope above, because it is the moment a document nobody had
+   * read became readable — the one step in the mail flow a customer might later
+   * ask us to account for, and the trail has to name who took it.
+   */
+  MAIL_CONTENTS_SCANNED: 'mailroom.contents_scanned',
   MAIL_REQUEST_CREATED: 'mailroom.request_created',
   MAIL_REQUEST_PROCESSED: 'mailroom.request_processed',
   MAIL_REQUEST_RESOLVED: 'mailroom.request_resolved',

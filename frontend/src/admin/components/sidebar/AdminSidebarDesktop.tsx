@@ -17,7 +17,10 @@ import {
  * white and lift to full opacity on hover.
  *
  * The nav list is long enough to crowd the user block on short viewports, so it
- * scrolls on its own while the brand mark and footer stay put.
+ * scrolls on its own while the brand mark and footer stay put — through
+ * `.nav-scroll`, which fades the cut-off edge and keeps the scrollbar out of the
+ * navy until the column is used. The list bleeds into the column's right gutter
+ * so that thumb rides the sidebar edge rather than a pill's shoulder.
  *
  * `items` arrives already filtered to what this member may open, so the three
  * variants cannot disagree about which sections exist.
@@ -57,7 +60,7 @@ export function AdminSidebarDesktop({
           />
         </Link>
 
-        <nav aria-label="Admin" className="min-h-0 w-full overflow-y-auto">
+        <nav aria-label="Admin" className="nav-scroll -mr-2 min-h-0 w-[calc(100%+0.5rem)] pr-2">
           <ul className="flex w-full flex-col gap-1">
             {items.map((item) => {
               const active = isAdminNavItemActive(item.to, pathname);

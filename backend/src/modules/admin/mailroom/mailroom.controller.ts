@@ -5,6 +5,7 @@ import { AppError } from '../../../lib/app-error.js';
 import { pathParam } from '../../../lib/params.js';
 import * as service from './mailroom.service.js';
 import {
+  fileContentsSchema,
   listLogQuerySchema,
   listRequestsQuerySchema,
   listScansQuerySchema,
@@ -94,6 +95,28 @@ export async function uploadScan(
 
     const upload = await service.uploadScan(getAuth(req), parsed.data);
     res.status(201).json({ data: upload });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function fileContents(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const parsed = fileContentsSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw AppError.validation('Invalid scan', parsed.error.issues);
+    }
+
+    const filed = await service.fileContents(
+      getAuth(req),
+      pathParam(req, 'itemId'),
+      parsed.data,
+    );
+    res.status(201).json({ data: filed });
   } catch (error) {
     next(error);
   }
