@@ -373,15 +373,17 @@ export type AdminOrderStatusOption = {
   allowed: boolean;
   current: boolean;
   /*
-   * Set on APPROVED when this order has never been quoted — the one block that is
-   * about the order's own history rather than about the pipeline or the actor's
-   * role, so the screen can say *why* the step is out of reach and point at the
-   * quote composer instead of leaving a dimmed row with no explanation.
+   * Why a step is out of reach when the reason is the order's own state rather
+   * than the pipeline or the actor's role, so the screen can say *why* instead of
+   * leaving a dimmed row with no explanation:
+   *   - `quote_required` on APPROVED — never priced, so there is nothing to pay.
+   *   - `items_pending` on COMPLETED — a service line is still open, and a
+   *     service that delivers a record is only completed by delivering it.
    *
-   * A hint, not the boundary: `updateOrder` re-checks it (AGENTS.md — the backend
-   * guards are the real boundary).
+   * A hint, not the boundary: `updateOrder` re-checks both (AGENTS.md — the
+   * backend guards are the real boundary).
    */
-  blockedReason?: 'quote_required';
+  blockedReason?: 'quote_required' | 'items_pending';
 };
 
 export type AdminOrderAssigneeOption = {
@@ -511,26 +513,34 @@ async function assigneeOptions(): Promise<AdminOrderAssigneeOption[]> {
 }
 
 /*
- * `hasQuote` gates APPROVED here exactly as it does on the write path: an order
- * nobody has priced cannot be approved by hand, whatever the pipeline or the
- * actor's role would otherwise permit (see `updateOrder`).
+ * `hasQuote` gates APPROVED and `itemsPending` gates COMPLETED here exactly as
+ * they do on the write path: an order nobody has priced cannot be approved by
+ * hand, and an order with a service line still open cannot be closed by hand,
+ * whatever the pipeline or the actor's role would otherwise permit (see
+ * `updateOrder`).
  */
 function statusOptions(
   current: OrderStatus,
   isAdmin: boolean,
   hasQuote: boolean,
+  itemsPending: boolean,
 ): AdminOrderStatusOption[] {
   const allowed = new Set(allowedNextStatuses(current, isAdmin));
 
   return ORDER_STATUS_SEQUENCE.map((status) => {
-    const blocked = status === OrderStatus.APPROVED && !hasQuote;
+    const blockedReason =
+      status === OrderStatus.APPROVED && !hasQuote
+        ? ('quote_required' as const)
+        : status === OrderStatus.COMPLETED && itemsPending
+          ? ('items_pending' as const)
+          : undefined;
 
     return {
       value: ORDER_STATUS_VIEW[status],
       label: ORDER_STATUS_LABEL[status],
-      allowed: allowed.has(status) && !blocked,
+      allowed: allowed.has(status) && !blockedReason,
       current: status === current,
-      ...(blocked ? { blockedReason: 'quote_required' as const } : {}),
+      ...(blockedReason ? { blockedReason } : {}),
     };
   });
 }
@@ -703,6 +713,7 @@ export async function getOrder(
       order.status,
       actor.role === Role.ADMIN,
       quote !== null,
+      order.items.some((item) => item.status !== OrderItemStatus.COMPLETED),
     ),
     assigneeOptions: assignees,
     canAssign,
@@ -868,6 +879,52 @@ export async function updateOrder(
           from: ORDER_STATUS_VIEW[existing.status],
           to: ORDER_STATUS_VIEW[OrderStatus.APPROVED],
           reason: 'quote_required',
+        },
+      );
+    }
+  }
+
+  /*
+   * An order cannot be completed while a service line is still open.
+   *
+   * COMPLETED is what the customer reads as "your filing is done, here is what
+   * you got". A service that returns a record is completed by filling in and
+   * delivering its result form — `delivery.updateOrderItemStatus` refuses to
+   * complete such a line any other way, so the required-field gate cannot be
+   * stepped around at the item level. Without this, the order-level control was
+   * the way around it: closing the order left every line pending, the customer's
+   * order read Completed, and the record they were promised was an empty draft
+   * they could never see.
+   *
+   * Stated in terms of item status rather than results, because it is the same
+   * rule for a service that delivers nothing: a line nobody marked done is work
+   * nobody did.
+   *
+   * Applies to admins too, for the same reason the quote gate does — the admin
+   * override corrects a mis-click in the pipeline, it does not bypass a rule the
+   * customer's screen depends on. The one-step path is the same for everyone:
+   * deliver the outstanding lines, then close the order.
+   *
+   * 422 rather than 403: the actor may complete orders, this one is just not
+   * finished yet.
+   */
+  if (statusChanged && nextStatus === OrderStatus.COMPLETED) {
+    const pending = await prisma.orderItem.findMany({
+      where: { orderId, status: { not: OrderItemStatus.COMPLETED } },
+      orderBy: { sortOrder: 'asc' },
+      select: { id: true, serviceName: true },
+    });
+
+    if (pending.length > 0) {
+      throw AppError.businessRule(
+        `Every service on this order has to be delivered before it can be completed. Still open: ${pending
+          .map((item) => item.serviceName)
+          .join(', ')}`,
+        {
+          from: ORDER_STATUS_VIEW[existing.status],
+          to: ORDER_STATUS_VIEW[OrderStatus.COMPLETED],
+          reason: 'items_pending',
+          pendingItemIds: pending.map((item) => item.id),
         },
       );
     }

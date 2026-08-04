@@ -4,6 +4,7 @@ import { Inbox, Loader2, MessagesSquare } from 'lucide-react';
 import { AdminLayout } from '../components/AdminLayout';
 import { DataErrorState } from '../components/DataErrorState';
 import { useMyConversations } from '../features/conversations/queries';
+import { useMyConversationsSocket } from '../features/conversations/useMyConversationsSocket';
 import { useAdminShell } from '../hooks/useAdminShell';
 import { formatActivityTime } from '../lib/format';
 import type { StaffConversationRow } from '../types/conversations';
@@ -100,6 +101,9 @@ function ListSkeleton() {
 export function AdminConversationsPage() {
   const { user, onLogout } = useAdminShell();
   const query = useMyConversations();
+
+  // A queue that only changes on reload is a queue that hides work.
+  useMyConversationsSocket();
 
   const rows = query.data?.pages.flatMap((page) => page.conversations) ?? [];
   // From the first page: the count is over the whole queue, so every page

@@ -1,6 +1,7 @@
 import {
   OrderDocumentSource,
   OrderDocumentStatus,
+  OrderItemStatus,
   OrderStatus,
   StaffStatus,
 } from '@prisma/client';
@@ -140,6 +141,19 @@ async function createOrder(
         },
       },
     },
+  });
+}
+
+/*
+ * Every service line delivered. Completing an order is gated on this, so a test
+ * about the pipeline tail has to get there the way the real flow does — a line is
+ * completed by delivering its result (modules/admin/delivery), which for a
+ * service with no result schema is the status change this stands in for.
+ */
+async function deliverItems(orderId: string) {
+  await prisma.orderItem.updateMany({
+    where: { orderId },
+    data: { status: OrderItemStatus.COMPLETED, completedAt: new Date() },
   });
 }
 
@@ -385,6 +399,10 @@ describe('updateOrder — the status pipeline', () => {
   it('lets an admin override the pipeline', async () => {
     const order = await createOrder(OrderStatus.SUBMITTED);
 
+    // Delivered first: the override skips pipeline *steps*, not the rule that an
+    // order with open service lines is not finished (see the completion gate).
+    await deliverItems(order.id);
+
     const row = await updateOrder(auth(ADMIN_ID, Role.ADMIN), order.id, {
       status: 'completed',
     });
@@ -455,6 +473,9 @@ describe('updateOrder — the status pipeline', () => {
     const order = await createOrder(OrderStatus.APPROVED);
     const actor = auth(STAFF_ID, Role.STAFF);
 
+    // The work itself, done before the order can be closed over it.
+    await deliverItems(order.id);
+
     for (const status of ['paid', 'processing', 'completed'] as const) {
       const row = await updateOrder(actor, order.id, { status });
       expect(row.status).toBe(status);
@@ -474,6 +495,55 @@ describe('updateOrder — the status pipeline', () => {
       'Status changed to Processing.',
       'Status changed to Completed.',
     ]);
+  });
+
+  /*
+   * The completion gate. A service that returns a record is completed by
+   * delivering that record, and `delivery.updateOrderItemStatus` refuses to
+   * complete such a line any other way — so without this rule the order-level
+   * status control was the way around the required-field gate: the customer's
+   * order would read Completed over a draft result they can never see.
+   */
+  it('refuses to complete an order while a service line is still open', async () => {
+    const order = await createOrder(OrderStatus.PROCESSING);
+
+    await expect(
+      updateOrder(auth(STAFF_ID, Role.STAFF), order.id, { status: 'completed' }),
+    ).rejects.toMatchObject({
+      status: 422,
+      details: { reason: 'items_pending' },
+    });
+
+    const unchanged = await prisma.order.findFirstOrThrow({
+      where: { id: order.id },
+    });
+    expect(unchanged.status).toBe(OrderStatus.PROCESSING);
+  });
+
+  // The admin override corrects a mis-click in the pipeline; it is not a way past
+  // a rule the customer's screen depends on — the same posture as the quote gate.
+  it('refuses an admin the same shortcut', async () => {
+    const order = await createOrder(OrderStatus.PROCESSING);
+
+    await expect(
+      updateOrder(auth(ADMIN_ID, Role.ADMIN), order.id, { status: 'completed' }),
+    ).rejects.toMatchObject({ status: 422 });
+  });
+
+  it('marks completed as blocked on the status control until the lines are delivered', async () => {
+    const order = await createOrder(OrderStatus.PROCESSING);
+
+    const before = await getOrder(auth(STAFF_ID, Role.STAFF), order.id);
+    const blocked = before.statusOptions.find((o) => o.value === 'completed');
+    expect(blocked?.allowed).toBe(false);
+    expect(blocked?.blockedReason).toBe('items_pending');
+
+    await deliverItems(order.id);
+
+    const after = await getOrder(auth(STAFF_ID, Role.STAFF), order.id);
+    const open = after.statusOptions.find((o) => o.value === 'completed');
+    expect(open?.allowed).toBe(true);
+    expect(open?.blockedReason).toBeUndefined();
   });
 
   // Processing sits between paid and completed, so a paid order cannot skip it.
