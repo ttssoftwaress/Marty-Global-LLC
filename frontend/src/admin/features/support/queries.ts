@@ -68,6 +68,28 @@ export function useAdminSupportConversations(
   });
 }
 
+export const adminSupportUnattendedKey = () =>
+  ['admin', 'support', 'unattended'] as const;
+
+/*
+ * GET /v1/admin/support/unattended — how many chats are sitting in the queue with
+ * nobody assigned to them. The seed for the sidebar badge; the socket keeps it
+ * right afterwards (`useAdminUnattendedSupport`).
+ *
+ * `enabled` is the member's `support` grant. Without it the nav item is not drawn
+ * at all and the endpoint would 403, so the shell must not ask.
+ */
+export function useAdminSupportUnattended(enabled: boolean) {
+  return useQuery({
+    queryKey: adminSupportUnattendedKey(),
+    queryFn: () =>
+      apiFetch<ApiSuccess<{ count: number }>>('/admin/support/unattended').then(
+        (res) => res.data,
+      ),
+    enabled,
+  });
+}
+
 export const adminSupportThreadKey = (conversationId: string) =>
   ['admin', 'support', 'thread', conversationId] as const;
 

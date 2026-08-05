@@ -7,6 +7,7 @@ import {
   type AdminSidebarUser,
 } from './AdminSidebarUserBlock';
 import {
+  ADMIN_NAV_BADGE_NOUN,
   isAdminNavItemActive,
   type AdminNavBadges,
   type AdminNavItem,
@@ -78,7 +79,11 @@ export function AdminSidebarTablet({
                     title={item.label}
                     /* The rail has no visible labels, so the count has to be in
                      * the accessible name — the badge itself is decorative. */
-                    aria-label={count > 0 ? `${item.label} — ${count} unread` : item.label}
+                    aria-label={
+                      count > 0 && item.badge
+                        ? `${item.label} — ${count} ${ADMIN_NAV_BADGE_NOUN[item.badge]}`
+                        : item.label
+                    }
                     aria-current={active ? 'page' : undefined}
                     className={
                       active

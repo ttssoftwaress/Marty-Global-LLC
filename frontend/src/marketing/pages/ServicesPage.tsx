@@ -64,7 +64,7 @@ export function ServicesPage() {
         <ServicesGridSection />
         <WhyChooseUsSection />
         <JurisdictionsStripSection />
-        <TestimonialsSection />
+        <TestimonialsSection showPartners={false} />
         <FaqSection faqs={SERVICES_FAQS} />
         <FinalCtaSection />
       </main>

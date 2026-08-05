@@ -1,2 +1,133 @@
+# Marty Global LLC — repo-root ignores.
+# Root rules apply to both apps; frontend/ and backend/ keep their own short
+# .gitignore so either folder still builds alone when zipped (AGENTS.md,
+# "Two Independent Apps").
+
+# --- Dependencies ---------------------------------------------------------
+node_modules/
+.npm/
+.pnp
+.pnp.*
+jspm_packages/
+CLAUDE.md
+Design.md
+AGENTS.md
+
+# Lockfiles are committed (npm, both apps) — do not add package-lock.json here.
+
+# --- Environment & secrets ------------------------------------------------
+# .env.example is committed in both apps; every real .env is not. All secrets
+# live in the backend and are validated in config/env.ts on boot; the browser
+# only ever receives VITE_ vars (AGENTS.md, "Security & PII").
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Credentials that must never reach the repo: TronGrid, SES, Twilio, R2,
+# Better Auth, Sentry, PostHog.
+*.pem
+*.p12
+*.pfx
+*.keystore
+secrets.json
+service-account*.json
+.sentryclirc
+
+# --- Build output ---------------------------------------------------------
+dist/
+build/
+out/
+.vite/
+vite.config.ts.timestamp-*
+*.tsbuildinfo
+.tsbuildinfo
+
+# --- Tests, coverage, e2e -------------------------------------------------
+coverage/
+.nyc_output/
+playwright-report/
+blob-report/
+test-results/
+playwright/.cache/
+.vitest/
+__snapshots__/*.snap.new
+
+# --- Prisma / database ----------------------------------------------------
+# schema.prisma, migrations/ and the seed scripts are committed; generated
+# client output and local database artefacts are not. Schema changes go
+# through migrations only (AGENTS.md, "Database & Dates").
+backend/prisma/generated/
+backend/src/generated/
+prisma/generated/
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+prisma/dev.db*
+
+# Local docker-compose data, if ever bind-mounted instead of a named volume.
+postgres-data/
+pgdata/
+redis-data/
+docker-compose.override.yml
+
+# --- Runtime / local artefacts -------------------------------------------
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Local scratch + locally written uploads (mail scans, identity documents).
+# Anchored to the repo/app roots so they never swallow source directories —
+# backend/src/modules/uploads/ is a module, not an artefact. Customer documents
+# belong in the private R2 bucket, never in git.
+/.tmp/
+/tmp/
+/temp/
+/uploads/
+/storage/
+backend/.tmp/
+backend/tmp/
+backend/uploads/
+backend/storage/
+frontend/.tmp/
+frontend/tmp/
+
+# --- Deploy / hosting -----------------------------------------------------
+.wrangler/
+.vercel/
+.netlify/
+.serverless/
+
+# --- Tooling / agents -----------------------------------------------------
 graphify-out/
 .claude/
+.cache/
+.eslintcache
+.turbo/
+
+# --- Editors --------------------------------------------------------------
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-workspace
+
+# --- OS -------------------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+desktop.ini
+$RECYCLE.BIN/

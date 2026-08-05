@@ -9,6 +9,7 @@ import {
   useMarkAdminNotificationRead,
   useMarkAllAdminNotificationsRead,
 } from '@/admin/features/notifications';
+import { useAdminUnattendedSupport } from '@/admin/features/support';
 import { useAdminMe } from '@/admin/queries/admin-me';
 import { useCompactScale } from '@/hooks/useCompactScale';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
@@ -137,6 +138,20 @@ export function AdminLayout({
   );
   const unreadCount = unread.notifications;
 
+  /*
+   * The Support-inbox bubble. A different question from the bell's counter beside
+   * it — that one is "rows addressed to me", this one is "chats addressed to
+   * nobody" — so it is its own number rather than the `messages` half of
+   * `useUnreadCounts`, which counts the conversations a user owns as a CUSTOMER
+   * and is therefore zero for a staff member on every screen.
+   *
+   * Asked only of a member who holds the `support` area: the nav item is hidden
+   * without it and the endpoint would refuse them.
+   */
+  const unattendedSupport = useAdminUnattendedSupport(
+    me.data?.permissions?.includes('support') ?? false,
+  );
+
   // Opening a row marks it read and then navigates. The row is a Link, so the
   // navigation would happen on its own; doing it here keeps both halves in one
   // place and lets an informational row (no href) still be marked read.
@@ -150,7 +165,7 @@ export function AdminLayout({
       <AdminSidebar
         user={sidebarUser}
         permissions={me.data?.permissions}
-        badges={{ notifications: unreadCount, support: unread.messages }}
+        badges={{ notifications: unreadCount, support: unattendedSupport }}
         mobileOpen={mobileNavOpen}
         onMobileClose={() => setMobileNavOpen(false)}
         /* On mobile the user block lives inside the drawer, which is itself a

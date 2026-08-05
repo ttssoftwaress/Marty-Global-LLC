@@ -3,7 +3,7 @@ import { addressOptions, countryOptions, stateOptions } from './seed-locations.j
 /*
  * THE CATALOG, as data.
  *
- * The field registry, the result registry, and the five services Marty Global
+ * The field registry, the result registry, and the seven services Marty Global
  * sells — kept apart from `seed.ts` so the shape of the catalog can be read (and
  * tested, in `seed-catalog.test.ts`) without importing a script that connects to
  * a database and starts writing to it.
@@ -308,6 +308,153 @@ export const FIELDS: SeedField[] = [
     category: 'Registered agent',
   },
 
+  // --- Business banking ---------------------------------------------------
+  /*
+   * Deliberately NOT `banking_region` (retired, at the tail of this list): the
+   * orders module denormalises an order's jurisdiction from any answer whose
+   * FIELD NAME reads as a region, country, or jurisdiction (orders.service.ts,
+   * REGION_FIELD_PATTERN). The market an account is opened in is not the
+   * jurisdiction the order is filed under — that is the company's, and it comes
+   * from `formation_country` in the step above — so this asks the same question
+   * under a name the pattern leaves alone.
+   */
+  {
+    key: 'banking_market',
+    label: 'Where do you want the account?',
+    type: 'select',
+    hint: 'The market the account is held in — not where the company is registered.',
+    category: 'Business banking',
+    config: {
+      options: [
+        { value: 'us', label: 'United States' },
+        { value: 'gb', label: 'United Kingdom' },
+        { value: 'eu', label: 'European Union' },
+        { value: 'ca', label: 'Canada' },
+        { value: 'sg', label: 'Singapore' },
+        { value: 'any', label: 'Wherever we are most likely to be accepted' },
+      ],
+    },
+  },
+  {
+    key: 'banking_account_type',
+    label: 'What kind of account?',
+    type: 'select',
+    category: 'Business banking',
+    config: {
+      options: [
+        { value: 'business-current', label: 'Business current account' },
+        { value: 'multi-currency', label: 'Multi-currency platform account' },
+        {
+          value: 'merchant-payout',
+          label: 'Payout account for a marketplace or gateway',
+        },
+        { value: 'undecided', label: 'Not sure — recommend one' },
+      ],
+    },
+  },
+  {
+    key: 'banking_currencies',
+    label: 'Currencies you need to hold',
+    type: 'text',
+    placeholder: 'e.g. USD, EUR, GBP',
+    hint: 'Leave blank if one currency is enough.',
+    category: 'Business banking',
+  },
+  {
+    key: 'banking_monthly_volume',
+    label: 'Expected monthly turnover',
+    type: 'select',
+    hint: 'Every partner asks this at onboarding — an estimate is fine.',
+    category: 'Business banking',
+    config: {
+      options: [
+        { value: 'under-10k', label: 'Under $10,000' },
+        { value: '10k-50k', label: '$10,000 – $50,000' },
+        { value: '50k-250k', label: '$50,000 – $250,000' },
+        { value: 'over-250k', label: 'More than $250,000' },
+      ],
+    },
+  },
+  {
+    key: 'banking_money_flow',
+    label: 'Where will the money come from?',
+    type: 'textarea',
+    placeholder:
+      'Who pays you, from which markets, and how — card sales, invoices, marketplace payouts.',
+    hint: 'The compliance question every partner asks first. Plain language answers it best.',
+    category: 'Business banking',
+    config: { rows: 3 },
+  },
+
+  // --- E-commerce ---------------------------------------------------------
+  {
+    key: 'marketplace',
+    label: 'Primary marketplace',
+    type: 'select',
+    hint: 'The one to register first. Add any others below.',
+    category: 'E-commerce',
+    config: {
+      options: [
+        { value: 'amazon', label: 'Amazon' },
+        { value: 'ebay', label: 'eBay' },
+        { value: 'walmart', label: 'Walmart' },
+        { value: 'alibaba', label: 'Alibaba' },
+      ],
+    },
+  },
+  {
+    key: 'marketplace_extra',
+    label: 'Other marketplaces',
+    type: 'textarea',
+    placeholder: 'One per line — any further platforms you want registered.',
+    category: 'E-commerce',
+    config: { rows: 2 },
+  },
+  /*
+   * Named `selling_markets` rather than anything with "region" or "country" in
+   * it, for the same reason as `banking_market` above — the countries a seller
+   * lists into are not the jurisdiction the order is filed under.
+   */
+  {
+    key: 'selling_markets',
+    label: 'Markets you will sell into',
+    type: 'textarea',
+    placeholder: 'e.g. United States and Canada first, then the UK.',
+    hint: 'Each marketplace verifies you separately per market, so list them all.',
+    category: 'E-commerce',
+    config: { rows: 2 },
+  },
+  {
+    key: 'store_name',
+    label: 'Store / brand name',
+    type: 'text',
+    placeholder: 'e.g. North Peak Goods',
+    hint: 'The name buyers see. It does not have to match the company name.',
+    category: 'E-commerce',
+  },
+  {
+    key: 'product_categories',
+    label: 'What will you sell?',
+    type: 'textarea',
+    placeholder: 'Product categories, and anything that needs approval to list.',
+    category: 'E-commerce',
+    config: { rows: 3 },
+  },
+  {
+    key: 'marketplace_history',
+    label: 'Have you sold on this platform before?',
+    type: 'select',
+    hint: 'A closed or suspended account under the same details changes how the new one is filed.',
+    category: 'E-commerce',
+    config: {
+      options: [
+        { value: 'no', label: 'No — this is a first account' },
+        { value: 'active', label: 'Yes — I have an active account elsewhere' },
+        { value: 'closed', label: 'Yes — a previous account was closed or suspended' },
+      ],
+    },
+  },
+
   // --- Remote desktop (RDP) -----------------------------------------------
   {
     key: 'rdp_plan',
@@ -574,6 +721,7 @@ export const FIELDS: SeedField[] = [
     key: 'banking_region',
     label: 'Preferred banking region (retired)',
     type: 'select',
+    hint: 'Replaced by "Where do you want the account?" — see `banking_market`.',
     category: 'Retired',
     archived: true,
     config: {
@@ -584,36 +732,6 @@ export const FIELDS: SeedField[] = [
         { value: 'eu', label: 'European Union' },
       ],
     },
-  },
-  {
-    key: 'marketplace',
-    label: 'Target marketplace (retired)',
-    type: 'select',
-    category: 'Retired',
-    archived: true,
-    config: {
-      options: [
-        { value: 'amazon', label: 'Amazon' },
-        { value: 'ebay', label: 'eBay' },
-        { value: 'walmart', label: 'Walmart' },
-        { value: 'alibaba', label: 'Alibaba' },
-      ],
-    },
-  },
-  {
-    key: 'store_name',
-    label: 'Store / brand name (retired)',
-    type: 'text',
-    category: 'Retired',
-    archived: true,
-  },
-  {
-    key: 'product_categories',
-    label: 'Product categories (retired)',
-    type: 'textarea',
-    category: 'Retired',
-    archived: true,
-    config: { rows: 3 },
   },
 ];
 
@@ -936,6 +1054,135 @@ export const RESULT_FIELDS: SeedResultField[] = [
     category: 'Website',
   },
 
+  // --- Business banking ---------------------------------------------------
+  /*
+   * SECURITY: no full account number, no credentials, no anything that could
+   * move money (AGENTS.md, Security & PII). A result value is stored in plain
+   * text and read back by staff and the customer, and the account is the
+   * customer's with the bank — the bank issues the credentials to them
+   * directly, never through us. The account number is the last four digits and
+   * the column exists at that width on purpose.
+   */
+  {
+    key: 'bank_name',
+    label: 'Bank',
+    type: 'text',
+    category: 'Banking',
+    isPrimary: true,
+    showInList: true,
+  },
+  {
+    key: 'bank_account_type',
+    label: 'Account type',
+    type: 'text',
+    hint: 'e.g. Business current account, multi-currency.',
+    category: 'Banking',
+  },
+  {
+    key: 'account_number_masked',
+    label: 'Account number',
+    type: 'text',
+    hint: 'Last four digits only — never the full number.',
+    category: 'Banking',
+    showInList: true,
+  },
+  {
+    key: 'account_currencies',
+    label: 'Currencies held',
+    type: 'text',
+    hint: 'e.g. USD, EUR, GBP',
+    category: 'Banking',
+  },
+  {
+    key: 'account_status',
+    label: 'Status',
+    type: 'status',
+    category: 'Banking',
+    showInList: true,
+    config: {
+      statusOptions: [
+        { value: 'open', label: 'Open', tone: 'success' },
+        { value: 'pending', label: 'With the bank', tone: 'warning' },
+        { value: 'declined', label: 'Declined', tone: 'error' },
+        { value: 'closed', label: 'Closed', tone: 'neutral' },
+      ],
+    },
+  },
+  {
+    key: 'account_opened_on',
+    label: 'Opened on',
+    type: 'date',
+    category: 'Banking',
+    showInList: true,
+  },
+  {
+    key: 'online_banking_url',
+    label: 'Online banking',
+    type: 'url',
+    hint: 'Where you sign in. Your credentials come from the bank, never from us.',
+    category: 'Banking',
+  },
+
+  // --- E-commerce ---------------------------------------------------------
+  {
+    key: 'store_name',
+    label: 'Store name',
+    type: 'text',
+    category: 'E-commerce',
+    isPrimary: true,
+    showInList: true,
+  },
+  {
+    key: 'store_platform',
+    label: 'Marketplace',
+    type: 'select',
+    category: 'E-commerce',
+    showInList: true,
+    config: {
+      options: [
+        { value: 'amazon', label: 'Amazon' },
+        { value: 'ebay', label: 'eBay' },
+        { value: 'walmart', label: 'Walmart' },
+        { value: 'alibaba', label: 'Alibaba' },
+      ],
+    },
+  },
+  {
+    key: 'store_url',
+    label: 'Storefront address',
+    type: 'url',
+    category: 'E-commerce',
+    showInList: true,
+  },
+  {
+    key: 'seller_id',
+    label: 'Seller / merchant ID',
+    type: 'text',
+    hint: 'The platform’s own reference for the account.',
+    category: 'E-commerce',
+  },
+  {
+    key: 'seller_account_status',
+    label: 'Status',
+    type: 'status',
+    category: 'E-commerce',
+    showInList: true,
+    config: {
+      statusOptions: [
+        { value: 'active', label: 'Selling', tone: 'success' },
+        { value: 'verifying', label: 'In verification', tone: 'warning' },
+        { value: 'suspended', label: 'Suspended', tone: 'error' },
+      ],
+    },
+  },
+  {
+    key: 'store_launched_on',
+    label: 'Account live on',
+    type: 'date',
+    category: 'E-commerce',
+    showInList: true,
+  },
+
   // --- Shared -------------------------------------------------------------
   {
     key: 'delivery_notes',
@@ -1004,94 +1251,10 @@ export const RESULT_FIELDS: SeedResultField[] = [
     category: 'Mail room',
   },
 
-  /*
-   * --- Retired ------------------------------------------------------------
-   * Facts from services we no longer sell. Archived rather than deleted for the
-   * same reason as the request fields above: records delivered under them must
-   * keep rendering.
-   */
-  {
-    key: 'bank_name',
-    label: 'Bank (retired)',
-    type: 'text',
-    category: 'Retired',
-    archived: true,
-  },
-  {
-    key: 'account_number_masked',
-    label: 'Account number (retired)',
-    type: 'text',
-    hint: 'Last four digits only.',
-    category: 'Retired',
-    archived: true,
-  },
-  {
-    key: 'account_status',
-    label: 'Account status (retired)',
-    type: 'status',
-    category: 'Retired',
-    archived: true,
-    config: {
-      statusOptions: [
-        { value: 'open', label: 'Open', tone: 'success' },
-        { value: 'pending', label: 'Pending activation', tone: 'warning' },
-        { value: 'closed', label: 'Closed', tone: 'neutral' },
-      ],
-    },
-  },
-  {
-    key: 'account_opened_on',
-    label: 'Opened on (retired)',
-    type: 'date',
-    category: 'Retired',
-    archived: true,
-  },
-  {
-    key: 'online_banking_url',
-    label: 'Online banking (retired)',
-    type: 'url',
-    category: 'Retired',
-    archived: true,
-  },
-  {
-    key: 'store_name',
-    label: 'Store name (retired)',
-    type: 'text',
-    category: 'Retired',
-    archived: true,
-  },
-  {
-    key: 'store_url',
-    label: 'Store address (retired)',
-    type: 'url',
-    category: 'Retired',
-    archived: true,
-  },
-  {
-    key: 'store_platform',
-    label: 'Store platform (retired)',
-    type: 'select',
-    category: 'Retired',
-    archived: true,
-    config: {
-      options: [
-        { value: 'shopify', label: 'Shopify' },
-        { value: 'woocommerce', label: 'WooCommerce' },
-        { value: 'amazon', label: 'Amazon' },
-      ],
-    },
-  },
-  {
-    key: 'store_launched_on',
-    label: 'Store launched on (retired)',
-    type: 'date',
-    category: 'Retired',
-    archived: true,
-  },
 ];
 
 /*
- * The orderable service catalog — the five services Marty Global sells.
+ * The orderable service catalog — the seven services Marty Global sells.
  *
  * Each carries its Step 1 card copy and its request form as REFERENCES into the
  * registry above — `{ fieldKey, required? }`, never an inline field definition.
@@ -1189,6 +1352,34 @@ const FORMATION_TIMES: Record<string, string> = {
 };
 
 const ALL_COUNTRIES = Object.keys(FORMATION_TIMES);
+
+/*
+ * Banking and e-commerce are offered in FEWER places than the rest of the
+ * catalog, and the shorter lists are the point: we can only file a bank
+ * application where a partner takes our customers' profile, and only register a
+ * seller account on a marketplace that operates in the market. Listing a
+ * jurisdiction we cannot actually submit into would put a country on the order
+ * form that the team has to walk back afterwards.
+ */
+export const BANKING_TIMES: Record<string, string> = {
+  US: '10–20 business days',
+  CA: '10–20 business days',
+  GB: '7–14 business days',
+  IE: '10–20 business days',
+  NL: '14–21 business days',
+  SG: '10–15 business days',
+};
+
+export const ECOMMERCE_TIMES: Record<string, string> = {
+  US: '5–10 business days',
+  CA: '5–10 business days',
+  GB: '5–10 business days',
+  IE: '7–14 business days',
+  NL: '7–14 business days',
+  ES: '7–14 business days',
+  IT: '7–14 business days',
+  SG: '7–14 business days',
+};
 
 const coverageOf = (
   codes: readonly string[],
@@ -1462,6 +1653,215 @@ export const SERVICES: SeedService[] = [
     ],
     resultInternal: true,
   },
+  /*
+   * The two services whose OUTCOME belongs to a third party.
+   *
+   * Everything above this point we file ourselves, so "delivered" is a decision
+   * we make. A bank and a marketplace decide for themselves, under their own
+   * compliance rules, and no amount of preparation obliges either to say yes.
+   * The copy therefore promises the application — matched, prepared, submitted,
+   * pursued — and never an approval, an account number, or a timeline somebody
+   * else controls. `/services/banking` and `/services/ecommerce` say exactly
+   * this on the marketing side; the two must not drift apart.
+   */
+  {
+    id: 'bank-account',
+    iconKey: 'bank-account',
+    name: 'Bank Account Opening',
+    shortName: 'Bank Account',
+    description:
+      'Guided business account applications for newly formed and non-resident-owned companies — matched to the partners that accept your entity, prepared, and submitted for you.',
+    features: [
+      'Partners matched to your entity & model',
+      'Application prepared and compliance-checked',
+      'Multi-currency options where supported',
+    ],
+    footer: { label: 'Decision timeline set by the bank' },
+    formSteps: [
+      /*
+       * The shared `company` step again (see Registered Agent): ordered
+       * alongside formation, the company is described once and the answers are
+       * recorded against both items. The registration number stays optional for
+       * the same reason it does there — a company being formed in the same
+       * application does not have one yet.
+       */
+      {
+        key: 'company',
+        title: 'Company details',
+        description: 'The entity the account will be opened for.',
+        fields: [
+          { fieldKey: 'company_name', required: true },
+          // Country first: the entity-type list below is filtered by it.
+          { fieldKey: 'formation_country', required: true },
+          { fieldKey: 'entity_type' },
+          { fieldKey: 'company_registration_number' },
+          { fieldKey: 'business_activity', required: true },
+        ],
+      },
+      {
+        key: 'banking',
+        title: 'Banking requirements',
+        description: 'Where the account should be, and what it needs to do.',
+        fields: [
+          { fieldKey: 'banking_market', required: true },
+          { fieldKey: 'banking_account_type', required: true },
+          { fieldKey: 'banking_currencies' },
+          { fieldKey: 'banking_monthly_volume', required: true },
+          { fieldKey: 'banking_money_flow', required: true },
+        ],
+      },
+      {
+        key: 'owners',
+        title: 'Owners & directors',
+        fields: [{ fieldKey: 'owner_details', required: true }],
+      },
+      {
+        key: 'identity',
+        title: 'Identity documents',
+        description:
+          'Every partner runs its own KYC before it opens anything — having these ready is most of what avoids a second round of requests.',
+        fields: [
+          { fieldKey: 'identity_document', required: true },
+          { fieldKey: 'proof_of_address', required: true },
+          { fieldKey: 'company_documents' },
+        ],
+      },
+    ],
+    coverage: coverageOf(Object.keys(BANKING_TIMES), BANKING_TIMES),
+    sortOrder: 4,
+    resultPageTitle: 'My bank accounts',
+    resultNoun: 'account',
+    /*
+     * `account_status` is required and `account_opened_on` is not, which is the
+     * whole shape of this service in one line: the record exists from the moment
+     * the application is with the bank, and an opening date only exists if the
+     * bank said yes.
+     */
+    resultFields: [
+      { fieldKey: 'bank_name', required: true, isPrimary: true },
+      { fieldKey: 'account_status', required: true },
+      { fieldKey: 'bank_account_type' },
+      { fieldKey: 'account_number_masked' },
+      { fieldKey: 'account_currencies' },
+      { fieldKey: 'account_opened_on' },
+      { fieldKey: 'online_banking_url' },
+      { fieldKey: 'delivery_notes' },
+    ],
+    requestTypes: [
+      {
+        key: 'another-bank',
+        label: 'Apply to another bank',
+        description: 'A second application with a different partner.',
+        turnaround: 'Shortlisted within 3 business days',
+        fields: [{ fieldKey: 'banking_market', required: true }],
+      },
+      {
+        key: 'bank-request',
+        label: 'The bank has asked me for something',
+        description: 'Send it to us and we will handle the response.',
+        turnaround: 'Answered within 1 business day',
+        fields: [{ fieldKey: 'change_request', required: true }],
+      },
+      {
+        key: 'update-bank-details',
+        label: 'Update my details with the bank',
+        description: 'A change of address, director, or company name.',
+        turnaround: 'Typically 5–10 business days',
+        fields: [{ fieldKey: 'change_request', required: true }],
+      },
+    ],
+  },
+  {
+    id: 'e-commerce',
+    iconKey: 'e-commerce',
+    name: 'E-Commerce Account Setup',
+    shortName: 'E-Commerce Setup',
+    description:
+      'Business seller accounts on Amazon, eBay, Walmart, and Alibaba, registered in your company’s name and prepared for the verification each platform runs.',
+    features: [
+      'Seller registration completed for you',
+      'Identity & address verification prepared',
+      'Entity, address and bank details aligned',
+    ],
+    footer: {
+      label: 'Marketplaces',
+      chips: ['Amazon', 'eBay', 'Walmart', 'Alibaba'],
+    },
+    formSteps: [
+      {
+        key: 'company',
+        title: 'Company details',
+        description: 'The entity the seller account is registered to.',
+        fields: [
+          { fieldKey: 'company_name', required: true },
+          { fieldKey: 'formation_country', required: true },
+          { fieldKey: 'company_registration_number' },
+        ],
+      },
+      {
+        key: 'store',
+        title: 'Store & marketplaces',
+        description: 'Where you want to sell, and what you will be listing.',
+        fields: [
+          { fieldKey: 'marketplace', required: true },
+          { fieldKey: 'marketplace_extra' },
+          { fieldKey: 'selling_markets', required: true },
+          { fieldKey: 'store_name', required: true },
+          { fieldKey: 'product_categories', required: true },
+          { fieldKey: 'marketplace_history', required: true },
+        ],
+      },
+      {
+        key: 'identity',
+        title: 'Identity documents',
+        description:
+          'Every marketplace verifies the owner and the business address before it lets you list — often by posting something to the address you gave.',
+        fields: [
+          { fieldKey: 'identity_document', required: true },
+          { fieldKey: 'proof_of_address', required: true },
+          { fieldKey: 'company_documents' },
+        ],
+      },
+    ],
+    coverage: coverageOf(Object.keys(ECOMMERCE_TIMES), ECOMMERCE_TIMES),
+    sortOrder: 5,
+    resultPageTitle: 'My seller accounts',
+    resultNoun: 'seller account',
+    // Same asymmetry as banking: the account has a status from the moment it is
+    // filed, and a live date only once the platform has verified it.
+    resultFields: [
+      { fieldKey: 'store_name', required: true, isPrimary: true },
+      { fieldKey: 'store_platform', required: true },
+      { fieldKey: 'seller_account_status', required: true },
+      { fieldKey: 'seller_id' },
+      { fieldKey: 'store_url' },
+      { fieldKey: 'store_launched_on' },
+      { fieldKey: 'delivery_notes' },
+    ],
+    requestTypes: [
+      {
+        key: 'add-marketplace',
+        label: 'Register another marketplace',
+        description: 'The same company, on one more platform.',
+        turnaround: 'Submitted within 5 business days',
+        fields: [{ fieldKey: 'marketplace', required: true }],
+      },
+      {
+        key: 'verification-request',
+        label: 'The platform has asked me for something',
+        description: 'A verification step or document request we can answer for you.',
+        turnaround: 'Answered within 1 business day',
+        fields: [{ fieldKey: 'change_request', required: true }],
+      },
+      {
+        key: 'update-store-details',
+        label: 'Update my store details',
+        description: 'Store name, address, or bank details on the seller profile.',
+        turnaround: 'Typically 2–5 business days',
+        fields: [{ fieldKey: 'change_request', required: true }],
+      },
+    ],
+  },
   {
     id: 'remote-desktop',
     iconKey: 'remote-desktop',
@@ -1494,7 +1894,7 @@ export const SERVICES: SeedService[] = [
       },
     ],
     coverage: coverageOf(ALL_COUNTRIES, 'Ready within 24 hours'),
-    sortOrder: 4,
+    sortOrder: 6,
     resultPageTitle: 'My servers',
     resultNoun: 'server',
     resultFields: [
@@ -1578,7 +1978,7 @@ export const SERVICES: SeedService[] = [
       },
     ],
     coverage: coverageOf(ALL_COUNTRIES, '2–4 weeks'),
-    sortOrder: 5,
+    sortOrder: 7,
     resultPageTitle: 'My websites',
     resultNoun: 'website',
     resultFields: [

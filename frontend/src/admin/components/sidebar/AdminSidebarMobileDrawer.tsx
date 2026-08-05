@@ -6,6 +6,7 @@ import { useOverlay } from '@/hooks/useOverlay';
 import { AdminNavBadge } from './AdminNavBadge';
 import { AdminSidebarUserBlock, type AdminSidebarUser } from './AdminSidebarUserBlock';
 import {
+  ADMIN_NAV_BADGE_NOUN,
   isAdminNavItemActive,
   type AdminNavBadges,
   type AdminNavItem,
@@ -127,7 +128,10 @@ export function AdminSidebarMobileDrawer({
                       <Icon className="size-5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
                       <span className="min-w-0 flex-1 break-words">{item.label}</span>
                       {item.badge ? (
-                        <AdminNavBadge count={badges?.[item.badge] ?? 0} />
+                        <AdminNavBadge
+                          count={badges?.[item.badge] ?? 0}
+                          noun={ADMIN_NAV_BADGE_NOUN[item.badge]}
+                        />
                       ) : null}
                     </NavLink>
                   </li>

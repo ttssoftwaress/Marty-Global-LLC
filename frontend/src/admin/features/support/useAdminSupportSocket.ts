@@ -13,9 +13,11 @@ import {
 import type { ComposerMode, SupportMessage } from '../../types/support';
 import {
   adminSupportThreadKey,
+  adminSupportUnattendedKey,
   appendAdminMessage,
   applyAdminReadReceipt,
   failAdminMessage,
+  useAdminSupportUnattended,
   useSendAdminSupportMessage,
 } from './queries';
 
@@ -271,6 +273,43 @@ export function useAdminSupportInboxSocket(activeConversationId?: string) {
       }
     },
   );
+}
+
+/*
+ * The Support-inbox badge in the admin sidebar: chats sitting in the queue that
+ * nobody has been given yet.
+ *
+ * Mounted in the shell rather than on the inbox page, because the point of the
+ * bubble is to be seen from the screens that are NOT the inbox — an admin working
+ * the orders queue has no other way to learn a chat arrived with no agent to take
+ * it.
+ *
+ * Fetch is the seed, the socket is the correction — the same shape as the bell's
+ * counter (`hooks/useUnreadCounts.ts`). `conversation:updated` reaches the
+ * supervisor room on every transition that moves this number: a chat created, a
+ * chat assigned or handed on, a chat resolved. The event carries ids only, so the
+ * count is re-read through the endpoint, which applies the viewer's own scope.
+ *
+ * Nothing here decrements locally. An assignment lands on every supervisor's
+ * screen at once, and two of them subtracting from their own copy of the number
+ * would drift apart within a minute — the server owns the figure, the event only
+ * says "ask again".
+ */
+export function useAdminUnattendedSupport(enabled: boolean): number {
+  const queryClient = useQueryClient();
+  const { socket } = useSocket();
+  const query = useAdminSupportUnattended(enabled);
+
+  useSocketEvent<SocketConversationChanged>(
+    socket,
+    SocketEvent.CONVERSATION,
+    () => {
+      if (!enabled) return;
+      void queryClient.invalidateQueries({ queryKey: adminSupportUnattendedKey() });
+    },
+  );
+
+  return query.data?.count ?? 0;
 }
 
 /*

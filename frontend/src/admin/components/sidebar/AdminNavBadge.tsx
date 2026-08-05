@@ -13,6 +13,11 @@
 type AdminNavBadgeProps = {
   count: number;
   /*
+   * What the number counts, for the screen reader — "unread" for the bell's feed,
+   * "unassigned" for the support queue. See ADMIN_NAV_BADGE_NOUN.
+   */
+  noun?: string;
+  /*
    * Set where the count is already in the control's own accessible name — the
    * tablet rail, whose tiles have no visible label. Announcing it twice is worse
    * than not drawing it at all.
@@ -21,7 +26,12 @@ type AdminNavBadgeProps = {
   className?: string;
 };
 
-export function AdminNavBadge({ count, decorative, className }: AdminNavBadgeProps) {
+export function AdminNavBadge({
+  count,
+  noun = 'unread',
+  decorative,
+  className,
+}: AdminNavBadgeProps) {
   if (count <= 0) return null;
 
   return (
@@ -37,7 +47,7 @@ export function AdminNavBadge({ count, decorative, className }: AdminNavBadgePro
     >
       {count > 9 ? '9+' : count}
       {/* The number alone reads as "9" to a screen reader with no idea what of. */}
-      {decorative ? null : <span className="sr-only"> unread</span>}
+      {decorative ? null : <span className="sr-only"> {noun}</span>}
     </span>
   );
 }

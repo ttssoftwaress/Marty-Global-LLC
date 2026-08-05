@@ -5,9 +5,12 @@ import jonathanAvatar from '../../../assets/testimonial-jonathan.png';
 /*
  * Testimonials — shared marketing section (home + services). Three breakpoints
  * per Figma:
- *   - mobile (<768px):  heading 28px, cards stacked in a single column.
- *   - tablet (md, 768px): heading 32px, cards still stacked (wider, larger type).
- *   - desktop (lg, 1024px): heading 40px, three equal cards in a row.
+ *   - mobile (<768px):  heading 28px, cards stacked in a single column, partner
+ *     logos in a 2×2 grid (four logos — Shopify is dropped at this width).
+ *   - tablet (md, 768px): heading 32px, cards still stacked (wider, larger type),
+ *     all five logos wrap centered.
+ *   - desktop (lg, 1024px): heading 40px, three equal cards in a row, all five
+ *     logos spread across a single space-between row.
  * Each card scales its quote, avatar, name, and role across the breakpoints.
  */
 
@@ -50,7 +53,27 @@ const TESTIMONIALS: Testimonial[] = [
   },
 ];
 
-export function TestimonialsSection() {
+// Mobile drops the fifth logo; tablet and desktop show all five.
+const PARTNER_LOGOS = [
+  'Stripe Atlas Partner',
+  'Silicon Valley Bank',
+  'Wise for Business',
+  'Mercury Financial',
+  'Shopify EU Networks',
+];
+
+type TestimonialsSectionProps = {
+  /**
+   * The partner-logo strip. Off on `/services`, where the page is already a long
+   * scroll of service cards, coverage lists, and value props — the logos were
+   * the least load-bearing band on it.
+   */
+  showPartners?: boolean;
+};
+
+export function TestimonialsSection({
+  showPartners = true,
+}: TestimonialsSectionProps = {}) {
   return (
     <section className="flex w-full flex-col items-center gap-10 bg-white px-4 py-16 md:gap-12 md:px-10 md:py-20 lg:gap-16 lg:px-20 lg:py-24">
       <h2 className="w-full text-center font-marketing text-[28px] font-bold leading-[1.2] text-text md:text-[32px] lg:text-[40px]">
@@ -62,6 +85,28 @@ export function TestimonialsSection() {
           <TestimonialCard key={testimonial.name} {...testimonial} />
         ))}
       </div>
+
+      {showPartners && (
+        <div className="flex w-full flex-col items-center gap-4 md:gap-5 md:pt-6 lg:gap-6 lg:pt-6">
+          <p className="text-[11px] font-semibold uppercase text-gray-400 lg:text-[12px]">
+            Trusted by leading platforms
+          </p>
+          <div className="grid w-full grid-cols-2 gap-2.5 md:flex md:flex-wrap md:justify-center md:gap-3 lg:flex-nowrap lg:justify-between">
+            {PARTNER_LOGOS.map((logo, index) => (
+              <div
+                key={logo}
+                className={`flex min-w-0 items-center justify-center rounded-lg border border-gray-200 bg-gray-100 px-4 py-2.5 md:flex-none lg:px-6 lg:py-3 ${
+                  index === 4 ? 'hidden md:flex' : ''
+                }`}
+              >
+                <p className="whitespace-nowrap font-marketing text-[11px] font-bold text-gray-500 md:text-[12px] lg:text-[14px]">
+                  {logo}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </section>
   );
 }

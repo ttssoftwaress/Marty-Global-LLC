@@ -22,12 +22,12 @@ import type { ServiceStep } from '../detail/ServiceStepGrid';
  * where our work ends and the bank's begins, and what a customer needs to have
  * ready.
  *
- * Unlike the other service pages there is no catalog entry to ground this one
- * against (`seed-catalog.ts` scaffolds formation, agent, mail room, remote
- * desktop, and website), so the claims here stay inside what the Services page
- * already says: we match, prepare, and submit applications with partner banks —
- * the bank decides. Nothing here promises an approval, an account number, or a
- * timeline the bank controls.
+ * The service is in the catalog (`bank-account` in `seed-catalog.ts`), and the
+ * claims here have to stay inside what it actually delivers: we match, prepare,
+ * and submit applications with partner banks — the bank decides. Nothing here
+ * promises an approval, an account number, or a timeline the bank controls,
+ * which is the same reason the catalog's delivery record requires a status and
+ * not an opening date.
  */
 
 export const BANKING_QUICK_FACTS: QuickFact[] = [
