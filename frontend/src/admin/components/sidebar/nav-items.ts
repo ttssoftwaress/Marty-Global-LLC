@@ -50,14 +50,27 @@ import type { LucideIcon } from 'lucide-react';
  * rather than the number, because the nav list is a static module and the counts
  * are live — the sidebar resolves the key against what the shell passes it.
  *
- * Only the member's own two counters, deliberately: a queue-depth badge ("12
- * orders waiting") would be a number every staff member sees the same, on a
- * screen whose scope differs per member, so it would contradict the list under
- * it for anyone without the area's `.all` grant.
+ * Two counters, deliberately, and both are scoped to the member reading them: the
+ * feed rows addressed to them, and the support chats nobody has been given yet
+ * within the slice of the queue they can see. A flat queue-depth badge ("12
+ * orders waiting") is the thing to avoid — it would be a number every staff
+ * member sees the same, on a screen whose scope differs per member, so it would
+ * contradict the list under it for anyone without the area's `.all` grant.
  */
 export type AdminNavBadgeKey = 'notifications' | 'support';
 
 export type AdminNavBadges = Partial<Record<AdminNavBadgeKey, number>>;
+
+/*
+ * What each bubble's number is a count OF, for the screen reader — the digit
+ * alone reads as "3" with no idea of what. The two counters are not the same
+ * question: the bell counts feed rows nobody has opened, while the inbox counts
+ * chats nobody has been given, which is why they cannot share one word.
+ */
+export const ADMIN_NAV_BADGE_NOUN: Record<AdminNavBadgeKey, string> = {
+  notifications: 'unread',
+  support: 'unassigned',
+};
 
 export type AdminNavItem = {
   label: string;

@@ -98,16 +98,30 @@ const SERVICE_REGIONS: Record<string, { code: string; processingTime: string }[]
     { code: 'CA', processingTime: '2–3 business days' },
     { code: 'EU', processingTime: '3–5 business days' },
   ],
+  /*
+   * These two read off the real address book rather than the shorthand list
+   * above: `seed-catalog.ts` offers banking and e-commerce in named countries
+   * (BANKING_TIMES / ECOMMERCE_TIMES), so scaffolding an "EU" offering beside
+   * them would put a jurisdiction on the order form that the catalog itself
+   * does not know about.
+   */
   'bank-account': [
     { code: 'US', processingTime: '10–20 business days' },
-    { code: 'GB', processingTime: '7–14 business days' },
     { code: 'CA', processingTime: '10–20 business days' },
-    { code: 'EU', processingTime: '14–21 business days' },
+    { code: 'GB', processingTime: '7–14 business days' },
+    { code: 'IE', processingTime: '10–20 business days' },
+    { code: 'NL', processingTime: '14–21 business days' },
+    { code: 'SG', processingTime: '10–15 business days' },
   ],
   'e-commerce': [
     { code: 'US', processingTime: '5–10 business days' },
+    { code: 'CA', processingTime: '5–10 business days' },
     { code: 'GB', processingTime: '5–10 business days' },
-    { code: 'EU', processingTime: '7–14 business days' },
+    { code: 'IE', processingTime: '7–14 business days' },
+    { code: 'NL', processingTime: '7–14 business days' },
+    { code: 'ES', processingTime: '7–14 business days' },
+    { code: 'IT', processingTime: '7–14 business days' },
+    { code: 'SG', processingTime: '7–14 business days' },
   ],
 };
 

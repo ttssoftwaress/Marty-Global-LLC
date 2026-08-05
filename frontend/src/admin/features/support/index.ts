@@ -24,5 +24,6 @@ export {
 export {
   useAdminSupportInboxSocket,
   useAdminSupportSocket,
+  useAdminUnattendedSupport,
   useAgentAvailability,
 } from './useAdminSupportSocket';

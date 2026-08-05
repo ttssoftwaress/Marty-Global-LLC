@@ -21,12 +21,13 @@ import type { ServiceStep } from '../detail/ServiceStepGrid';
  * (`services/detail/`) from this file plus its two service-specific sections —
  * the marketplaces themselves, and what every one of them verifies.
  *
- * Like banking, this service has no catalog entry to ground it against, and its
- * outcome belongs to a third party. So the claims stay inside what the Services
- * page already says — we prepare and submit the seller application and handle
- * the verification — and nothing here promises an approved account or names a
- * platform rule specific enough to go stale. Marketplace names are factual
- * references to where we file, not a claim of partnership or endorsement.
+ * Like banking, this service is in the catalog (`e-commerce` in
+ * `seed-catalog.ts`) and its outcome belongs to a third party. So the claims
+ * stay inside what it delivers — we prepare and submit the seller application
+ * and handle the verification — and nothing here promises an approved account
+ * or names a platform rule specific enough to go stale. Marketplace names are
+ * factual references to where we file, not a claim of partnership or
+ * endorsement.
  */
 
 export const ECOMMERCE_QUICK_FACTS: QuickFact[] = [

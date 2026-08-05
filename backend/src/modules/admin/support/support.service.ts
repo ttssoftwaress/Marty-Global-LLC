@@ -215,6 +215,45 @@ async function supportScope(
   return { AND: [{ assigneeId: actor.userId }] };
 }
 
+/*
+ * Chats still waiting for an owner: nobody has picked them up and they are not
+ * closed.
+ *
+ * One definition, three readers — the inbox header's pill, the sidebar badge,
+ * and the live push behind it — because a badge that disagreed with the number
+ * printed at the top of the screen it links to is worse than no badge.
+ *
+ * Scoped like every other read here, which for an ordinary agent means zero by
+ * construction: their inbox is the threads assigned to them, so "unassigned" is
+ * not a cohort they have. A supervisor sees the real figure, and with automatic
+ * routing a non-zero one is worth acting on — it means the team has no eligible
+ * support agent for the router to hand the chat to.
+ */
+function unattendedWhere(
+  scope: Prisma.ConversationWhereInput,
+): Prisma.ConversationWhereInput {
+  return {
+    deletedAt: null,
+    kind: ConversationKind.SUPPORT,
+    ...scope,
+    assigneeId: null,
+    status: { not: ConversationStatus.RESOLVED },
+  };
+}
+
+/*
+ * The sidebar badge's number, on its own so the shell can read it on every
+ * `/admin/*` screen without loading a page of the inbox.
+ *
+ * It falls to zero the moment a chat is assigned — which is the whole point of
+ * the bubble: it counts work nobody has taken, not work outstanding.
+ */
+export async function countUnattended(actor: AuthContext): Promise<number> {
+  return prisma.conversation.count({
+    where: unattendedWhere(await supportScope(actor)),
+  });
+}
+
 export async function listConversations(
   actor: AuthContext,
   query: ListConversationsQuery,
@@ -262,22 +301,8 @@ export async function listConversations(
         status: { not: ConversationStatus.RESOLVED },
       },
     }),
-    /*
-     * Chats still waiting for an owner. Scoped like everything else, which for an
-     * agent means zero by construction — their inbox is the threads assigned to
-     * them, so "unassigned" is not a cohort they have. A supervisor sees the real
-     * figure, and with automatic routing a non-zero one is worth acting on: it
-     * means the team has no eligible support agent to route to.
-     */
-    prisma.conversation.count({
-      where: {
-        deletedAt: null,
-        kind: ConversationKind.SUPPORT,
-        ...scope,
-        assigneeId: null,
-        status: { not: ConversationStatus.RESOLVED },
-      },
-    }),
+    // The same figure the sidebar badge carries — see `unattendedWhere`.
+    prisma.conversation.count({ where: unattendedWhere(scope) }),
   ]);
 
   const page = takePage(rows, query.limit);

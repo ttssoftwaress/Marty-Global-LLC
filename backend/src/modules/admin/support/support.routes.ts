@@ -23,6 +23,13 @@ const router = Router();
 router.use(requirePermission('support'));
 
 router.get('/conversations', apiRateLimit, controller.listConversations);
+/*
+ * The sidebar badge's counter. Its own endpoint rather than a field on `/admin/me`
+ * because the two change on completely different clocks: permissions move when an
+ * admin edits a member, this moves every time a chat arrives or is handed to
+ * someone, and the shell caches that record for five minutes.
+ */
+router.get('/unattended', apiRateLimit, controller.unattendedCount);
 router.get('/conversations/:conversationId', apiRateLimit, controller.getThread);
 router.post(
   '/conversations/:conversationId/messages',

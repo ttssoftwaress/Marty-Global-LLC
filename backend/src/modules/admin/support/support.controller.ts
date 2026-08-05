@@ -29,6 +29,18 @@ export async function listConversations(
   }
 }
 
+export async function unattendedCount(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    res.json({ data: { count: await service.countUnattended(getAuth(req)) } });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function getThread(
   req: Request,
   res: Response,
