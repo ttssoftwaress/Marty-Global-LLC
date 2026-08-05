@@ -1,4 +1,6 @@
-import { createBrowserRouter, Outlet } from 'react-router-dom';
+import { createBrowserRouter, Outlet, type RouteObject } from 'react-router-dom';
+
+import { RouteErrorFallback } from './RouteErrorFallback';
 
 // Portal sections the sidebar links to that have no screen yet. Paths are
 // relative to `/app` and mirror PORTAL_NAV_ITEMS in
@@ -20,7 +22,7 @@ const PORTAL_PLACEHOLDER_ROUTES: { path: string; title: string }[] = [];
 // mapping below already handles it.
 const ADMIN_PLACEHOLDER_ROUTES: { path: string; title: string }[] = [];
 
-export const router = createBrowserRouter([
+const routes: RouteObject[] = [
   {
     /*
      * The public marketing pages, grouped under a pathless parent so the
@@ -1103,4 +1105,14 @@ export const router = createBrowserRouter([
       };
     },
   },
+];
+
+/*
+ * Every route hangs off one pathless parent, purely to give the whole tree a
+ * single errorElement. Without it React Router renders its own developer
+ * default for a route that fails to load — which is what a customer saw after a
+ * deploy replaced the chunk their tab was still asking for.
+ */
+export const router = createBrowserRouter([
+  { errorElement: <RouteErrorFallback />, children: routes },
 ]);
