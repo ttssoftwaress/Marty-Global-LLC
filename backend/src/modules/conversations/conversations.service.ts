@@ -11,6 +11,7 @@ import { AppError } from '../../lib/app-error.js';
 import { toInitials } from '../../lib/initials.js';
 import { prisma } from '../../lib/prisma.js';
 import { Role } from '../../lib/roles.js';
+import { emitOrderConversationChanged } from '../../sockets/broadcast.js';
 import { AuditAction, record } from '../audit/audit.service.js';
 
 /*
@@ -420,6 +421,27 @@ export async function sendMessage(
       entityType: 'Conversation',
       entityId: conversation.id,
       metadata: { from: null, to: actor.userId, via: 'conversation_reply' },
+    });
+  }
+
+  /*
+   * Persist, then emit (AGENTS.md, Live Chat). The assignee's "My conversations"
+   * row has just changed — its preview, its time, and whether it is waiting on a
+   * reply — and this thread has no socket transport of its own: both sides post
+   * over REST, so nothing else would ever tell the list. That is why a staff
+   * member had to reload the page to see a customer's message.
+   *
+   * A note is deliberately silent. It never touches the preview, the timestamp,
+   * or the waiting-on-us flag, so there is nothing on the list for it to change.
+   *
+   * The assignee is the one the transaction just wrote, not the one read before
+   * it — a reply that claimed an unowned thread must reach the agent who now
+   * holds it, and `order.assigneeId` still says nobody.
+   */
+  if (!isNote) {
+    emitOrderConversationChanged({
+      conversationId: conversation.id,
+      assigneeId: claimsConversation ? actor.userId : conversation.assigneeId,
     });
   }
 

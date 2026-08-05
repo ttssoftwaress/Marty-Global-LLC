@@ -132,3 +132,15 @@ export const STAFF_ROOM = 'staff';
  * the same permission check the REST inbox applies.
  */
 export const SUPPORT_ALL_ROOM = 'support:all';
+
+/*
+ * The same idea for order threads: staff who read every order rather than only
+ * the ones assigned to them (`orders.all` or `orders.assign`).
+ *
+ * A separate room from the one above because the two grants are separate — a
+ * member can hold the whole order queue without holding the support inbox, and
+ * "My conversations" is scoped by the ORDERS grant. Emitting an order thread's
+ * change into the support room would tell people the list would never show it to
+ * and miss the supervisors it should reach.
+ */
+export const ORDERS_ALL_ROOM = 'orders:all';
