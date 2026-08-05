@@ -1,1 +1,11 @@
+# SPA fallback: client-side routing means every path has to reach index.html.
+#
+# A real file always wins over this rule, so /assets/<hash>.js is served as
+# JavaScript for as long as that deployment is live. A chunk from an OLDER
+# deployment no longer exists, and the request falls through to here — the
+# browser asks for a module and gets HTML, which is the
+# "Failed to fetch dynamically imported module" error a tab left open across a
+# deploy runs into. Pages does not support 404 in this file, so the recovery is
+# client-side: src/lib/stale-deploy.ts reloads the tab once to pick up the new
+# index.html.
 /*    /index.html   200
