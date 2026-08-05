@@ -113,7 +113,7 @@ graphify-out/
 .turbo/
 
 # --- Editors --------------------------------------------------------------
-.vscode/
+.vscode/*
 !.vscode/extensions.json
 .idea/
 *.swp

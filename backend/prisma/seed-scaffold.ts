@@ -1,5 +1,7 @@
 import type { PrismaClient } from '@prisma/client';
 
+import { BANKING_TIMES, ECOMMERCE_TIMES } from './seed-catalog.js';
+
 /*
  * The scaffold seed — the configuration a fresh database needs before the app is
  * testable at all, and nothing else.
@@ -84,6 +86,9 @@ const CARRIERS: ScaffoldCarrier[] = [
  *
  * `processingTime` is free text and is only ever displayed, never parsed.
  */
+const regionsFrom = (times: Record<string, string>) =>
+  Object.entries(times).map(([code, processingTime]) => ({ code, processingTime }));
+
 const SERVICE_REGIONS: Record<string, { code: string; processingTime: string }[]> = {
   'company-formation': [
     { code: 'US', processingTime: '5–7 business days' },
@@ -100,29 +105,14 @@ const SERVICE_REGIONS: Record<string, { code: string; processingTime: string }[]
   ],
   /*
    * These two read off the real address book rather than the shorthand list
-   * above: `seed-catalog.ts` offers banking and e-commerce in named countries
-   * (BANKING_TIMES / ECOMMERCE_TIMES), so scaffolding an "EU" offering beside
-   * them would put a jurisdiction on the order form that the catalog itself
-   * does not know about.
+   * above: `seed-catalog.ts` offers banking and e-commerce in named countries,
+   * so scaffolding an "EU" offering beside them would put a jurisdiction on the
+   * order form that the catalog itself does not know about. Derived from that
+   * file's BANKING_TIMES / ECOMMERCE_TIMES rather than copied, so the two seeds
+   * cannot drift apart when a country or an estimate changes there.
    */
-  'bank-account': [
-    { code: 'US', processingTime: '10–20 business days' },
-    { code: 'CA', processingTime: '10–20 business days' },
-    { code: 'GB', processingTime: '7–14 business days' },
-    { code: 'IE', processingTime: '10–20 business days' },
-    { code: 'NL', processingTime: '14–21 business days' },
-    { code: 'SG', processingTime: '10–15 business days' },
-  ],
-  'e-commerce': [
-    { code: 'US', processingTime: '5–10 business days' },
-    { code: 'CA', processingTime: '5–10 business days' },
-    { code: 'GB', processingTime: '5–10 business days' },
-    { code: 'IE', processingTime: '7–14 business days' },
-    { code: 'NL', processingTime: '7–14 business days' },
-    { code: 'ES', processingTime: '7–14 business days' },
-    { code: 'IT', processingTime: '7–14 business days' },
-    { code: 'SG', processingTime: '7–14 business days' },
-  ],
+  'bank-account': regionsFrom(BANKING_TIMES),
+  'e-commerce': regionsFrom(ECOMMERCE_TIMES),
 };
 
 // --- Price points --------------------------------------------------------

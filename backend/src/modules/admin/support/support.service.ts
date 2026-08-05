@@ -228,16 +228,26 @@ async function supportScope(
  * not a cohort they have. A supervisor sees the real figure, and with automatic
  * routing a non-zero one is worth acting on — it means the team has no eligible
  * support agent for the router to hand the chat to.
+ *
+ * The scope goes under `AND` rather than being spread, so that whatever fields
+ * it carries cannot be silently dropped by the fixed predicates below it — an
+ * `assigneeId` from the scope spread here would be overwritten by the
+ * `assigneeId: null` this filter exists to apply, widening the count to every
+ * unowned thread in the system.
  */
 function unattendedWhere(
   scope: Prisma.ConversationWhereInput,
 ): Prisma.ConversationWhereInput {
   return {
-    deletedAt: null,
-    kind: ConversationKind.SUPPORT,
-    ...scope,
-    assigneeId: null,
-    status: { not: ConversationStatus.RESOLVED },
+    AND: [
+      scope,
+      {
+        deletedAt: null,
+        kind: ConversationKind.SUPPORT,
+        assigneeId: null,
+        status: { not: ConversationStatus.RESOLVED },
+      },
+    ],
   };
 }
 

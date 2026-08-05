@@ -1361,7 +1361,7 @@ const ALL_COUNTRIES = Object.keys(FORMATION_TIMES);
  * jurisdiction we cannot actually submit into would put a country on the order
  * form that the team has to walk back afterwards.
  */
-const BANKING_TIMES: Record<string, string> = {
+export const BANKING_TIMES: Record<string, string> = {
   US: '10–20 business days',
   CA: '10–20 business days',
   GB: '7–14 business days',
@@ -1370,7 +1370,7 @@ const BANKING_TIMES: Record<string, string> = {
   SG: '10–15 business days',
 };
 
-const ECOMMERCE_TIMES: Record<string, string> = {
+export const ECOMMERCE_TIMES: Record<string, string> = {
   US: '5–10 business days',
   CA: '5–10 business days',
   GB: '5–10 business days',

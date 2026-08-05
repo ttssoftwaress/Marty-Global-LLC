@@ -91,11 +91,11 @@ export function TestimonialsSection({
           <p className="text-[11px] font-semibold uppercase text-gray-400 lg:text-[12px]">
             Trusted by leading platforms
           </p>
-          <div className="flex w-full flex-wrap justify-center gap-2.5 md:gap-3 lg:flex-nowrap lg:justify-between">
+          <div className="grid w-full grid-cols-2 gap-2.5 md:flex md:flex-wrap md:justify-center md:gap-3 lg:flex-nowrap lg:justify-between">
             {PARTNER_LOGOS.map((logo, index) => (
               <div
                 key={logo}
-                className={`flex flex-1 items-center justify-center rounded-lg border border-gray-200 bg-gray-100 px-4 py-2.5 md:flex-none lg:px-6 lg:py-3 ${
+                className={`flex min-w-0 items-center justify-center rounded-lg border border-gray-200 bg-gray-100 px-4 py-2.5 md:flex-none lg:px-6 lg:py-3 ${
                   index === 4 ? 'hidden md:flex' : ''
                 }`}
               >
