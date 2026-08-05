@@ -1,10 +1,39 @@
 import { fileURLToPath, URL } from 'node:url'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
+
+/*
+ * The identity of this build, written into the bundle and published beside it
+ * as /version.json. The running app polls that file and reloads itself when the
+ * two disagree, so a release reaches open tabs without anyone refreshing
+ * (src/lib/app-version.ts).
+ *
+ * The release workflow sets VITE_SENTRY_RELEASE to the commit SHA, which makes
+ * the id the same thing Sentry already groups by. The timestamp is only for
+ * local `npm run build`.
+ */
+const buildId = process.env.VITE_SENTRY_RELEASE || `local-${Date.now()}`
+
+function versionManifest(): Plugin {
+  return {
+    name: 'marty-version-manifest',
+    apply: 'build',
+    generateBundle() {
+      this.emitFile({
+        type: 'asset',
+        // Not under /assets — that path is served immutable for a year, and this
+        // file has to be read fresh on every poll.
+        fileName: 'version.json',
+        source: JSON.stringify({ build: buildId }),
+      })
+    },
+  }
+}
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  define: { __BUILD_ID__: JSON.stringify(buildId) },
+  plugins: [react(), tailwindcss(), versionManifest()],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
