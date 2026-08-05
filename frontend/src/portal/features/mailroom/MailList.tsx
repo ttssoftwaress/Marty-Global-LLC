@@ -1,10 +1,21 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { AlertTriangle, Inbox, ScanLine } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
+import {
+  DetailRow,
+  ExpandChevron,
+  ExpandChevronCell,
+  detailPanelId,
+  expandRowProps,
+  expandedRowClass,
+  stopRowToggle,
+  useExpandedRow,
+} from '../../components/ExpandableRow';
 import { formatOrderDate } from '../../lib/format';
 import type { MailItem } from '../../types/mailroom';
 import { isStorageExpiringSoon } from './expiry';
+import { MailItemDetails } from './MailItemDetails';
 import { MailStatusChip } from './MailStatusChip';
 import { ScanThumbnail } from './ScanThumbnail';
 import { StorageExpiryInfo } from './StorageExpiryInfo';
@@ -34,6 +45,12 @@ import { StorageExpiryInfo } from './StorageExpiryInfo';
  * list has to show which: the preview says sealed / scanning / scanned, and an
  * unopened envelope's action is "Scan" — the ask that puts it in the mail room's
  * queue — beside the "View" that opens the envelope shot.
+ *
+ * Clicking a row opens the two questions the columns cannot answer: whether the
+ * envelope has been opened, and whether anything is expected of the customer.
+ * The scan itself stays in the viewer — a page image is not a strip under a
+ * table row — so the panel's action opens it. One row is open at a time, and
+ * the checkbox and the action buttons stop their own clicks.
  */
 
 // Amber warning text (approaching shred date / action reason). Uses the review
@@ -207,6 +224,7 @@ export function MailList({
   empty = DEFAULT_EMPTY,
 }: MailListProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const { expandedId, toggle: toggleExpanded } = useExpandedRow();
 
   const isEmpty = !isLoading && items.length === 0;
   const showSkeleton = Boolean(isLoading) && items.length === 0;
@@ -280,28 +298,40 @@ export function MailList({
         ) : (
           items.map((item) => {
             const soon = isStorageExpiringSoon(item.storageExpiresAt);
+            const isExpanded = item.id === expandedId;
+            const panelId = detailPanelId('mail-card', item.id);
+
             return (
               <div
                 key={item.id}
                 className="flex flex-col gap-3 rounded-card border border-gray-200 bg-white p-4 shadow-sm-elevation"
               >
-                <div className="flex gap-3">
-                  <div
+                <button
+                  type="button"
+                  onClick={() => toggleExpanded(item.id)}
+                  aria-expanded={isExpanded}
+                  aria-controls={panelId}
+                  className="flex gap-3 rounded-input text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                >
+                  <span
                     className="h-[3.25rem] w-10 shrink-0 rounded-lg bg-gray-200"
                     aria-hidden="true"
                   />
-                  <div className="flex min-w-0 flex-1 flex-col gap-1">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="truncate text-body font-semibold text-text">
+                  <span className="flex min-w-0 flex-1 flex-col gap-1">
+                    <span className="flex items-start justify-between gap-2">
+                      <span className="truncate text-body font-semibold text-text">
                         {item.sender}
-                      </p>
-                      <MailStatusChip status={item.status} />
-                    </div>
-                    <p className="text-small text-gray-500">
+                      </span>
+                      <span className="flex shrink-0 items-center gap-2">
+                        <MailStatusChip status={item.status} />
+                        <ExpandChevron isExpanded={isExpanded} />
+                      </span>
+                    </span>
+                    <span className="block text-small text-gray-500">
                       Received {formatOrderDate(item.receivedAt)}
-                    </p>
+                    </span>
                     {soon ? (
-                      <p
+                      <span
                         className={`flex items-center gap-1 text-small font-semibold ${AMBER}`}
                       >
                         <AlertTriangle
@@ -310,14 +340,24 @@ export function MailList({
                           aria-hidden="true"
                         />
                         Expires {formatOrderDate(item.storageExpiresAt)}
-                      </p>
+                      </span>
                     ) : (
-                      <p className="text-small text-gray-400">
+                      <span className="block text-small text-gray-400">
                         Expires {formatOrderDate(item.storageExpiresAt)}
-                      </p>
+                      </span>
                     )}
+                  </span>
+                </button>
+
+                {isExpanded ? (
+                  <div id={panelId} onClick={stopRowToggle}>
+                    <MailItemDetails
+                      item={item}
+                      roomId={roomId}
+                      to={itemHref(roomId, item.id)}
+                    />
                   </div>
-                </div>
+                ) : null}
 
                 {/* Mobile has no preview thumbnail to carry the stage, so the
                     one piece of mail that is waiting on US says so in words. */}
@@ -404,9 +444,12 @@ export function MailList({
                     carries two actions, Scan and View, rather than one. */}
                 <th
                   scope="col"
-                  className="w-[7.5rem] pr-4 text-right lg:w-[11.5rem] lg:pr-6"
+                  className="w-[7.5rem] pr-3 text-right lg:w-[11.5rem]"
                 >
                   Action
+                </th>
+                <th scope="col" className="w-[4rem] pr-4 lg:pr-6">
+                  <span className="sr-only">Details</span>
                 </th>
               </tr>
             </thead>
@@ -415,14 +458,25 @@ export function MailList({
               <tbody>
                 {windowItems.map((item) => {
                   const isSelected = selected.has(item.id);
+                  const isExpanded = item.id === expandedId;
+                  const panelId = detailPanelId('mail', item.id);
+
                   return (
+                    <Fragment key={item.id}>
                     <tr
-                      key={item.id}
+                      {...expandRowProps({
+                        isExpanded,
+                        panelId,
+                        onToggle: () => toggleExpanded(item.id),
+                        label: `${isExpanded ? 'Hide' : 'Show'} details for mail from ${item.sender}`,
+                      })}
                       className={`h-16 lg:h-[4.5rem] ${
-                        isSelected ? 'bg-primary-light' : 'bg-white'
+                        isSelected
+                          ? 'cursor-pointer bg-primary-light transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary'
+                          : expandedRowClass(isExpanded)
                       }`}
                     >
-                      <td className="pl-4 lg:pl-6">
+                      <td className="pl-4 lg:pl-6" onClick={stopRowToggle}>
                         <input
                           type="checkbox"
                           checked={isSelected}
@@ -470,7 +524,10 @@ export function MailList({
                         <MailStatusChip status={item.status} />
                       </td>
 
-                      <td className="pr-4 text-right lg:pr-6">
+                      <td
+                        className="pr-3 text-right"
+                        onClick={stopRowToggle}
+                      >
                         <div className="flex justify-end">
                           <RowAction
                             item={item}
@@ -480,7 +537,20 @@ export function MailList({
                           />
                         </div>
                       </td>
+
+                      <ExpandChevronCell isExpanded={isExpanded} />
                     </tr>
+
+                    {isExpanded ? (
+                      <DetailRow panelId={panelId} colSpan={8}>
+                        <MailItemDetails
+                          item={item}
+                          roomId={roomId}
+                          to={itemHref(roomId, item.id)}
+                        />
+                      </DetailRow>
+                    ) : null}
+                    </Fragment>
                   );
                 })}
               </tbody>

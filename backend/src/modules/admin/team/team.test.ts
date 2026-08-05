@@ -6,6 +6,7 @@ import { Role } from '../../../lib/roles.js';
 
 const { prisma } = await import('../../../lib/prisma.js');
 const service = await import('./team.service.js');
+const trash = await import('../trash/trash.service.js');
 const rolesService = await import('../roles/roles.service.js');
 const { permissionMap } = await import('../../../lib/permissions.js');
 const { resolveMemberPermissions } = await import('../../../lib/staff-permissions.js');
@@ -70,6 +71,12 @@ async function makeMember(
 }
 
 async function cleanup() {
+  // The trash entries first: a delete case files one per member, and they are
+  // keyed by user id, so leaving them behind would make the next run's delete a
+  // no-op against an entry that outlived its row.
+  await prisma.trashEntry.deleteMany({
+    where: { entityType: 'staff-member', entityId: { in: IDS } },
+  });
   await prisma.staffProfile.deleteMany({ where: { userId: { in: IDS } } });
   await prisma.user.deleteMany({ where: { id: { in: IDS } } });
 }
@@ -120,10 +127,24 @@ beforeEach(async () => {
 
 afterAll(cleanup);
 
-describe('deleteTeamMember', () => {
+/*
+ * Deleting a staff account, which now runs through the Trash
+ * (`modules/admin/trash`) rather than through this module.
+ *
+ * The refusals are the interesting cases and they are unchanged: an admin
+ * locking themselves out, and the last admin being removed. Both leave an org
+ * with nobody able to reach the admin-only endpoints, and the recovery is a
+ * database edit — which AGENTS.md forbids.
+ *
+ * What did change is the successful path, and the last two cases pin it: the row
+ * is soft-deleted with the login shut down immediately, not destroyed, and the
+ * credential survives so that a restore inside the retention window returns
+ * somebody who can still sign in.
+ */
+describe('deleting a staff member', () => {
   it('refuses to delete the actor’s own account', async () => {
     await expect(
-      service.deleteTeamMember(actor(ADMIN_A, Role.ADMIN), ADMIN_A),
+      trash.trashRows(actor(ADMIN_A, Role.ADMIN), 'staff-member', [ADMIN_A]),
     ).rejects.toMatchObject({ status: 422 });
 
     // Still there, and still usable.
@@ -134,37 +155,42 @@ describe('deleteTeamMember', () => {
   });
 
   it('refuses to delete the last active admin', async () => {
+    await makeMember(ADMIN_B, Role.ADMIN, 'super-admin', StaffStatus.ACTIVE);
+
     await asOnlyAdmin(ADMIN_A, async () => {
       await expect(
-        service.deleteTeamMember(actor(STAFF, Role.STAFF), ADMIN_A),
+        trash.trashRows(actor(ADMIN_B, Role.ADMIN), 'staff-member', [ADMIN_A]),
       ).rejects.toMatchObject({ status: 422 });
     });
   });
 
-  it('deletes an admin once another active admin exists', async () => {
+  it('soft-deletes and shuts the account down once another admin exists', async () => {
     await makeMember(ADMIN_B, Role.ADMIN, 'super-admin', StaffStatus.ACTIVE);
 
-    await service.deleteTeamMember(actor(ADMIN_B, Role.ADMIN), ADMIN_A);
+    await trash.trashRows(actor(ADMIN_B, Role.ADMIN), 'staff-member', [ADMIN_A]);
 
-    const [profile, user] = await Promise.all([
+    const [profile, user, entry] = await Promise.all([
       prisma.staffProfile.findUnique({ where: { userId: ADMIN_A } }),
       prisma.user.findUnique({ where: { id: ADMIN_A } }),
+      prisma.trashEntry.findUnique({
+        where: {
+          entityType_entityId: { entityType: 'staff-member', entityId: ADMIN_A },
+        },
+      }),
     ]);
 
-    // The row is gone, not stamped: a `deletedAt` user is still a credential
-    // Better Auth will sign in, which is exactly what this must prevent.
-    expect(user).toBeNull();
-    expect(profile).toBeNull();
+    // The row survives so the delete can be taken back — but the login does not
+    // wait for that window to close. A stamped `deletedAt` alone would leave a
+    // credential Better Auth still signs in, which is what the ban prevents.
+    expect(profile?.deletedAt).toBeInstanceOf(Date);
+    expect(user?.deletedAt).toBeInstanceOf(Date);
+    expect(user?.banned).toBe(true);
+    expect(user?.banExpires).toBeNull();
+    expect(entry).not.toBeNull();
   });
 
-  it('keeps the row but kills the login when the account owns retained records', async () => {
+  it('keeps the credential so a restore returns a usable account', async () => {
     await makeMember(ADMIN_B, Role.ADMIN, 'super-admin', StaffStatus.ACTIVE);
-
-    // A company cascades from `user`, so deleting the row would destroy a record
-    // under regulatory retention (AGENTS.md).
-    await prisma.company.create({
-      data: { ownerId: STAFF, businessName: 'Retained Co', country: 'US' },
-    });
 
     await prisma.account.create({
       data: {
@@ -176,25 +202,26 @@ describe('deleteTeamMember', () => {
       },
     });
 
-    await service.deleteTeamMember(actor(ADMIN_B, Role.ADMIN), STAFF);
+    await trash.trashRows(actor(ADMIN_B, Role.ADMIN), 'staff-member', [STAFF]);
 
-    const [user, profile, credentials, company] = await Promise.all([
-      prisma.user.findUnique({ where: { id: STAFF } }),
-      prisma.staffProfile.findUnique({ where: { userId: STAFF } }),
-      prisma.account.count({ where: { userId: STAFF } }),
-      prisma.company.count({ where: { ownerId: STAFF } }),
-    ]);
+    // Destroying the password on the way in would make the restore return
+    // somebody who cannot sign in — not "as it was before". It goes at purge.
+    expect(await prisma.account.count({ where: { userId: STAFF } })).toBe(1);
 
-    expect(company).toBe(1);
-    expect(user?.deletedAt).toBeInstanceOf(Date);
-    expect(profile?.deletedAt).toBeInstanceOf(Date);
-    // Banned with no credential left: no sign-in, and no password reset back in.
-    expect(user?.banned).toBe(true);
-    expect(user?.banExpires).toBeNull();
-    expect(credentials).toBe(0);
+    const entry = await prisma.trashEntry.findUniqueOrThrow({
+      where: {
+        entityType_entityId: { entityType: 'staff-member', entityId: STAFF },
+      },
+    });
+
+    await trash.restoreEntries(actor(ADMIN_B, Role.ADMIN), [entry.id]);
+
+    const restored = await prisma.user.findUnique({ where: { id: STAFF } });
+    expect(restored?.deletedAt).toBeNull();
+    expect(restored?.banned).toBe(false);
   });
 
-  it('drops the deleted member’s sessions with the account', async () => {
+  it('drops the deleted member’s sessions', async () => {
     await makeMember(ADMIN_B, Role.ADMIN, 'super-admin', StaffStatus.ACTIVE);
 
     await prisma.session.create({
@@ -206,19 +233,20 @@ describe('deleteTeamMember', () => {
       },
     });
 
-    await service.deleteTeamMember(actor(ADMIN_B, Role.ADMIN), STAFF);
+    await trash.trashRows(actor(ADMIN_B, Role.ADMIN), 'staff-member', [STAFF]);
 
-    // Cascaded off the deleted user row — a signed-in member must not keep a
-    // live cookie after the account is removed.
+    // A cookie issued before the deletion has to be dead the moment access is
+    // revoked, or the revocation means nothing. This is the one thing a restore
+    // deliberately does not put back.
     expect(await prisma.session.count({ where: { userId: STAFF } })).toBe(0);
   });
 
   it('404s on a member who is already deleted', async () => {
     await makeMember(ADMIN_B, Role.ADMIN, 'super-admin', StaffStatus.ACTIVE);
-    await service.deleteTeamMember(actor(ADMIN_B, Role.ADMIN), STAFF);
+    await trash.trashRows(actor(ADMIN_B, Role.ADMIN), 'staff-member', [STAFF]);
 
     await expect(
-      service.deleteTeamMember(actor(ADMIN_B, Role.ADMIN), STAFF),
+      trash.trashRows(actor(ADMIN_B, Role.ADMIN), 'staff-member', [STAFF]),
     ).rejects.toMatchObject({ status: 404 });
   });
 });

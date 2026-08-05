@@ -9,7 +9,7 @@ import * as Sentry from '@sentry/node';
 
 import { createApp } from './app.js';
 import { env } from './config/env.js';
-import { scheduleGuestChatPurge } from './jobs/queues.js';
+import { scheduleGuestChatPurge, scheduleTrashPurge } from './jobs/queues.js';
 import { closeWorkers, registerWorkers } from './jobs/workers.js';
 import { logger } from './lib/logger.js';
 import { prisma } from './lib/prisma.js';
@@ -56,6 +56,22 @@ try {
  */
 scheduleGuestChatPurge(env.GUEST_CHAT_PURGE_INTERVAL_SECONDS).catch((err: unknown) => {
   logger.error({ err }, 'Failed to schedule the guest chat purge');
+});
+
+/*
+ * Trashed records are hard-deleted once their retention window closes. Same
+ * shape as the sweep above, and daily rather than configurable: the window
+ * itself is the admin setting (`TrashSettings.retentionDays`), and how often we
+ * check a deadline measured in days is not a decision anybody needs to make.
+ *
+ * A failure to schedule must not stop the app — nothing is destroyed by the
+ * sweep not running, which is the safe direction for this particular job to fail
+ * in.
+ */
+const ONE_DAY_SECONDS = 24 * 60 * 60;
+
+scheduleTrashPurge(ONE_DAY_SECONDS).catch((err: unknown) => {
+  logger.error({ err }, 'Failed to schedule the trash purge');
 });
 
 server.listen(env.PORT, () => {

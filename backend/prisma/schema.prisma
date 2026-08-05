@@ -175,6 +175,15 @@ model StaffRole {
   sortOrder Int     @default(100)
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  /*
+   * Deleting a role moves it to Trash (modules/admin/trash) rather than dropping
+   * the row. The guard is unchanged — a role any member still holds is refused,
+   * which is also what the `Restrict` foreign key below enforces — so this only
+   * changes what a successful delete does. `key` stays unique, so a role sitting
+   * in Trash keeps its slug and creating one under the same slug is refused with
+   * a message naming Trash.
+   */
+  deletedAt DateTime? @db.Timestamptz(3)
 
   profiles StaffProfile[]
 
@@ -635,6 +644,14 @@ model FieldDefinition {
   sortOrder   Int     @default(0)
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+  /*
+   * Distinct from `archived`, and the two are not interchangeable. Archiving is
+   * a retirement the admin chooses for a field that is still referenced: it
+   * leaves the picker and keeps resolving everywhere it is used. This is the
+   * delete — the field is gone from every screen and recoverable from Trash
+   * until the retention window closes (modules/admin/trash).
+   */
+  deletedAt   DateTime? @db.Timestamptz(3)
 
   @@index([archived, sortOrder])
   @@map("field_definition")
@@ -648,6 +665,14 @@ model Region {
   sortOrder Int     @default(0)
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  // Deleting a location moves it to Trash rather than dropping the row, so a
+  // mis-click is undoable for the retention window (modules/admin/trash). It
+  // used to be a hard DELETE guarded on "nothing references it" — the guard
+  // stays, this only changes what the successful delete does. Every read below
+  // filters it, and `code` is the primary key, so a location sitting in Trash
+  // still holds its code: creating one under the same code is refused with a
+  // message naming Trash rather than a bare unique-constraint error.
+  deletedAt DateTime? @db.Timestamptz(3)
 
   serviceOfferings ServiceRegionOffering[]
   pricingTiers     ServicePricingTier[]
@@ -979,6 +1004,9 @@ model ResultFieldDefinition {
   sortOrder Int     @default(0)
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  // The delete, as distinct from `archived` above — the same split the request
+  // registry documents (modules/admin/trash).
+  deletedAt DateTime? @db.Timestamptz(3)
 
   values ServiceResultValue[]
 
@@ -1483,6 +1511,10 @@ model MailActionLog {
   closedAt   DateTime @default(now()) @db.Timestamptz(3)
   createdAt  DateTime @default(now()) @db.Timestamptz(3)
   updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+  // Append-only in normal operation — nothing in the mail flow edits or removes
+  // a closed entry. The admin Mail-log table can still send a row to Trash,
+  // which is the mis-filed-entry escape hatch and nothing more.
+  deletedAt  DateTime? @db.Timestamptz(3)
 
   mailItem    MailItem @relation(fields: [mailItemId], references: [id], onDelete: Cascade)
   processedBy User?    @relation("MailActionProcessor", fields: [processedById], references: [id], onDelete: SetNull)
@@ -1504,6 +1536,10 @@ model MailCarrier {
   sortOrder Int     @default(0)
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  // Same rule as Region above: the delete moves the row to Trash, the "nothing
+  // has shipped with it" guard is unchanged, and the code stays taken while it
+  // sits there.
+  deletedAt DateTime? @db.Timestamptz(3)
 
   @@index([active, sortOrder])
   @@map("mail_carrier")
@@ -2239,6 +2275,16 @@ model UnmatchedTransfer {
 
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  /*
+   * Trashing a row here does NOT stop the poller re-recording the transfer. The
+   * unique tx hash is the de-duplication, and the sweep's upsert deliberately
+   * ignores this column — money that arrived is a fact about the chain, not a
+   * row an admin gets to retract, and the sweep window re-reads it every
+   * interval. So the effect is only on the reconciliation queue's display: the
+   * row leaves the screen and, if the transfer is sighted again, comes back.
+   * Real disposal is `resolvedAt` with a note, which is what the queue is for.
+   */
+  deletedAt DateTime? @db.Timestamptz(3)
 
   resolvedBy User? @relation("UnmatchedTransferResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
 
@@ -2267,6 +2313,142 @@ model ContactSubmission {
 
   @@index([createdAt])
   @@map("contact_submission")
+}
+
+// --- Trash ---------------------------------------------------------------
+/*
+ * One row an admin deleted, and everything that had to go with it.
+ *
+ * Deleting from an admin table sets `deletedAt` on the row — every read in both
+ * apps already filters that, so it leaves every screen at once — and files an
+ * entry here. The entry is what makes the delete undoable: it names the row, who
+ * removed it, when the retention window closes, and, crucially, the exact set of
+ * OTHER rows the same click had to soft-delete so nothing was left pointing at a
+ * record that had vanished.
+ *
+ * WHY THE CASCADE IS RECORDED RATHER THAN RE-DERIVED
+ *
+ *   Deleting a customer has to take their orders, quotes, payments, mail rooms
+ *   and conversations with it, or those rows keep appearing in five other admin
+ *   tables attached to a customer who is gone. Restore then has to put back
+ *   exactly what that click took — no more. A row that was ALREADY soft-deleted
+ *   before the click must stay deleted afterwards, and re-deriving the closure
+ *   at restore time cannot tell the two apart. So the ids are captured at delete
+ *   time, in `cascade`, and restore clears `deletedAt` on precisely those.
+ *
+ *   Shape: `[{ entityType, ids: string[] }]`, in the order they were deleted.
+ *   Restore walks it in reverse — parents last — so nothing is briefly visible
+ *   with its parent still missing.
+ *
+ * LIFECYCLE
+ *
+ *   A row exists here only while it is IN the trash. Restoring deletes the entry
+ *   and clears the timestamps; purging deletes the entry and hard-deletes the
+ *   rows. That is what lets `[entityType, entityId]` be unique — one live entry
+ *   per record, so the same row cannot be trashed twice or restored twice.
+ *
+ * WHAT IS NOT HERE
+ *
+ *   `AuditLog`. The trail is the evidence that a deletion happened and who did
+ *   it, so a delete button over it would be the one that erases its own record.
+ *   The audit module has no write path at all, by design, and this changes
+ *   nothing about that (modules/admin/audit/audit.service.ts).
+ */
+model TrashEntry {
+  id String @id @default(cuid())
+
+  // Registry key from `modules/admin/trash/trash.registry.ts` — "order",
+  // "customer", "mail-room". A stable slug rather than the Prisma model name, so
+  // renaming a model is not a data migration over this table.
+  entityType String
+  // The deleted row's primary key. A `String` for every entity: most are cuids,
+  // and the two code-keyed tables (Region, MailCarrier) store their code here.
+  entityId   String
+
+  /*
+   * What the trash screen prints for this row, snapshotted at delete time.
+   *
+   * Snapshotted rather than joined, and for the reason every other snapshot in
+   * this schema exists: after a purge there is nothing left to join to, and a
+   * trash list that cannot name what it is about to destroy is not a
+   * confirmation screen. `sublabel` is the secondary line (a customer's email, a
+   * quote's total as text) — never a raw amount, never anything a purge would
+   * need to be exact about.
+   */
+  label    String
+  sublabel String?
+
+  // Who deleted it, id plus a snapshotted name — the same pairing
+  // `Payment.settledBy` uses, so the entry still reads after the account is
+  // gone. Null actor is a system/job delete; none exists today.
+  deletedById   String?
+  deletedByName String
+
+  /*
+   * When the retention window closes. Stored rather than computed from
+   * `createdAt + retentionDays`, because the window is admin-editable
+   * (`TrashSettings.retentionDays`) and a shortened window must never
+   * retroactively destroy something an admin was told they had 30 days to
+   * recover. Each entry keeps the deadline it was given.
+   */
+  purgeAt DateTime @db.Timestamptz(3)
+
+  // The rows this delete also took. See the cascade note above.
+  cascade Json?
+
+  /*
+   * Why the last purge attempt failed, if one did. A purge is a real DELETE and
+   * a few relations are `Restrict`, so a row can become un-purgeable after the
+   * fact — something started referencing it while it sat in the trash. Recording
+   * the reason and pushing `purgeAt` forward keeps one stuck entry from failing
+   * the whole nightly sweep, and gives an admin something to act on.
+   */
+  purgeError    String?
+  purgeAttempts Int      @default(0)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  // One live entry per record — see LIFECYCLE above.
+  @@unique([entityType, entityId])
+  // The screen's default view: newest deletion first, narrowed by type.
+  @@index([createdAt(sort: Desc), id(sort: Desc)])
+  @@index([entityType, createdAt(sort: Desc)])
+  // The nightly sweep's scan: everything past its deadline.
+  @@index([purgeAt])
+  @@map("trash_entry")
+}
+
+/*
+ * How long the trash keeps things, as data rather than a constant.
+ *
+ * The same argument as `PaymentSettings` and `NotificationSettings`: a retention
+ * period is a business decision, and AGENTS.md is explicit that filings and
+ * payments carry regulatory retention. An org that needs 90 days, or needs the
+ * purge stood down entirely while an audit is open, must not need a redeploy.
+ *
+ * One row by construction — the id defaults to 'singleton' and the service
+ * upserts it.
+ */
+model TrashSettings {
+  id String @id @default("singleton")
+
+  // Days a deleted record stays recoverable. Applied to entries created AFTER a
+  // change; existing entries keep the `purgeAt` they were given.
+  retentionDays Int @default(30)
+
+  /*
+   * Whether the nightly sweep hard-deletes anything at all. On by default —
+   * a trash that never empties is a database that only grows — but switchable,
+   * because "stop destroying data right now" is the one operation that has to be
+   * available without a deploy.
+   */
+  purgeEnabled Boolean @default(true)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@map("trash_settings")
 }
 
 // --- Audit ---------------------------------------------------------------

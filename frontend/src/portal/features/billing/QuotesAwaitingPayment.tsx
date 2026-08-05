@@ -1,9 +1,21 @@
+import { Fragment } from 'react';
 import { Calendar, Clock, FileCheck2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
+import {
+  DetailRow,
+  ExpandChevron,
+  ExpandChevronCell,
+  detailPanelId,
+  expandRowProps,
+  expandedRowClass,
+  stopRowToggle,
+  useExpandedRow,
+} from '../../components/ExpandableRow';
 import { formatMoney, formatOrderDate } from '../../lib/format';
 import type { BillingQuote } from '../../types/billing';
 import { QuoteStatusChip } from './chips';
+import { QuoteDetails } from './QuoteDetails';
 
 /*
  * Quotes awaiting payment — three presentations of one list, swapped by
@@ -19,6 +31,12 @@ import { QuoteStatusChip } from './chips';
  * "Pay now" routes into the branded checkout for the quote. The design shows a
  * populated list; the empty state is added so a settled account explains itself
  * instead of showing a bare card.
+ *
+ * Clicking a row opens what the amount is made of — the itemised breakdown,
+ * fetched then rather than carried by the billing overview (which the dashboard
+ * loads too). It is the one thing a customer wants before paying and the one
+ * thing the row cannot show. "Pay now" stays on the row and stops its own
+ * click, so the common case does not get slower. One row is open at a time.
  */
 
 // The branded checkout for a quote lives under billing (AGENTS.md,
@@ -46,6 +64,7 @@ function EmptyState() {
 }
 
 export function QuotesAwaitingPayment({ quotes }: { quotes: BillingQuote[] }) {
+  const { expandedId, toggle } = useExpandedRow();
   const isEmpty = quotes.length === 0;
 
   return (
@@ -61,42 +80,64 @@ export function QuotesAwaitingPayment({ quotes }: { quotes: BillingQuote[] }) {
             <EmptyState />
           </li>
         ) : (
-          quotes.map((quote) => (
-            <li
-              key={quote.id}
-              className="flex flex-col gap-4 rounded-card border border-gray-200 bg-white p-4 shadow-sm-elevation"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex min-w-0 flex-col gap-1">
-                  <p className="text-body font-semibold text-text">
-                    {quote.serviceName}
-                  </p>
-                  <p className="text-body-lg font-bold text-text">
-                    {formatMoney(quote.amount)}
-                  </p>
-                </div>
-                <QuoteStatusChip status={quote.status} />
-              </div>
+          quotes.map((quote) => {
+            const isExpanded = quote.id === expandedId;
+            const panelId = detailPanelId('quote-card', quote.id);
 
-              <p className="flex items-center gap-1.5 text-small font-medium text-[var(--color-status-review-text)]">
-                <Calendar
-                  className="size-3.5 shrink-0"
-                  strokeWidth={1.75}
-                  aria-hidden="true"
-                />
-                Valid until {formatOrderDate(quote.validUntil)}
-              </p>
-
-              <div className="flex items-center gap-2">
-                <Link
-                  to={payHref(quote.id)}
-                  className="btn btn-accent h-12 flex-1 rounded-input text-body"
+            return (
+              <li
+                key={quote.id}
+                className="flex flex-col gap-4 rounded-card border border-gray-200 bg-white p-4 shadow-sm-elevation"
+              >
+                <button
+                  type="button"
+                  onClick={() => toggle(quote.id)}
+                  aria-expanded={isExpanded}
+                  aria-controls={panelId}
+                  className="flex flex-col gap-4 rounded-input text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                 >
-                  Pay now
-                </Link>
-              </div>
-            </li>
-          ))
+                  <span className="flex items-start justify-between gap-3">
+                    <span className="flex min-w-0 flex-col gap-1">
+                      <span className="text-body font-semibold text-text">
+                        {quote.serviceName}
+                      </span>
+                      <span className="text-body-lg font-bold text-text">
+                        {formatMoney(quote.amount)}
+                      </span>
+                    </span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      <QuoteStatusChip status={quote.status} />
+                      <ExpandChevron isExpanded={isExpanded} />
+                    </span>
+                  </span>
+
+                  <span className="flex items-center gap-1.5 text-small font-medium text-[var(--color-status-review-text)]">
+                    <Calendar
+                      className="size-3.5 shrink-0"
+                      strokeWidth={1.75}
+                      aria-hidden="true"
+                    />
+                    Valid until {formatOrderDate(quote.validUntil)}
+                  </span>
+                </button>
+
+                {isExpanded ? (
+                  <div id={panelId} onClick={stopRowToggle}>
+                    <QuoteDetails quote={quote} />
+                  </div>
+                ) : null}
+
+                <div className="flex items-center gap-2">
+                  <Link
+                    to={payHref(quote.id)}
+                    className="btn btn-accent h-12 flex-1 rounded-input text-body"
+                  >
+                    Pay now
+                  </Link>
+                </div>
+              </li>
+            );
+          })
         )}
       </ul>
 
@@ -126,9 +167,12 @@ export function QuotesAwaitingPayment({ quotes }: { quotes: BillingQuote[] }) {
                 </th>
                 <th
                   scope="col"
-                  className="w-[8.125rem] px-4 text-right lg:w-[9rem] lg:px-6"
+                  className="w-[8.125rem] pr-3 text-right lg:w-[9rem]"
                 >
                   Action
+                </th>
+                <th scope="col" className="w-[4rem] pr-4 lg:pr-6">
+                  <span className="sr-only">Details</span>
                 </th>
               </tr>
             </thead>
@@ -136,16 +180,30 @@ export function QuotesAwaitingPayment({ quotes }: { quotes: BillingQuote[] }) {
             <tbody>
               {isEmpty ? (
                 <tr>
-                  <td colSpan={6} className="py-0">
+                  <td colSpan={7} className="py-0">
                     <EmptyState />
                   </td>
                 </tr>
               ) : (
-                quotes.map((quote) => (
-                  <tr key={quote.id} className="h-14">
+                quotes.map((quote) => {
+                  const isExpanded = quote.id === expandedId;
+                  const panelId = detailPanelId('quote', quote.id);
+
+                  return (
+                  <Fragment key={quote.id}>
+                  <tr
+                    {...expandRowProps({
+                      isExpanded,
+                      panelId,
+                      onToggle: () => toggle(quote.id),
+                      label: `${isExpanded ? 'Hide' : 'Show'} what the ${quote.serviceName} quote covers`,
+                    })}
+                    className={`h-14 ${expandedRowClass(isExpanded)}`}
+                  >
                     <td className="min-w-0 px-4 lg:px-6">
                       <Link
                         to={payHref(quote.id)}
+                        onClick={stopRowToggle}
                         title={quote.serviceName}
                         className="block truncate text-[0.8125rem] font-semibold text-primary hover:underline lg:text-body"
                       >
@@ -182,7 +240,7 @@ export function QuotesAwaitingPayment({ quotes }: { quotes: BillingQuote[] }) {
                       <QuoteStatusChip status={quote.status} />
                     </td>
 
-                    <td className="px-4 lg:px-6">
+                    <td className="pr-3" onClick={stopRowToggle}>
                       <div className="flex items-center justify-end gap-2">
                         <Link
                           to={payHref(quote.id)}
@@ -192,8 +250,18 @@ export function QuotesAwaitingPayment({ quotes }: { quotes: BillingQuote[] }) {
                         </Link>
                       </div>
                     </td>
+
+                    <ExpandChevronCell isExpanded={isExpanded} />
                   </tr>
-                ))
+
+                  {isExpanded ? (
+                    <DetailRow panelId={panelId} colSpan={7}>
+                      <QuoteDetails quote={quote} />
+                    </DetailRow>
+                  ) : null}
+                  </Fragment>
+                  );
+                })
               )}
             </tbody>
           </table>

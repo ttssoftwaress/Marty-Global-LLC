@@ -5,6 +5,7 @@ import { AppError } from '../../../lib/app-error.js';
 import { logger } from '../../../lib/logger.js';
 import { prisma } from '../../../lib/prisma.js';
 import { AuditAction, record } from '../../audit/audit.service.js';
+import { trashRows } from '../trash/trash.service.js';
 import {
   getPaymentSettings,
   PAYMENT_SETTINGS_ID,
@@ -102,7 +103,8 @@ export type BankAccountView = {
   sortOrder: number;
   fields: BankAccountFieldView[];
   // How many payments were issued against this account. What decides whether
-  // deleting it removes the row or archives it (see `deleteBankAccount`).
+  // deleting it eventually removes the row or leaves it retired (see
+  // `deleteBankAccount`, and the `bank-account` purge guard it defers to).
   usage: { payments: number };
   updatedAt: string;
 };
@@ -439,50 +441,39 @@ export async function updateBankAccount(
 }
 
 /*
- * Remove an account, or archive it.
+ * Deleting a bank account goes through `modules/admin/trash`, like every other
+ * admin table's delete — the row is soft-deleted and a restorable entry is
+ * filed.
  *
- * Unlike locations and carriers — where a referenced row is refused and the
- * admin is told to switch it off — a bank we have stopped using should leave the
- * list rather than sit in it switched off forever. So the verb resolves by
- * usage:
+ * What used to live here was a two-verb resolution: an account nothing had
+ * referenced was dropped outright, one that had taken payments was soft-deleted
+ * instead. Both halves survive, split across the two moments they actually
+ * belong to:
  *
- *   · Nothing referenced it: a genuine "added by mistake", removed outright.
- *   · Payments were issued against it: soft-deleted. The link on those payments
- *     survives (`onDelete: SetNull` never fires), and their instructions were
- *     snapshotted at intent time anyway, so nothing a customer or a reconciler
- *     reads changes. It simply stops being an account.
+ *   · The delete is now always the soft one, which is what makes it undoable.
+ *   · "This account has taken payments, so the row stays" moved to the
+ *     `bank-account` descriptor's `purgeGuard` — asked at the end of the
+ *     retention window rather than at the start of it, which is when it becomes
+ *     true. Those payments store this account's id, and dropping the row would
+ *     null the reconciliation link for every wire collected through it.
  *
- * The response says which happened, so the screen can report it rather than
- * implying a hard delete that did not occur.
+ * `usage.payments` on the view above is still what the screen prints, and it is
+ * what tells an admin in advance which of the two outcomes to expect — and it is
+ * what this function reports back, so the screen can say what will actually
+ * happen rather than implying a hard delete that is not coming.
  */
 export async function deleteBankAccount(
   actor: AuthContext,
   accountId: string,
 ): Promise<{ id: string; removed: 'deleted' | 'archived' }> {
-  const account = await readAccount(accountId);
+  // 404s on an account that is already gone, before anything is written.
+  await readAccount(accountId);
+
   const payments = (await accountUsage()).get(accountId) ?? 0;
 
-  const removed = payments > 0 ? 'archived' : 'deleted';
+  await trashRows(actor, 'bank-account', [accountId]);
 
-  if (payments > 0) {
-    await prisma.bankAccount.update({
-      where: { id: accountId },
-      data: { deletedAt: new Date(), active: false },
-    });
-  } else {
-    // The fields cascade with it.
-    await prisma.bankAccount.delete({ where: { id: accountId } });
-  }
-
-  void record({
-    actor,
-    action: AuditAction.BANK_ACCOUNT_DELETED,
-    entityType: 'BankAccount',
-    entityId: accountId,
-    metadata: { code: account.code, removed, payments },
-  });
-
-  return { id: accountId, removed };
+  return { id: accountId, removed: payments > 0 ? 'archived' : 'deleted' };
 }
 
 export async function reorderBankAccounts(

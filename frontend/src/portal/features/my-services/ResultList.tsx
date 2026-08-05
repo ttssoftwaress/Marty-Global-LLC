@@ -1,12 +1,24 @@
-import { ChevronRight, FolderOpen, MessageSquare } from 'lucide-react';
+import { Fragment } from 'react';
+import { FolderOpen, MessageSquare } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
+import {
+  DetailRow,
+  ExpandChevron,
+  ExpandChevronCell,
+  detailPanelId,
+  expandRowProps,
+  expandedRowClass,
+  stopRowToggle,
+  useExpandedRow,
+} from '../../components/ExpandableRow';
 import { formatOrderDate } from '../../lib/format';
 import type {
   CustomerServiceSummary,
   ResultField,
   ServiceResultRow,
 } from '../../types/my-services';
+import { ResultRowDetails } from './ResultRowDetails';
 import { ResultValueView, resultValueText } from './ResultValueView';
 
 /*
@@ -25,7 +37,13 @@ import { ResultValueView, resultValueText } from './ResultValueView';
  * columns and one returning two renders two — a catalog change, not a deploy.
  *
  * The first column is always the primary field: it is the record's title, and
- * what the whole row links through.
+ * what the whole row is identified by.
+ *
+ * Clicking a row opens EVERY fact the service returns, grouped as the record's
+ * own page groups them — the columns are a summary by design, and the rest is
+ * what a customer opens a record for. It is fetched on expand and deliberately
+ * uncached: the response carries short-TTL presigned download links, and a link
+ * held from an old page load is a dead one. One row is open at a time.
  */
 
 type ResultListProps = {
@@ -136,6 +154,7 @@ export function ResultList({
   hasFilter,
 }: ResultListProps) {
   const secondary = secondaryColumns(columns);
+  const { expandedId, toggle } = useExpandedRow();
 
   if (isLoading) {
     return (
@@ -179,19 +198,31 @@ export function ResultList({
               <th scope="col" className="px-card text-right">
                 <span className="sr-only">View</span>
               </th>
+
+              <th scope="col" className="w-[4rem] pl-0 pr-card">
+                <span className="sr-only">Details</span>
+              </th>
             </tr>
           </thead>
 
           <tbody>
-            {rows.map((row) => (
-              <tr key={row.id} className="group hover:bg-gray-50">
+            {rows.map((row) => {
+              const isExpanded = row.id === expandedId;
+              const panelId = detailPanelId('result', row.id);
+
+              return (
+              <Fragment key={row.id}>
+              <tr
+                {...expandRowProps({
+                  isExpanded,
+                  panelId,
+                  onToggle: () => toggle(row.id),
+                  label: `${isExpanded ? 'Hide' : 'Show'} details for ${row.title}`,
+                })}
+                className={expandedRowClass(isExpanded)}
+              >
                 <td className="px-card py-4 align-top">
-                  <Link
-                    to={recordHref(row.id)}
-                    className="block focus:outline-none"
-                  >
-                    <RowTitle row={row} />
-                  </Link>
+                  <RowTitle row={row} />
 
                   {/* Tablet only: the columns the table dropped, so the fold
                    * hides nothing. */}
@@ -230,7 +261,10 @@ export function ResultList({
                   </td>
                 ))}
 
-                <td className="px-card py-4 text-right align-top">
+                <td
+                  className="px-card py-4 text-right align-top"
+                  onClick={stopRowToggle}
+                >
                   <Link
                     to={recordHref(row.id)}
                     className="inline-flex items-center justify-center rounded-[0.625rem] border border-primary bg-white px-4 py-2 text-[0.8125rem] font-semibold text-primary transition-colors hover:bg-primary-light"
@@ -238,27 +272,43 @@ export function ResultList({
                     View
                   </Link>
                 </td>
+
+                <ExpandChevronCell
+                  isExpanded={isExpanded}
+                  className="py-4 pl-0 pr-card align-top"
+                />
               </tr>
-            ))}
+
+              {isExpanded ? (
+                <DetailRow panelId={panelId} colSpan={secondary.length + 3}>
+                  <ResultRowDetails row={row} to={recordHref(row.id)} />
+                </DetailRow>
+              ) : null}
+              </Fragment>
+              );
+            })}
           </tbody>
         </table>
       </div>
 
       {/* --- Cards: mobile ------------------------------------------------- */}
       <ul className="flex flex-col md:hidden">
-        {rows.map((row) => (
+        {rows.map((row) => {
+          const isExpanded = row.id === expandedId;
+          const panelId = detailPanelId('result-card', row.id);
+
+          return (
           <li key={row.id} className="border-b border-gray-100 last:border-b-0">
-            <Link
-              to={recordHref(row.id)}
-              className="flex flex-col gap-3 p-4 transition-colors hover:bg-gray-50"
+            <button
+              type="button"
+              onClick={() => toggle(row.id)}
+              aria-expanded={isExpanded}
+              aria-controls={panelId}
+              className="flex w-full flex-col gap-3 p-4 text-left transition-colors hover:bg-gray-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
             >
               <span className="flex items-start justify-between gap-3">
                 <RowTitle row={row} />
-                <ChevronRight
-                  className="mt-0.5 size-5 shrink-0 text-gray-400"
-                  strokeWidth={2}
-                  aria-hidden="true"
-                />
+                <ExpandChevron isExpanded={isExpanded} />
               </span>
 
               {secondary.length > 0 ? (
@@ -288,9 +338,16 @@ export function ResultList({
                   Delivered {formatOrderDate(row.deliveredAt)}
                 </span>
               ) : null}
-            </Link>
+            </button>
+
+            {isExpanded ? (
+              <div id={panelId} className="bg-gray-50 px-4 pb-4">
+                <ResultRowDetails row={row} to={recordHref(row.id)} />
+              </div>
+            ) : null}
           </li>
-        ))}
+          );
+        })}
       </ul>
     </div>
   );

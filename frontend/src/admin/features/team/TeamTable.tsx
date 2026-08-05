@@ -1,6 +1,20 @@
+import { Fragment } from 'react';
+
+import {
+  DetailRow,
+  ExpandChevronCell,
+  detailPanelId,
+  expandRowProps,
+  expandedRowClass,
+  stopRowToggle,
+  useExpandedRow,
+} from '../../components/ExpandableRow';
+import { RowCheckbox } from '../../components/RowCheckbox';
+import type { RowSelection } from '../../hooks/useRowSelection';
 import { formatOrderDate } from '../../lib/format';
 import type { AdminTeamMemberRow } from '../../types/team';
 import { TeamMemberAvatar } from './TeamMemberAvatar';
+import { TeamMemberDetails } from './TeamMemberDetails';
 import { TeamStatusChip } from './TeamStatusChip';
 
 /*
@@ -29,6 +43,12 @@ import { TeamStatusChip } from './TeamStatusChip';
  * colour so it does not read as a peer of Edit. Logged as a deviation.
  *
  * A member with no join date prints an em dash, matching the desktop link.
+ *
+ * Clicking the row opens what the columns cannot show: the areas this member
+ * actually holds, and which of them override their role. Two people on one role
+ * can differ, so that grid is the record — and it is fetched on expand rather
+ * than carried by every row. One row is open at a time, and the three action
+ * buttons stop their own clicks.
  */
 
 type TeamTableProps = {
@@ -36,6 +56,11 @@ type TeamTableProps = {
   onEdit: (member: AdminTeamMemberRow) => void;
   onToggleActive: (member: AdminTeamMemberRow) => void;
   onDelete: (member: AdminTeamMemberRow) => void;
+  selection: RowSelection;
+  // False unless the signed-in member is an administrator — deleting a staff
+  // account takes admin, so anyone else gets no tick column at all rather than
+  // a selection that can only ever be refused.
+  selectable: boolean;
 };
 
 export function TeamTable({
@@ -43,13 +68,35 @@ export function TeamTable({
   onEdit,
   onToggleActive,
   onDelete,
+  selection,
+  selectable,
 }: TeamTableProps) {
+  const { expandedId, toggle } = useExpandedRow();
+
   return (
     <div className="table-scroll hidden md:block">
       <table className="data-table min-w-[46rem] table-fixed lg:min-w-[56.25rem] lg:table-auto">
         <thead>
           <tr className="h-12">
-            <th scope="col" className="pl-5 pr-4 lg:w-[13.75rem] lg:pl-card">
+            {selectable ? (
+              <th scope="col" className="w-[3rem] pl-5 pr-0 lg:pl-card">
+                <RowCheckbox
+                  checked={selection.allVisibleSelected}
+                  indeterminate={selection.someVisibleSelected}
+                  onChange={selection.toggleAllVisible}
+                  label="Select all staff on this page"
+                />
+              </th>
+            ) : null}
+
+            <th
+              scope="col"
+              className={
+                selectable
+                  ? 'pl-3 pr-4 lg:w-[13.75rem]'
+                  : 'pl-5 pr-4 lg:w-[13.75rem] lg:pl-card'
+              }
+            >
               Name
             </th>
             <th scope="col" className="hidden w-[15rem] pr-4 lg:table-cell">
@@ -66,9 +113,12 @@ export function TeamTable({
             </th>
             <th
               scope="col"
-              className="w-[12.5rem] pr-5 text-right lg:w-[16.25rem] lg:pr-card"
+              className="w-[12.5rem] pr-4 text-right lg:w-[16.25rem]"
             >
               <span className="inline-block w-full text-right">Action</span>
+            </th>
+            <th scope="col" className="w-[4rem] pr-5 lg:pr-card">
+              <span className="sr-only">Details</span>
             </th>
           </tr>
         </thead>
@@ -78,12 +128,38 @@ export function TeamTable({
             const isDeactivated = member.status === 'deactivated';
             const statusLabel = isDeactivated ? 'Reactivate' : 'Deactivate';
 
+            const isExpanded = member.id === expandedId;
+            const panelId = detailPanelId('team', member.id);
+
             return (
+              <Fragment key={member.id}>
               <tr
-                key={member.id}
-                className="transition-colors hover:bg-gray-50"
+                {...expandRowProps({
+                  isExpanded,
+                  panelId,
+                  onToggle: () => toggle(member.id),
+                  label: `${isExpanded ? 'Hide' : 'Show'} access for ${member.name}`,
+                })}
+                className={expandedRowClass(isExpanded)}
               >
-                <td className="h-table-row py-3 pl-5 pr-4 lg:pl-card">
+                {selectable ? (
+                  <td
+                    className="h-table-row py-3 pl-5 pr-0 lg:pl-card"
+                    onClick={stopRowToggle}
+                  >
+                    <RowCheckbox
+                      checked={selection.isSelected(member.id)}
+                      onChange={() => selection.toggle(member.id)}
+                      label={`Select ${member.name}`}
+                    />
+                  </td>
+                ) : null}
+
+                <td
+                  className={`h-table-row py-3 pr-4 ${
+                    selectable ? 'pl-3' : 'pl-5 lg:pl-card'
+                  }`}
+                >
                   <div className="flex min-w-0 items-center gap-3">
                     <TeamMemberAvatar
                       id={member.id}
@@ -110,6 +186,7 @@ export function TeamTable({
                 <td className="hidden py-3 pr-4 lg:table-cell">
                   <a
                     href={`mailto:${member.email}`}
+                    onClick={stopRowToggle}
                     title={member.email}
                     className="block truncate text-gray-500 hover:text-primary hover:underline"
                   >
@@ -136,7 +213,7 @@ export function TeamTable({
                   </span>
                 </td>
 
-                <td className="py-3 pl-2 pr-5 lg:pr-card">
+                <td className="py-3 pl-2 pr-4" onClick={stopRowToggle}>
                   <div className="flex items-center justify-end gap-2 lg:gap-2">
                     {/* Tablet draws both actions as plain text; desktop gives
                         Edit an outlined button. */}
@@ -165,7 +242,19 @@ export function TeamTable({
                     </button>
                   </div>
                 </td>
+
+                <ExpandChevronCell
+                  isExpanded={isExpanded}
+                  className="pr-5 lg:pr-card"
+                />
               </tr>
+
+              {isExpanded ? (
+                <DetailRow panelId={panelId} colSpan={selectable ? 8 : 7}>
+                  <TeamMemberDetails member={member} />
+                </DetailRow>
+              ) : null}
+              </Fragment>
             );
           })}
         </tbody>

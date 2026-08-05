@@ -82,12 +82,11 @@ export type AdminAuditActor = {
  * never maps a verb to words, so a historical action the catalogue no longer
  * names still arrives readable.
  *
- * `metadata` is whatever the recording layer stored for this kind of event: a
- * status change, an amount in minor units, a set of permission keys. Its shape
- * varies per action by design, so it is `unknown` here and rendered generically
- * rather than typed per verb — a union of sixty shapes would have to be kept in
- * step with the backend by hand, which is exactly the drift the mirror rule
- * warns about. It never contains PII or card data (AGENTS.md, Security & PII).
+ * The metadata blob is NOT on the row. Its size is whatever the recording layer
+ * chose to keep for that action, and a page of the trail was shipping fifty of
+ * them to render fifty two-value preview lines. `metadataPreview` is that line,
+ * built by the backend; the blob itself arrives with `AdminAuditEntry` when a
+ * reader opens the row.
  *
  * `createdAt` is ISO-8601 UTC, converted to the viewer's zone only at render
  * (AGENTS.md, Dates).
@@ -101,9 +100,26 @@ export type AdminAuditRow = {
   actor: AdminAuditActor;
   entityType: string;
   entityId: string;
+  metadataPreview: string | null;
+  createdAt: string;
+};
+
+/*
+ * One entry in full — what the expanded row reads, fetched per row.
+ *
+ * `metadata` is whatever the recording layer stored for this kind of event: a
+ * status change, an amount in minor units, a set of permission keys. Its shape
+ * varies per action by design, so it is `unknown` here and rendered generically
+ * rather than typed per verb — a union of sixty shapes would have to be kept in
+ * step with the backend by hand, which is exactly the drift the mirror rule
+ * warns about. It never contains PII or card data (AGENTS.md, Security & PII).
+ *
+ * `ipAddress` is null for anything a job wrote: a background processor has no
+ * request and therefore no caller address.
+ */
+export type AdminAuditEntry = AdminAuditRow & {
   metadata: unknown;
   ipAddress: string | null;
-  createdAt: string;
 };
 
 /*

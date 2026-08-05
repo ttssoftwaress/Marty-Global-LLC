@@ -52,6 +52,18 @@ import type {
  *      offers nothing, which looks to a customer exactly like a broken form.
  */
 
+/*
+ * Rows not in the Trash. Every read on this screen and every write validator
+ * carries it — a trashed question must not appear in the picker, and must not be
+ * acceptable in a form schema being saved.
+ *
+ * Two deliberate exceptions, both about a key rather than a row: `createField`
+ * looks a clashing key up unfiltered so it can say the row is in the Trash
+ * rather than report a phantom conflict, and `parentLabelFor` prints whatever
+ * name it can find for an error message.
+ */
+const LIVE = { deletedAt: null } as const;
+
 export type FieldDefinitionView = {
   id: string;
   key: string;
@@ -71,9 +83,9 @@ export type FieldDefinitionView = {
   /*
    * Whether removing this field outright is available at all. False the moment
    * any service form or request type references the key (`isDeletable`);
-   * `deleteField` runs that same check plus stored answers, because a field
-   * dropped from a form after orders were placed has a usage count of zero and
-   * answers behind it.
+   * `fieldDeletionBlocker` runs that same check plus stored answers, because a
+   * field dropped from a form after orders were placed has a usage count of zero
+   * and answers behind it.
    */
   canDelete: boolean;
   /*
@@ -121,7 +133,7 @@ function toView(
  * still on offer" as the list and the update response can answer it.
  *
  * Written once because the same predicate spelled out at each call site is the
- * drift that lets a visible button meet a refused call. `deleteField` adds the
+ * drift that lets a visible button meet a refused call. The delete path adds the
  * stored-answer check on top: a field dropped from every form after orders were
  * placed has a usage count of zero and answers behind it, and only the delete
  * path pays for that query.
@@ -244,7 +256,7 @@ function configOf(definition: Pick<FieldDefinition, 'config'>): FieldConfig {
  */
 async function dependencyEdges(): Promise<Dependency[]> {
   const rows = await prisma.fieldDefinition.findMany({
-    where: { type: 'select' },
+    where: { type: 'select', ...LIVE },
     select: { key: true, label: true, config: true },
   });
 
@@ -286,8 +298,8 @@ async function assertDependencyIsSound(
     });
   }
 
-  const parent = await prisma.fieldDefinition.findUnique({
-    where: { key: parentKey },
+  const parent = await prisma.fieldDefinition.findFirst({
+    where: { key: parentKey, ...LIVE },
   });
 
   if (!parent) {
@@ -429,6 +441,7 @@ export async function listFields(
   query: ListFieldsQuery,
 ): Promise<FieldDefinitionPage> {
   const where: Prisma.FieldDefinitionWhereInput = {
+    ...LIVE,
     ...(query.includeArchived ? {} : { archived: false }),
     ...(query.type ? { type: query.type } : {}),
     ...(query.search
@@ -479,16 +492,28 @@ export async function createField(
     where: { key: input.key },
   });
 
-  // A duplicate key is a conflict, not a silent merge: the admin is registering
-  // a question that already exists and should be told to reuse it.
+  /*
+   * A duplicate key is a conflict, not a silent merge: the admin is registering
+   * a question that already exists and should be told to reuse it.
+   *
+   * Unfiltered on `deletedAt`, because the key is unique across trashed rows
+   * too — so the clash is real and the message has to say where the row actually
+   * is. Reviving it here would hand back a question with its old answers under
+   * whatever label this form just supplied.
+   */
   if (existing) {
-    throw AppError.conflict(`A field with the key "${input.key}" already exists`);
+    throw existing.deletedAt
+      ? AppError.conflict(
+          `A field with the key "${input.key}" is in the Trash. Restore it, or delete it permanently, before registering another under the same key.`,
+        )
+      : AppError.conflict(`A field with the key "${input.key}" already exists`);
   }
 
   const config = configFor(input.type, input.config);
   await assertDependencyIsSound(input.key, config);
 
   const last = await prisma.fieldDefinition.findFirst({
+    where: LIVE,
     orderBy: { sortOrder: 'desc' },
     select: { sortOrder: true },
   });
@@ -524,8 +549,8 @@ export async function updateField(
   fieldId: string,
   input: UpdateFieldInput,
 ): Promise<FieldDefinitionView> {
-  const existing = await prisma.fieldDefinition.findUnique({
-    where: { id: fieldId },
+  const existing = await prisma.fieldDefinition.findFirst({
+    where: { id: fieldId, ...LIVE },
   });
 
   if (!existing) throw AppError.notFound('Field not found');
@@ -609,24 +634,28 @@ export async function updateField(
 }
 
 /*
- * Remove a registered question outright — rule 3 above.
+ * Why this registered question may NOT be removed — rule 3 above, as a sentence
+ * the admin reads, or null when nothing points at the key.
  *
- * A hard delete, unlike the catalog's own, and deliberately: a `FieldDefinition`
- * is configuration rather than a customer-facing record, so once nothing points
- * at it there is nothing to retain. The guard is what makes that safe, and it is
- * checked here rather than trusted from the UI — every place a key can be
- * referenced is counted before the row goes.
+ * Exported rather than folded into a delete function, because the delete itself
+ * no longer lives here: every admin table's delete now routes through
+ * `modules/admin/trash`, which stamps `deletedAt`, files a restorable entry, and
+ * asks the entity's own registry descriptor whether the row may go. This is that
+ * answer for a field, and it stays in this file because it is the one place that
+ * knows every way a key can be referenced.
  *
- * A field that fails any of those checks is archived instead, which is the same
- * outcome the admin wanted (it leaves the picker) without orphaning the answers
+ * The check is deliberately exhaustive and deliberately paid for only here:
+ * `isDeletable` above answers the cheap half for the list's `canDelete` flag,
+ * while the stored-answer probe costs a query and only the delete path runs it.
+ *
+ * A field that fails any of these is archived instead, which is the same outcome
+ * the admin wanted — it leaves the picker — without orphaning the answers
  * already given under it (AGENTS.md — ask before any hard delete).
  */
-export async function deleteField(
-  actor: AuthContext,
-  fieldId: string,
-): Promise<{ id: string }> {
-  const existing = await prisma.fieldDefinition.findUnique({
-    where: { id: fieldId },
+export async function fieldDeletionBlocker(fieldId: string): Promise<string | null> {
+  const existing = await prisma.fieldDefinition.findFirst({
+    where: { id: fieldId, deletedAt: null },
+    select: { key: true, label: true },
   });
 
   if (!existing) throw AppError.notFound('Field not found');
@@ -642,38 +671,19 @@ export async function deleteField(
   const inRequestType = requestKeys.has(existing.key);
   const dependents = dependentsOf(edges, existing.key);
 
-  if (!isDeletable(usageCount, inRequestType, dependents.length) || hasAnswers) {
-    const reason = hasAnswers
-      ? 'customers have already answered it'
-      : usageCount > 0
-        ? `${usageCount} service${usageCount === 1 ? '' : 's'} still ask${usageCount === 1 ? 's' : ''} it`
-        : dependents.length > 0
-          ? `${dependents.map((child) => `"${child.label}"`).join(', ')} filter${dependents.length === 1 ? 's' : ''} its choices by this field's answer`
-          : 'a service request form still asks it';
-
-    throw AppError.businessRule(
-      `"${existing.label}" cannot be deleted because ${reason}. Archive it instead — it leaves the picker and every form and answer already using it keeps working.`,
-      {
-        fieldKey: existing.key,
-        usageCount,
-        inRequestType,
-        hasAnswers,
-        dependents: dependents.map((child) => child.key),
-      },
-    );
+  if (isDeletable(usageCount, inRequestType, dependents.length) && !hasAnswers) {
+    return null;
   }
 
-  await prisma.fieldDefinition.delete({ where: { id: fieldId } });
+  const reason = hasAnswers
+    ? 'customers have already answered it'
+    : usageCount > 0
+      ? `${usageCount} service${usageCount === 1 ? '' : 's'} still ask${usageCount === 1 ? 's' : ''} it`
+      : dependents.length > 0
+        ? `${dependents.map((child) => `"${child.label}"`).join(', ')} filter${dependents.length === 1 ? 's' : ''} its choices by this field's answer`
+        : 'a service request form still asks it';
 
-  void record({
-    actor,
-    action: AuditAction.FIELD_DELETED,
-    entityType: 'FieldDefinition',
-    entityId: fieldId,
-    metadata: { key: existing.key, type: existing.type },
-  });
-
-  return { id: fieldId };
+  return `"${existing.label}" cannot be deleted because ${reason}. Archive it instead — it leaves the picker and every form and answer already using it keeps working.`;
 }
 
 /*
@@ -686,7 +696,7 @@ export async function assertFieldsExist(keys: readonly string[]): Promise<void> 
   if (unique.length === 0) return;
 
   const found = await prisma.fieldDefinition.findMany({
-    where: { key: { in: unique } },
+    where: { key: { in: unique }, ...LIVE },
     select: { key: true },
   });
 
@@ -719,7 +729,7 @@ export async function assertDependenciesSatisfied(
   if (keys.length === 0) return;
 
   const definitions = await prisma.fieldDefinition.findMany({
-    where: { key: { in: [...new Set(keys)] }, type: 'select' },
+    where: { key: { in: [...new Set(keys)] }, type: 'select', ...LIVE },
     select: { key: true, label: true, config: true },
   });
 

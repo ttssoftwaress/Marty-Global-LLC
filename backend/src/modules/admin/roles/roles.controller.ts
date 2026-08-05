@@ -3,6 +3,7 @@ import type { NextFunction, Request, Response } from 'express';
 import { getAuth } from '../../../guards/index.js';
 import { AppError } from '../../../lib/app-error.js';
 import { pathParam } from '../../../lib/params.js';
+import { trashRows } from '../trash/trash.service.js';
 import * as service from './roles.service.js';
 import {
   createStaffRoleSchema,
@@ -55,10 +56,15 @@ export async function updateRole(req: Request, res: Response, next: NextFunction
   }
 }
 
+// Deleting a job role. To the Trash, with both of its rules — built-in roles
+// cannot go, and neither can one any member still holds — on the `staff-role`
+// descriptor in `trash.registry.ts`.
 export async function deleteRole(req: Request, res: Response, next: NextFunction) {
   try {
-    const result = await service.deleteRole(getAuth(req), pathParam(req, 'roleId'));
-    res.json({ data: result });
+    const id = pathParam(req, 'roleId');
+    await trashRows(getAuth(req), 'staff-role', [id]);
+
+    res.json({ data: { id } });
   } catch (error) {
     next(error);
   }

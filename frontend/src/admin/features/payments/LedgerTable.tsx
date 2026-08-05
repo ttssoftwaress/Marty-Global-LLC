@@ -1,8 +1,21 @@
+import { Fragment } from 'react';
 import { Link } from 'react-router-dom';
 
+import {
+  DetailRow,
+  ExpandChevronCell,
+  detailPanelId,
+  expandRowProps,
+  expandedRowClass,
+  stopRowToggle,
+  useExpandedRow,
+} from '../../components/ExpandableRow';
+import { RowCheckbox } from '../../components/RowCheckbox';
+import type { RowSelection } from '../../hooks/useRowSelection';
 import { formatMoney, formatOrderDate } from '../../lib/format';
 import { EM_DASH, formatPaymentMethod } from '../../lib/payments';
 import type { BillingLedgerRow } from '../../types/payments';
+import { LedgerDetails } from './LedgerDetails';
 import { LedgerRowAction } from './LedgerRowAction';
 import { PaymentStatusChip } from './PaymentStatusChip';
 
@@ -11,6 +24,13 @@ import { PaymentStatusChip } from './PaymentStatusChip';
  * instead; see LedgerCardList).
  *
  * One real `<table>` so the columns align and the header is announced.
+ *
+ * The row carries what the ledger is scanned by — reference, customer, service,
+ * amount, date, status, method — and clicking it opens what it cannot: the
+ * itemised breakdown and every payment attempt made against the invoice, both
+ * fetched then rather than shipped with the page (LedgerDetails). One row is
+ * open at a time. The reference link and the action button stop their own
+ * clicks, so following either never also toggles a panel.
  *
  * Four departures from the Figma links, all of them fixes to problems visible
  * in the design itself (Design.md — improve where warranted, log it):
@@ -42,9 +62,6 @@ import { PaymentStatusChip } from './PaymentStatusChip';
  *      workspace, which truncated every service to three characters. The minimum
  *      is the fixed columns plus a readable service column, so the frame scrolls
  *      instead of starving it.
- *
- * Desktop's column order matches the design: ID, customer, service, amount,
- * date, status, method, action.
  */
 
 type LedgerTableProps = {
@@ -52,17 +69,44 @@ type LedgerTableProps = {
   onAction: (row: BillingLedgerRow) => void;
   /** The row whose reminder is in flight, if any — one chase at a time. */
   sendingId?: string | null;
+  selection: RowSelection;
+  // False when the signed-in member may not delete here — the column is dropped
+  // rather than drawn disabled, so nobody ticks rows they cannot act on.
+  selectable: boolean;
 };
 
-export function LedgerTable({ rows, onAction, sendingId }: LedgerTableProps) {
+export function LedgerTable({
+  rows,
+  onAction,
+  sendingId,
+  selection,
+  selectable,
+}: LedgerTableProps) {
+  const { expandedId, toggle } = useExpandedRow();
+
   return (
     <div className="table-scroll hidden md:block">
-      <table className="data-table min-w-[49rem] table-fixed lg:min-w-[75rem]">
+      <table className="data-table min-w-[52rem] table-fixed lg:min-w-[78rem]">
         <thead>
           <tr className="h-12">
+            {selectable ? (
+              <th scope="col" className="w-10 pl-4 pr-2 lg:pl-6">
+                <RowCheckbox
+                  checked={selection.allVisibleSelected}
+                  indeterminate={selection.someVisibleSelected}
+                  onChange={selection.toggleAllVisible}
+                  label="Select all quotes on this page"
+                />
+              </th>
+            ) : null}
+
             <th
               scope="col"
-              className="w-[11.75rem] pl-4 pr-2 lg:w-[12.5rem] lg:pl-6 lg:pr-4"
+              className={
+                selectable
+                  ? 'w-[11.75rem] pr-2 lg:w-[12.5rem] lg:pr-4'
+                  : 'w-[11.75rem] pl-4 pr-2 lg:w-[12.5rem] lg:pl-6 lg:pr-4'
+              }
             >
               Order ID
             </th>
@@ -84,90 +128,131 @@ export function LedgerTable({ rows, onAction, sendingId }: LedgerTableProps) {
             <th scope="col" className="hidden w-[9.25rem] pr-4 lg:table-cell">
               Payment method
             </th>
-            <th scope="col" className="w-[9.25rem] pr-4 text-right lg:pr-6">
+            <th scope="col" className="w-[9.25rem] pr-2 text-right lg:pr-4">
               Action
+            </th>
+            <th scope="col" className="w-[4rem] pr-4 lg:pr-6">
+              <span className="sr-only">Details</span>
             </th>
           </tr>
         </thead>
 
         <tbody>
-          {rows.map((row) => (
-            <tr key={row.id} className="transition-colors hover:bg-gray-50">
-              <td className="py-3 pl-4 pr-3 lg:pl-6 lg:pr-4">
-                <Link
-                  to={row.to}
-                  title={row.reference}
-                  className="block truncate font-semibold text-primary hover:underline"
+          {rows.map((row) => {
+            const isExpanded = row.id === expandedId;
+            const panelId = detailPanelId('ledger', row.id);
+
+            return (
+              <Fragment key={row.id}>
+                <tr
+                  {...expandRowProps({
+                    isExpanded,
+                    panelId,
+                    onToggle: () => toggle(row.id),
+                    label: `${isExpanded ? 'Hide' : 'Show'} invoice details for ${row.reference}`,
+                  })}
+                  className={expandedRowClass(isExpanded)}
                 >
-                  {row.reference}
-                </Link>
-              </td>
+                  {selectable ? (
+                    <td className="py-3 pl-4 pr-2 lg:pl-6" onClick={stopRowToggle}>
+                      <RowCheckbox
+                        checked={selection.isSelected(row.id)}
+                        onChange={() => selection.toggle(row.id)}
+                        label={`Select quote ${row.reference}`}
+                      />
+                    </td>
+                  ) : null}
 
-              <td className="hidden py-3 pr-4 lg:table-cell">
-                <span className="block truncate" title={row.customer.name}>
-                  {row.customer.name}
-                </span>
-              </td>
+                  <td
+                    className={`py-3 pr-3 lg:pr-4 ${selectable ? '' : 'pl-4 lg:pl-6'}`}
+                  >
+                    <Link
+                      to={row.to}
+                      onClick={stopRowToggle}
+                      title={row.reference}
+                      className="block truncate font-semibold text-primary hover:underline"
+                    >
+                      {row.reference}
+                    </Link>
+                  </td>
 
-              <td className="py-3 pr-2 lg:pr-4">
-                <span className="block truncate" title={row.service}>
-                  {row.service}
-                </span>
-                {/*
-                 * Tablet folds the customer, the date, and the method under the
-                 * service — an extension of that link's own idea — so nothing is
-                 * lost at a width that cannot hold eight columns. Desktop has
-                 * all three as their own columns, so this line hides there.
-                 */}
-                <span className="mt-0.5 block truncate text-small text-gray-500 lg:hidden">
-                  {row.customer.name} · {formatOrderDate(row.issuedAt)} ·{' '}
-                  {formatPaymentMethod(row.method)}
-                </span>
-              </td>
+                  <td className="hidden py-3 pr-4 lg:table-cell">
+                    <span className="block truncate" title={row.customer.name}>
+                      {row.customer.name}
+                    </span>
+                  </td>
 
-              <td className="py-3 pr-3 lg:pr-4">
-                <span className="block truncate font-medium">
-                  {formatMoney(row.amount)}
-                </span>
-              </td>
+                  <td className="py-3 pr-2 lg:pr-4">
+                    <span className="block truncate" title={row.service}>
+                      {row.service}
+                    </span>
+                    {/*
+                     * Tablet folds the customer, the date, and the method under
+                     * the service — an extension of that link's own idea — so
+                     * nothing is lost at a width that cannot hold eight columns.
+                     */}
+                    <span className="mt-0.5 block truncate text-small text-gray-500 lg:hidden">
+                      {row.customer.name} · {formatOrderDate(row.issuedAt)} ·{' '}
+                      {formatPaymentMethod(row.method)}
+                    </span>
+                  </td>
 
-              <td className="hidden py-3 pr-4 lg:table-cell">
-                <span className="block truncate text-gray-600">
-                  {formatOrderDate(row.issuedAt)}
-                </span>
-              </td>
+                  <td className="py-3 pr-3 lg:pr-4">
+                    <span className="block truncate font-medium">
+                      {formatMoney(row.amount)}
+                    </span>
+                  </td>
 
-              <td className="py-3 pr-3 lg:pr-4">
-                <PaymentStatusChip
-                  status={row.status}
-                  label={row.statusLabel}
-                />
-              </td>
+                  <td className="hidden py-3 pr-4 lg:table-cell">
+                    <span className="block truncate text-gray-600">
+                      {formatOrderDate(row.issuedAt)}
+                    </span>
+                  </td>
 
-              <td className="hidden py-3 pr-4 lg:table-cell">
-                <span
-                  className={`block truncate ${
-                    row.method ? 'text-text-secondary' : 'text-gray-400'
-                  }`}
-                >
-                  {formatPaymentMethod(row.method)}
-                </span>
-              </td>
+                  <td className="py-3 pr-3 lg:pr-4">
+                    <PaymentStatusChip
+                      status={row.status}
+                      label={row.statusLabel}
+                    />
+                  </td>
 
-              <td className="py-3 pl-2 pr-4 text-right lg:pr-6">
-                {row.action.kind === 'none' ? (
-                  <span className="text-gray-400">{EM_DASH}</span>
-                ) : (
-                  <LedgerRowAction
-                    row={row}
-                    onAction={onAction}
-                    isSending={sendingId === row.id}
-                    isBusy={Boolean(sendingId)}
-                  />
-                )}
-              </td>
-            </tr>
-          ))}
+                  <td className="hidden py-3 pr-4 lg:table-cell">
+                    <span
+                      className={`block truncate ${
+                        row.method ? 'text-text-secondary' : 'text-gray-400'
+                      }`}
+                    >
+                      {formatPaymentMethod(row.method)}
+                    </span>
+                  </td>
+
+                  <td
+                    className="py-3 pl-2 pr-2 text-right lg:pr-4"
+                    onClick={stopRowToggle}
+                  >
+                    {row.action.kind === 'none' ? (
+                      <span className="text-gray-400">{EM_DASH}</span>
+                    ) : (
+                      <LedgerRowAction
+                        row={row}
+                        onAction={onAction}
+                        isSending={sendingId === row.id}
+                        isBusy={Boolean(sendingId)}
+                      />
+                    )}
+                  </td>
+
+                  <ExpandChevronCell isExpanded={isExpanded} />
+                </tr>
+
+                {isExpanded ? (
+                  <DetailRow panelId={panelId} colSpan={selectable ? 10 : 9}>
+                    <LedgerDetails row={row} />
+                  </DetailRow>
+                ) : null}
+              </Fragment>
+            );
+          })}
         </tbody>
       </table>
     </div>

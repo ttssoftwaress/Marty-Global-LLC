@@ -31,7 +31,8 @@ export type AuditCategoryKey =
   | 'mailroom'
   | 'team'
   | 'support'
-  | 'settings';
+  | 'settings'
+  | 'trash';
 
 /*
  * The sections the viewer tabs on. Ordered by how often an admin opens them
@@ -49,6 +50,17 @@ export const AUDIT_CATEGORIES: readonly { key: AuditCategoryKey; label: string }
   { key: 'team', label: 'Team & staff' },
   { key: 'support', label: 'Support' },
   { key: 'settings', label: 'Business settings' },
+  /*
+   * Deletions, restores, and purges — its own section rather than filed under
+   * the area each deleted record belongs to.
+   *
+   * The reason is the question this tab answers: "what has been removed", asked
+   * across every table at once. Spreading a customer deletion into Orders and a
+   * carrier deletion into Business settings would leave that question needing
+   * nine tabs and a mental join, which is exactly the reading the trash screen
+   * itself exists to make unnecessary.
+   */
+  { key: 'trash', label: 'Trash & restore' },
 ];
 
 /*
@@ -509,6 +521,44 @@ const CATALOG: Record<string, Entry> = {
     label: 'Mail carriers reordered',
     category: 'settings',
     severity: 'normal',
+  },
+  /*
+   * `alert`, like the other settings switch above and for the same reason: this
+   * decides when a deletion stops being reversible. Shortening the window, or
+   * standing the sweep down while an audit is open, are both facts a reviewer
+   * needs surfaced rather than buried.
+   */
+  [AuditAction.TRASH_SETTINGS_UPDATED]: {
+    label: 'Trash retention changed',
+    category: 'settings',
+    severity: 'alert',
+  },
+
+  // --- Trash & restore ---------------------------------------------------
+  /*
+   * Three severities for three different weights, which is the whole point of
+   * splitting the verbs.
+   *
+   * Trashing is `notice`: a row left every screen, and something a reviewer
+   * should see, but there is a way back for the whole retention window. Restore
+   * is `normal` — it is the undo, and an undo being taken is the system working.
+   * Purging is `alert` and the only one of the three that cannot be answered:
+   * after it, this entry is the sole remaining evidence the record existed.
+   */
+  [AuditAction.RECORD_TRASHED]: {
+    label: 'Record moved to Trash',
+    category: 'trash',
+    severity: 'notice',
+  },
+  [AuditAction.RECORD_RESTORED]: {
+    label: 'Record restored from Trash',
+    category: 'trash',
+    severity: 'normal',
+  },
+  [AuditAction.RECORD_PURGED]: {
+    label: 'Record permanently deleted',
+    category: 'trash',
+    severity: 'alert',
   },
 };
 

@@ -24,6 +24,13 @@ router.use(requirePermission('payments'));
 router.get('/summary', apiRateLimit, controller.getSummary);
 router.get('/revenue', apiRateLimit, controller.getRevenue);
 router.get('/ledger', apiRateLimit, controller.listLedger);
+/*
+ * One ledger row in full — the itemised quote and every payment attempt made
+ * against it. Its own endpoint rather than more columns on the list: both are
+ * extra joins per quote, and a page of the ledger would pay for them on every
+ * row to render detail nobody has opened.
+ */
+router.get('/ledger/:quoteId', apiRateLimit, controller.getLedgerRow);
 
 /*
  * Chasing an unpaid invoice. Anyone holding the `payments` area may send one,
@@ -73,6 +80,13 @@ router.post(
  * order to PAID.
  */
 router.get('/settlements', apiRateLimit, controller.listSettlements);
+/*
+ * One payment in full, including the frozen bank instructions the customer was
+ * shown. Off the list because that snapshot is a whole rendered details block
+ * per wire, read on the one row a settler opens and shipped for all of them.
+ * Same scope as the list — see `getSettlement`.
+ */
+router.get('/settlements/:paymentId', apiRateLimit, controller.getSettlement);
 router.post(
   '/settlements/:paymentId/settle',
   requirePermission('payments.settle'),
@@ -87,6 +101,10 @@ router.post(
 );
 
 router.get('/unmatched', apiRateLimit, controller.listUnmatched);
+// The chain facts behind one stray transfer — the addresses, the contract, the
+// raw integer, the sighting count. Readable by anyone with the `payments` area,
+// like the list: a transfer that matched nothing belongs to nobody to scope to.
+router.get('/unmatched/:transferId', apiRateLimit, controller.getUnmatched);
 router.post(
   '/unmatched/:transferId/resolve',
   requireAdmin,

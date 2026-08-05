@@ -10,6 +10,14 @@ export const QueueName = {
   NOTIFICATIONS: 'notifications',
   PAYMENTS: 'payments',
   SUPPORT: 'support',
+  /*
+   * Housekeeping that belongs to no single module. The trash sweep is its first
+   * job and the reason the queue exists: it hard-deletes rows from a dozen
+   * tables, so filing it under any one module's queue would say it belonged
+   * there — and putting it on the support queue beside the guest-chat purge
+   * would put a cross-cutting destructive job behind live chat's retry posture.
+   */
+  MAINTENANCE: 'maintenance',
 } as const;
 
 export type QueueName = (typeof QueueName)[keyof typeof QueueName];
@@ -26,6 +34,13 @@ export const JobName = {
   SUPPORT_OFFLINE_HANDOFF: 'support-offline-handoff',
   // Deletes anonymous visitor chats past their retention window. Repeatable.
   PURGE_GUEST_CHATS: 'purge-guest-chats',
+  /*
+   * Hard-deletes trashed records whose retention window has closed. Repeatable,
+   * daily, and the one job in this system whose whole purpose is to destroy
+   * data — which is why it re-reads its own stop switch on every run
+   * (`TrashSettings.purgeEnabled`) rather than trusting the schedule.
+   */
+  PURGE_TRASH: 'purge-trash',
 } as const;
 
 export type JobName = (typeof JobName)[keyof typeof JobName];
@@ -84,7 +99,29 @@ export const supportQueue = new Queue(QueueName.SUPPORT, {
   },
 });
 
-export const queues = [notificationsQueue, paymentsQueue, supportQueue];
+/*
+ * Housekeeping. Its retry posture is the deliberate opposite of the
+ * notifications queue's: this queue destroys data, so a failed run must not be
+ * hammered back at the database. One attempt, superseded by tomorrow's sweep —
+ * and the sweep itself is idempotent (an entry it could not purge is left with
+ * the reason recorded and its deadline pushed forward), so nothing is lost by
+ * giving up on a run.
+ */
+export const maintenanceQueue = new Queue(QueueName.MAINTENANCE, {
+  connection: redis,
+  defaultJobOptions: {
+    attempts: 1,
+    removeOnComplete: { age: 60 * 60 * 24 * 7, count: 50 },
+    removeOnFail: { age: 60 * 60 * 24 * 7 },
+  },
+});
+
+export const queues = [
+  notificationsQueue,
+  paymentsQueue,
+  supportQueue,
+  maintenanceQueue,
+];
 
 export type SendEmailJob = {
   notificationId: string;
@@ -187,6 +224,27 @@ export async function scheduleGuestChatPurge(everySeconds: number) {
     'guest-chat-purge',
     { every: everySeconds * 1000 },
     { name: JobName.PURGE_GUEST_CHATS, data: {} },
+  );
+}
+
+/*
+ * Empty the trash of anything past its retention window.
+ *
+ * Daily, and deliberately no more often: the window is measured in days, so a
+ * sweep every hour would run twenty-four times to find the same nothing, and the
+ * one thing a destructive job should not be is eager. A sweep processes a
+ * bounded batch and leaves the rest for tomorrow, which is why a long-neglected
+ * bin drains steadily rather than in one long transaction.
+ *
+ * Idempotent, like every other repeatable job here: the entries it purges are
+ * gone, and the ones it could not are left with their reason recorded — so a
+ * duplicated or overlapping run finds nothing to redo.
+ */
+export async function scheduleTrashPurge(everySeconds: number) {
+  return maintenanceQueue.upsertJobScheduler(
+    'trash-purge',
+    { every: everySeconds * 1000 },
+    { name: JobName.PURGE_TRASH, data: {} },
   );
 }
 

@@ -4,6 +4,7 @@ import { getAuth } from '../../../guards/index.js';
 import { AppError } from '../../../lib/app-error.js';
 import { pathParam } from '../../../lib/params.js';
 import * as notifications from './settings.notifications.js';
+import { trashRows } from '../trash/trash.service.js';
 import * as service from './settings.service.js';
 import {
   carrierCodeSchema,
@@ -80,15 +81,26 @@ export async function updateLocation(
   }
 }
 
+/*
+ * The row's own Delete button, which now moves it to the Trash rather than
+ * dropping it — one shared path with the bulk selection and with every other
+ * admin table (`modules/admin/trash`).
+ *
+ * The endpoint's shape is unchanged, so the screen calling it did not have to
+ * move: it still returns the code it removed. What changed is that the removal
+ * is undoable and that the "nothing references it" rule is now stated once, on
+ * the `location` descriptor in the registry.
+ */
 export async function deleteLocation(
   req: Request,
   res: Response,
   next: NextFunction,
 ) {
   try {
-    res.json({
-      data: await service.deleteLocation(getAuth(req), locationCode(req)),
-    });
+    const code = locationCode(req);
+    await trashRows(getAuth(req), 'location', [code]);
+
+    res.json({ data: { code } });
   } catch (error) {
     next(error);
   }
@@ -165,15 +177,17 @@ export async function updateCarrier(
   }
 }
 
+// Same as `deleteLocation` above: to the Trash, not gone.
 export async function deleteCarrier(
   req: Request,
   res: Response,
   next: NextFunction,
 ) {
   try {
-    res.json({
-      data: await service.deleteCarrier(getAuth(req), carrierCode(req)),
-    });
+    const code = carrierCode(req);
+    await trashRows(getAuth(req), 'carrier', [code]);
+
+    res.json({ data: { code } });
   } catch (error) {
     next(error);
   }

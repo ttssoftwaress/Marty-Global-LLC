@@ -1,7 +1,14 @@
 import { AlertCircle, CheckCircle2 } from 'lucide-react';
 
+import {
+  ExpandChevron,
+  detailPanelId,
+  stopRowToggle,
+  useExpandedRow,
+} from '../../components/ExpandableRow';
 import { formatActivityTime, formatOrderDate } from '../../lib/format';
 import type { UnmatchedTransferRow } from '../../types/payments';
+import { UnmatchedTransferDetails } from './UnmatchedTransferDetails';
 import { shortHash } from './UnmatchedTransferTable';
 
 /*
@@ -13,8 +20,10 @@ import { shortHash } from './UnmatchedTransferTable';
  * has been unclaimed. The sender is dropped at this width for the same reason
  * tablet drops it — the hash already identifies the transfer.
  *
- * The resolution note wraps rather than truncating: a card has the height for it,
- * and on a reconciled row the note is the entire point of the record.
+ * The card body opens the same panel the table's rows open — the full hash,
+ * both addresses, the contract, the raw integer, and the resolution note —
+ * fetched when opened rather than carried by every card. One card is open at a
+ * time.
  */
 
 type UnmatchedTransferCardListProps = {
@@ -30,55 +39,67 @@ export function UnmatchedTransferCardList({
   resolvingId,
   onResolve,
 }: UnmatchedTransferCardListProps) {
+  const { expandedId, toggle } = useExpandedRow();
+
   return (
     <ul className="flex w-full flex-col gap-3 md:hidden">
       {rows.map((row) => {
         const resolved = Boolean(row.resolvedAt);
+        const isExpanded = row.id === expandedId;
+        const panelId = detailPanelId('transfer-card', row.id);
 
         return (
           <li
             key={row.id}
             className="flex flex-col gap-2.5 rounded-card border border-gray-200 bg-white p-3.5 shadow-sm-elevation"
           >
-            <div className="flex items-start justify-between gap-3">
-              <p className="text-body font-bold text-text">
-                {row.amountDisplay} USDT
-              </p>
-
-              {resolved ? (
-                <span className="inline-flex shrink-0 items-center gap-1 rounded-pill px-2 py-1 text-caption font-semibold leading-4 status-approved">
-                  <CheckCircle2 className="size-3 shrink-0" strokeWidth={2} aria-hidden="true" />
-                  Reconciled
-                </span>
-              ) : (
-                <span className="inline-flex shrink-0 items-center gap-1 rounded-pill px-2 py-1 text-caption font-semibold leading-4 status-review">
-                  <AlertCircle className="size-3 shrink-0" strokeWidth={2} aria-hidden="true" />
-                  Unattributed
-                </span>
-              )}
-            </div>
-
-            <p
-              className="truncate font-mono text-small text-text-secondary"
-              title={row.transactionHash}
+            <button
+              type="button"
+              onClick={() => toggle(row.id)}
+              aria-expanded={isExpanded}
+              aria-controls={panelId}
+              className="flex flex-col gap-2.5 rounded-input text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
             >
-              {shortHash(row.transactionHash, 12, 10)}
-            </p>
+              <span className="flex items-start justify-between gap-3">
+                <span className="text-body font-bold text-text">
+                  {row.amountDisplay} USDT
+                </span>
 
-            <p className="text-caption text-gray-400">
-              Landed {formatOrderDate(row.blockAt)} ·{' '}
-              {resolved
-                ? `last seen ${formatActivityTime(row.lastSeenAt)}`
-                : `unclaimed since ${formatActivityTime(row.firstSeenAt)}`}
-            </p>
+                <span className="flex shrink-0 items-center gap-2">
+                  {resolved ? (
+                    <span className="inline-flex shrink-0 items-center gap-1 rounded-pill px-2 py-1 text-caption font-semibold leading-4 status-approved">
+                      <CheckCircle2 className="size-3 shrink-0" strokeWidth={2} aria-hidden="true" />
+                      Reconciled
+                    </span>
+                  ) : (
+                    <span className="inline-flex shrink-0 items-center gap-1 rounded-pill px-2 py-1 text-caption font-semibold leading-4 status-review">
+                      <AlertCircle className="size-3 shrink-0" strokeWidth={2} aria-hidden="true" />
+                      Unattributed
+                    </span>
+                  )}
+                  <ExpandChevron isExpanded={isExpanded} />
+                </span>
+              </span>
 
-            {resolved && row.resolutionNote ? (
-              <p className="text-small leading-[1.4] text-text-secondary">
-                {row.resolutionNote}
-                {row.resolvedBy ? (
-                  <span className="text-gray-400"> — {row.resolvedBy}</span>
-                ) : null}
-              </p>
+              <span
+                className="block truncate font-mono text-small text-text-secondary"
+                title={row.transactionHash}
+              >
+                {shortHash(row.transactionHash, 12, 10)}
+              </span>
+
+              <span className="block text-caption text-gray-400">
+                Landed {formatOrderDate(row.blockAt)} ·{' '}
+                {resolved
+                  ? `last seen ${formatActivityTime(row.lastSeenAt)}`
+                  : `unclaimed since ${formatActivityTime(row.firstSeenAt)}`}
+              </span>
+            </button>
+
+            {isExpanded ? (
+              <div id={panelId} onClick={stopRowToggle}>
+                <UnmatchedTransferDetails row={row} />
+              </div>
             ) : null}
 
             {!resolved && canResolve ? (

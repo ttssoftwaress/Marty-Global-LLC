@@ -1,7 +1,19 @@
+import { Fragment } from 'react';
 import { Bitcoin, Building2, CheckCircle2, Clock, XCircle } from 'lucide-react';
 
+import {
+  DetailRow,
+  ExpandChevron,
+  ExpandChevronCell,
+  detailPanelId,
+  expandRowProps,
+  expandedRowClass,
+  stopRowToggle,
+  useExpandedRow,
+} from '../../components/ExpandableRow';
 import { formatActivityTime, formatOrderDate } from '../../lib/format';
 import type { SettlementRow } from '../../types/payments';
+import { SettlementDetails } from './SettlementDetails';
 
 /*
  * The manual settlement queue — payments a person has to close.
@@ -13,9 +25,12 @@ import type { SettlementRow } from '../../types/payments';
  * provider itself.
  *
  * The row is built around the two questions a settler actually asks: how much,
- * and against which reference. The bank details the customer was shown ride
- * along on the row so the statement can be checked against the account the money
- * was meant to land in, without a trip to the settings screen.
+ * and against which reference. Clicking it opens the rest — the bank details
+ * the customer was shown, the reference recorded, and any settlement note — so
+ * the statement can be checked against the account the money was meant to land
+ * in without a trip to the settings screen. Those details are fetched on expand
+ * rather than carried by every row (SettlementDetails), and one row is open at
+ * a time.
  *
  * "Customer says sent" is shown but never treated as money: it is a claim that
  * moved this row to the top of the queue, and the copy keeps that distinction —
@@ -106,9 +121,11 @@ export function SettlementTable({
   onSettle,
   onReject,
 }: QueueProps) {
+  const { expandedId, toggle } = useExpandedRow();
+
   return (
     <div className="table-scroll hidden md:block">
-      <table className="data-table min-w-[54rem] table-fixed lg:min-w-[64rem]">
+      <table className="data-table min-w-[58rem] table-fixed lg:min-w-[68rem]">
         <thead>
           <tr className="h-12">
             <th scope="col" className="w-[13rem] pl-4 pr-3 lg:pl-6 lg:pr-4">
@@ -126,102 +143,131 @@ export function SettlementTable({
             <th scope="col" className="w-[11rem] pr-3 lg:pr-4">
               Status
             </th>
-            <th scope="col" className="w-[12.5rem] pr-4 text-right lg:pr-6">
+            <th scope="col" className="w-[12.5rem] pr-2 text-right lg:pr-4">
               <span className="sr-only">Action</span>
+            </th>
+            <th scope="col" className="w-[4rem] pr-4 lg:pr-6">
+              <span className="sr-only">Details</span>
             </th>
           </tr>
         </thead>
 
         <tbody>
-          {rows.map((row) => (
-            <tr key={row.id} className="transition-colors hover:bg-gray-50">
-              <td className="py-3 pl-4 pr-3 lg:pl-6 lg:pr-4">
-                <span
-                  className="block truncate font-medium"
-                  title={row.customerName}
+          {rows.map((row) => {
+            const isExpanded = row.id === expandedId;
+            const panelId = detailPanelId('settlement', row.id);
+
+            return (
+              <Fragment key={row.id}>
+                <tr
+                  {...expandRowProps({
+                    isExpanded,
+                    panelId,
+                    onToggle: () => toggle(row.id),
+                    label: `${isExpanded ? 'Hide' : 'Show'} payment details for ${row.customerName}`,
+                  })}
+                  className={expandedRowClass(isExpanded)}
                 >
-                  {row.customerName}
-                </span>
-                <span
-                  className="mt-0.5 block truncate text-caption text-gray-500"
-                  title={row.reference ?? row.customerEmail}
-                >
-                  {row.reference ?? row.customerEmail}
-                </span>
-              </td>
-
-              <td className="py-3 pr-3 lg:pr-4">
-                <span className="block truncate font-semibold">
-                  {row.amountDisplay}
-                </span>
-                <ProviderBadge provider={row.provider} />
-              </td>
-
-              <td className="hidden py-3 pr-4 lg:table-cell">
-                <span
-                  className="block truncate text-gray-600"
-                  title={row.accountLabel ?? undefined}
-                >
-                  {row.accountLabel ?? '—'}
-                </span>
-              </td>
-
-              <td className="py-3 pr-3 lg:pr-4">
-                <span className="block truncate text-gray-600">
-                  {formatOrderDate(row.createdAt)}
-                </span>
-                {row.markedSentAt ? (
-                  <span className="mt-0.5 block truncate text-caption text-gray-400">
-                    Sent {formatActivityTime(row.markedSentAt)}
-                  </span>
-                ) : null}
-              </td>
-
-              <td className="py-3 pr-3 lg:pr-4">
-                <div className="flex min-w-0 flex-col gap-1">
-                  <SettlementStatusChip row={row} />
-                  {row.status !== 'awaiting' && row.settledBy ? (
+                  <td className="py-3 pl-4 pr-3 lg:pl-6 lg:pr-4">
                     <span
-                      className="block truncate text-caption text-gray-500"
-                      title={row.settlementNote ?? undefined}
+                      className="block truncate font-medium"
+                      title={row.customerName}
                     >
-                      {row.settledBy}
-                      {row.settledAt
-                        ? ` · ${formatOrderDate(row.settledAt)}`
-                        : ''}
+                      {row.customerName}
                     </span>
-                  ) : null}
-                </div>
-              </td>
+                    <span
+                      className="mt-0.5 block truncate text-caption text-gray-500"
+                      title={row.reference ?? row.customerEmail}
+                    >
+                      {row.reference ?? row.customerEmail}
+                    </span>
+                  </td>
 
-              <td className="py-3 pr-4 text-right lg:pr-6">
-                {row.status !== 'awaiting' || !canSettle ? (
-                  <span aria-hidden="true" className="text-gray-300">
-                    —
-                  </span>
-                ) : (
-                  <div className="flex items-center justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={() => onSettle(row)}
-                      disabled={busyId === row.id}
-                      className="whitespace-nowrap rounded-control bg-primary px-3 py-1.5 text-small font-semibold text-white transition-colors hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
+                  <td className="py-3 pr-3 lg:pr-4">
+                    <span className="block truncate font-semibold">
+                      {row.amountDisplay}
+                    </span>
+                    <ProviderBadge provider={row.provider} />
+                  </td>
+
+                  <td className="hidden py-3 pr-4 lg:table-cell">
+                    <span
+                      className="block truncate text-gray-600"
+                      title={row.accountLabel ?? undefined}
                     >
-                      Mark received
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onReject(row)}
-                      disabled={busyId === row.id}
-                      className="whitespace-nowrap rounded-control border border-gray-300 px-3 py-1.5 text-small font-semibold text-gray-600 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      Close
-                    </button>
-                  </div>
-                )}
-              </td>
-            </tr>
-          ))}
+                      {row.accountLabel ?? '—'}
+                    </span>
+                  </td>
+
+                  <td className="py-3 pr-3 lg:pr-4">
+                    <span className="block truncate text-gray-600">
+                      {formatOrderDate(row.createdAt)}
+                    </span>
+                    {row.markedSentAt ? (
+                      <span className="mt-0.5 block truncate text-caption text-gray-400">
+                        Sent {formatActivityTime(row.markedSentAt)}
+                      </span>
+                    ) : null}
+                  </td>
+
+                  <td className="py-3 pr-3 lg:pr-4">
+                    <div className="flex min-w-0 flex-col gap-1">
+                      <SettlementStatusChip row={row} />
+                      {/* The settler's note is in the panel, not truncated here:
+                          it is usually the sentence explaining why a payment was
+                          closed without settling. */}
+                      {row.status !== 'awaiting' && row.settledBy ? (
+                        <span className="block truncate text-caption text-gray-500">
+                          {row.settledBy}
+                          {row.settledAt
+                            ? ` · ${formatOrderDate(row.settledAt)}`
+                            : ''}
+                        </span>
+                      ) : null}
+                    </div>
+                  </td>
+
+                  <td
+                    className="py-3 pr-2 text-right lg:pr-4"
+                    onClick={stopRowToggle}
+                  >
+                    {row.status !== 'awaiting' || !canSettle ? (
+                      <span aria-hidden="true" className="text-gray-300">
+                        —
+                      </span>
+                    ) : (
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => onSettle(row)}
+                          disabled={busyId === row.id}
+                          className="whitespace-nowrap rounded-control bg-primary px-3 py-1.5 text-small font-semibold text-white transition-colors hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Mark received
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onReject(row)}
+                          disabled={busyId === row.id}
+                          className="whitespace-nowrap rounded-control border border-gray-300 px-3 py-1.5 text-small font-semibold text-gray-600 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Close
+                        </button>
+                      </div>
+                    )}
+                  </td>
+
+                  <ExpandChevronCell isExpanded={isExpanded} />
+                </tr>
+
+                {isExpanded ? (
+                  <DetailRow panelId={panelId} colSpan={7}>
+                    <SettlementDetails row={row} />
+                  </DetailRow>
+                ) : null}
+              </Fragment>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -236,73 +282,96 @@ export function SettlementCardList({
   onSettle,
   onReject,
 }: QueueProps) {
+  const { expandedId, toggle } = useExpandedRow();
+
   return (
     <ul className="flex w-full flex-col gap-3 md:hidden">
-      {rows.map((row) => (
-        <li
-          key={row.id}
-          className="flex flex-col gap-3 rounded-card border border-gray-200 bg-white p-4 shadow-sm-elevation"
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex min-w-0 flex-col gap-0.5">
-              <span className="truncate text-body font-medium text-text">
-                {row.customerName}
-              </span>
-              <span className="truncate text-caption text-gray-500">
-                {row.reference ?? row.customerEmail}
-              </span>
-            </div>
-            <SettlementStatusChip row={row} />
-          </div>
+      {rows.map((row) => {
+        const isExpanded = row.id === expandedId;
+        const panelId = detailPanelId('settlement-card', row.id);
 
-          <div className="flex items-end justify-between gap-3">
-            <div className="flex flex-col gap-0.5">
-              <span className="text-h6 font-semibold text-text">
-                {row.amountDisplay}
-              </span>
-              <ProviderBadge provider={row.provider} />
-            </div>
-
-            <div className="flex flex-col items-end gap-0.5 text-right">
-              {row.accountLabel ? (
-                <span className="truncate text-caption text-gray-500">
-                  {row.accountLabel}
+        return (
+          <li
+            key={row.id}
+            className="flex flex-col gap-3 rounded-card border border-gray-200 bg-white p-4 shadow-sm-elevation"
+          >
+            <button
+              type="button"
+              onClick={() => toggle(row.id)}
+              aria-expanded={isExpanded}
+              aria-controls={panelId}
+              className="flex flex-col gap-3 rounded-input text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            >
+              <span className="flex items-start justify-between gap-3">
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  <span className="truncate text-body font-medium text-text">
+                    {row.customerName}
+                  </span>
+                  <span className="truncate text-caption text-gray-500">
+                    {row.reference ?? row.customerEmail}
+                  </span>
                 </span>
-              ) : null}
-              <span className="text-caption text-gray-400">
-                {formatOrderDate(row.createdAt)}
+                <SettlementStatusChip row={row} />
               </span>
-            </div>
-          </div>
 
-          {row.status === 'awaiting' && canSettle ? (
-            <div className="flex items-center gap-2 border-t border-gray-200 pt-3">
-              <button
-                type="button"
-                onClick={() => onSettle(row)}
-                disabled={busyId === row.id}
-                className="flex h-10 flex-1 items-center justify-center rounded-control bg-primary text-body font-semibold text-white transition-colors hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Mark received
-              </button>
-              <button
-                type="button"
-                onClick={() => onReject(row)}
-                disabled={busyId === row.id}
-                className="flex h-10 shrink-0 items-center justify-center rounded-control border border-gray-300 px-4 text-body font-semibold text-gray-600 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Close
-              </button>
-            </div>
-          ) : row.settledBy ? (
-            <p className="border-t border-gray-200 pt-3 text-caption text-gray-500">
-              {row.settledBy}
-              {row.settledAt ? ` · ${formatOrderDate(row.settledAt)}` : ''}
-              {row.settlementNote ? ` — ${row.settlementNote}` : ''}
-            </p>
-          ) : null}
-        </li>
-      ))}
+              <span className="flex items-end justify-between gap-3">
+                <span className="flex flex-col gap-0.5">
+                  <span className="text-h6 font-semibold text-text">
+                    {row.amountDisplay}
+                  </span>
+                  <ProviderBadge provider={row.provider} />
+                </span>
+
+                <span className="flex items-center gap-2">
+                  <span className="flex flex-col items-end gap-0.5 text-right">
+                    {row.accountLabel ? (
+                      <span className="truncate text-caption text-gray-500">
+                        {row.accountLabel}
+                      </span>
+                    ) : null}
+                    <span className="text-caption text-gray-400">
+                      {formatOrderDate(row.createdAt)}
+                    </span>
+                  </span>
+                  <ExpandChevron isExpanded={isExpanded} />
+                </span>
+              </span>
+            </button>
+
+            {isExpanded ? (
+              <div id={panelId} onClick={stopRowToggle}>
+                <SettlementDetails row={row} />
+              </div>
+            ) : null}
+
+            {row.status === 'awaiting' && canSettle ? (
+              <div className="flex items-center gap-2 border-t border-gray-200 pt-3">
+                <button
+                  type="button"
+                  onClick={() => onSettle(row)}
+                  disabled={busyId === row.id}
+                  className="flex h-10 flex-1 items-center justify-center rounded-control bg-primary text-body font-semibold text-white transition-colors hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Mark received
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onReject(row)}
+                  disabled={busyId === row.id}
+                  className="flex h-10 shrink-0 items-center justify-center rounded-control border border-gray-300 px-4 text-body font-semibold text-gray-600 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Close
+                </button>
+              </div>
+            ) : row.settledBy ? (
+              <p className="border-t border-gray-200 pt-3 text-caption text-gray-500">
+                {row.settledBy}
+                {row.settledAt ? ` · ${formatOrderDate(row.settledAt)}` : ''}
+              </p>
+            ) : null}
+          </li>
+        );
+      })}
     </ul>
   );
 }

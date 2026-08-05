@@ -62,7 +62,7 @@ export type ResultFieldDefinitionView = {
   /*
    * Whether removing this field outright is available at all. False as soon as a
    * service returns it or a delivered record holds a value for it — resolved by
-   * `isDeletable`, the same helper `deleteResultField` refuses on, so a hidden
+   * `isDeletable`, the same helper `resultFieldDeletionBlocker` refuses on, so a hidden
    * button and a refused call cannot disagree.
    */
   canDelete: boolean;
@@ -110,6 +110,53 @@ function toView(
  */
 function isDeletable(usageCount: number, hasDeliveredValues: boolean): boolean {
   return usageCount === 0 && !hasDeliveredValues;
+}
+
+/*
+ * Rows not in the Trash. Spread into every read and every write validator here —
+ * a trashed result field must leave the picker and must not be acceptable in a
+ * delivery schema being saved.
+ *
+ * `createResultField` looks a clashing key up WITHOUT it, on purpose: the key is
+ * unique across trashed rows too, so the clash is real and the message has to
+ * say where the row actually is.
+ */
+const LIVE = { deletedAt: null } as const;
+
+/*
+ * Why this result field may NOT be deleted, or null when nothing points at it.
+ *
+ * The mirror of `fieldDeletionBlocker` in the request registry, and exported for
+ * the same reason: the delete itself now runs through `modules/admin/trash`, and
+ * this is the one place that knows both ways a definition can be referenced — a
+ * service still returning it, and a delivered record holding a value for it.
+ * The `result-field` descriptor in `trash.registry.ts` calls it.
+ */
+export async function resultFieldDeletionBlocker(
+  fieldId: string,
+): Promise<string | null> {
+  const existing = await prisma.resultFieldDefinition.findFirst({
+    where: { id: fieldId, ...LIVE },
+    select: { key: true, label: true },
+  });
+
+  if (!existing) throw AppError.notFound('Result field not found');
+
+  const [usage, valueCount] = await Promise.all([
+    usageByKey(),
+    prisma.serviceResultValue.count({ where: { fieldId } }),
+  ]);
+
+  const usageCount = usage.get(existing.key) ?? 0;
+
+  if (isDeletable(usageCount, valueCount > 0)) return null;
+
+  const reason =
+    valueCount > 0
+      ? `${valueCount} delivered record${valueCount === 1 ? '' : 's'} hold${valueCount === 1 ? 's' : ''} a value for it`
+      : `${usageCount} service${usageCount === 1 ? '' : 's'} still return${usageCount === 1 ? 's' : ''} it`;
+
+  return `"${existing.label}" cannot be deleted because ${reason}. Archive it instead — it leaves the picker and every record already using it keeps rendering.`;
 }
 
 // Strip config keys that don't belong to the field's type, so a field switched
@@ -184,6 +231,7 @@ export async function listResultFields(
   query: ListResultFieldsQuery,
 ): Promise<ResultFieldDefinitionPage> {
   const where: Prisma.ResultFieldDefinitionWhereInput = {
+    ...LIVE,
     ...(query.includeArchived ? {} : { archived: false }),
     ...(query.type ? { type: query.type } : {}),
     ...(query.search
@@ -227,15 +275,24 @@ export async function createResultField(
     where: { key: input.key },
   });
 
-  // A duplicate key is a conflict, not a silent merge: the admin is registering
-  // a fact that already exists and should be told to reuse it.
+  /*
+   * A duplicate key is a conflict, not a silent merge: the admin is registering
+   * a fact that already exists and should be told to reuse it. Unfiltered on
+   * `deletedAt` for the reason `LIVE` documents — a trashed row still holds the
+   * key, so the message names the Trash rather than reporting a phantom clash.
+   */
   if (existing) {
-    throw AppError.conflict(
-      `A result field with the key "${input.key}" already exists`,
-    );
+    throw existing.deletedAt
+      ? AppError.conflict(
+          `A result field with the key "${input.key}" is in the Trash. Restore it, or delete it permanently, before registering another under the same key.`,
+        )
+      : AppError.conflict(
+          `A result field with the key "${input.key}" already exists`,
+        );
   }
 
   const last = await prisma.resultFieldDefinition.findFirst({
+    where: LIVE,
     orderBy: { sortOrder: 'desc' },
     select: { sortOrder: true },
   });
@@ -272,8 +329,8 @@ export async function updateResultField(
   fieldId: string,
   input: UpdateResultFieldInput,
 ): Promise<ResultFieldDefinitionView> {
-  const existing = await prisma.resultFieldDefinition.findUnique({
-    where: { id: fieldId },
+  const existing = await prisma.resultFieldDefinition.findFirst({
+    where: { id: fieldId, ...LIVE },
   });
 
   if (!existing) throw AppError.notFound('Result field not found');
@@ -339,59 +396,14 @@ export async function updateResultField(
 }
 
 /*
- * Remove a registered fact outright — rule 3 above.
- *
- * A hard delete, unlike the catalog's own, and for the same reason the request
- * registry's is: a `ResultFieldDefinition` is configuration, not a
- * customer-facing record, so once nothing points at it there is nothing to
- * retain. The guard is what makes that safe, and it runs here rather than being
- * trusted from the UI.
- *
- * The `Restrict` on `ServiceResultValue.definition` would refuse a delete that
- * slipped past this check, but as a foreign-key error with nothing an admin can
- * act on — so the value count is read first and turned into a sentence.
+ * Deleting a result field no longer lives here — it goes through
+ * `modules/admin/trash`, like every other admin table's delete, and the "a
+ * delivered record holds a value for it" rule is now the `result-field`
+ * descriptor's guard in `trash.registry.ts`. `usageByKey` and `isDeletable`
+ * above still answer this screen's `canDelete` flag, which is what that guard
+ * and this list agree on.
  */
-export async function deleteResultField(
-  actor: AuthContext,
-  fieldId: string,
-): Promise<{ id: string }> {
-  const existing = await prisma.resultFieldDefinition.findUnique({
-    where: { id: fieldId },
-  });
 
-  if (!existing) throw AppError.notFound('Result field not found');
-
-  const [usage, valueCount] = await Promise.all([
-    usageByKey(),
-    prisma.serviceResultValue.count({ where: { fieldId } }),
-  ]);
-
-  const usageCount = usage.get(existing.key) ?? 0;
-
-  if (!isDeletable(usageCount, valueCount > 0)) {
-    const reason =
-      valueCount > 0
-        ? `${valueCount} delivered record${valueCount === 1 ? '' : 's'} hold${valueCount === 1 ? 's' : ''} a value for it`
-        : `${usageCount} service${usageCount === 1 ? '' : 's'} still return${usageCount === 1 ? 's' : ''} it`;
-
-    throw AppError.businessRule(
-      `"${existing.label}" cannot be deleted because ${reason}. Archive it instead — it leaves the picker and every record already using it keeps rendering.`,
-      { fieldKey: existing.key, usageCount, valueCount },
-    );
-  }
-
-  await prisma.resultFieldDefinition.delete({ where: { id: fieldId } });
-
-  void record({
-    actor,
-    action: AuditAction.RESULT_FIELD_DELETED,
-    entityType: 'ResultFieldDefinition',
-    entityId: fieldId,
-    metadata: { key: existing.key, type: existing.type },
-  });
-
-  return { id: fieldId };
-}
 
 /*
  * The catalog's write path calls this to reject a result schema referencing a
@@ -405,7 +417,7 @@ export async function assertResultFieldsExist(
   if (unique.length === 0) return;
 
   const found = await prisma.resultFieldDefinition.findMany({
-    where: { key: { in: unique } },
+    where: { key: { in: unique }, ...LIVE },
     select: { key: true },
   });
 

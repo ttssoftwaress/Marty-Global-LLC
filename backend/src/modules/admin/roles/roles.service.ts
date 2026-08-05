@@ -122,7 +122,10 @@ function toView(
 
 export async function listRoles(): Promise<AdminStaffRolesView> {
   const [roles, counts] = await Promise.all([
-    prisma.staffRole.findMany({ orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }] }),
+    prisma.staffRole.findMany({
+      where: LIVE,
+      orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
+    }),
     prisma.staffProfile.groupBy({
       by: ['roleKey'],
       where: { deletedAt: null },
@@ -141,6 +144,19 @@ export async function listRoles(): Promise<AdminStaffRolesView> {
   };
 }
 
+/*
+ * Rows not in the Trash.
+ *
+ * The two label-clash checks below deliberately DO carry it, unlike the
+ * code-keyed tables elsewhere: a role's `label` is not unique in the database,
+ * so a trashed role holding a name is not a constraint problem — it is a name
+ * nobody can see, and refusing it would be refusing on the basis of a row the
+ * admin has no way to find. The stable `key` is derived from the label
+ * (`uniqueRoleKey`) and is what actually has to stay distinct, which that helper
+ * already guarantees against every row including trashed ones.
+ */
+const LIVE = { deletedAt: null } as const;
+
 // --- Create --------------------------------------------------------------
 
 export async function createRole(
@@ -150,7 +166,7 @@ export async function createRole(
   const label = input.label.trim();
 
   const clash = await prisma.staffRole.findFirst({
-    where: { label: { equals: label, mode: 'insensitive' } },
+    where: { label: { equals: label, mode: 'insensitive' }, ...LIVE },
     select: { id: true },
   });
 
@@ -201,7 +217,9 @@ export async function updateRole(
     permissions?: Record<string, boolean>;
   },
 ): Promise<AdminStaffRole> {
-  const existing = await prisma.staffRole.findUnique({ where: { id: roleId } });
+  const existing = await prisma.staffRole.findFirst({
+    where: { id: roleId, ...LIVE },
+  });
 
   if (!existing) throw AppError.notFound('Role not found');
 
@@ -224,7 +242,11 @@ export async function updateRole(
   if (input.label !== undefined) {
     const label = input.label.trim();
     const clash = await prisma.staffRole.findFirst({
-      where: { label: { equals: label, mode: 'insensitive' }, id: { not: roleId } },
+      where: {
+        label: { equals: label, mode: 'insensitive' },
+        id: { not: roleId },
+        ...LIVE,
+      },
       select: { id: true },
     });
 
@@ -306,51 +328,14 @@ export async function updateRole(
   return toView(role, memberCount);
 }
 
-// --- Delete --------------------------------------------------------------
-
-export async function deleteRole(
-  actor: AuthContext,
-  roleId: string,
-): Promise<{ id: string }> {
-  const role = await prisma.staffRole.findUnique({ where: { id: roleId } });
-
-  if (!role) throw AppError.notFound('Role not found');
-
-  if (role.isSystem) {
-    throw AppError.businessRule('A built-in role cannot be deleted');
-  }
-
-  /*
-   * Refused rather than reassigned. The foreign key is `Restrict` for the same
-   * reason: the alternative is deciding on someone's behalf which role a member
-   * lands on, and getting that wrong hands out access nobody asked for. A
-   * soft-deleted profile counts too — its row is retained deliberately
-   * (team.service.ts) and would break the constraint.
-   */
-  const members = await prisma.staffProfile.count({ where: { roleKey: role.key } });
-
-  if (members > 0) {
-    throw AppError.businessRule(
-      `${members} staff ${members === 1 ? 'account holds' : 'accounts hold'} this role — move them to another role before deleting it`,
-    );
-  }
-
-  await prisma.staffRole.delete({ where: { id: roleId } });
-
-  void record({
-    actor,
-    action: AuditAction.STAFF_ROLE_DELETED,
-    entityType: 'StaffRole',
-    entityId: roleId,
-    metadata: {
-      key: role.key,
-      authRole: role.authRole,
-      permissions: role.permissions,
-    },
-  });
-
-  return { id: roleId };
-}
+/*
+ * --- Delete ---------------------------------------------------------------
+ *
+ * Not here. A role is deleted through `modules/admin/trash`, which soft-deletes
+ * the row and files a restorable entry, and both of the rules that used to sit
+ * in this file — a built-in role cannot go, and neither can one any member still
+ * holds — are the `staff-role` descriptor's guard in `trash.registry.ts`.
+ */
 
 // --- Shared rules --------------------------------------------------------
 
