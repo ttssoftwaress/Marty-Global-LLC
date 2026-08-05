@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { AdminLayout } from '../components/AdminLayout';
+import { ConfirmDeleteDialog } from '../components/ConfirmDeleteDialog';
 import { DataErrorState } from '../components/DataErrorState';
+import { SelectionBar } from '../components/SelectionBar';
 import {
   OrderCardList,
   OrderStatusTabs,
@@ -14,6 +16,7 @@ import {
   useAdminOrders,
   useAdminOrdersSummary,
 } from '../features/orders';
+import { useBulkDelete } from '../features/trash';
 import { useAdminShell } from '../hooks/useAdminShell';
 import { useCursorPageWindow } from '../hooks/useCursorPageWindow';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
@@ -87,13 +90,6 @@ export function AdminOrdersQueuePage() {
 
   const filterKey = `${status}|${debouncedSearch}|${filters.service}|${filters.region}|${filters.dateRange}`;
 
-  // Selection is per result set — a row selected under one filter should not
-  // survive into a different list.
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  useEffect(() => {
-    setSelectedIds([]);
-  }, [filterKey]);
-
   const loadedOrders = useMemo<AdminOrderRow[]>(
     () => orders.data?.pages.flatMap((page) => page.orders) ?? [],
     [orders.data],
@@ -124,19 +120,22 @@ export function AdminOrdersQueuePage() {
     if (orders.hasNextPage) void orders.fetchNextPage();
   };
 
-  const toggleRow = (id: string) =>
-    setSelectedIds((current) =>
-      current.includes(id)
-        ? current.filter((candidate) => candidate !== id)
-        : [...current, id],
-    );
-
-  const toggleAll = () =>
-    setSelectedIds((current) =>
-      current.length === windowOrders.length
-        ? []
-        : windowOrders.map((order) => order.id),
-    );
+  /*
+   * The queue's selection, which predates the delete: the checkbox column and
+   * the selected-row highlight were already here, tracked by a local `useState`
+   * with its own reset-on-filter-change effect.
+   *
+   * It is the shared hook now, which gives it the delete and takes two rules
+   * with it — the ticks clear when the filter changes, and a tick can never
+   * outlive the row it was on (a page step, a refetch, or the delete itself).
+   * The header box still toggles the visible window only, which is what it did
+   * before.
+   */
+  const bulk = useBulkDelete({
+    entityType: 'order',
+    visibleIds: windowOrders.map((order) => order.id),
+    resetKey: `${filterKey}|${page}`,
+  });
 
   const clearFilters = () => {
     setStatus('all');
@@ -219,6 +218,22 @@ export function AdminOrdersQueuePage() {
             />
           ) : (
             <>
+              {/*
+               * Sits between the toolbar and the list, so the rows stay visible
+               * while the decision is made — a bar that covered them would be
+               * asking for a delete the admin can no longer see.
+               */}
+              {bulk.canDelete ? (
+                <SelectionBar
+                  count={bulk.selection.count}
+                  noun="orders"
+                  singularNoun="order"
+                  onDelete={bulk.openDialog}
+                  onClear={bulk.selection.clear}
+                  isDeleting={bulk.isDeleting}
+                />
+              ) : null}
+
               {/* Mobile — cards on the page background, no surrounding frame. */}
               {isEmpty ? null : <OrderCardList orders={loadedOrders} />}
 
@@ -228,9 +243,8 @@ export function AdminOrdersQueuePage() {
                   <>
                     <OrdersTable
                       orders={windowOrders}
-                      selectedIds={selectedIds}
-                      onToggleRow={toggleRow}
-                      onToggleAll={toggleAll}
+                      selection={bulk.selection}
+                      selectable={bulk.canDelete}
                     />
                     <OrdersPagination
                       page={page}
@@ -274,6 +288,18 @@ export function AdminOrdersQueuePage() {
           )}
         </div>
       </div>
+
+      <ConfirmDeleteDialog
+        open={bulk.isDialogOpen}
+        count={bulk.selection.count}
+        singularNoun="order"
+        pluralNoun="orders"
+        retentionDays={bulk.retentionDays}
+        isDeleting={bulk.isDeleting}
+        error={bulk.error}
+        onConfirm={bulk.confirm}
+        onClose={bulk.closeDialog}
+      />
     </AdminLayout>
   );
 }

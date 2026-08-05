@@ -85,21 +85,10 @@ export function auditMetadataEntries(metadata: unknown): AuditMetadataEntry[] {
 }
 
 /*
- * A one-line summary for the row itself, before anyone expands it.
- *
- * The first two values only — the row has a fixed height and the full set lives
- * in the expanded panel. Two is what fits at the tablet width without pushing
- * the timestamp off the edge.
+ * The row's own one-line summary is NOT built here any more. The list no longer
+ * carries the metadata blob — it is fetched per expanded row — so the preview
+ * arrives as `metadataPreview`, computed by the backend from the same object.
  */
-export function auditMetadataPreview(metadata: unknown): string | null {
-  const entries = auditMetadataEntries(metadata);
-  if (entries.length === 0) return null;
-
-  return entries
-    .slice(0, 2)
-    .map((entry) => `${entry.key}: ${entry.value}`)
-    .join(' · ');
-}
 
 /*
  * What the entry happened to, as the row prints it: "Order · cms55ibmm0000".

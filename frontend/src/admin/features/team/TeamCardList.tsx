@@ -1,6 +1,13 @@
+import {
+  ExpandChevron,
+  detailPanelId,
+  stopRowToggle,
+  useExpandedRow,
+} from '../../components/ExpandableRow';
 import { formatOrderDate } from '../../lib/format';
 import type { AdminTeamMemberRow } from '../../types/team';
 import { TeamMemberAvatar } from './TeamMemberAvatar';
+import { TeamMemberDetails } from './TeamMemberDetails';
 import { TeamStatusChip } from './TeamStatusChip';
 
 /*
@@ -17,6 +24,9 @@ import { TeamStatusChip } from './TeamStatusChip';
  * a deactivated account, deactivate otherwise. Delete is added beside it in the
  * error colour — the screen's only way to remove a staff account, and the same
  * deviation the table logs. A member with no join date prints an em dash.
+ *
+ * Tapping the card body opens the same access panel the table's rows open,
+ * fetched when opened. One card is open at a time.
  */
 
 type TeamCardListProps = {
@@ -32,47 +42,64 @@ export function TeamCardList({
   onToggleActive,
   onDelete,
 }: TeamCardListProps) {
+  const { expandedId, toggle } = useExpandedRow();
+
   return (
     <ul className="flex w-full flex-col gap-4 md:hidden">
       {members.map((member) => {
         const isDeactivated = member.status === 'deactivated';
         const statusLabel = isDeactivated ? 'Reactivate' : 'Deactivate';
+        const isExpanded = member.id === expandedId;
+        const panelId = detailPanelId('team-card', member.id);
 
         return (
           <li
             key={member.id}
             className="flex flex-col gap-2 rounded-card border border-gray-200 bg-white p-4 shadow-sm-elevation"
           >
-            <div className="flex items-center gap-3">
-              <TeamMemberAvatar
-                id={member.id}
-                initials={member.initials}
-                className="size-10 text-[0.875rem] leading-5"
-              />
+            <button
+              type="button"
+              onClick={() => toggle(member.id)}
+              aria-expanded={isExpanded}
+              aria-controls={panelId}
+              className="flex flex-col gap-2 rounded-input text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            >
+              <span className="flex items-center gap-3">
+                <TeamMemberAvatar
+                  id={member.id}
+                  initials={member.initials}
+                  className="size-10 text-[0.875rem] leading-5"
+                />
 
-              <span className="min-w-0 flex-1 truncate text-body font-semibold text-text">
-                {member.name}
+                <span className="min-w-0 flex-1 truncate text-body font-semibold text-text">
+                  {member.name}
+                </span>
+
+                <TeamStatusChip
+                  status={member.status}
+                  label={member.statusLabel}
+                />
+
+                <ExpandChevron isExpanded={isExpanded} />
               </span>
 
-              <TeamStatusChip
-                status={member.status}
-                label={member.statusLabel}
-              />
-            </div>
+              <span className="block truncate text-small text-gray-500">
+                {member.email}
+              </span>
 
-            <a
-              href={`mailto:${member.email}`}
-              className="truncate text-small text-gray-500 hover:text-primary hover:underline"
-            >
-              {member.email}
-            </a>
+              <span className="block text-small text-gray-400">
+                {member.roleLabel}
+                <span aria-hidden="true"> · </span>
+                <span className="sr-only">, </span>
+                Joined {member.joinedAt ? formatOrderDate(member.joinedAt) : '—'}
+              </span>
+            </button>
 
-            <p className="text-small text-gray-400">
-              {member.roleLabel}
-              <span aria-hidden="true"> · </span>
-              <span className="sr-only">, </span>
-              Joined {member.joinedAt ? formatOrderDate(member.joinedAt) : '—'}
-            </p>
+            {isExpanded ? (
+              <div id={panelId} onClick={stopRowToggle}>
+                <TeamMemberDetails member={member} />
+              </div>
+            ) : null}
 
             <div className="flex items-center gap-3 pt-1">
               <button

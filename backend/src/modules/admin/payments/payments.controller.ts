@@ -62,6 +62,50 @@ export async function listLedger(
   }
 }
 
+// The ledger's expanded row: the itemised breakdown and the attempt history,
+// neither of which the list carries (payments.service.ts, getLedgerRow).
+export async function getLedgerRow(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    res.json({
+      data: await service.getLedgerRow(getAuth(req), pathParam(req, 'quoteId')),
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getSettlement(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    res.json({
+      data: await service.getSettlement(getAuth(req), pathParam(req, 'paymentId')),
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getUnmatched(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    res.json({
+      data: await service.getUnmatchedTransfer(pathParam(req, 'transferId')),
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function listUnmatched(
   req: Request,
   res: Response,

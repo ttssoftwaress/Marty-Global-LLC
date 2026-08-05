@@ -1,6 +1,18 @@
 import { useState } from 'react';
 
+import { Fragment } from 'react';
+
 import { ApiError } from '@/services/api';
+import {
+  DetailRow,
+  ExpandChevronCell,
+  detailPanelId,
+  expandRowProps,
+  expandedRowClass,
+  stopRowToggle,
+  useExpandedRow,
+} from '../../components/ExpandableRow';
+import { BankAccountDetails } from './BankAccountDetails';
 import { formatAccountFields } from '../../lib/payment-settings';
 import { moveInList } from '../../lib/settings';
 import type { BankAccount } from '../../types/payment-settings';
@@ -51,6 +63,8 @@ export function BankAccountsPanel({ canWrite }: { canWrite: boolean }) {
   const [editing, setEditing] = useState<BankAccount | 'new' | null>(null);
   // What the last delete actually did, since the two outcomes read differently.
   const [removed, setRemoved] = useState<string | null>(null);
+
+  const { expandedId, toggle } = useExpandedRow();
 
   const rows = accounts.data ?? [];
 
@@ -152,14 +166,30 @@ export function BankAccountsPanel({ canWrite }: { canWrite: boolean }) {
                 <SettingsTh>Payments</SettingsTh>
                 <SettingsTh>{canWrite ? 'Offered' : 'Status'}</SettingsTh>
                 <th className="w-px px-4" />
+                <th className="w-[4rem] px-4">
+                  <span className="sr-only">Details</span>
+                </th>
               </tr>
             </thead>
 
             <tbody>
-              {rows.map((account, index) => (
-                <tr key={account.id} className="hover:bg-gray-50">
+              {rows.map((account, index) => {
+                const isExpanded = account.id === expandedId;
+                const panelId = detailPanelId('bank-account', account.id);
+
+                return (
+                <Fragment key={account.id}>
+                <tr
+                  {...expandRowProps({
+                    isExpanded,
+                    panelId,
+                    onToggle: () => toggle(account.id),
+                    label: `${isExpanded ? 'Hide' : 'Show'} the details customers see for ${account.label}`,
+                  })}
+                  className={expandedRowClass(isExpanded)}
+                >
                   {canWrite && (
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3" onClick={stopRowToggle}>
                       <ReorderButtons
                         label={account.label}
                         isFirst={index === 0}
@@ -191,7 +221,7 @@ export function BankAccountsPanel({ canWrite }: { canWrite: boolean }) {
                     {account.usage.payments}
                   </td>
 
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3" onClick={stopRowToggle}>
                     {canWrite ? (
                       <ToggleSwitch
                         checked={account.active}
@@ -204,7 +234,7 @@ export function BankAccountsPanel({ canWrite }: { canWrite: boolean }) {
                     )}
                   </td>
 
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3" onClick={stopRowToggle}>
                     {canWrite && (
                       <RowActions
                         name={account.label}
@@ -217,8 +247,18 @@ export function BankAccountsPanel({ canWrite }: { canWrite: boolean }) {
                       />
                     )}
                   </td>
+
+                  <ExpandChevronCell isExpanded={isExpanded} className="px-4" />
                 </tr>
-              ))}
+
+                {isExpanded ? (
+                  <DetailRow panelId={panelId} colSpan={canWrite ? 8 : 7}>
+                    <BankAccountDetails account={account} />
+                  </DetailRow>
+                ) : null}
+                </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>

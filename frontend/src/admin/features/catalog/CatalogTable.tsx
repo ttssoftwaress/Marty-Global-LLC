@@ -1,6 +1,20 @@
+import { Fragment } from 'react';
+
+import {
+  DetailRow,
+  ExpandChevronCell,
+  detailPanelId,
+  expandRowProps,
+  expandedRowClass,
+  stopRowToggle,
+  useExpandedRow,
+} from '../../components/ExpandableRow';
 import { RowActions } from '../../components/RowActions';
+import { RowCheckbox } from '../../components/RowCheckbox';
+import type { RowSelection } from '../../hooks/useRowSelection';
 import { formatCatalogDate, formatTierCount } from '../../lib/catalog';
 import type { CatalogServiceRow } from '../../types/catalog';
+import { CatalogRowDetails } from './CatalogRowDetails';
 import { RegionChipList } from './RegionChip';
 
 /*
@@ -27,6 +41,12 @@ import { RegionChipList } from './RegionChip';
  *
  * Rows are semantic table markup, not divs, so the column headers are announced
  * with their cells.
+ *
+ * Clicking a row opens what a service actually is — the customer-facing
+ * description, how many questions its form asks, and the facts it delivers —
+ * fetched on expand through the same read the Manage form uses, so opening
+ * Manage afterwards is served from cache. One row is open at a time, and the
+ * action controls stop their own clicks.
  */
 
 type CatalogTableProps = {
@@ -34,6 +54,10 @@ type CatalogTableProps = {
   onManage: (row: CatalogServiceRow) => void;
   onDelete: (row: CatalogServiceRow) => void;
   deletingId: string | null;
+  selection: RowSelection;
+  // False when the signed-in member may not delete here — the column is dropped
+  // rather than drawn disabled, so nobody ticks rows they cannot act on.
+  selectable: boolean;
 };
 
 export function CatalogTable({
@@ -41,12 +65,27 @@ export function CatalogTable({
   onManage,
   onDelete,
   deletingId,
+  selection,
+  selectable,
 }: CatalogTableProps) {
+  const { expandedId, toggle } = useExpandedRow();
+
   return (
     <div className="table-scroll">
       <table className="data-table min-w-[46.5rem] table-fixed lg:min-w-[64rem]">
         <thead>
           <tr>
+            {selectable ? (
+              <th scope="col" className="h-12 w-[3rem] py-0 pl-6 pr-0">
+                <RowCheckbox
+                  checked={selection.allVisibleSelected}
+                  indeterminate={selection.someVisibleSelected}
+                  onChange={selection.toggleAllVisible}
+                  label="Select all services on this page"
+                />
+              </th>
+            ) : null}
+
             <Th className="w-auto">Service name</Th>
             <Th className="w-[12.5rem] lg:w-[21.25rem]">Regions supported</Th>
             <Th className="w-[9.375rem]">Pricing tiers</Th>
@@ -54,12 +93,38 @@ export function CatalogTable({
             {/* Wider than the design's 100px: the column now carries Delete beside
               Manage, and Delete's inline confirmation needs the room. */}
             <Th className="w-[11.5rem] text-right">Actions</Th>
+            <Th className="w-[4rem]">
+              <span className="sr-only">Details</span>
+            </Th>
           </tr>
         </thead>
 
         <tbody>
-          {rows.map((row) => (
-            <tr key={row.id} className="h-20 lg:h-[4.5rem]">
+          {rows.map((row) => {
+            const isExpanded = row.id === expandedId;
+            const panelId = detailPanelId('catalog', row.id);
+
+            return (
+              <Fragment key={row.id}>
+                <tr
+                  {...expandRowProps({
+                    isExpanded,
+                    panelId,
+                    onToggle: () => toggle(row.id),
+                    label: `${isExpanded ? 'Hide' : 'Show'} details for ${row.name}`,
+                  })}
+                  className={`h-20 lg:h-[4.5rem] ${expandedRowClass(isExpanded)}`}
+                >
+              {selectable ? (
+                <td className="py-0 pl-6 pr-0" onClick={stopRowToggle}>
+                  <RowCheckbox
+                    checked={selection.isSelected(row.id)}
+                    onChange={() => selection.toggle(row.id)}
+                    label={`Select ${row.name}`}
+                  />
+                </td>
+              ) : null}
+
               <td className="px-6 py-0">
                 <div className="flex min-w-0 items-center gap-2">
                   <span className="truncate font-semibold" title={row.name}>
@@ -100,7 +165,7 @@ export function CatalogTable({
                 {formatCatalogDate(row.updatedAt)}
               </td>
 
-              <td className="px-6 py-0">
+              <td className="px-6 py-0" onClick={stopRowToggle}>
                 {/*
                  * Delete is absent rather than disabled once a customer has
                  * ordered the service — `canDelete` comes from the API, and the
@@ -120,8 +185,18 @@ export function CatalogTable({
                   </div>
                 )}
               </td>
-            </tr>
-          ))}
+
+                  <ExpandChevronCell isExpanded={isExpanded} className="px-6" />
+                </tr>
+
+                {isExpanded ? (
+                  <DetailRow panelId={panelId} colSpan={selectable ? 7 : 6}>
+                    <CatalogRowDetails row={row} />
+                  </DetailRow>
+                ) : null}
+              </Fragment>
+            );
+          })}
         </tbody>
       </table>
     </div>

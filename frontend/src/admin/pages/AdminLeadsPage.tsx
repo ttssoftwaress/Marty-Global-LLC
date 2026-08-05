@@ -2,14 +2,24 @@ import { useMemo, useState } from 'react';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 
 import { AdminLayout } from '../components/AdminLayout';
+import { ConfirmDeleteDialog } from '../components/ConfirmDeleteDialog';
+import { SelectionBar } from '../components/SelectionBar';
 import { LeadsTable, useAdminLeads, useSetLeadHandled } from '../features/leads';
 import type { AdminLead, AdminLeadStatus } from '../features/leads';
+import { useBulkDelete } from '../features/trash';
 import { useAdminShell } from '../hooks/useAdminShell';
 
 /*
  * The marketing contact form's queue — read-only submissions the team works
  * outside this system (a call or an email), with `handledAt` as the only state
  * a lead carries. No detail screen: name, email, and message all fit in the row.
+ *
+ * Rows can be selected and deleted in bulk. A lead is the one record here with
+ * no downstream consequence to a delete — nothing references it, and a queue of
+ * spam submissions is exactly what a bulk delete is for — so it is the plainest
+ * use of the shared machinery: `useBulkDelete` owns the selection, the
+ * confirmation, and the mutation, and the rows land in Trash like everything
+ * else (`modules/admin/trash`).
  */
 
 const STATUS_TABS: { value: AdminLeadStatus; label: string }[] = [
@@ -53,6 +63,14 @@ export function AdminLeadsPage() {
   );
 
   const openCount = query.data?.pages[0]?.openCount ?? 0;
+
+  // Keyed on the status tab: ticking three open leads and switching to
+  // "Handled" must not leave the delete armed with rows nobody can see.
+  const bulk = useBulkDelete({
+    entityType: 'lead',
+    visibleIds: rows.map((row) => row.id),
+    resetKey: status,
+  });
 
   const toggleHandled = (lead: AdminLead) => {
     setPendingId(lead.id);
@@ -104,12 +122,23 @@ export function AdminLeadsPage() {
             <QueueError onRetry={() => void query.refetch()} />
           ) : (
             <>
+              <SelectionBar
+                count={bulk.selection.count}
+                noun="leads"
+                singularNoun="lead"
+                onDelete={bulk.openDialog}
+                onClear={bulk.selection.clear}
+                isDeleting={bulk.isDeleting}
+              />
+
               <LeadsTable
                 rows={rows}
                 isLoading={query.isLoading}
                 hasFilter={status !== 'open'}
                 onToggleHandled={toggleHandled}
                 pendingId={pendingId}
+                selection={bulk.selection}
+                selectable={bulk.canDelete}
               />
 
               {query.hasNextPage ? (
@@ -129,6 +158,18 @@ export function AdminLeadsPage() {
           )}
         </div>
       </div>
+
+      <ConfirmDeleteDialog
+        open={bulk.isDialogOpen}
+        count={bulk.selection.count}
+        singularNoun="lead"
+        pluralNoun="leads"
+        retentionDays={bulk.retentionDays}
+        isDeleting={bulk.isDeleting}
+        error={bulk.error}
+        onConfirm={bulk.confirm}
+        onClose={bulk.closeDialog}
+      />
     </AdminLayout>
   );
 }

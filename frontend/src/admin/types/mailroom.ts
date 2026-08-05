@@ -401,6 +401,45 @@ export type MailLogRow = {
 };
 
 /*
+ * One closed entry in full — what the log's expanded row reads.
+ *
+ * Off the list on purpose: it is three joins deep (the item, its pages, every
+ * request raised against it) and the log is the longest table in the admin
+ * area, so only the row somebody opens pays for them.
+ *
+ * Every request is listed, not only the one that closed the entry. A forwarding
+ * that follows a scan request is the usual sequence, and "why did this leave the
+ * building?" is answered by the sequence rather than by the last row.
+ */
+export type MailLogEntryDetail = MailLogRow & {
+  mailItemId: string;
+  item: {
+    sender: string;
+    status: string;
+    statusLabel: string;
+    receivedAt: string; // ISO-8601 UTC
+    storageExpiresAt: string;
+    scanReady: boolean;
+    note: string | null;
+    pageCount: number;
+  };
+  requests: {
+    id: string;
+    type: MailRequestType;
+    typeLabel: string;
+    status: MailRequestStatus;
+    statusLabel: string;
+    requestedAt: string;
+    processedAt: string | null;
+    processedBy: string | null;
+    shippingAddress: string | null;
+    carrier: string | null;
+    trackingNumber: string | null;
+    notes: string | null;
+  }[];
+};
+
+/*
  * One page of the log, cursor-paginated for the same reason the pending queue
  * is: the footer prints "Showing 1–8 of 120 items" and a numbered strip, both
  * derived from the totals the endpoint returns beside the cursor.

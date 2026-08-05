@@ -2,7 +2,11 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
 import { apiFetch } from '@/services/api';
 import type { ApiSuccess } from '@/types/api';
-import type { AdminAuditPage, AdminAuditSummary } from '../../types/audit';
+import type {
+  AdminAuditEntry,
+  AdminAuditPage,
+  AdminAuditSummary,
+} from '../../types/audit';
 import { ALL_ACTIONS, ALL_CATEGORIES } from '../../types/audit';
 
 /*
@@ -107,3 +111,27 @@ export const emptyAuditParams: AdminAuditParams = {
   from: null,
   to: null,
 };
+
+export const adminAuditEntryKey = (id: string) =>
+  ['admin', 'audit', 'entry', id] as const;
+
+/*
+ * GET /v1/admin/audit/:id — one entry in full, for the expanded row.
+ *
+ * Called from inside the detail panel, which is only mounted while its row is
+ * open, so the request happens on expand rather than on page load: a page of
+ * the trail fetches the metadata of the one entry somebody is reading.
+ *
+ * An audit entry is immutable — nothing in the system can edit or delete one —
+ * so once fetched it never goes stale, and re-opening a row is instant.
+ */
+export function useAdminAuditEntry(id: string) {
+  return useQuery({
+    queryKey: adminAuditEntryKey(id),
+    queryFn: () =>
+      apiFetch<ApiSuccess<AdminAuditEntry>>(`/admin/audit/${id}`).then(
+        (res) => res.data,
+      ),
+    staleTime: Infinity,
+  });
+}

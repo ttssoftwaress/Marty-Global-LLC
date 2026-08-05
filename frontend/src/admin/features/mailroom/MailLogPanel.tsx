@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react';
 import { Archive } from 'lucide-react';
 
+import { ConfirmDeleteDialog } from '../../components/ConfirmDeleteDialog';
+import { SelectionBar } from '../../components/SelectionBar';
+import { useBulkDelete } from '../trash';
 import { useCursorPageWindow } from '../../hooks/useCursorPageWindow';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import type {
@@ -128,6 +131,17 @@ export function MailLogPanel({ onView }: MailLogPanelProps) {
     resetKey: `${search}|${range}|${action}`,
   });
 
+  /*
+   * The log is append-only in the mail flow — nothing in it is edited or removed
+   * as part of working the queue. The delete is the mis-filed-entry escape
+   * hatch, which is exactly the case a restorable Trash is for.
+   */
+  const bulk = useBulkDelete({
+    entityType: 'mail-log',
+    visibleIds: entries.map((entry) => entry.id),
+    resetKey: `${search}|${range}|${action}|${page}`,
+  });
+
   const clearFilters = () => {
     setSearch('');
     setRange('all');
@@ -190,6 +204,17 @@ export function MailLogPanel({ onView }: MailLogPanelProps) {
     <div className="flex w-full flex-col gap-4">
       {filterStrip}
 
+      {bulk.canDelete ? (
+        <SelectionBar
+          count={bulk.selection.count}
+          noun="log entries"
+          singularNoun="log entry"
+          onDelete={bulk.openDialog}
+          onClear={bulk.selection.clear}
+          isDeleting={bulk.isDeleting}
+        />
+      ) : null}
+
       {/* Dimmed while the next page or filter resolves over the current rows. */}
       <div
         className={`flex w-full flex-col gap-4 transition-opacity ${
@@ -209,7 +234,12 @@ export function MailLogPanel({ onView }: MailLogPanelProps) {
              * stand on the page background, so no surface is drawn there.
              */}
             <div className="hidden w-full overflow-hidden md:block md:rounded-card md:border md:border-gray-200 md:bg-white md:shadow-sm-elevation">
-              <MailLogTable entries={entries} onView={onView} />
+              <MailLogTable
+                entries={entries}
+                onView={onView}
+                selection={bulk.selection}
+                selectable={bulk.canDelete}
+              />
             </div>
 
             {/*
@@ -226,6 +256,18 @@ export function MailLogPanel({ onView }: MailLogPanelProps) {
           </>
         )}
       </div>
+
+      <ConfirmDeleteDialog
+        open={bulk.isDialogOpen}
+        count={bulk.selection.count}
+        singularNoun="log entry"
+        pluralNoun="log entries"
+        retentionDays={bulk.retentionDays}
+        isDeleting={bulk.isDeleting}
+        error={bulk.error}
+        onConfirm={bulk.confirm}
+        onClose={bulk.closeDialog}
+      />
     </div>
   );
 }

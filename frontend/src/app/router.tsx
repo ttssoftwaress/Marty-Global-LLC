@@ -1074,6 +1074,36 @@ const routes: RouteObject[] = [
           };
         },
       },
+      {
+        /*
+         * Trash — everything deleted across the admin portal, and the way back.
+         *
+         * Every admin table's Delete sends rows here rather than destroying
+         * them, so this is the undo for the whole portal. Reads
+         * `GET /v1/admin/trash` and `/trash/summary`; writes are
+         * `POST /v1/admin/trash/restore` and, admin-only,
+         * `POST /v1/admin/trash/purge`.
+         *
+         * Its own `trash` area rather than folding into each section's grant,
+         * because it is one screen holding rows from all of them — the list
+         * itself is scoped server-side to the areas the reader holds, so the
+         * grant opens the screen and their other areas decide what is on it.
+         */
+        path: 'trash',
+        lazy: async () => {
+          const { AdminTrashPage } = await import('@/admin/pages/AdminTrashPage');
+          const { RequirePermission } = await import(
+            '@/admin/components/RequirePermission'
+          );
+          return {
+            Component: () => (
+              <RequirePermission area="trash" title="Trash">
+                <AdminTrashPage />
+              </RequirePermission>
+            ),
+          };
+        },
+      },
       // The admin sidebar links to every admin section; their screens are not
       // built yet, so each renders a placeholder instead of falling through to
       // the catch-all and dropping the user back on marketing.

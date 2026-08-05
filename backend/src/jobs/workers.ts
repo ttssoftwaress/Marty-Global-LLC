@@ -5,6 +5,7 @@ import { createRedisConnection } from '../config/redis.js';
 import { logger } from '../lib/logger.js';
 import { getUsdtConfig } from '../modules/payments/payment-settings.service.js';
 import { markFailed } from '../modules/notifications/notifications.service.js';
+import { maintenanceProcessor } from './processors/maintenance.processor.js';
 import { notificationsProcessor } from './processors/notifications.processor.js';
 import { paymentsProcessor } from './processors/payments.processor.js';
 import { supportProcessor } from './processors/support.processor.js';
@@ -146,6 +147,34 @@ export function registerWorkers() {
   workers.push(support);
 
   /*
+   * Housekeeping — today, the trash sweep.
+   *
+   * Concurrency 1, and not for throughput: this is the one worker that
+   * hard-deletes rows, and two sweeps racing over the same expired entries would
+   * have each finding rows the other had just removed. One writer, one batch at
+   * a time.
+   */
+  const maintenance = new Worker(QueueName.MAINTENANCE, maintenanceProcessor, {
+    connection: createRedisConnection('marty-worker-maintenance'),
+    concurrency: 1,
+  });
+
+  maintenance.on('failed', (job: Job | undefined, error: Error) => {
+    // Nothing is lost by a failed sweep — the entries it did not reach are still
+    // past their deadline and tomorrow's run finds them. Reported anyway: a
+    // sweep that keeps failing is a bin that never empties, which nothing else
+    // would ever surface.
+    logger.error(
+      { err: error, jobId: job?.id, name: job?.name },
+      'Maintenance job failed',
+    );
+
+    captureJobFailure(QueueName.MAINTENANCE, job, error);
+  });
+
+  workers.push(maintenance);
+
+  /*
    * Idempotent: BullMQ keys the scheduler by id, so re-running on every boot
    * updates the same schedule rather than stacking another.
    *
@@ -161,7 +190,14 @@ export function registerWorkers() {
     });
 
   logger.info(
-    { queues: [QueueName.NOTIFICATIONS, QueueName.PAYMENTS, QueueName.SUPPORT] },
+    {
+      queues: [
+        QueueName.NOTIFICATIONS,
+        QueueName.PAYMENTS,
+        QueueName.SUPPORT,
+        QueueName.MAINTENANCE,
+      ],
+    },
     'Job workers registered',
   );
 

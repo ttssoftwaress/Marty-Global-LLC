@@ -5,6 +5,8 @@ import { Role } from '@/constants/roles';
 import { ApiError } from '@/services/api';
 import { useAdminMe } from '@/admin/queries/admin-me';
 import { AdminLayout } from '../components/AdminLayout';
+import { ConfirmDeleteDialog } from '../components/ConfirmDeleteDialog';
+import { SelectionBar } from '../components/SelectionBar';
 import {
   LedgerCardList,
   LedgerFilterTabs,
@@ -32,6 +34,7 @@ import {
   useSendPaymentReminder,
   useSettlePayment,
 } from '../features/payments';
+import { useBulkDelete } from '../features/trash';
 import { useAdminShell } from '../hooks/useAdminShell';
 import { useCursorPageWindow } from '../hooks/useCursorPageWindow';
 import type {
@@ -180,6 +183,20 @@ export function AdminQuotesPaymentsPage() {
 
   const openTransfers = transfers.data?.pages[0]?.openCount ?? 0;
 
+  /*
+   * The reconciliation queue's own selection. Worth being clear about what a
+   * delete does here, because it is the one entity in the registry that a
+   * background job also writes: it removes the row from this queue, it does not
+   * undo the transfer. The poller re-reads its overlap window and will record
+   * money that is still arriving all over again. Resolving it with a note is the
+   * disposal that sticks, which is what the Resolve action beside it does.
+   */
+  const transferBulk = useBulkDelete({
+    entityType: 'unmatched-transfer',
+    visibleIds: transferRows.map((row) => row.id),
+    resetKey: transferFilter,
+  });
+
   const onResolveSubmit = (note: string) => {
     if (!resolving) return;
 
@@ -218,6 +235,21 @@ export function AdminQuotesPaymentsPage() {
     isFetchingNextPage: ledger.isFetchingNextPage,
     fetchNextPage: ledger.fetchNextPage,
     resetKey: status,
+  });
+
+  /*
+   * Two independent selections on one screen, because the two tables hold two
+   * different kinds of record and one bin entry cannot be both.
+   *
+   * The ledger's rows are quotes; deleting one takes its payment attempts with
+   * it, and a payment that has actually been credited is refused outright —
+   * money already taken stays on the ledger, and the alternative is cancelling
+   * the quote, which the ledger already models.
+   */
+  const ledgerBulk = useBulkDelete({
+    entityType: 'quote',
+    visibleIds: windowRows.map((row) => row.id),
+    resetKey: `${status}|${page}`,
   });
 
   const onLoadMore = () => {
@@ -304,6 +336,17 @@ export function AdminQuotesPaymentsPage() {
               <TableSkeleton rows={7} />
             ) : (
               <>
+                {ledgerBulk.canDelete ? (
+                  <SelectionBar
+                    count={ledgerBulk.selection.count}
+                    noun="quotes"
+                    singularNoun="quote"
+                    onDelete={ledgerBulk.openDialog}
+                    onClear={ledgerBulk.selection.clear}
+                    isDeleting={ledgerBulk.isDeleting}
+                  />
+                ) : null}
+
                 {/* Mobile — cards on the page background, no surrounding frame. */}
                 {isLedgerEmpty ? null : (
                   <LedgerCardList
@@ -331,6 +374,8 @@ export function AdminQuotesPaymentsPage() {
                         rows={windowRows}
                         onAction={onLedgerAction}
                         sendingId={remind.isPending ? remind.variables : null}
+                        selection={ledgerBulk.selection}
+                        selectable={ledgerBulk.canDelete}
                       />
                       <LedgerPagination
                         page={page}
@@ -618,6 +663,17 @@ export function AdminQuotesPaymentsPage() {
                 </div>
               </div>
 
+              {transferBulk.canDelete ? (
+                <SelectionBar
+                  count={transferBulk.selection.count}
+                  noun="transfers"
+                  singularNoun="transfer"
+                  onDelete={transferBulk.openDialog}
+                  onClear={transferBulk.selection.clear}
+                  isDeleting={transferBulk.isDeleting}
+                />
+              ) : null}
+
               {transferRows.length === 0 ? null : (
                 <UnmatchedTransferCardList
                   rows={transferRows}
@@ -648,6 +704,8 @@ export function AdminQuotesPaymentsPage() {
                     canResolve={canResolveTransfers}
                     resolvingId={resolveTransfer.isPending ? resolving?.id ?? null : null}
                     onResolve={setResolving}
+                    selection={transferBulk.selection}
+                    selectable={transferBulk.canDelete}
                   />
                 )}
               </div>
@@ -719,6 +777,30 @@ export function AdminQuotesPaymentsPage() {
         error={resolveTransfer.error}
         onSubmit={onResolveSubmit}
         onClose={onResolveClose}
+      />
+
+      <ConfirmDeleteDialog
+        open={ledgerBulk.isDialogOpen}
+        count={ledgerBulk.selection.count}
+        singularNoun="quote"
+        pluralNoun="quotes"
+        retentionDays={ledgerBulk.retentionDays}
+        isDeleting={ledgerBulk.isDeleting}
+        error={ledgerBulk.error}
+        onConfirm={ledgerBulk.confirm}
+        onClose={ledgerBulk.closeDialog}
+      />
+
+      <ConfirmDeleteDialog
+        open={transferBulk.isDialogOpen}
+        count={transferBulk.selection.count}
+        singularNoun="transfer"
+        pluralNoun="transfers"
+        retentionDays={transferBulk.retentionDays}
+        isDeleting={transferBulk.isDeleting}
+        error={transferBulk.error}
+        onConfirm={transferBulk.confirm}
+        onClose={transferBulk.closeDialog}
       />
     </AdminLayout>
   );

@@ -248,7 +248,7 @@ async function resolveRegionCode(
   if (codes.length === 0) return null;
 
   const regions = await prisma.region.findMany({
-    where: { code: { in: [...new Set(codes)] }, active: true },
+    where: { code: { in: [...new Set(codes)] }, active: true, deletedAt: null },
     select: { code: true },
   });
 

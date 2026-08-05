@@ -462,6 +462,130 @@ export async function listLedger(
   };
 }
 
+// --- One ledger row, in full ---------------------------------------------
+
+/*
+ * What the ledger's expanded row reads.
+ *
+ * None of this is on the list, and deliberately: the itemised breakdown and the
+ * attempt history are two extra joins per quote, and a page of the ledger would
+ * pay for both on every row to render detail nobody has opened. The list stays
+ * one query over quotes; this is the second query, for the one row somebody is
+ * looking at.
+ *
+ * MONEY: every figure stays integer minor units through `money()`; the only
+ * arithmetic is the integer sum the quote already stores separately.
+ */
+export type LedgerAttempt = {
+  id: string;
+  provider: 'usdt_trc20' | 'wire_transfer';
+  providerLabel: string;
+  status: PaymentStatus;
+  amount: Money;
+  providerRef: string | null;
+  createdAt: string;
+  paidAt: string | null;
+  failureReason: string | null;
+};
+
+export type LedgerRowDetail = {
+  id: string;
+  reference: string;
+  quoteReference: string;
+  customer: { id: string; name: string; email: string };
+  service: string;
+  status: LedgerStatus;
+  statusLabel: string;
+  subtotal: Money;
+  discount: Money;
+  tax: Money;
+  total: Money;
+  issuedAt: string;
+  validUntil: string;
+  paidAt: string | null;
+  lastRemindedAt: string | null;
+  reminderCount: number;
+  items: { id: string; label: string; amount: Money }[];
+  attempts: LedgerAttempt[];
+  order: { id: string; reference: string; to: string } | null;
+};
+
+const PROVIDER_KEY = {
+  [PaymentProvider.USDT_TRC20]: 'usdt_trc20',
+  [PaymentProvider.WIRE_TRANSFER]: 'wire_transfer',
+} as const;
+
+export async function getLedgerRow(
+  actor: AuthContext,
+  quoteId: string,
+): Promise<LedgerRowDetail> {
+  const quote = await prisma.quote.findFirst({
+    // The same scope the list applied. A row a member cannot see in the ledger
+    // must not become readable by asking for its detail directly.
+    where: { ...LEDGER_SCOPE, ...(await quoteScope(actor)), id: quoteId },
+    include: {
+      customer: { select: { id: true, name: true, email: true } },
+      order: { select: { id: true, reference: true } },
+      lineItems: { orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] },
+      payments: {
+        where: { deletedAt: null },
+        orderBy: { createdAt: 'desc' },
+      },
+    },
+  });
+
+  if (!quote) throw AppError.notFound('Quote not found');
+
+  const status = deriveStatus(quote.payments);
+
+  return {
+    id: quote.id,
+    reference: quote.order?.reference ?? quote.reference,
+    quoteReference: quote.reference,
+    customer: quote.customer,
+    service: quote.serviceName,
+    status,
+    statusLabel: STATUS_LABEL[status],
+    subtotal: money(quote.subtotal, quote.currency),
+    discount: money(quote.discount, quote.currency),
+    tax: money(quote.tax, quote.currency),
+    total: money(quote.total, quote.currency),
+    issuedAt: iso(quote.issuedAt),
+    validUntil: iso(quote.validUntil),
+    paidAt: isoOrNull(quote.paidAt),
+    lastRemindedAt: isoOrNull(quote.lastRemindedAt),
+    reminderCount: quote.reminderCount,
+    items: quote.lineItems.map((item) => ({
+      id: item.id,
+      label: item.label,
+      amount: money(item.amount, quote.currency),
+    })),
+    /*
+     * Every attempt, not just the settled one. A reconciler opening this row is
+     * usually asking why an invoice is still open, and "one failed USDT intent
+     * that expired" is the answer the ledger row itself cannot give.
+     */
+    attempts: quote.payments.map((payment) => ({
+      id: payment.id,
+      provider: PROVIDER_KEY[payment.provider],
+      providerLabel: METHOD_LABEL[payment.provider],
+      status: payment.status,
+      amount: money(payment.amount, payment.currency),
+      providerRef: payment.providerRef,
+      createdAt: iso(payment.createdAt),
+      paidAt: isoOrNull(payment.paidAt),
+      failureReason: payment.failureReason,
+    })),
+    order: quote.order
+      ? {
+          id: quote.order.id,
+          reference: quote.order.reference,
+          to: `/admin/orders/${quote.order.id}`,
+        }
+      : null,
+  };
+}
+
 // --- Payment reminder ----------------------------------------------------
 /*
  * Chase an unpaid invoice — the write behind the ledger's "Send reminder".
@@ -717,20 +841,33 @@ export async function getRevenue(
 export type UnmatchedTransferRow = {
   id: string;
   transactionHash: string;
-  /** Raw on-chain integer, as a decimal string. */
-  amountRaw: string;
-  /** The same amount as a display decimal, e.g. "1.5". */
+  /** The amount as a display decimal, e.g. "1.5". */
   amountDisplay: string;
-  decimals: number;
   fromAddress: string;
-  toAddress: string;
-  contractAddress: string;
   blockAt: string;
   firstSeenAt: string;
   lastSeenAt: string;
-  sightings: number;
   resolvedAt: string | null;
   resolvedBy: string | null;
+};
+
+/*
+ * The expanded row: the chain facts a reconciler needs only once they are
+ * actually chasing this transfer — which address it landed in, which contract
+ * it came through, the raw integer, how many sweeps have seen it, and the note
+ * whoever closed it left.
+ *
+ * Split out rather than shipped with the list because the queue is scanned by
+ * hash, amount, and age; the addresses are 34 characters each and were being
+ * sent for every row to be read on almost none of them.
+ */
+export type UnmatchedTransferDetail = UnmatchedTransferRow & {
+  /** Raw on-chain integer, as a decimal string. */
+  amountRaw: string;
+  decimals: number;
+  toAddress: string;
+  contractAddress: string;
+  sightings: number;
   resolutionNote: string | null;
 };
 
@@ -750,46 +887,77 @@ const UNMATCHED_STATUS_WHERE: Record<
   all: {},
 };
 
+type UnmatchedRecord = Prisma.UnmatchedTransferGetPayload<object>;
+
+function toUnmatchedRow(transfer: UnmatchedRecord): UnmatchedTransferRow {
+  // The raw integer never becomes a float: it is read as a BigInt and formatted
+  // by integer division (AGENTS.md, Money).
+  const raw = BigInt(transfer.amountRaw.toFixed(0));
+
+  return {
+    id: transfer.id,
+    transactionHash: transfer.transactionHash,
+    amountDisplay: formatUsdtRaw(raw, transfer.decimals),
+    fromAddress: transfer.fromAddress,
+    blockAt: iso(transfer.blockAt),
+    firstSeenAt: iso(transfer.firstSeenAt),
+    lastSeenAt: iso(transfer.lastSeenAt),
+    resolvedAt: isoOrNull(transfer.resolvedAt),
+    resolvedBy: transfer.resolvedByName,
+  };
+}
+
+function toUnmatchedDetail(transfer: UnmatchedRecord): UnmatchedTransferDetail {
+  return {
+    ...toUnmatchedRow(transfer),
+    amountRaw: BigInt(transfer.amountRaw.toFixed(0)).toString(),
+    decimals: transfer.decimals,
+    toAddress: transfer.toAddress,
+    contractAddress: transfer.contractAddress,
+    sightings: transfer.sightings,
+    resolutionNote: transfer.resolutionNote,
+  };
+}
+
+/*
+ * One transfer in full — the queue's expanded row.
+ *
+ * No scope check, matching the list: a transfer that matched no payment belongs
+ * to nobody we can name, so there is no customer to scope it to and hiding it
+ * from a reviewer would recreate the blind spot the queue exists to close.
+ */
+export async function getUnmatchedTransfer(
+  transferId: string,
+): Promise<UnmatchedTransferDetail> {
+  const transfer = await prisma.unmatchedTransfer.findFirst({
+    where: { id: transferId, deletedAt: null },
+  });
+
+  if (!transfer) throw AppError.notFound('Transfer not found');
+
+  return toUnmatchedDetail(transfer);
+}
+
 export async function listUnmatchedTransfers(
   _actor: AuthContext,
   query: ListUnmatchedQuery,
 ): Promise<UnmatchedTransferPage> {
   const [rows, openCount] = await Promise.all([
     prisma.unmatchedTransfer.findMany({
-      where: UNMATCHED_STATUS_WHERE[query.status],
+      where: { ...UNMATCHED_STATUS_WHERE[query.status], deletedAt: null },
       // Newest transfer first. `blockAt` rather than `firstSeenAt`: a cold start
       // can notice an old transfer today, and the queue should read in the order
       // the money actually arrived.
       orderBy: [{ blockAt: 'desc' }, { id: 'desc' }],
       ...cursorArgs(query.cursor, query.limit),
     }),
-    prisma.unmatchedTransfer.count({ where: { resolvedAt: null } }),
+    prisma.unmatchedTransfer.count({ where: { resolvedAt: null, deletedAt: null } }),
   ]);
 
   const page = takePage(rows, query.limit);
 
   return {
-    rows: page.rows.map((transfer) => {
-      const raw = BigInt(transfer.amountRaw.toFixed(0));
-
-      return {
-        id: transfer.id,
-        transactionHash: transfer.transactionHash,
-        amountRaw: raw.toString(),
-        amountDisplay: formatUsdtRaw(raw, transfer.decimals),
-        decimals: transfer.decimals,
-        fromAddress: transfer.fromAddress,
-        toAddress: transfer.toAddress,
-        contractAddress: transfer.contractAddress,
-        blockAt: iso(transfer.blockAt),
-        firstSeenAt: iso(transfer.firstSeenAt),
-        lastSeenAt: iso(transfer.lastSeenAt),
-        sightings: transfer.sightings,
-        resolvedAt: isoOrNull(transfer.resolvedAt),
-        resolvedBy: transfer.resolvedByName,
-        resolutionNote: transfer.resolutionNote,
-      };
-    }),
+    rows: page.rows.map(toUnmatchedRow),
     nextCursor: page.nextCursor,
     openCount,
   };
@@ -813,9 +981,9 @@ export async function resolveUnmatchedTransfer(
   transferId: string,
   input: ResolveUnmatchedInput,
   now = new Date(),
-): Promise<UnmatchedTransferRow> {
-  const existing = await prisma.unmatchedTransfer.findUnique({
-    where: { id: transferId },
+): Promise<UnmatchedTransferDetail> {
+  const existing = await prisma.unmatchedTransfer.findFirst({
+    where: { id: transferId, deletedAt: null },
     select: { id: true, resolvedAt: true },
   });
 
@@ -866,25 +1034,9 @@ export async function resolveUnmatchedTransfer(
     },
   });
 
-  const raw = BigInt(resolved.amountRaw.toFixed(0));
-
-  return {
-    id: resolved.id,
-    transactionHash: resolved.transactionHash,
-    amountRaw: raw.toString(),
-    amountDisplay: formatUsdtRaw(raw, resolved.decimals),
-    decimals: resolved.decimals,
-    fromAddress: resolved.fromAddress,
-    toAddress: resolved.toAddress,
-    contractAddress: resolved.contractAddress,
-    blockAt: iso(resolved.blockAt),
-    firstSeenAt: iso(resolved.firstSeenAt),
-    lastSeenAt: iso(resolved.lastSeenAt),
-    sightings: resolved.sightings,
-    resolvedAt: isoOrNull(resolved.resolvedAt),
-    resolvedBy: resolved.resolvedByName,
-    resolutionNote: resolved.resolutionNote,
-  };
+  // The write answers with the full record rather than the row shape: the caller
+  // has the expanded panel open, and it is the panel's note it just wrote.
+  return toUnmatchedDetail(resolved);
 }
 
 /*
@@ -914,20 +1066,31 @@ export type SettlementRow = {
   customerEmail: string;
   /** Which bank account the customer was told to send to, for a wire. */
   accountLabel: string | null;
-  /*
-   * The bank details as the customer saw them, so a settler can check the
-   * statement against the account the money was meant to land in without
-   * opening the settings screen.
-   */
-  instructions: { label: string; value: string }[];
   /** When the customer said they had sent it. Null means they have not. */
   markedSentAt: string | null;
-  /** The bank's reference or the tx hash, once one has been recorded. */
-  providerRef: string | null;
   settledAt: string | null;
   settledBy: string | null;
-  settlementNote: string | null;
   createdAt: string;
+};
+
+/*
+ * The expanded row.
+ *
+ * `instructions` is the reason this split exists: the frozen instruction card
+ * is a whole rendered bank-details block per wire, and the queue was shipping
+ * one for every row to show it on the one row a settler opens. It is exactly
+ * what the expanded panel is for — the settler checks the statement against the
+ * account the money was meant to land in, without opening the settings screen.
+ */
+export type SettlementDetail = SettlementRow & {
+  instructions: { label: string; value: string }[];
+  /** The bank's reference or the tx hash, once one has been recorded. */
+  providerRef: string | null;
+  settlementNote: string | null;
+  customerId: string;
+  quoteTotal: Money | null;
+  quoteValidUntil: string | null;
+  order: { id: string; reference: string; to: string } | null;
 };
 
 export type SettlementPage = {
@@ -981,18 +1144,72 @@ function toSettlementRow(payment: SettlementRecord): SettlementRow {
     customerName: payment.customer.name,
     customerEmail: payment.customer.email,
     accountLabel: snapshot?.accountLabel || payment.bankAccountLabel || null,
+    markedSentAt: isoOrNull(payment.customerMarkedSentAt),
+    settledAt: isoOrNull(payment.paidAt),
+    settledBy: payment.settledByName,
+    createdAt: iso(payment.createdAt),
+  };
+}
+
+const SETTLEMENT_DETAIL_INCLUDE = {
+  quote: {
+    select: {
+      serviceName: true,
+      reference: true,
+      total: true,
+      currency: true,
+      validUntil: true,
+      order: { select: { id: true, reference: true } },
+    },
+  },
+  customer: { select: { id: true, name: true, email: true } },
+} as const;
+
+/*
+ * One payment in the settlement queue, in full — what the expanded row reads.
+ *
+ * Scoped exactly like the list. A settler who cannot see a payment in the queue
+ * must not be able to read its bank instructions by asking for them directly,
+ * and `assertInScope` is the same guard the two writes below use.
+ */
+export async function getSettlement(
+  actor: AuthContext,
+  paymentId: string,
+): Promise<SettlementDetail> {
+  await assertInScope(actor, paymentId);
+
+  const payment = await prisma.payment.findFirst({
+    where: { id: paymentId, deletedAt: null },
+    include: SETTLEMENT_DETAIL_INCLUDE,
+  });
+
+  if (!payment) throw AppError.notFound('Payment not found');
+
+  const snapshot = readWireInstructions(payment.wireInstructions);
+  const order = payment.quote?.order ?? null;
+
+  return {
+    ...toSettlementRow(payment),
     // Label and value only — the copy flags are a checkout concern, and this is
     // a reconciler reading a bank statement.
     instructions: (snapshot?.fields ?? []).map((field) => ({
       label: field.label,
       value: field.value,
     })),
-    markedSentAt: isoOrNull(payment.customerMarkedSentAt),
     providerRef: payment.providerRef,
-    settledAt: isoOrNull(payment.paidAt),
-    settledBy: payment.settledByName,
     settlementNote: payment.settlementNote,
-    createdAt: iso(payment.createdAt),
+    customerId: payment.customer.id,
+    quoteTotal: payment.quote
+      ? money(payment.quote.total, payment.quote.currency)
+      : null,
+    quoteValidUntil: payment.quote ? iso(payment.quote.validUntil) : null,
+    order: order
+      ? {
+          id: order.id,
+          reference: order.reference,
+          to: `/admin/orders/${order.id}`,
+        }
+      : null,
   };
 }
 

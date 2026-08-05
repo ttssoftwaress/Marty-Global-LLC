@@ -3,6 +3,7 @@ import type { NextFunction, Request, Response } from 'express';
 import { getAuth } from '../../../guards/index.js';
 import { AppError } from '../../../lib/app-error.js';
 import { pathParam } from '../../../lib/params.js';
+import { trashRows } from '../trash/trash.service.js';
 import * as service from './result-fields.service.js';
 import {
   createResultFieldSchema,
@@ -69,17 +70,18 @@ export async function updateResultField(
   }
 }
 
+// The mirror of `deleteField` — to the Trash, with the "a delivered record holds
+// a value for it" rule on the `result-field` descriptor.
 export async function deleteResultField(
   req: Request,
   res: Response,
   next: NextFunction,
 ) {
   try {
-    const deleted = await service.deleteResultField(
-      getAuth(req),
-      pathParam(req, 'fieldId'),
-    );
-    res.json({ data: deleted });
+    const id = pathParam(req, 'fieldId');
+    await trashRows(getAuth(req), 'result-field', [id]);
+
+    res.json({ data: { id } });
   } catch (error) {
     next(error);
   }

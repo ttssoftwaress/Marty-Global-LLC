@@ -95,6 +95,45 @@ export type BillingLedgerRow = {
  * so `nextCursor` drives mobile's "Load more"; `page`/`totalPages` drive the
  * numbered pager the wider links show over the same stream.
  */
+/*
+ * One ledger row in full — the itemised quote and every payment attempt made
+ * against it. Neither is on the list: both are extra joins per quote, and a page
+ * of the ledger would pay for them on every row to render detail nobody opened.
+ */
+export type LedgerAttempt = {
+  id: string;
+  provider: SettlementProvider;
+  providerLabel: string;
+  status: string;
+  amount: Money;
+  providerRef: string | null;
+  createdAt: string;
+  paidAt: string | null;
+  failureReason: string | null;
+};
+
+export type LedgerRowDetail = {
+  id: string;
+  reference: string;
+  quoteReference: string;
+  customer: { id: string; name: string; email: string };
+  service: string;
+  status: PaymentStatus;
+  statusLabel: string;
+  subtotal: Money;
+  discount: Money;
+  tax: Money;
+  total: Money;
+  issuedAt: string;
+  validUntil: string;
+  paidAt: string | null;
+  lastRemindedAt: string | null;
+  reminderCount: number;
+  items: { id: string; label: string; amount: Money }[];
+  attempts: LedgerAttempt[];
+  order: { id: string; reference: string; to: string } | null;
+};
+
 export type BillingLedgerPage = {
   rows: BillingLedgerRow[];
   nextCursor: string | null;
@@ -120,23 +159,31 @@ export type BillingLedgerPage = {
 export type UnmatchedTransferRow = {
   id: string;
   transactionHash: string;
-  amountRaw: string;
   amountDisplay: string; // "1.5" — already formatted, never re-derived here
-  decimals: number;
   fromAddress: string;
-  toAddress: string;
-  contractAddress: string;
   blockAt: string; // ISO-8601 UTC — when the money actually landed
   firstSeenAt: string; // when a sweep first noticed it
   lastSeenAt: string; // the most recent sweep that still saw it unresolved
+  resolvedAt: string | null;
+  resolvedBy: string | null;
+};
+
+/*
+ * The expanded row: the chain facts a reconciler needs only once they are
+ * chasing this transfer. Off the list because the two addresses are 34
+ * characters each and were being sent for every row to be read on almost none.
+ */
+export type UnmatchedTransferDetail = UnmatchedTransferRow & {
+  amountRaw: string;
+  decimals: number;
+  toAddress: string;
+  contractAddress: string;
   /*
    * How many sweeps have re-read this transfer. The poller re-reads an overlap
    * window every interval, so a rising count is the queue's way of saying "still
    * sitting here" — it is not a count of separate transfers.
    */
   sightings: number;
-  resolvedAt: string | null;
-  resolvedBy: string | null;
   resolutionNote: string | null;
 };
 
@@ -184,20 +231,29 @@ export type SettlementRow = {
   customerEmail: string;
   /** Which bank account the customer was told to send to, for a wire. */
   accountLabel: string | null;
-  /**
-   * The bank details as the customer saw them, so a settler can check the
-   * statement against the account the money was meant to land in without
-   * opening the settings screen.
-   */
-  instructions: { label: string; value: string }[];
   /** When the customer said they had sent it. Null means they have not. */
   markedSentAt: string | null;
-  /** The bank's reference or the tx hash, once one has been recorded. */
-  providerRef: string | null;
   settledAt: string | null;
   settledBy: string | null;
-  settlementNote: string | null;
   createdAt: string;
+};
+
+/*
+ * The expanded row.
+ *
+ * `instructions` is why this is a separate shape: the frozen instruction card
+ * is a whole rendered bank-details block per wire, and the queue was shipping
+ * one for every row to show it on the one row a settler opens.
+ */
+export type SettlementDetail = SettlementRow & {
+  instructions: { label: string; value: string }[];
+  /** The bank's reference or the tx hash, once one has been recorded. */
+  providerRef: string | null;
+  settlementNote: string | null;
+  customerId: string;
+  quoteTotal: Money | null;
+  quoteValidUntil: string | null;
+  order: { id: string; reference: string; to: string } | null;
 };
 
 export type SettlementFilter = 'open' | 'settled' | 'all';

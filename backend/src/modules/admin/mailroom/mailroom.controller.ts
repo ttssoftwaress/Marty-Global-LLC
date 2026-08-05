@@ -203,3 +203,13 @@ export async function listLog(req: Request, res: Response, next: NextFunction) {
     next(error);
   }
 }
+
+export async function getLogEntry(req: Request, res: Response, next: NextFunction) {
+  try {
+    res.json({
+      data: await service.getLogEntry(getAuth(req), pathParam(req, 'entryId')),
+    });
+  } catch (error) {
+    next(error);
+  }
+}

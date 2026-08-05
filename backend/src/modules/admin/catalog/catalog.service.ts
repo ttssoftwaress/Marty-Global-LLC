@@ -35,7 +35,7 @@ export type ServiceRegionView = { code: string; label: string; flag: string };
 
 export async function listRegions(): Promise<ServiceRegionView[]> {
   const regions = await prisma.region.findMany({
-    where: { active: true },
+    where: { active: true, deletedAt: null },
     orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
   });
 
@@ -58,7 +58,8 @@ export type CatalogServiceRow = {
    * Whether removing this service is available at all — false as soon as a
    * customer has ordered it or a record has been delivered under it. Computed
    * here rather than in the UI so the rule has one definition, and re-checked in
-   * `deleteService` so it is a guard and not just a hidden button.
+   * the `service` descriptor's guard in `trash.registry.ts`, so the flag is a
+   * preview of a real refusal rather than just a hidden button.
    */
   canDelete: boolean;
 };
@@ -313,8 +314,11 @@ async function assertRegionsExist(codes: readonly string[]): Promise<void> {
   const unique = [...new Set(codes)];
   if (unique.length === 0) return;
 
+  // `deletedAt: null` matters here and not in the label lookups elsewhere: this
+  // is a WRITE accepting codes, and a location in the Trash must not be
+  // offerable again from a stale form.
   const found = await prisma.region.findMany({
-    where: { code: { in: unique } },
+    where: { code: { in: unique }, deletedAt: null },
     select: { code: true },
   });
 
@@ -524,69 +528,22 @@ export async function updateService(
 }
 
 /*
- * Remove a service from the catalog.
+ * Deleting a service goes through `modules/admin/trash`, like every other admin
+ * table's delete. Two things carried over unchanged and one changed:
  *
- * Two rules, and both are the reason this is offered at all rather than leaving
- * "deactivate" as the only exit:
- *
- *   1. It only ever reaches the write for a service nothing points at — no order
- *      line, no delivered record. A service a customer has bought is part of
- *      that order's history, so it is deactivated instead: the row stays
- *      resolvable and simply leaves the customer's catalog.
- *
- *   2. Even then it is `deletedAt`, not a row disappearing (AGENTS.md — ask
- *      before any hard delete). Every catalog read already filters soft-deleted
- *      rows, so the service leaves both apps immediately while the record of
- *      what was configured survives. `active: false` goes with it, so a row
- *      restored by hand comes back hidden rather than silently on sale.
- *
- * The service's own children — tiers, offerings, request types — are left as
- * they are: they are only ever read through the service, which no query can
- * reach any more, and untouching them keeps a restore lossless.
+ *   - The rule is the same, and now stated once: it only ever succeeds for a
+ *     service nothing points at. A service a customer has bought is part of that
+ *     order's history, so it is deactivated instead. That sentence lives on the
+ *     `service` descriptor in `trash.registry.ts`.
+ *   - Its children — tiers, offerings, request types — are still left as they
+ *     are. They are only ever read through the service, which no query can reach
+ *     any more, and untouching them is what keeps a restore lossless.
+ *   - `active: false` no longer rides along with the delete. It was there so a
+ *     row resurrected by hand came back hidden rather than silently on sale;
+ *     restoring is a real, audited path now, and flipping a column the restore
+ *     could not know to flip back would make it lossy.
  */
-export async function deleteService(
-  actor: AuthContext,
-  serviceId: string,
-): Promise<{ id: string }> {
-  const existing = await prisma.service.findFirst({
-    where: { id: serviceId, deletedAt: null },
-    select: {
-      id: true,
-      name: true,
-      _count: { select: { orderItems: true, results: true } },
-    },
-  });
 
-  if (!existing) throw AppError.notFound('Service not found');
-
-  const usage = {
-    orderItems: existing._count.orderItems,
-    results: existing._count.results,
-  };
-  const references = usage.orderItems + usage.results;
-
-  if (references > 0) {
-    throw AppError.businessRule(
-      `"${existing.name}" is on ${references} customer record${references === 1 ? '' : 's'}, so it cannot be deleted. Turn it off instead — it stays on those records and disappears from the customer's catalog.`,
-      { serviceId, usage },
-    );
-  }
-
-  await prisma.service.update({
-    where: { id: serviceId },
-    data: { deletedAt: new Date(), active: false },
-  });
-
-  void record({
-    actor,
-    action: AuditAction.SERVICE_DELETED,
-    entityType: 'Service',
-    entityId: serviceId,
-    metadata: { name: existing.name },
-  });
-
-  return { id: serviceId };
-}
 
 /*
  * The delivery half of a service: what it RETURNS, and how the customer's page

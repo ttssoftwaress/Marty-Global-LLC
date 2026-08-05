@@ -19,6 +19,33 @@ export async function getOverview(
   }
 }
 
+function pathParam(req: Request, name: string): string {
+  const value = req.params[name];
+  if (typeof value !== 'string' || !value) {
+    throw AppError.validation(`${name} is required`);
+  }
+  return value;
+}
+
+// One open quote in full — the itemised breakdown behind the amount.
+export async function getQuote(req: Request, res: Response, next: NextFunction) {
+  try {
+    res.json({ data: await service.getQuote(req, pathParam(req, 'quoteId')) });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// One payment in full, including the presigned invoice link. The list carries
+// `hasInvoice` only — see `PaymentRecordView` for why the URL is minted here.
+export async function getPayment(req: Request, res: Response, next: NextFunction) {
+  try {
+    res.json({ data: await service.getPayment(req, pathParam(req, 'paymentId')) });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function listPayments(
   req: Request,
   res: Response,

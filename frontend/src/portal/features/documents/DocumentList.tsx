@@ -1,9 +1,20 @@
-import { useMemo } from 'react';
+import { Fragment, useMemo } from 'react';
 import { Download, FileText, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
-import { formatFileSize, formatOrderDate } from '../../lib/format';
+import {
+  DetailRow,
+  ExpandChevron,
+  ExpandChevronCell,
+  detailPanelId,
+  expandRowProps,
+  expandedRowClass,
+  stopRowToggle,
+  useExpandedRow,
+} from '../../components/ExpandableRow';
+import { formatOrderDate } from '../../lib/format';
 import type { PortalDocument } from '../../types/documents';
+import { DocumentDetails } from './DocumentDetails';
 import { DocumentSourceChip } from './DocumentSourceChip';
 import { fileIconFor } from './fileIcons';
 
@@ -11,12 +22,21 @@ import { fileIconFor } from './fileIcons';
  * The documents list — two presentations of one list, swapped by breakpoint (a
  * table row can't reflow into a card, so each renders its own markup, the same
  * approach the mail and orders lists take):
- *   - desktop (lg): full table — name · belongs to · source · size · added ·
- *                   download
- *   - tablet (md):  the same table, folding "belongs to" under the name and
- *                   dropping the standalone SIZE column
- *   - mobile:       one card per document — icon + name/source, the context and
- *                   meta beneath, and a full-width download button
+ *   - desktop (lg): the table — name · source · added · download
+ *   - tablet (md):  the same table at narrower gutters
+ *   - mobile:       one card per document — icon + name/source, the meta
+ *                   beneath, and a full-width download button
+ *
+ * The row is what the library is scanned by: what the file is called, where it
+ * came from, and when it arrived. What it belongs to, its type, and its size
+ * moved into the panel the row opens — a filename plus a context plus a size in
+ * one row is three answers competing for the same width, and only the first is
+ * what anyone reads down the column.
+ *
+ * That panel is the one in the portal that does not fetch: this library is
+ * assembled from three sources and paged as one list, so a per-row read would
+ * re-run the whole gather to return fields the row already holds
+ * (DocumentDetails records the reasoning). One row is open at a time.
  *
  * A document we owe the customer but haven't filed yet renders its row with a
  * disabled control and says why, rather than a dead button (Design.md — a
@@ -106,13 +126,6 @@ function DocumentName({ document }: { document: PortalDocument }) {
         <span className="block truncate text-body font-semibold text-text">
           {document.name}
         </span>
-        {/* Tablet folds the context under the name; desktop has its own column. */}
-        <Link
-          to={document.contextHref}
-          className="block truncate text-small text-primary hover:underline lg:hidden"
-        >
-          {document.contextLabel}
-        </Link>
       </span>
     </span>
   );
@@ -164,6 +177,8 @@ export function DocumentList({
   downloadingId,
   downloadError,
 }: DocumentListProps) {
+  const { expandedId, toggle } = useExpandedRow();
+
   const isEmpty = !isLoading && documents.length === 0;
   const showSkeleton = Boolean(isLoading) && documents.length === 0;
 
@@ -211,104 +226,113 @@ export function DocumentList({
             <EmptyState isFiltered={isFiltered} />
           </div>
         ) : (
-          documents.map((document) => (
-            <div
-              key={`${document.source}-${document.id}`}
-              className="flex flex-col gap-3 rounded-card border border-gray-200 bg-white p-4 shadow-sm-elevation"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <DocumentName document={document} />
-                <DocumentSourceChip source={document.source} />
+          documents.map((document) => {
+            const key = `${document.source}-${document.id}`;
+            const isExpanded = key === expandedId;
+            const panelId = detailPanelId('document-card', key);
+
+            return (
+              <div
+                key={key}
+                className="flex flex-col gap-3 rounded-card border border-gray-200 bg-white p-4 shadow-sm-elevation"
+              >
+                <button
+                  type="button"
+                  onClick={() => toggle(key)}
+                  aria-expanded={isExpanded}
+                  aria-controls={panelId}
+                  className="flex flex-col gap-3 rounded-input text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                >
+                  <span className="flex items-start justify-between gap-2">
+                    <DocumentName document={document} />
+                    <span className="flex shrink-0 items-center gap-2">
+                      <DocumentSourceChip source={document.source} />
+                      <ExpandChevron isExpanded={isExpanded} />
+                    </span>
+                  </span>
+
+                  <span className="block text-small text-gray-500">
+                    Added {formatOrderDate(document.createdAt)}
+                  </span>
+                </button>
+
+                {isExpanded ? (
+                  <div id={panelId} onClick={stopRowToggle}>
+                    <DocumentDetails document={document} />
+                  </div>
+                ) : null}
+
+                <div className="h-px w-full bg-gray-200" />
+                <DownloadAction
+                  document={document}
+                  onDownload={onDownload}
+                  isDownloading={downloadingId === document.id}
+                  fullWidth
+                />
               </div>
-
-              <p className="text-small text-gray-500">
-                Added {formatOrderDate(document.createdAt)}
-                {document.sizeBytes !== null
-                  ? ` · ${formatFileSize(document.sizeBytes)}`
-                  : ''}
-              </p>
-
-              <div className="h-px w-full bg-gray-200" />
-              <DownloadAction
-                document={document}
-                onDownload={onDownload}
-                isDownloading={downloadingId === document.id}
-                fullWidth
-              />
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 
       {/* Tablet & desktop — card-wrapped table */}
       <div className="hidden w-full overflow-hidden rounded-card border border-gray-200 bg-white shadow-sm-elevation md:block">
         <div className="table-scroll">
-          <table className="data-table min-w-[38rem] table-fixed lg:min-w-[54rem]">
+          <table className="data-table min-w-[36rem] table-fixed lg:min-w-[44rem]">
             <thead>
               <tr className="h-12">
                 <th scope="col" className="pl-4 pr-3 lg:pl-6">
                   Document
                 </th>
-                <th scope="col" className="hidden w-[11rem] pr-3 lg:table-cell">
-                  Belongs to
-                </th>
                 <th scope="col" className="w-[6.25rem] pr-3">
                   Source
-                </th>
-                <th
-                  scope="col"
-                  className="hidden w-[6.25rem] pr-3 lg:table-cell"
-                >
-                  Size
                 </th>
                 <th scope="col" className="w-[8.75rem] pr-3">
                   Added
                 </th>
                 <th
                   scope="col"
-                  className="w-[7.5rem] pr-4 text-right lg:w-[9.375rem] lg:pr-6"
+                  className="w-[7.5rem] pr-3 text-right lg:w-[9.375rem]"
                 >
                   Action
+                </th>
+                <th scope="col" className="w-[4rem] pr-4 lg:pr-6">
+                  <span className="sr-only">Details</span>
                 </th>
               </tr>
             </thead>
 
             {!showSkeleton && !isEmpty && (
               <tbody>
-                {windowDocuments.map((document) => (
+                {windowDocuments.map((document) => {
+                  const key = `${document.source}-${document.id}`;
+                  const isExpanded = key === expandedId;
+                  const panelId = detailPanelId('document', key);
+
+                  return (
+                  <Fragment key={key}>
                   <tr
-                    key={`${document.source}-${document.id}`}
-                    className="h-16 bg-white lg:h-[4.5rem]"
+                    {...expandRowProps({
+                      isExpanded,
+                      panelId,
+                      onToggle: () => toggle(key),
+                      label: `${isExpanded ? 'Hide' : 'Show'} details for ${document.name}`,
+                    })}
+                    className={`h-16 lg:h-[4.5rem] ${expandedRowClass(isExpanded)}`}
                   >
                     <td className="min-w-0 py-2 pl-4 pr-3 lg:pl-6">
                       <DocumentName document={document} />
-                    </td>
-
-                    <td className="hidden min-w-0 pr-3 lg:table-cell">
-                      <Link
-                        to={document.contextHref}
-                        title={document.contextLabel}
-                        className="block truncate text-primary hover:underline"
-                      >
-                        {document.contextLabel}
-                      </Link>
                     </td>
 
                     <td className="pr-3">
                       <DocumentSourceChip source={document.source} />
                     </td>
 
-                    <td className="hidden whitespace-nowrap pr-3 text-gray-600 lg:table-cell">
-                      {document.sizeBytes !== null
-                        ? formatFileSize(document.sizeBytes)
-                        : '—'}
-                    </td>
-
                     <td className="whitespace-nowrap pr-3 text-gray-600">
                       {formatOrderDate(document.createdAt)}
                     </td>
 
-                    <td className="pr-4 text-right lg:pr-6">
+                    <td className="pr-3 text-right" onClick={stopRowToggle}>
                       <div className="flex justify-end">
                         <DownloadAction
                           document={document}
@@ -317,8 +341,18 @@ export function DocumentList({
                         />
                       </div>
                     </td>
+
+                    <ExpandChevronCell isExpanded={isExpanded} />
                   </tr>
-                ))}
+
+                  {isExpanded ? (
+                    <DetailRow panelId={panelId} colSpan={5}>
+                      <DocumentDetails document={document} />
+                    </DetailRow>
+                  ) : null}
+                  </Fragment>
+                  );
+                })}
               </tbody>
             )}
           </table>

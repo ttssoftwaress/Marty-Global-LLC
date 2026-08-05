@@ -1,8 +1,20 @@
-import { Download, Receipt, Wallet } from 'lucide-react';
+import { Fragment } from 'react';
+import { Receipt, Wallet } from 'lucide-react';
 
+import {
+  DetailRow,
+  ExpandChevron,
+  ExpandChevronCell,
+  detailPanelId,
+  expandRowProps,
+  expandedRowClass,
+  stopRowToggle,
+  useExpandedRow,
+} from '../../components/ExpandableRow';
 import { formatMoney, formatOrderDate } from '../../lib/format';
 import type { PaymentHistoryRange, PaymentRecord } from '../../types/billing';
 import { PaymentStatusChip } from './chips';
+import { PaymentDetails } from './PaymentDetails';
 import { PaymentHistoryControls } from './PaymentHistoryControls';
 
 /*
@@ -16,8 +28,15 @@ import { PaymentHistoryControls } from './PaymentHistoryControls';
  *     status chip beside an Invoice download), over a "Load more" button
  *
  * Desktop/tablet page a fixed window through the loaded history; mobile appends.
- * Both drive one cursor stream (AGENTS.md, cursor pagination). The invoice
- * download is a short-TTL presigned URL, disabled until the backend has it.
+ * Both drive one cursor stream (AGENTS.md, cursor pagination).
+ *
+ * The invoice moved OFF the row and into the panel it opens. The link is a
+ * short-TTL presigned URL (AGENTS.md, Security & PII), so a column of them
+ * meant signing one per payment on the page to serve at most one — and every
+ * clock started at page load, so the button on a row read twenty minutes later
+ * was already expired. Clicking a row now opens what was billed, the
+ * transaction reference, and a link minted at that moment. One row is open at a
+ * time.
  */
 
 type PaymentHistoryProps = {
@@ -39,72 +58,18 @@ type PaymentHistoryProps = {
   onNext: () => void;
 };
 
-function InvoiceIconButton({ payment }: { payment: PaymentRecord }) {
-  const label = `Download invoice for ${payment.serviceName}`;
-  const base =
-    'flex size-9 items-center justify-center rounded-input text-gray-500 transition-colors lg:size-10';
-
-  if (!payment.invoiceHref) {
-    return (
-      <button
-        type="button"
-        disabled
-        aria-label="Invoice not ready yet"
-        className={`${base} cursor-default opacity-40`}
-      >
-        <Download
-          className="size-[1.125rem] shrink-0 lg:size-5"
-          strokeWidth={1.75}
-          aria-hidden="true"
-        />
-      </button>
-    );
-  }
-
+/*
+ * Whether an invoice exists, said in words on the row. The download itself is
+ * in the panel: the link is presigned and short-lived, so it is minted when the
+ * customer opens the row rather than for every row on the page.
+ */
+function InvoiceHint({ payment }: { payment: PaymentRecord }) {
   return (
-    <a
-      href={payment.invoiceHref}
-      download
-      aria-label={label}
-      className={`${base} hover:bg-gray-100`}
+    <span
+      className={`text-small ${payment.hasInvoice ? 'text-primary' : 'text-gray-400'}`}
     >
-      <Download
-        className="size-[1.125rem] shrink-0 lg:size-5"
-        strokeWidth={1.75}
-        aria-hidden="true"
-      />
-    </a>
-  );
-}
-
-function InvoiceTextLink({ payment }: { payment: PaymentRecord }) {
-  if (!payment.invoiceHref) {
-    return (
-      <span className="flex items-center gap-1.5 text-small font-semibold text-gray-400">
-        <Download
-          className="size-4 shrink-0"
-          strokeWidth={1.75}
-          aria-hidden="true"
-        />
-        Invoice
-      </span>
-    );
-  }
-
-  return (
-    <a
-      href={payment.invoiceHref}
-      download
-      aria-label={`Download invoice for ${payment.serviceName}`}
-      className="flex items-center gap-1.5 text-small font-semibold text-primary hover:underline"
-    >
-      <Download
-        className="size-4 shrink-0"
-        strokeWidth={1.75}
-        aria-hidden="true"
-      />
-      Invoice
-    </a>
+      {payment.hasInvoice ? 'Invoice ready' : 'Not ready'}
+    </span>
   );
 }
 
@@ -155,6 +120,8 @@ export function PaymentHistory({
   onPrev,
   onNext,
 }: PaymentHistoryProps) {
+  const { expandedId, toggle } = useExpandedRow();
+
   const isEmpty = !isLoading && payments.length === 0;
   const showSkeleton = isLoading && payments.length === 0;
 
@@ -193,30 +160,53 @@ export function PaymentHistory({
         ) : (
           <>
             <ul className="flex w-full flex-col gap-3">
-              {payments.map((payment) => (
-                <li
-                  key={payment.id}
-                  className="flex flex-col gap-3 rounded-card border border-gray-200 bg-white p-4"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex min-w-0 flex-col gap-0.5">
-                      <p className="truncate text-body font-semibold text-text">
-                        {payment.serviceName}
-                      </p>
-                      <p className="text-small text-text-secondary">
-                        {formatOrderDate(payment.paidAt)} · {payment.method}
-                      </p>
-                    </div>
-                    <p className="shrink-0 text-body font-semibold text-text">
-                      {formatMoney(payment.amount)}
-                    </p>
-                  </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <PaymentStatusChip status={payment.status} />
-                    <InvoiceTextLink payment={payment} />
-                  </div>
-                </li>
-              ))}
+              {payments.map((payment) => {
+                const isExpanded = payment.id === expandedId;
+                const panelId = detailPanelId('payment-card', payment.id);
+
+                return (
+                  <li
+                    key={payment.id}
+                    className="flex flex-col gap-3 rounded-card border border-gray-200 bg-white p-4"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => toggle(payment.id)}
+                      aria-expanded={isExpanded}
+                      aria-controls={panelId}
+                      className="flex flex-col gap-3 rounded-input text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                    >
+                      <span className="flex items-start justify-between gap-3">
+                        <span className="flex min-w-0 flex-col gap-0.5">
+                          <span className="truncate text-body font-semibold text-text">
+                            {payment.serviceName}
+                          </span>
+                          <span className="text-small text-text-secondary">
+                            {formatOrderDate(payment.paidAt)} · {payment.method}
+                          </span>
+                        </span>
+                        <span className="flex shrink-0 items-center gap-2">
+                          <span className="text-body font-semibold text-text">
+                            {formatMoney(payment.amount)}
+                          </span>
+                          <ExpandChevron isExpanded={isExpanded} />
+                        </span>
+                      </span>
+
+                      <span className="flex items-center justify-between gap-3">
+                        <PaymentStatusChip status={payment.status} />
+                        <InvoiceHint payment={payment} />
+                      </span>
+                    </button>
+
+                    {isExpanded ? (
+                      <div id={panelId} onClick={stopRowToggle}>
+                        <PaymentDetails payment={payment} />
+                      </div>
+                    ) : null}
+                  </li>
+                );
+              })}
             </ul>
 
             <button
@@ -258,19 +248,32 @@ export function PaymentHistory({
                 <th scope="col" className="w-[6.875rem] pr-3 lg:w-[9.5rem]">
                   Status
                 </th>
-                <th
-                  scope="col"
-                  className="w-[5rem] px-4 text-right lg:w-[6rem] lg:px-6"
-                >
+                <th scope="col" className="w-[6rem] pr-3 lg:w-[7rem]">
                   Invoice
+                </th>
+                <th scope="col" className="w-[4rem] pr-4 lg:pr-6">
+                  <span className="sr-only">Details</span>
                 </th>
               </tr>
             </thead>
 
             {!showSkeleton && !isEmpty && (
               <tbody>
-                {windowPayments.map((payment) => (
-                  <tr key={payment.id} className="h-14">
+                {windowPayments.map((payment) => {
+                  const isExpanded = payment.id === expandedId;
+                  const panelId = detailPanelId('payment', payment.id);
+
+                  return (
+                  <Fragment key={payment.id}>
+                  <tr
+                    {...expandRowProps({
+                      isExpanded,
+                      panelId,
+                      onToggle: () => toggle(payment.id),
+                      label: `${isExpanded ? 'Hide' : 'Show'} details for the ${payment.serviceName} payment`,
+                    })}
+                    className={`h-14 ${expandedRowClass(isExpanded)}`}
+                  >
                     <td className="px-4 text-[0.8125rem] text-gray-600 lg:px-6 lg:text-body">
                       <span className="block truncate">
                         {formatOrderDate(payment.paidAt)}
@@ -309,13 +312,21 @@ export function PaymentHistory({
                       <PaymentStatusChip status={payment.status} />
                     </td>
 
-                    <td className="px-4 lg:px-6">
-                      <div className="flex justify-end">
-                        <InvoiceIconButton payment={payment} />
-                      </div>
+                    <td className="pr-3">
+                      <InvoiceHint payment={payment} />
                     </td>
+
+                    <ExpandChevronCell isExpanded={isExpanded} />
                   </tr>
-                ))}
+
+                  {isExpanded ? (
+                    <DetailRow panelId={panelId} colSpan={7}>
+                      <PaymentDetails payment={payment} />
+                    </DetailRow>
+                  ) : null}
+                  </Fragment>
+                  );
+                })}
               </tbody>
             )}
           </table>

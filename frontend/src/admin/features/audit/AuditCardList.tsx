@@ -1,6 +1,6 @@
 import { ChevronDown } from 'lucide-react';
 
-import { auditMetadataPreview, shortEntityId } from '../../lib/audit';
+import { shortEntityId } from '../../lib/audit';
 import { formatAuditTime } from '../../lib/format';
 import type { AdminAuditRow } from '../../types/audit';
 import { AuditActorAvatar } from './AuditActorAvatar';
@@ -41,7 +41,6 @@ export function AuditCardList({
     <ul className="flex w-full flex-col gap-3 md:hidden">
       {entries.map((entry) => {
         const isExpanded = entry.id === expandedId;
-        const preview = auditMetadataPreview(entry.metadata);
         const panelId = `audit-card-details-${entry.id}`;
 
         return (
@@ -90,9 +89,9 @@ export function AuditCardList({
                 </span>
               </div>
 
-              {preview ? (
+              {entry.metadataPreview ? (
                 <span className="line-clamp-2 text-small text-gray-500">
-                  {preview}
+                  {entry.metadataPreview}
                 </span>
               ) : (
                 <span className="truncate text-small text-gray-400">
@@ -102,7 +101,7 @@ export function AuditCardList({
             </button>
 
             {isExpanded ? (
-              <div id={panelId} className="border-t border-gray-200 p-4">
+              <div id={panelId} className="border-t border-gray-200 bg-gray-50 p-4">
                 <AuditDetails entry={entry} />
               </div>
             ) : null}

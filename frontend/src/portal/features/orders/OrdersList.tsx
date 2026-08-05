@@ -1,11 +1,22 @@
-import type { KeyboardEvent, MouseEvent } from 'react';
+import { Fragment } from 'react';
 import { ChevronDown, PackageOpen } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 
+import {
+  DetailRow,
+  ExpandChevron,
+  ExpandChevronCell,
+  detailPanelId,
+  expandRowProps,
+  expandedRowClass,
+  stopRowToggle,
+  useExpandedRow,
+} from '../../components/ExpandableRow';
 import { OrderStatusChip } from '../dashboard/OrderStatusChip';
 import { formatOrderDate } from '../../lib/format';
 import type { Order } from '../../types/orders';
 import { OrderRowAction } from './OrderRowAction';
+import { OrderRowDetails } from './OrderRowDetails';
 
 /*
  * Orders list — three presentations of one list, swapped by breakpoint (a table
@@ -16,13 +27,16 @@ import { OrderRowAction } from './OrderRowAction';
  *                   drops the standalone ORDER ID column
  *   - mobile:       one card per order, header + meta + full-width action
  *
- * The whole row opens the order. The design only draws the trailing button, but
- * a list of records where the record itself is inert is a list people click at
- * and nothing happens — and it left an order reachable only through one small
- * target. The service name is a real anchor inside the row, so the destination
- * can be opened in a new tab; the row is the convenience layer over it, not the
- * only way in. The row is a keyboard target too — `useRowProps` gives it a tab
- * stop and Enter/Space activation, so the enlarged target is not pointer-only.
+ * The whole row EXPANDS. The design only draws the trailing button, but a list
+ * of records where the record itself is inert is a list people click at and
+ * nothing happens — and "where has my order got to" is answerable in place
+ * rather than by a page load. The panel carries the current stage, what the
+ * customer told us, and what has been filed, fetched when the row is opened
+ * (OrderRowDetails); one row is open at a time. The service name and the
+ * trailing action are still real links, so the order can be opened in a new
+ * tab, and they stop their own clicks. The row is a keyboard target too — it is
+ * a tab stop that Enter/Space toggles, so the enlarged target is not
+ * pointer-only.
  *
  * The DATE SUBMITTED header carries the design's sort affordance (highlighted
  * label + chevron). Sorting is a data concern the backend owns, so the header
@@ -52,51 +66,6 @@ type OrdersListProps = {
 };
 
 export const orderDetailPath = (orderId: string) => `/app/orders/${orderId}`;
-
-/*
- * A click anywhere on the row opens it, with two exceptions:
- *   - a click that ends a text selection is someone reading a reference, not
- *     navigating
- *   - a click inside the action cell belongs to that control, which stops the
- *     event itself
- *
- * Enter/Space on the focused row does the same. The keydown only fires when the
- * row itself is focused — a key press inside the service link or the action
- * control belongs to that control and must not navigate twice.
- *
- * No `role` is set on the row: `role="button"`/`role="link"` may not contain
- * interactive descendants (every row holds at least two), and on a `<tr>` it
- * would drop the row out of the table's structure. The element keeps its native
- * role and gains the behaviour.
- */
-function useRowProps() {
-  const navigate = useNavigate();
-
-  const openOrder = (orderId: string) => {
-    if (window.getSelection()?.toString()) return;
-    navigate(orderDetailPath(orderId));
-  };
-
-  return (orderId: string) => ({
-    tabIndex: 0,
-    onClick: () => openOrder(orderId),
-    onKeyDown: (event: KeyboardEvent<HTMLElement>) => {
-      if (event.target !== event.currentTarget) return;
-      if (event.key !== 'Enter' && event.key !== ' ') return;
-      event.preventDefault();
-      openOrder(orderId);
-    },
-  });
-}
-
-// The trailing control is a link of its own; without this its click would also
-// run the row handler and both would navigate.
-const stopRowClick = (event: MouseEvent) => event.stopPropagation();
-
-// Inset — a row sits flush against its neighbours, so an outward offset would be
-// clipped or overlap the row above.
-const ROW_FOCUS_CLASS =
-  'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary';
 
 function EmptyState() {
   return (
@@ -140,7 +109,7 @@ export function OrdersList({
 }: OrdersListProps) {
   const isEmpty = orders.length === 0;
   const cardOrders = mobileOrders ?? orders;
-  const rowProps = useRowProps();
+  const { expandedId, toggle } = useExpandedRow();
 
   return (
     <>
@@ -151,32 +120,52 @@ export function OrdersList({
             <EmptyState />
           </li>
         ) : (
-          cardOrders.map((order) => (
-            <li
-              key={order.id}
-              {...rowProps(order.id)}
-              className={`flex cursor-pointer flex-col gap-3 rounded-input border border-gray-300 bg-white p-4 transition-colors active:bg-gray-50 ${ROW_FOCUS_CLASS}`}
-            >
-              <div className="flex items-start gap-2">
-                <Link
-                  to={orderDetailPath(order.id)}
-                  onClick={stopRowClick}
-                  className="min-w-0 flex-1 text-body font-semibold text-text"
+          cardOrders.map((order) => {
+            const isExpanded = order.id === expandedId;
+            const panelId = detailPanelId('order-card', order.id);
+
+            return (
+              <li
+                key={order.id}
+                className="flex flex-col gap-3 rounded-input border border-gray-300 bg-white p-4"
+              >
+                <button
+                  type="button"
+                  onClick={() => toggle(order.id)}
+                  aria-expanded={isExpanded}
+                  aria-controls={panelId}
+                  className="flex flex-col gap-3 rounded-input text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                 >
-                  {order.serviceName}
-                </Link>
-                <OrderStatusChip status={order.status} />
-              </div>
+                  <span className="flex items-start gap-2">
+                    <span className="min-w-0 flex-1 text-body font-semibold text-text">
+                      {order.serviceName}
+                    </span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      <OrderStatusChip status={order.status} />
+                      <ExpandChevron isExpanded={isExpanded} />
+                    </span>
+                  </span>
 
-              <p className="text-small text-gray-500">
-                #{order.reference} · {formatOrderDate(order.submittedAt)}
-              </p>
+                  <span className="block text-small text-gray-500">
+                    #{order.reference} · {formatOrderDate(order.submittedAt)}
+                  </span>
+                </button>
 
-              <div onClick={stopRowClick}>
-                <OrderRowAction order={order} fullWidth />
-              </div>
-            </li>
-          ))
+                {isExpanded ? (
+                  <div id={panelId} onClick={stopRowToggle}>
+                    <OrderRowDetails
+                      orderId={order.id}
+                      to={orderDetailPath(order.id)}
+                    />
+                  </div>
+                ) : null}
+
+                <div>
+                  <OrderRowAction order={order} fullWidth />
+                </div>
+              </li>
+            );
+          })
         )}
       </ul>
 
@@ -203,9 +192,12 @@ export function OrdersList({
                 </th>
                 <th
                   scope="col"
-                  className="w-[9.375rem] px-0 pr-4 text-right lg:w-[10.625rem] lg:pr-6"
+                  className="w-[9.375rem] px-0 pr-3 text-right lg:w-[10.625rem]"
                 >
                   Action
+                </th>
+                <th scope="col" className="w-[4rem] pr-4 lg:pr-6">
+                  <span className="sr-only">Details</span>
                 </th>
               </tr>
             </thead>
@@ -213,21 +205,30 @@ export function OrdersList({
             <tbody>
               {isEmpty ? (
                 <tr>
-                  <td colSpan={5} className="py-0">
+                  <td colSpan={6} className="py-0">
                     <EmptyState />
                   </td>
                 </tr>
               ) : (
-                orders.map((order) => (
+                orders.map((order) => {
+                  const isExpanded = order.id === expandedId;
+                  const panelId = detailPanelId('order', order.id);
+
+                  return (
+                  <Fragment key={order.id}>
                   <tr
-                    key={order.id}
-                    {...rowProps(order.id)}
-                    className={`h-16 cursor-pointer transition-colors hover:bg-gray-50 active:bg-gray-100 lg:h-table-row ${ROW_FOCUS_CLASS}`}
+                    {...expandRowProps({
+                      isExpanded,
+                      panelId,
+                      onToggle: () => toggle(order.id),
+                      label: `${isExpanded ? 'Hide' : 'Show'} details for ${order.serviceName}`,
+                    })}
+                    className={`h-16 lg:h-table-row ${expandedRowClass(isExpanded)}`}
                   >
                     <td className="min-w-0 px-4 lg:px-6">
                       <Link
                         to={orderDetailPath(order.id)}
-                        onClick={stopRowClick}
+                        onClick={stopRowToggle}
                         title={order.serviceName}
                         className="block truncate font-semibold"
                       >
@@ -254,13 +255,26 @@ export function OrdersList({
                       <OrderStatusChip status={order.status} />
                     </td>
 
-                    <td className="pr-0 text-right lg:pr-6">
-                      <div className="flex justify-end" onClick={stopRowClick}>
+                    <td className="pr-3 text-right">
+                      <div className="flex justify-end" onClick={stopRowToggle}>
                         <OrderRowAction order={order} />
                       </div>
                     </td>
+
+                    <ExpandChevronCell isExpanded={isExpanded} />
                   </tr>
-                ))
+
+                  {isExpanded ? (
+                    <DetailRow panelId={panelId} colSpan={6}>
+                      <OrderRowDetails
+                        orderId={order.id}
+                        to={orderDetailPath(order.id)}
+                      />
+                    </DetailRow>
+                  ) : null}
+                  </Fragment>
+                  );
+                })
               )}
             </tbody>
           </table>
