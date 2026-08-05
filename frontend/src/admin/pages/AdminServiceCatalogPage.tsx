@@ -2,7 +2,9 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { AdminLayout } from '../components/AdminLayout';
+import { ConfirmDeleteDialog } from '../components/ConfirmDeleteDialog';
 import { DataErrorState } from '../components/DataErrorState';
+import { SelectionBar } from '../components/SelectionBar';
 import {
   CatalogCardList,
   CatalogEmptyState,
@@ -14,6 +16,7 @@ import {
   useCreateCatalogService,
   useDeleteCatalogService,
 } from '../features/catalog';
+import { useBulkDelete } from '../features/trash';
 import { useAdminShell } from '../hooks/useAdminShell';
 import type { CatalogServiceRow, ServiceWritePayload } from '../types/catalog';
 import { ApiError } from '@/services/api';
@@ -60,6 +63,17 @@ export function AdminServiceCatalogPage() {
     () => services.data?.pages.flatMap((page) => page.rows) ?? [],
     [services.data],
   );
+
+  /*
+   * Selecting several services and deleting them together. The per-row Delete
+   * beside Manage stays — it is the ordinary case and its inline confirmation is
+   * lighter than a modal — and both paths now run through the same endpoint, so
+   * a service that has been ordered is refused identically either way.
+   */
+  const bulk = useBulkDelete({
+    entityType: 'service',
+    visibleIds: rows.map((row) => row.id),
+  });
 
   const openCreate = () => {
     createService.reset();
@@ -149,6 +163,17 @@ export function AdminServiceCatalogPage() {
             </div>
           ) : (
             <>
+              {bulk.canDelete ? (
+                <SelectionBar
+                  count={bulk.selection.count}
+                  noun="services"
+                  singularNoun="service"
+                  onDelete={bulk.openDialog}
+                  onClear={bulk.selection.clear}
+                  isDeleting={bulk.isDeleting}
+                />
+              ) : null}
+
               {/* Mobile — cards on the page background, no surrounding frame. */}
               <CatalogCardList
                 rows={rows}
@@ -164,6 +189,8 @@ export function AdminServiceCatalogPage() {
                   onManage={openManage}
                   onDelete={handleDelete}
                   deletingId={deletingId}
+                  selection={bulk.selection}
+                  selectable={bulk.canDelete}
                 />
               </div>
 
@@ -194,6 +221,18 @@ export function AdminServiceCatalogPage() {
         error={createService.error}
         onSubmit={handleSubmit}
         onClose={closeForm}
+      />
+
+      <ConfirmDeleteDialog
+        open={bulk.isDialogOpen}
+        count={bulk.selection.count}
+        singularNoun="service"
+        pluralNoun="services"
+        retentionDays={bulk.retentionDays}
+        isDeleting={bulk.isDeleting}
+        error={bulk.error}
+        onConfirm={bulk.confirm}
+        onClose={bulk.closeDialog}
       />
     </AdminLayout>
   );

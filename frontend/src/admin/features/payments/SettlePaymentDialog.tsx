@@ -5,6 +5,7 @@ import { ApiError } from '@/services/api';
 import { FormDialog } from '../../components/FormDialog';
 import { formatOrderDate } from '../../lib/format';
 import type { SettlementRow } from '../../types/payments';
+import { useAdminSettlement } from './queries';
 
 /*
  * Confirming that money we cannot see arrived.
@@ -43,6 +44,56 @@ function todayLocal(): string {
   const month = String(now.getMonth() + 1).padStart(2, '0');
   const day = String(now.getDate()).padStart(2, '0');
   return `${now.getFullYear()}-${month}-${day}`;
+}
+
+/*
+ * The instruction card as the customer saw it, frozen at intent time.
+ *
+ * Its own component because it FETCHES: the queue's rows no longer carry the
+ * snapshot (it is a whole rendered details block per wire, and the list was
+ * shipping one for every row), so it is read per payment. Rendered only while
+ * the dialog is open, and usually already cached — a settler reaches this
+ * dialog from the row they just expanded, which asked for the same record.
+ *
+ * A failed read is silent here rather than an error block: this is a
+ * cross-check, and the amount, customer, and reference above it are the facts
+ * the confirmation actually turns on.
+ */
+function WireInstructions({ payment }: { payment: SettlementRow }) {
+  const detail = useAdminSettlement(payment.id);
+  const instructions = detail.data?.instructions ?? [];
+
+  if (detail.isPending) {
+    return (
+      <div
+        aria-hidden="true"
+        className="h-20 w-full animate-pulse rounded-card bg-gray-200"
+      />
+    );
+  }
+
+  if (instructions.length === 0) return null;
+
+  return (
+    <div className="flex flex-col gap-2 rounded-card border border-gray-200 p-3.5">
+      <p className="text-caption font-semibold uppercase tracking-[0.4px] text-gray-500">
+        {payment.accountLabel ?? 'Details the customer was shown'}
+      </p>
+      <dl className="flex flex-col gap-1.5">
+        {instructions.map((field, index) => (
+          <div
+            key={`${field.label}-${index}`}
+            className="flex items-baseline justify-between gap-3"
+          >
+            <dt className="shrink-0 text-caption text-gray-500">{field.label}</dt>
+            <dd className="min-w-0 break-all text-right font-mono text-small text-text-secondary">
+              {field.value}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
 }
 
 type SettlePaymentDialogProps = {
@@ -163,28 +214,7 @@ export function SettlePaymentDialog({
 
         {/* What the customer was told to send to. A settler checking a statement
             needs the account beside the amount, not one screen away. */}
-        {payment.instructions.length > 0 ? (
-          <div className="flex flex-col gap-2 rounded-card border border-gray-200 p-3.5">
-            <p className="text-caption font-semibold uppercase tracking-[0.4px] text-gray-500">
-              {payment.accountLabel ?? 'Details the customer was shown'}
-            </p>
-            <dl className="flex flex-col gap-1.5">
-              {payment.instructions.map((field, index) => (
-                <div
-                  key={`${field.label}-${index}`}
-                  className="flex items-baseline justify-between gap-3"
-                >
-                  <dt className="shrink-0 text-caption text-gray-500">
-                    {field.label}
-                  </dt>
-                  <dd className="min-w-0 break-all text-right font-mono text-small text-text-secondary">
-                    {field.value}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          </div>
-        ) : null}
+        <WireInstructions payment={payment} />
 
         <div className="flex flex-col gap-1.5">
           <label htmlFor="settle-reference" className="text-small font-medium text-text">

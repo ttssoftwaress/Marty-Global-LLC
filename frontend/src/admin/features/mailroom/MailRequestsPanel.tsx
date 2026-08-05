@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react';
 import { Inbox } from 'lucide-react';
 
+import { ConfirmDeleteDialog } from '../../components/ConfirmDeleteDialog';
+import { SelectionBar } from '../../components/SelectionBar';
+import { useBulkDelete } from '../trash';
 import { useCursorPageWindow } from '../../hooks/useCursorPageWindow';
 import { isRequestActionable } from '../../lib/mail-requests';
 import type { MailRequestFilter, MailRequestRow } from '../../types/mailroom';
@@ -117,6 +120,17 @@ export function MailRequestsPanel({ onOpen }: MailRequestsPanelProps) {
     resetKey: filter,
   });
 
+  /*
+   * A request is what the customer ASKED for, kept apart from the mail item
+   * itself — so deleting one here withdraws the ask and leaves the post alone,
+   * which is the distinction the two tabs already draw.
+   */
+  const bulk = useBulkDelete({
+    entityType: 'mail-request',
+    visibleIds: rows.map((row) => row.id),
+    resetKey: `${filter}|${page}`,
+  });
+
   // Tracked per row so claiming one request does not disable every other button.
   const processingId = processRequest.isPending
     ? (processRequest.variables ?? null)
@@ -173,6 +187,17 @@ export function MailRequestsPanel({ onOpen }: MailRequestsPanelProps) {
     <div className="flex w-full flex-col gap-4">
       <MailRequestFilters value={filter} onChange={setFilter} />
 
+      {bulk.canDelete ? (
+        <SelectionBar
+          count={bulk.selection.count}
+          noun="requests"
+          singularNoun="request"
+          onDelete={bulk.openDialog}
+          onClear={bulk.selection.clear}
+          isDeleting={bulk.isDeleting}
+        />
+      ) : null}
+
       {/*
        * The claim failing is not the operator's action failing — the panel is
        * open and the request can still be settled from it — so this reports what
@@ -213,6 +238,8 @@ export function MailRequestsPanel({ onOpen }: MailRequestsPanelProps) {
                 requests={rows}
                 processingId={processingId}
                 onOpen={onOpenRequest}
+                selection={bulk.selection}
+                selectable={bulk.canDelete}
               />
 
               <MailRequestsPagination
@@ -226,6 +253,18 @@ export function MailRequestsPanel({ onOpen }: MailRequestsPanelProps) {
           </>
         )}
       </div>
+
+      <ConfirmDeleteDialog
+        open={bulk.isDialogOpen}
+        count={bulk.selection.count}
+        singularNoun="request"
+        pluralNoun="requests"
+        retentionDays={bulk.retentionDays}
+        isDeleting={bulk.isDeleting}
+        error={bulk.error}
+        onConfirm={bulk.confirm}
+        onClose={bulk.closeDialog}
+      />
     </div>
   );
 }

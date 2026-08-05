@@ -26,6 +26,7 @@ import { adminRolesRouter } from './roles/roles.routes.js';
 import { adminSettingsRouter } from './settings/settings.routes.js';
 import { adminSupportRouter } from './support/support.routes.js';
 import { adminTeamRouter } from './team/team.routes.js';
+import { adminRecycleRouter, adminTrashRouter } from './trash/trash.routes.js';
 
 /*
  * The whole `/v1/admin` surface. Two guards apply to every route beneath it, so
@@ -144,5 +145,27 @@ router.use('/settings', adminSettingsRouter);
  * delegated without also handing over the power to change what it records.
  */
 router.use('/audit', adminAuditRouter);
+/*
+ * Trash & restore. Two mounts from one module, because the two halves are
+ * different grants (trash/trash.routes.ts explains why they cannot share one).
+ *
+ * `POST /deletions` is the single delete path for every admin table: it stamps
+ * `deletedAt`, soft-deletes whatever would otherwise be left pointing at the
+ * row, and files a restorable entry. The per-section delete endpoints that
+ * already existed — a service, a location, a carrier, a field, a role — now call
+ * the same service, so there is one set of rules and one bin rather than a hard
+ * delete here and a soft one there.
+ *
+ * Its own top-level path rather than a child of `/trash`, because the two are
+ * different grants: deleting is a write against the section a member is already
+ * working in (`data.delete` plus that section's area), while the bin is a screen
+ * of its own (`trash`). Nesting it would mean granting the bin to anyone who may
+ * tidy a queue. A noun rather than `/records/delete` for a duller reason — the
+ * delivery router already owns `/records`, and a mount that only works because
+ * the sibling in front of it happens not to match is a trap for the next route
+ * added there.
+ */
+router.use('/trash', adminTrashRouter);
+router.use('/deletions', adminRecycleRouter);
 
 export const adminRouter = router;

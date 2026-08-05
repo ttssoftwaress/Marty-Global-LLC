@@ -1,3 +1,16 @@
+import { Fragment } from 'react';
+
+import {
+  DetailRow,
+  ExpandChevronCell,
+  detailPanelId,
+  expandRowProps,
+  expandedRowClass,
+  stopRowToggle,
+  useExpandedRow,
+} from '../../components/ExpandableRow';
+import { RowCheckbox } from '../../components/RowCheckbox';
+import type { RowSelection } from '../../hooks/useRowSelection';
 import { formatOrderDate } from '../../lib/format';
 import type { MailRequestRow } from '../../types/mailroom';
 import { MailOpsCustomerAvatar } from './MailOpsCustomerAvatar';
@@ -6,6 +19,7 @@ import {
   MailRequestTypeBadge,
 } from './MailRequestBadges';
 import { MailRequestRowAction } from './MailRequestRowAction';
+import { MailRequestRowDetails } from './MailRequestRowDetails';
 
 /*
  * The pending-requests queue — the desktop and tablet presentation (mobile
@@ -30,27 +44,57 @@ import { MailRequestRowAction } from './MailRequestRowAction';
  * The design zebra-stripes the second row only, which reads as a hover state
  * rendered into the mockup rather than banding — the rows are plain white here
  * with a real hover tint instead (logged as a deviation).
+ *
+ * Clicking a row EXPANDS it rather than opening the processing slide-over. An
+ * operator working this queue usually needs to know what they are about to do —
+ * which envelope, opened or sealed, and for a forwarding the address it is
+ * going to — before committing to the form. The action button still opens the
+ * slide-over and stops its own click, so processing is one press away. The
+ * panel is fetched on expand, and one row is open at a time.
  */
 
 type MailRequestsTableProps = {
   requests: MailRequestRow[];
   processingId: string | null;
   onOpen: (request: MailRequestRow) => void;
+  selection: RowSelection;
+  // False when the signed-in member may not delete here — the column is dropped
+  // rather than drawn disabled, so nobody ticks rows they cannot act on.
+  selectable: boolean;
 };
 
 export function MailRequestsTable({
   requests,
   processingId,
   onOpen,
+  selection,
+  selectable,
 }: MailRequestsTableProps) {
+  const { expandedId, toggle } = useExpandedRow();
+
   return (
     <div className="table-scroll hidden md:block">
       <table className="data-table min-w-[42.5rem] table-fixed lg:min-w-[62rem]">
         <thead>
           <tr className="h-11 lg:h-12">
+            {selectable ? (
+              <th scope="col" className="w-10 pl-4 pr-2 lg:pl-6">
+                <RowCheckbox
+                  checked={selection.allVisibleSelected}
+                  indeterminate={selection.someVisibleSelected}
+                  onChange={selection.toggleAllVisible}
+                  label="Select all requests on this page"
+                />
+              </th>
+            ) : null}
+
             <th
               scope="col"
-              className="w-[8.75rem] pl-4 pr-3 lg:w-[13.75rem] lg:pl-6 lg:pr-4"
+              className={
+                selectable
+                  ? 'w-[8.75rem] pr-3 lg:w-[13.75rem] lg:pr-4'
+                  : 'w-[8.75rem] pl-4 pr-3 lg:w-[13.75rem] lg:pl-6 lg:pr-4'
+              }
             >
               Customer
             </th>
@@ -70,28 +114,43 @@ export function MailRequestsTable({
             </th>
             <th
               scope="col"
-              className="w-[5.5rem] pr-4 text-right lg:w-[8.25rem] lg:pr-6"
+              className="w-[5.5rem] pr-3 text-right lg:w-[8.25rem] lg:pr-4"
             >
               <span className="inline-block w-full text-right">Action</span>
+            </th>
+            <th scope="col" className="w-[4rem] pr-4 lg:pr-6">
+              <span className="sr-only">Details</span>
             </th>
           </tr>
         </thead>
 
         <tbody>
-          {/*
-           * The whole row opens the request, not just the button in the last
-           * column — the operator reads the row and expects to click it. The
-           * button stays as the explicit, keyboard-reachable target; this only
-           * widens where a pointer may land, so no keyboard handler is added
-           * here (it would duplicate the button in the tab order).
-           */}
-          {requests.map((request) => (
-            <tr
-              key={request.id}
-              onClick={() => onOpen(request)}
-              className="h-[3.25rem] cursor-pointer transition-colors hover:bg-gray-50 active:bg-gray-100 lg:h-table-row"
-            >
-              <td className="py-2 pl-4 pr-3 lg:pl-6 lg:pr-4">
+          {requests.map((request) => {
+            const isExpanded = request.id === expandedId;
+            const panelId = detailPanelId('mail-request', request.id);
+
+            return (
+              <Fragment key={request.id}>
+                <tr
+                  {...expandRowProps({
+                    isExpanded,
+                    panelId,
+                    onToggle: () => toggle(request.id),
+                    label: `${isExpanded ? 'Hide' : 'Show'} details for ${request.mailItem}`,
+                  })}
+                  className={`h-[3.25rem] lg:h-table-row ${expandedRowClass(isExpanded)}`}
+                >
+              {selectable ? (
+                <td className="py-2 pl-4 pr-2 lg:pl-6" onClick={stopRowToggle}>
+                  <RowCheckbox
+                    checked={selection.isSelected(request.id)}
+                    onChange={() => selection.toggle(request.id)}
+                    label={`Select the ${request.type} request for ${request.mailItem}`}
+                  />
+                </td>
+              ) : null}
+
+              <td className={`py-2 pr-3 lg:pr-4 ${selectable ? '' : 'pl-4 lg:pl-6'}`}>
                 <div className="flex items-center gap-2 lg:gap-2.5">
                   <MailOpsCustomerAvatar
                     id={request.customer.id}
@@ -147,7 +206,10 @@ export function MailRequestsTable({
                 />
               </td>
 
-              <td className="py-2 pl-2 pr-4 lg:pr-6">
+              <td
+                className="py-2 pl-2 pr-3 lg:pr-4"
+                onClick={stopRowToggle}
+              >
                 <div className="flex justify-end">
                   <MailRequestRowAction
                     request={request}
@@ -156,8 +218,21 @@ export function MailRequestsTable({
                   />
                 </div>
               </td>
-            </tr>
-          ))}
+
+                  <ExpandChevronCell
+                    isExpanded={isExpanded}
+                    className="py-2"
+                  />
+                </tr>
+
+                {isExpanded ? (
+                  <DetailRow panelId={panelId} colSpan={selectable ? 8 : 7}>
+                    <MailRequestRowDetails request={request} onOpen={onOpen} />
+                  </DetailRow>
+                ) : null}
+              </Fragment>
+            );
+          })}
         </tbody>
       </table>
     </div>

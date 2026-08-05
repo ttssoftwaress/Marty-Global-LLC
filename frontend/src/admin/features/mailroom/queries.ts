@@ -9,6 +9,7 @@ import { apiFetch } from '@/services/api';
 import type { ApiSuccess } from '@/types/api';
 import type {
   MailContentsDraft,
+  MailLogEntryDetail,
   MailLogFilters,
   MailLogPage,
   MailOpsRecentUpload,
@@ -327,5 +328,26 @@ export function useAdminMailLog(filters: MailLogFilters) {
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.nextCursor,
     placeholderData: (previous) => previous,
+  });
+}
+
+export const adminMailLogEntryKey = (entryId: string) =>
+  ['admin', 'mailroom', 'log', 'entry', entryId] as const;
+
+/*
+ * GET /v1/admin/mailroom/log/:entryId — one closed entry in full, for the log's
+ * expanded row.
+ *
+ * Called from inside the detail panel, which is only mounted while its row is
+ * open, so the item's state and its request history are fetched for the one
+ * entry somebody opened rather than for every row on the page.
+ */
+export function useAdminMailLogEntry(entryId: string) {
+  return useQuery({
+    queryKey: adminMailLogEntryKey(entryId),
+    queryFn: () =>
+      apiFetch<ApiSuccess<MailLogEntryDetail>>(
+        `/admin/mailroom/log/${entryId}`,
+      ).then((res) => res.data),
   });
 }

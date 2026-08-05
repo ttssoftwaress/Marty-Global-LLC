@@ -1,12 +1,22 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { ChevronDown, ChevronUp, Pencil, Trash2 } from 'lucide-react';
 
 import { ApiError } from '@/services/api';
+import {
+  DetailRow,
+  ExpandChevronCell,
+  detailPanelId,
+  expandRowProps,
+  expandedRowClass,
+  stopRowToggle,
+  useExpandedRow,
+} from '../../components/ExpandableRow';
 import { formatLocationUsage, moveInList } from '../../lib/settings';
 import type { AdminLocation } from '../../types/settings';
 import { ToggleSwitch } from '../catalog/detail/ToggleSwitch';
 import { LocationFormDialog } from './LocationFormDialog';
 import { ActiveChip, SettingsPanel, SettingsTh } from './SettingsPanel';
+import { LocationDetails } from './SettingsRowDetails';
 import {
   useAdminLocations,
   useCreateLocation,
@@ -45,6 +55,8 @@ export function LocationsPanel({ canWrite }: { canWrite: boolean }) {
   // Open when set: a location to edit, or `'new'` to add one. One flag rather
   // than two, so the two states cannot both be on.
   const [editing, setEditing] = useState<AdminLocation | 'new' | null>(null);
+
+  const { expandedId, toggle } = useExpandedRow();
 
   const rows = locations.data ?? [];
 
@@ -137,14 +149,30 @@ export function LocationsPanel({ canWrite }: { canWrite: boolean }) {
                 <SettingsTh>Used by</SettingsTh>
                 <SettingsTh>{canWrite ? 'Offered' : 'Status'}</SettingsTh>
                 <th className="w-px px-4" />
+                <th className="w-[4rem] px-4">
+                  <span className="sr-only">Details</span>
+                </th>
               </tr>
             </thead>
 
             <tbody>
-              {rows.map((location, index) => (
-                <tr key={location.code} className="hover:bg-gray-50">
+              {rows.map((location, index) => {
+                const isExpanded = location.code === expandedId;
+                const panelId = detailPanelId('location', location.code);
+
+                return (
+                <Fragment key={location.code}>
+                <tr
+                  {...expandRowProps({
+                    isExpanded,
+                    panelId,
+                    onToggle: () => toggle(location.code),
+                    label: `${isExpanded ? 'Hide' : 'Show'} what references ${location.label}`,
+                  })}
+                  className={expandedRowClass(isExpanded)}
+                >
                   {canWrite && (
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3" onClick={stopRowToggle}>
                       <ReorderButtons
                         label={location.label}
                         isFirst={index === 0}
@@ -174,7 +202,7 @@ export function LocationsPanel({ canWrite }: { canWrite: boolean }) {
                     {formatLocationUsage(location)}
                   </td>
 
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3" onClick={stopRowToggle}>
                     {canWrite ? (
                       <ToggleSwitch
                         checked={location.active}
@@ -187,7 +215,7 @@ export function LocationsPanel({ canWrite }: { canWrite: boolean }) {
                     )}
                   </td>
 
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3" onClick={stopRowToggle}>
                     {canWrite && (
                       <RowActions
                         name={location.label}
@@ -198,8 +226,18 @@ export function LocationsPanel({ canWrite }: { canWrite: boolean }) {
                       />
                     )}
                   </td>
+
+                  <ExpandChevronCell isExpanded={isExpanded} className="px-4" />
                 </tr>
-              ))}
+
+                {isExpanded ? (
+                  <DetailRow panelId={panelId} colSpan={canWrite ? 7 : 6}>
+                    <LocationDetails location={location} />
+                  </DetailRow>
+                ) : null}
+                </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>

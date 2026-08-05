@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
 
 import { AdminLayout } from '../components/AdminLayout';
+import { ConfirmDeleteDialog } from '../components/ConfirmDeleteDialog';
 import { DataErrorState } from '../components/DataErrorState';
+import { SelectionBar } from '../components/SelectionBar';
 import {
   CustomerCardList,
   CustomerRegionFilter,
@@ -15,6 +17,7 @@ import {
   useAdminCustomers,
   useAdminCustomersSummary,
 } from '../features/customers';
+import { useBulkDelete } from '../features/trash';
 import { useAdminShell } from '../hooks/useAdminShell';
 import { useCursorPageWindow } from '../hooks/useCursorPageWindow';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
@@ -120,6 +123,19 @@ export function AdminCustomersPage() {
     if (customers.hasNextPage) void customers.fetchNextPage();
   };
 
+  /*
+   * Deleting a customer is the widest delete in the portal — their orders,
+   * quotes, payments, mail rooms, and conversations go with them, or five other
+   * admin screens keep listing rows attached to somebody who is gone. The
+   * backend computes and records that reach; the confirmation dialog is where an
+   * admin is told about it before agreeing.
+   */
+  const bulk = useBulkDelete({
+    entityType: 'customer',
+    visibleIds: windowCustomers.map((customer) => customer.id),
+    resetKey: `${segment}|${region}|${debouncedSearch}|${page}`,
+  });
+
   const clearFilters = () => {
     setSegment('all');
     setRegion(ALL_REGIONS);
@@ -193,6 +209,17 @@ export function AdminCustomersPage() {
             />
           ) : (
             <>
+              {bulk.canDelete ? (
+                <SelectionBar
+                  count={bulk.selection.count}
+                  noun="customers"
+                  singularNoun="customer"
+                  onDelete={bulk.openDialog}
+                  onClear={bulk.selection.clear}
+                  isDeleting={bulk.isDeleting}
+                />
+              ) : null}
+
               {/* Mobile — cards on the page background, no surrounding frame. */}
               {isEmpty ? null : <CustomerCardList customers={loadedCustomers} />}
 
@@ -204,7 +231,11 @@ export function AdminCustomersPage() {
                     onClearFilters={clearFilters}
                   />
                 ) : (
-                  <CustomersTable customers={windowCustomers} />
+                  <CustomersTable
+                    customers={windowCustomers}
+                    selection={bulk.selection}
+                    selectable={bulk.canDelete}
+                  />
                 )}
               </div>
 
@@ -240,6 +271,18 @@ export function AdminCustomersPage() {
           )}
         </div>
       </div>
+
+      <ConfirmDeleteDialog
+        open={bulk.isDialogOpen}
+        count={bulk.selection.count}
+        singularNoun="customer"
+        pluralNoun="customers"
+        retentionDays={bulk.retentionDays}
+        isDeleting={bulk.isDeleting}
+        error={bulk.error}
+        onConfirm={bulk.confirm}
+        onClose={bulk.closeDialog}
+      />
     </AdminLayout>
   );
 }

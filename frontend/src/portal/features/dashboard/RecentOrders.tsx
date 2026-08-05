@@ -1,6 +1,18 @@
+import { Fragment } from 'react';
 import { Link } from 'react-router-dom';
 
+import {
+  DetailRow,
+  ExpandChevron,
+  ExpandChevronCell,
+  detailPanelId,
+  expandRowProps,
+  expandedRowClass,
+  stopRowToggle,
+  useExpandedRow,
+} from '../../components/ExpandableRow';
 import { formatOrderDate } from '../../lib/format';
+import { OrderRowDetails } from '../orders/OrderRowDetails';
 import type { DashboardOrder } from '../../types/dashboard';
 import { OrderStatusChip } from './OrderStatusChip';
 
@@ -16,6 +28,10 @@ import { OrderStatusChip } from './OrderStatusChip';
  *
  * The design shows a populated list only; the empty state is added here so a
  * new customer sees an explanation instead of a bare card.
+ *
+ * A row opens in place, the same as the orders list it summarises — the two
+ * show the same records, so they must not disagree about what clicking one
+ * does. The panel is fetched on expand and one row is open at a time.
  */
 
 type RecentOrdersProps = {
@@ -41,7 +57,10 @@ function SectionLink() {
   );
 }
 
+const orderHref = (orderId: string) => `/app/orders/${orderId}`;
+
 export function RecentOrders({ orders }: RecentOrdersProps) {
+  const { expandedId, toggle } = useExpandedRow();
   const isEmpty = orders.length === 0;
 
   return (
@@ -61,28 +80,48 @@ export function RecentOrders({ orders }: RecentOrdersProps) {
           </div>
         ) : (
           <ul className="flex flex-col gap-2">
-            {orders.map((order) => (
-              <li
-                key={order.id}
-                className="rounded-xl border border-gray-200 bg-white p-4"
-              >
-                <Link
-                  to={`/app/orders/${order.id}`}
-                  className="flex items-start justify-between gap-3"
-                >
-                  <span className="flex min-w-0 flex-1 flex-col gap-1">
-                    <span className="truncate text-body font-semibold text-text">
-                      {order.serviceName}
-                    </span>
-                    <span className="text-small text-gray-500">
-                      #{order.reference} · {formatOrderDate(order.submittedAt)}
-                    </span>
-                  </span>
+            {orders.map((order) => {
+              const isExpanded = order.id === expandedId;
+              const panelId = detailPanelId('recent-order-card', order.id);
 
-                  <OrderStatusChip status={order.status} />
-                </Link>
-              </li>
-            ))}
+              return (
+                <li
+                  key={order.id}
+                  className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-4"
+                >
+                  <button
+                    type="button"
+                    onClick={() => toggle(order.id)}
+                    aria-expanded={isExpanded}
+                    aria-controls={panelId}
+                    className="flex items-start justify-between gap-3 rounded-input text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                  >
+                    <span className="flex min-w-0 flex-1 flex-col gap-1">
+                      <span className="truncate text-body font-semibold text-text">
+                        {order.serviceName}
+                      </span>
+                      <span className="text-small text-gray-500">
+                        #{order.reference} · {formatOrderDate(order.submittedAt)}
+                      </span>
+                    </span>
+
+                    <span className="flex shrink-0 items-center gap-2">
+                      <OrderStatusChip status={order.status} />
+                      <ExpandChevron isExpanded={isExpanded} />
+                    </span>
+                  </button>
+
+                  {isExpanded ? (
+                    <div id={panelId} onClick={stopRowToggle}>
+                      <OrderRowDetails
+                        orderId={order.id}
+                        to={orderHref(order.id)}
+                      />
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>
@@ -115,18 +154,35 @@ export function RecentOrders({ orders }: RecentOrdersProps) {
                   >
                     Submitted
                   </th>
-                  <th scope="col" className="h-12 w-[8.75rem] pr-5">
+                  <th scope="col" className="h-12 w-[8.75rem] pr-3">
                     Status
+                  </th>
+                  <th scope="col" className="h-12 w-[4rem] pr-5">
+                    <span className="sr-only">Details</span>
                   </th>
                 </tr>
               </thead>
 
               <tbody>
-                {orders.map((order) => (
-                  <tr key={order.id} className="h-[3.75rem] lg:h-table-row">
+                {orders.map((order) => {
+                  const isExpanded = order.id === expandedId;
+                  const panelId = detailPanelId('recent-order', order.id);
+
+                  return (
+                  <Fragment key={order.id}>
+                  <tr
+                    {...expandRowProps({
+                      isExpanded,
+                      panelId,
+                      onToggle: () => toggle(order.id),
+                      label: `${isExpanded ? 'Hide' : 'Show'} details for ${order.serviceName}`,
+                    })}
+                    className={`h-[3.75rem] lg:h-table-row ${expandedRowClass(isExpanded)}`}
+                  >
                     <td className="min-w-0 px-5">
                       <Link
-                        to={`/app/orders/${order.id}`}
+                        to={orderHref(order.id)}
+                        onClick={stopRowToggle}
                         className="flex min-w-0 flex-col gap-0.5 lg:gap-0"
                       >
                         <span
@@ -151,11 +207,24 @@ export function RecentOrders({ orders }: RecentOrdersProps) {
                       {formatOrderDate(order.submittedAt)}
                     </td>
 
-                    <td className="pr-5">
+                    <td className="pr-3">
                       <OrderStatusChip status={order.status} />
                     </td>
+
+                    <ExpandChevronCell isExpanded={isExpanded} className="pr-5" />
                   </tr>
-                ))}
+
+                  {isExpanded ? (
+                    <DetailRow panelId={panelId} colSpan={5}>
+                      <OrderRowDetails
+                        orderId={order.id}
+                        to={orderHref(order.id)}
+                      />
+                    </DetailRow>
+                  ) : null}
+                  </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>

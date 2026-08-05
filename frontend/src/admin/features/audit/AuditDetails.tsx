@@ -1,12 +1,23 @@
-import type { ReactNode } from 'react';
-
+import {
+  DetailField,
+  DetailGrid,
+  DetailPanel,
+  DetailSection,
+} from '../../components/ExpandableRow';
 import { auditMetadataEntries } from '../../lib/audit';
 import type { AdminAuditRow } from '../../types/audit';
+import { useAdminAuditEntry } from './queries';
 
 /*
  * The expanded panel under an audit row — everything the row itself does not
- * have space for: the raw action verb, the full entity id, the caller's IP, and
- * every metadata value.
+ * carry: the raw action verb, the full entity id, the caller's IP, and every
+ * metadata value.
+ *
+ * It FETCHES, and that is the point. The list deliberately no longer ships the
+ * metadata blob (the one column here with no bounded size), so this component
+ * asks for the one entry it is showing. It is only mounted while its row is
+ * open, so the request happens on expand — a page of fifty entries makes one
+ * call, for the entry somebody is actually reading.
  *
  * Shared by the table and the mobile cards so an entry reads identically at
  * every width — the one part of this screen where the two presentations must not
@@ -17,35 +28,29 @@ import type { AdminAuditRow } from '../../types/audit';
  * anyone querying the table directly will search on.
  */
 
-const TERM = 'text-caption font-semibold uppercase tracking-[0.6px] text-gray-500';
-const VALUE = 'break-all text-body text-text';
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1">
-      <dt className={TERM}>{label}</dt>
-      <dd className={VALUE}>{children}</dd>
-    </div>
-  );
-}
-
 export function AuditDetails({ entry }: { entry: AdminAuditRow }) {
-  const metadata = auditMetadataEntries(entry.metadata);
+  const detail = useAdminAuditEntry(entry.id);
+  const metadata = auditMetadataEntries(detail.data?.metadata);
 
   return (
-    <div className="flex flex-col gap-4 rounded-input bg-gray-50 p-4">
-      <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Field label="Action">
-          <code className="text-small text-text-secondary">{entry.action}</code>
-        </Field>
+    <DetailPanel
+      isPending={detail.isPending}
+      isError={detail.isError}
+      errorMessage="Could not load this entry’s details."
+      onRetry={() => void detail.refetch()}
+    >
+      <DetailGrid>
+        <DetailField label="Action" mono>
+          {entry.action}
+        </DetailField>
 
-        <Field label="Record">
+        <DetailField label="Record">
           {entry.entityType}
           <br />
           <code className="text-small text-text-secondary">{entry.entityId}</code>
-        </Field>
+        </DetailField>
 
-        <Field label="Actor">
+        <DetailField label="Actor">
           {entry.actor.name}
           {entry.actor.roleLabel ? (
             <span className="block text-small text-gray-500">
@@ -57,17 +62,14 @@ export function AuditDetails({ entry }: { entry: AdminAuditRow }) {
               {entry.actor.id}
             </code>
           ) : null}
-        </Field>
+        </DetailField>
 
         {/* Absent for anything a job wrote — a background processor has no
-            request and therefore no caller address. An em dash rather than a
-            hidden field, so the column does not shift between rows. */}
-        <Field label="IP address">{entry.ipAddress ?? '—'}</Field>
-      </dl>
+            request and therefore no caller address. */}
+        <DetailField label="IP address">{detail.data?.ipAddress}</DetailField>
+      </DetailGrid>
 
-      <div className="flex flex-col gap-2 border-t border-gray-200 pt-4">
-        <p className={TERM}>Details</p>
-
+      <DetailSection title="Details">
         {metadata.length === 0 ? (
           <p className="text-body text-gray-500">
             This entry recorded no additional detail.
@@ -84,7 +86,7 @@ export function AuditDetails({ entry }: { entry: AdminAuditRow }) {
             ))}
           </dl>
         )}
-      </div>
-    </div>
+      </DetailSection>
+    </DetailPanel>
   );
 }

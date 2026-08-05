@@ -51,5 +51,11 @@ router.post('/requests/:requestId/process', sensitiveRateLimit, controller.proce
 router.post('/requests/:requestId/resolve', sensitiveRateLimit, controller.resolveRequest);
 
 router.get('/log', apiRateLimit, controller.listLog);
+/*
+ * One closed entry in full — the item's own state and every request raised
+ * against it. Off the list because it is three joins deep and the log is the
+ * longest table in the admin area; only the row somebody opens pays for them.
+ */
+router.get('/log/:entryId', apiRateLimit, controller.getLogEntry);
 
 export const adminMailroomRouter = router;

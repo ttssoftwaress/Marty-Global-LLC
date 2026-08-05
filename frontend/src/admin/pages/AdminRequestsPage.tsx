@@ -2,11 +2,14 @@ import { useMemo, useState } from 'react';
 import { AlertTriangle, Loader2, Search } from 'lucide-react';
 
 import { AdminLayout } from '../components/AdminLayout';
+import { ConfirmDeleteDialog } from '../components/ConfirmDeleteDialog';
+import { SelectionBar } from '../components/SelectionBar';
 import {
   RequestQueueTable,
   useAdminRequests,
   type RequestQueueFilters,
 } from '../features/delivery';
+import { useBulkDelete } from '../features/trash';
 import { useAdminShell } from '../hooks/useAdminShell';
 import { REQUEST_STATUS_OPTIONS } from '../types/delivery';
 
@@ -76,6 +79,12 @@ export function AdminRequestsPage() {
 
   const total = query.data?.pages[0]?.totalResults ?? 0;
   const hasFilter = status !== 'all' || assignee !== 'all' || search.trim().length > 0;
+
+  const bulk = useBulkDelete({
+    entityType: 'service-request',
+    visibleIds: rows.map((row) => row.id),
+    resetKey: `${status}|${assignee}|${search}`,
+  });
 
   return (
     <AdminLayout {...shell}>
@@ -164,10 +173,21 @@ export function AdminRequestsPage() {
             <QueueError onRetry={() => void query.refetch()} />
           ) : (
             <>
+              <SelectionBar
+                count={bulk.selection.count}
+                noun="requests"
+                singularNoun="request"
+                onDelete={bulk.openDialog}
+                onClear={bulk.selection.clear}
+                isDeleting={bulk.isDeleting}
+              />
+
               <RequestQueueTable
                 rows={rows}
                 isLoading={query.isLoading}
                 hasFilter={hasFilter}
+                selection={bulk.selection}
+                selectable={bulk.canDelete}
               />
 
               {query.hasNextPage ? (
@@ -187,6 +207,18 @@ export function AdminRequestsPage() {
           )}
         </div>
       </div>
+
+      <ConfirmDeleteDialog
+        open={bulk.isDialogOpen}
+        count={bulk.selection.count}
+        singularNoun="request"
+        pluralNoun="requests"
+        retentionDays={bulk.retentionDays}
+        isDeleting={bulk.isDeleting}
+        error={bulk.error}
+        onConfirm={bulk.confirm}
+        onClose={bulk.closeDialog}
+      />
     </AdminLayout>
   );
 }

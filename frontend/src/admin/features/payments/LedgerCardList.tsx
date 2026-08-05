@@ -1,8 +1,15 @@
 import { Link } from 'react-router-dom';
 
+import {
+  ExpandChevron,
+  detailPanelId,
+  stopRowToggle,
+  useExpandedRow,
+} from '../../components/ExpandableRow';
 import { formatMoney, formatOrderDate } from '../../lib/format';
 import { formatPaymentMethod } from '../../lib/payments';
 import type { BillingLedgerRow } from '../../types/payments';
+import { LedgerDetails } from './LedgerDetails';
 import { LedgerRowAction } from './LedgerRowAction';
 import { PaymentStatusChip } from './PaymentStatusChip';
 
@@ -19,6 +26,11 @@ import { PaymentStatusChip } from './PaymentStatusChip';
  *
  * The card is not itself a link: the action is the row's single primary target
  * and the reference stays separately tappable, which keeps the text selectable.
+ *
+ * The card's summary block is a button that opens the same detail panel the
+ * table's rows open, so the invoice breakdown and the attempt history are
+ * reachable at every width — and fetched only when opened. One card is open at
+ * a time.
  */
 
 type LedgerCardListProps = {
@@ -29,48 +41,75 @@ type LedgerCardListProps = {
 };
 
 export function LedgerCardList({ rows, onAction, sendingId }: LedgerCardListProps) {
+  const { expandedId, toggle } = useExpandedRow();
+
   return (
     <ul className="flex w-full flex-col gap-3 md:hidden">
-      {rows.map((row) => (
-        <li
-          key={row.id}
-          className="flex flex-col gap-3 rounded-card border border-gray-200 bg-white p-4 shadow-sm-elevation"
-        >
-          <div className="flex items-center justify-between gap-2">
-            <Link
-              to={row.to}
-              className="shrink-0 text-body font-semibold text-primary hover:underline"
+      {rows.map((row) => {
+        const isExpanded = row.id === expandedId;
+        const panelId = detailPanelId('ledger-card', row.id);
+
+        return (
+          <li
+            key={row.id}
+            className="flex flex-col gap-3 rounded-card border border-gray-200 bg-white p-4 shadow-sm-elevation"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <Link
+                to={row.to}
+                className="shrink-0 text-body font-semibold text-primary hover:underline"
+              >
+                {row.reference}
+              </Link>
+              <PaymentStatusChip status={row.status} label={row.statusLabel} />
+            </div>
+
+            <button
+              type="button"
+              onClick={() => toggle(row.id)}
+              aria-expanded={isExpanded}
+              aria-controls={panelId}
+              className="flex flex-col gap-3 rounded-input text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
             >
-              {row.reference}
-            </Link>
-            <PaymentStatusChip status={row.status} label={row.statusLabel} />
-          </div>
+              <span className="text-small text-text-secondary">
+                {row.customer.name} · {row.service}
+              </span>
 
-          <p className="text-small text-text-secondary">
-            {row.customer.name} · {row.service}
-          </p>
+              <span className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                <span className="flex flex-col gap-1">
+                  <span className="text-body-lg font-bold text-text">
+                    {formatMoney(row.amount)}
+                  </span>
+                  <span className="text-caption text-gray-400">
+                    {formatOrderDate(row.issuedAt)} ·{' '}
+                    {formatPaymentMethod(row.method)}
+                  </span>
+                </span>
+                <ExpandChevron isExpanded={isExpanded} />
+              </span>
+            </button>
 
-          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-            <p className="text-body-lg font-bold text-text">{formatMoney(row.amount)}</p>
-            <p className="text-caption text-gray-400">
-              {formatOrderDate(row.issuedAt)} · {formatPaymentMethod(row.method)}
-            </p>
-          </div>
+            {isExpanded ? (
+              <div id={panelId} onClick={stopRowToggle}>
+                <LedgerDetails row={row} />
+              </div>
+            ) : null}
 
-          {row.action.kind === 'none' ? null : (
-            <>
-              <hr className="border-t border-gray-200" />
-              <LedgerRowAction
-                row={row}
-                onAction={onAction}
-                fullWidth
-                isSending={sendingId === row.id}
-                isBusy={Boolean(sendingId)}
-              />
-            </>
-          )}
-        </li>
-      ))}
+            {row.action.kind === 'none' ? null : (
+              <>
+                <hr className="border-t border-gray-200" />
+                <LedgerRowAction
+                  row={row}
+                  onAction={onAction}
+                  fullWidth
+                  isSending={sendingId === row.id}
+                  isBusy={Boolean(sendingId)}
+                />
+              </>
+            )}
+          </li>
+        );
+      })}
     </ul>
   );
 }

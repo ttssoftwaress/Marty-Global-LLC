@@ -4,8 +4,10 @@ import { apiFetch } from '@/services/api';
 import type { ApiSuccess } from '@/types/api';
 import type {
   BillingOverview,
+  BillingQuoteDetail,
   PaymentHistoryPage,
   PaymentHistoryRange,
+  PaymentRecordDetail,
 } from '../../types/billing';
 
 /*
@@ -63,5 +65,48 @@ export function usePaymentHistory(params: PaymentHistoryParams) {
     // Keep the previous range/search results on screen while the next load
     // resolves, so changing the filter doesn't flash the skeleton.
     placeholderData: (previous) => previous,
+  });
+}
+
+export const billingQuoteKey = (quoteId: string) =>
+  ['billing', 'quote', quoteId] as const;
+
+/*
+ * GET /v1/billing/quotes/:quoteId — one quote's itemised breakdown, for the
+ * expanded row.
+ *
+ * Called from inside the detail panel, which is only mounted while its row is
+ * open, so nothing is itemised until a customer opens a quote.
+ */
+export function useBillingQuote(quoteId: string) {
+  return useQuery({
+    queryKey: billingQuoteKey(quoteId),
+    queryFn: () =>
+      apiFetch<ApiSuccess<BillingQuoteDetail>>(`/billing/quotes/${quoteId}`).then(
+        (res) => res.data,
+      ),
+  });
+}
+
+export const paymentRecordKey = (paymentId: string) =>
+  ['billing', 'payment', paymentId] as const;
+
+/*
+ * GET /v1/billing/payments/:paymentId — one payment in full, including its
+ * presigned invoice link.
+ *
+ * The link is the reason this is per-row rather than per-page: a presigned URL
+ * is short-TTL, so it is minted when the customer opens the row they want it
+ * from. `staleTime: 0` keeps that honest — a panel re-opened much later
+ * re-fetches rather than handing back an expired link from cache.
+ */
+export function usePaymentRecord(paymentId: string) {
+  return useQuery({
+    queryKey: paymentRecordKey(paymentId),
+    queryFn: () =>
+      apiFetch<ApiSuccess<PaymentRecordDetail>>(
+        `/billing/payments/${paymentId}`,
+      ).then((res) => res.data),
+    staleTime: 0,
   });
 }

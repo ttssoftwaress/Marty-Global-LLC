@@ -10,16 +10,17 @@ import type { ApiSuccess } from '@/types/api';
 import type {
   BillingLedgerPage,
   BillingLedgerRow,
+  LedgerRowDetail,
+  SettlementDetail,
+  UnmatchedTransferDetail,
   PaymentStatusFilter,
   PaymentsSummary,
   RevenuePeriod,
   RevenueSeries,
   SettlementFilter,
   SettlementPage,
-  SettlementRow,
   UnmatchedTransferFilter,
   UnmatchedTransferPage,
-  UnmatchedTransferRow,
 } from '../../types/payments';
 
 /*
@@ -180,7 +181,7 @@ export function useResolveUnmatchedTransfer() {
 
   return useMutation({
     mutationFn: ({ transferId, note }: { transferId: string; note: string }) =>
-      apiFetch<ApiSuccess<UnmatchedTransferRow>>(
+      apiFetch<ApiSuccess<UnmatchedTransferDetail>>(
         `/admin/payments/unmatched/${transferId}/resolve`,
         { method: 'POST', body: JSON.stringify({ note }) },
       ).then((res) => res.data),
@@ -269,7 +270,7 @@ export function useSettlePayment() {
       note?: string;
       paidAt?: string;
     }) =>
-      apiFetch<ApiSuccess<SettlementRow>>(
+      apiFetch<ApiSuccess<SettlementDetail>>(
         `/admin/payments/settlements/${paymentId}/settle`,
         { method: 'POST', body: JSON.stringify(body) },
       ).then((res) => res.data),
@@ -287,10 +288,60 @@ export function useRejectSettlement() {
 
   return useMutation({
     mutationFn: ({ paymentId, reason }: { paymentId: string; reason: string }) =>
-      apiFetch<ApiSuccess<SettlementRow>>(
+      apiFetch<ApiSuccess<SettlementDetail>>(
         `/admin/payments/settlements/${paymentId}/reject`,
         { method: 'POST', body: JSON.stringify({ reason }) },
       ).then((res) => res.data),
     onSuccess: () => invalidateAfterSettlement(queryClient),
+  });
+}
+
+/* --- Expanded rows -------------------------------------------------------
+ *
+ * Three reads, one per table on this screen, each called from inside a detail
+ * panel that is only mounted while its row is open. That is what makes them
+ * lazy: a page of the ledger fetches the breakdown of the one quote somebody
+ * opened, not of all twenty.
+ */
+
+export const adminLedgerRowKey = (quoteId: string) =>
+  ['admin', 'payments', 'ledger', 'row', quoteId] as const;
+
+// GET /v1/admin/payments/ledger/:quoteId
+export function useAdminLedgerRow(quoteId: string) {
+  return useQuery({
+    queryKey: adminLedgerRowKey(quoteId),
+    queryFn: () =>
+      apiFetch<ApiSuccess<LedgerRowDetail>>(
+        `/admin/payments/ledger/${quoteId}`,
+      ).then((res) => res.data),
+  });
+}
+
+export const adminSettlementKey = (paymentId: string) =>
+  ['admin', 'payments', 'settlement', paymentId] as const;
+
+// GET /v1/admin/payments/settlements/:paymentId
+export function useAdminSettlement(paymentId: string) {
+  return useQuery({
+    queryKey: adminSettlementKey(paymentId),
+    queryFn: () =>
+      apiFetch<ApiSuccess<SettlementDetail>>(
+        `/admin/payments/settlements/${paymentId}`,
+      ).then((res) => res.data),
+  });
+}
+
+export const adminUnmatchedTransferKey = (transferId: string) =>
+  ['admin', 'payments', 'unmatched', 'row', transferId] as const;
+
+// GET /v1/admin/payments/unmatched/:transferId
+export function useAdminUnmatchedTransfer(transferId: string) {
+  return useQuery({
+    queryKey: adminUnmatchedTransferKey(transferId),
+    queryFn: () =>
+      apiFetch<ApiSuccess<UnmatchedTransferDetail>>(
+        `/admin/payments/unmatched/${transferId}`,
+      ).then((res) => res.data),
   });
 }

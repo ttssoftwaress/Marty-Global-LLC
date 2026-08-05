@@ -1,4 +1,9 @@
-import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 
 import { apiFetch } from '@/services/api';
 import type { ApiSuccess } from '@/types/api';
@@ -11,13 +16,25 @@ import type { ApiSuccess } from '@/types/api';
 
 export type AdminLeadStatus = 'all' | 'open' | 'handled';
 
+/*
+ * A row in the queue. The message is deliberately not on it — it is the
+ * record's one unbounded field, and a page of the queue would otherwise carry
+ * fifty of them to render a clamped line. `preview` is that line; the full text
+ * arrives with `AdminLeadDetail` when a row is opened.
+ */
 export type AdminLead = {
   id: string;
   name: string;
   email: string;
-  message: string;
+  preview: string;
   handled: boolean;
   createdAt: string;
+};
+
+/** The expanded row: the message in full, and when it was picked up. */
+export type AdminLeadDetail = AdminLead & {
+  message: string;
+  handledAt: string | null;
 };
 
 export type AdminLeadsPage = {
@@ -67,5 +84,23 @@ export function useSetLeadHandled() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin', 'leads'] });
     },
+  });
+}
+
+export const adminLeadKey = (id: string) => ['admin', 'leads', 'detail', id] as const;
+
+/*
+ * GET /v1/admin/leads/:id — one lead in full, for the expanded row.
+ *
+ * Called from inside the detail panel, which is only mounted while its row is
+ * open, so nothing is fetched until somebody opens a lead.
+ */
+export function useAdminLead(id: string) {
+  return useQuery({
+    queryKey: adminLeadKey(id),
+    queryFn: () =>
+      apiFetch<ApiSuccess<AdminLeadDetail>>(`/admin/leads/${id}`).then(
+        (res) => res.data,
+      ),
   });
 }

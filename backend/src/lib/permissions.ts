@@ -120,6 +120,37 @@ export const PERMISSION_AREAS = [
    * actor.
    */
   { key: 'audit', label: 'Audit log' },
+  /*
+   * The trash — the deleted-record bin every admin table sends rows to, and the
+   * screen they are restored from (`/admin/trash`).
+   *
+   * Its own area rather than folding into each section's grant, because it is
+   * one screen holding rows from all of them: a member with `mailroom` alone
+   * would otherwise get a bin listing customers, quotes, and staff accounts. The
+   * list is filtered to what the holder can see — an entry is shown only when
+   * they hold the area its entity belongs to — so the grant opens the screen and
+   * the per-entity areas decide what is on it.
+   *
+   * Restoring is this grant. Emptying the bin ahead of its retention window is
+   * NOT — that is the one irreversible write in the feature and it narrows again
+   * to `requireAdmin` on the route.
+   */
+  { key: 'trash', label: 'Trash & restore' },
+  /*
+   * Moving rows to the trash from an admin table.
+   *
+   * A write grant with no section behind it — the same shape as
+   * `payments.settle` and `customers.ban`, and separate for the same reason.
+   * Reading a queue is the ordinary work of nearly every admin section; removing
+   * rows from it is a different decision, and a bulk selection makes it a
+   * decision about many records at once. Holding an area lets a member work its
+   * records; this is what lets them take one out.
+   *
+   * It is checked IN ADDITION to the entity's own area, never instead of it: a
+   * member who cannot open the customer list cannot delete a customer by
+   * knowing an id.
+   */
+  { key: 'data.delete', label: 'Delete records to Trash' },
 ] as const;
 
 export type PermissionAreaKey = (typeof PERMISSION_AREAS)[number]['key'];
@@ -156,8 +187,15 @@ const SCOPE_SUFFIX = '.all';
  * absent on purpose — a service's price, the staff directory, and the location
  * list are org-wide records with no owner to scope them to, so an "All data"
  * switch there would be a control that changes nothing. `orders.assign`,
- * `support.assign`, `payments.settle`, and `customers.ban` are absent because
- * they are write grants, not sections.
+ * `support.assign`, `payments.settle`, `customers.ban`, and `data.delete` are
+ * absent because they are write grants, not sections.
+ *
+ * `trash` is absent for a third reason: it is a section, but its scope is
+ * already answered by the areas its entries belong to. The trash list shows an
+ * entry only when the reader holds that entity's area, and narrows further
+ * through that area's own `.all` — so a reviewer without `customers.all` sees
+ * deleted orders that are theirs and no customer rows at all. A `trash.all`
+ * switch would be a second answer to a question those grants already settle.
  */
 export const SCOPED_AREAS = [
   'orders',
@@ -443,6 +481,16 @@ export const SYSTEM_STAFF_ROLES: readonly SystemStaffRole[] = [
       // Overseeing the pipeline includes overseeing who acted on it. The only
       // other role holding this by default is super-admin.
       'audit',
+      /*
+       * Tidying the queues is operational work, and the undo has to sit with
+       * whoever does it — a deletion an operations manager can make but cannot
+       * take back would leave the recovery waiting on an administrator.
+       *
+       * The two travel together for that reason. Emptying the bin early is still
+       * refused: that route narrows to `requireAdmin` regardless of grants.
+       */
+      'data.delete',
+      'trash',
       // Overseeing the pipeline means seeing all of it — this role is the reason
       // the org-wide scope exists.
       ...ALL_SCOPES,

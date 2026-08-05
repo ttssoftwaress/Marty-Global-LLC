@@ -18,6 +18,19 @@ export async function listLeads(req: Request, res: Response, next: NextFunction)
   }
 }
 
+export async function getLead(req: Request, res: Response, next: NextFunction) {
+  try {
+    const id = req.params.id;
+    if (typeof id !== 'string' || !id) {
+      throw AppError.validation('Lead id is required');
+    }
+
+    res.json({ data: await service.getLead(id) });
+  } catch (error) {
+    next(error);
+  }
+}
+
 const setHandledSchema = z.object({ handled: z.boolean() });
 
 export async function setHandled(req: Request, res: Response, next: NextFunction) {

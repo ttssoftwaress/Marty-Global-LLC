@@ -1,7 +1,13 @@
 import { Fragment } from 'react';
-import { ChevronDown } from 'lucide-react';
 
-import { auditMetadataPreview, shortEntityId } from '../../lib/audit';
+import {
+  DetailRow,
+  ExpandChevronCell,
+  detailPanelId,
+  expandRowProps,
+  expandedRowClass,
+} from '../../components/ExpandableRow';
+import { shortEntityId } from '../../lib/audit';
 import { formatAuditTime } from '../../lib/format';
 import type { AdminAuditRow } from '../../types/audit';
 import { AuditActorAvatar } from './AuditActorAvatar';
@@ -17,7 +23,7 @@ import { AuditSeverityChip } from './AuditSeverityChip';
  *
  * The two links differ in how much they fit, which the same markup covers:
  *   - desktop (lg): five columns — timestamp, action, actor, record, and the
- *     expand control
+ *     expand affordance
  *   - tablet (md):  the record column drops out and folds into the expanded
  *     panel, since an entity type plus a cuid is the widest thing on the row and
  *     the least useful when collapsed
@@ -27,8 +33,12 @@ import { AuditSeverityChip } from './AuditSeverityChip';
  * row would mean losing the scan position on every one — the whole reason a
  * reader is here is to compare an entry against its neighbours.
  *
- * The expander is a real `<button>` carrying `aria-expanded` and controlling the
- * panel's id, so the state is announced rather than implied by a rotated chevron.
+ * The whole ROW is the toggle, not the chevron beside it. A row of scannable
+ * text with one 32px target at the end is a control most readers miss, and the
+ * enlarged target costs nothing here because an audit row holds no other
+ * controls. The chevron stays as the affordance and is `aria-hidden`; the row
+ * itself carries `aria-expanded` and controls the panel's id, so the state is
+ * announced rather than implied by a rotated glyph.
  */
 
 type AuditTableProps = {
@@ -67,17 +77,20 @@ export function AuditTable({ entries, expandedId, onToggle }: AuditTableProps) {
         <tbody>
           {entries.map((entry) => {
             const isExpanded = entry.id === expandedId;
-            const preview = auditMetadataPreview(entry.metadata);
-            const panelId = `audit-details-${entry.id}`;
+            const panelId = detailPanelId('audit', entry.id);
 
             return (
               // A row and its details panel are two `<tr>`s, so the key belongs
               // on the fragment holding both rather than on either one.
               <Fragment key={entry.id}>
                 <tr
-                  className={`transition-colors ${
-                    isExpanded ? 'bg-gray-50' : 'hover:bg-gray-50'
-                  }`}
+                  {...expandRowProps({
+                    isExpanded,
+                    panelId,
+                    onToggle: () => onToggle(entry.id),
+                    label: `${isExpanded ? 'Hide' : 'Show'} details for ${entry.actionLabel}`,
+                  })}
+                  className={expandedRowClass(isExpanded)}
                 >
                   <td className="py-3 pl-5 pr-4 align-top lg:pl-card">
                     <span className="block whitespace-nowrap pt-1 text-small tabular-nums text-text-secondary">
@@ -92,9 +105,9 @@ export function AuditTable({ entries, expandedId, onToggle }: AuditTableProps) {
                         label={entry.actionLabel}
                       />
 
-                      {preview ? (
+                      {entry.metadataPreview ? (
                         <span className="truncate text-small text-gray-500">
-                          {preview}
+                          {entry.metadataPreview}
                         </span>
                       ) : null}
                     </div>
@@ -128,36 +141,16 @@ export function AuditTable({ entries, expandedId, onToggle }: AuditTableProps) {
                     </div>
                   </td>
 
-                  <td className="py-3 pr-5 align-top lg:pr-card">
-                    <div className="flex justify-end pt-0.5">
-                      <button
-                        type="button"
-                        onClick={() => onToggle(entry.id)}
-                        aria-expanded={isExpanded}
-                        aria-controls={panelId}
-                        aria-label={`${isExpanded ? 'Hide' : 'Show'} details for ${entry.actionLabel}`}
-                        className="flex size-8 items-center justify-center rounded-control border border-gray-200 bg-white text-gray-500 transition-colors hover:bg-gray-50 hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                      >
-                        <ChevronDown
-                          className={`size-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                          strokeWidth={2}
-                          aria-hidden="true"
-                        />
-                      </button>
-                    </div>
-                  </td>
+                  <ExpandChevronCell
+                    isExpanded={isExpanded}
+                    className="align-top pr-5 lg:pr-card"
+                  />
                 </tr>
 
                 {isExpanded ? (
-                  <tr>
-                    <td
-                      id={panelId}
-                      colSpan={5}
-                      className="bg-gray-50 px-5 pb-4 pt-0 lg:px-card"
-                    >
-                      <AuditDetails entry={entry} />
-                    </td>
-                  </tr>
+                  <DetailRow panelId={panelId} colSpan={5}>
+                    <AuditDetails entry={entry} />
+                  </DetailRow>
                 ) : null}
               </Fragment>
             );

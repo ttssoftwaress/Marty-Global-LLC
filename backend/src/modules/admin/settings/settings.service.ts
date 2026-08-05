@@ -37,12 +37,34 @@ import type {
  *      hard delete). Deleting is offered only for a row nothing references at
  *      all, which is the genuine "added by mistake" case.
  *
+ *      That delete no longer lives in this file. Both tables now route through
+ *      `modules/admin/trash`, which soft-deletes the row and files a restorable
+ *      entry, and the two "nothing references it" rules moved to the `location`
+ *      and `carrier` descriptors in `trash.registry.ts` — the same sentences,
+ *      one copy each. What stayed here is `locationUsage` / `carrierUsage`,
+ *      because this screen prints those counts in its "Used by" column and
+ *      derives its `canDelete` flag from them.
+ *
  *   3. Order is a property of the list. Positions are rewritten as one complete
  *      sequence in one transaction — a partial payload is completed with the
  *      codes it omitted (`orderedCodes`) rather than renumbering a subset — so
  *      two admins reordering at once cannot interleave into a ranking neither of
  *      them chose, and no two rows end up sharing a position.
  */
+
+/*
+ * Rows not in the Trash. Spread into every read on this screen and into the two
+ * "does this code exist" checks that gate an edit.
+ *
+ * Deliberately absent from the two create paths: `code` is the primary key on
+ * both tables, so a trashed row still holds its code, and a create that filtered
+ * it out would fail on the unique constraint with a message naming nothing the
+ * admin can see. They look the row up unfiltered and say where it actually is.
+ *
+ * Also absent from `locationUsage` / `carrierUsage`: those answer "does anything
+ * point at this code", which a soft delete does not change.
+ */
+const LIVE = { deletedAt: null } as const;
 
 // --- Views ---------------------------------------------------------------
 
@@ -201,7 +223,10 @@ async function locationUsage(): Promise<Map<string, LocationUsage>> {
 
 export async function listLocations(): Promise<{ locations: LocationView[] }> {
   const [rows, usage] = await Promise.all([
-    prisma.region.findMany({ orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }] }),
+    prisma.region.findMany({
+      where: LIVE,
+      orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
+    }),
     locationUsage(),
   ]);
 
@@ -218,12 +243,26 @@ export async function createLocation(
 ): Promise<LocationView> {
   const existing = await prisma.region.findUnique({ where: { code: input.code } });
 
-  // A duplicate code is a conflict, not a silent merge: the admin is opening a
-  // jurisdiction that already exists and should be pointed at the row they have.
+  /*
+   * A duplicate code is a conflict, not a silent merge: the admin is opening a
+   * jurisdiction that already exists and should be pointed at the row they have.
+   *
+   * A trashed location still holds its code — `code` is the primary key and the
+   * row is only soft-deleted — so the check deliberately does NOT filter on
+   * `deletedAt`. It names the Trash instead of reporting a clash with a row the
+   * admin cannot see, because the two have different answers: one is "you
+   * already have this", the other is "restore it, or empty the Trash first".
+   * Reviving the trashed row here would be the worst option of the three — old
+   * data, wearing whatever labels this form just supplied.
+   */
   if (existing) {
-    throw AppError.conflict(
-      `A location with the code "${input.code}" already exists`,
-    );
+    throw existing.deletedAt
+      ? AppError.conflict(
+          `A location with the code "${input.code}" is in the Trash. Restore it, or delete it permanently, before creating another under the same code.`,
+        )
+      : AppError.conflict(
+          `A location with the code "${input.code}" already exists`,
+        );
   }
 
   const last = await prisma.region.findFirst({
@@ -257,7 +296,7 @@ export async function updateLocation(
   code: string,
   input: UpdateLocationInput,
 ): Promise<LocationView> {
-  const existing = await prisma.region.findUnique({ where: { code } });
+  const existing = await prisma.region.findFirst({ where: { code, ...LIVE } });
   if (!existing) throw AppError.notFound('Location not found');
 
   const region = await prisma.region.update({
@@ -287,45 +326,22 @@ export async function updateLocation(
 }
 
 /*
- * Remove a location outright. Only ever reaches the delete when nothing points
- * at it: a location an order was filed under is part of that filing's record, so
- * it is retired with `active: false` instead (rule 2 above).
+ * Deleting a location no longer lives here.
+ *
+ * It goes through `modules/admin/trash`, like every other admin table's delete:
+ * the row is soft-deleted, a restorable entry is filed, and the "nothing points
+ * at this" rule that used to sit in this function is now the `location`
+ * descriptor's guard in `trash.registry.ts` — same sentence, same three counts,
+ * one copy. `locationUsage` above still answers the list's "Used by" column and
+ * its `canDelete` flag, which is what that guard and this screen agree on.
  */
-export async function deleteLocation(
-  actor: AuthContext,
-  code: string,
-): Promise<{ code: string }> {
-  const existing = await prisma.region.findUnique({ where: { code } });
-  if (!existing) throw AppError.notFound('Location not found');
-
-  const usage = (await locationUsage()).get(code) ?? { ...NO_LOCATION_USAGE };
-  const references = usage.services + usage.pricingTiers + usage.orders;
-
-  if (references > 0) {
-    throw AppError.businessRule(
-      `"${existing.label}" is still referenced by ${references} record${references === 1 ? '' : 's'}, so it cannot be deleted. Turn it off instead — it stays on the records that use it and disappears from every picker.`,
-      { code, usage },
-    );
-  }
-
-  await prisma.region.delete({ where: { code } });
-
-  void record({
-    actor,
-    action: AuditAction.LOCATION_DELETED,
-    entityType: 'Region',
-    entityId: code,
-    metadata: { code },
-  });
-
-  return { code };
-}
 
 export async function reorderLocations(
   actor: AuthContext,
   input: ReorderLocationsInput,
 ): Promise<{ locations: LocationView[] }> {
   const known = await prisma.region.findMany({
+    where: LIVE,
     orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
     select: { code: true },
   });
@@ -386,6 +402,7 @@ async function carrierUsage(): Promise<Map<string, number>> {
 export async function listCarriers(): Promise<{ carriers: CarrierView[] }> {
   const [rows, usage] = await Promise.all([
     prisma.mailCarrier.findMany({
+      where: LIVE,
       orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
     }),
     carrierUsage(),
@@ -406,10 +423,17 @@ export async function createCarrier(
     where: { code: input.code },
   });
 
+  // Same rule as `createLocation` above, and for the same reason — a trashed
+  // carrier keeps its code, so the clash is real and the message has to say
+  // where the row actually is.
   if (existing) {
-    throw AppError.conflict(
-      `A carrier with the code "${input.code}" already exists`,
-    );
+    throw existing.deletedAt
+      ? AppError.conflict(
+          `A carrier with the code "${input.code}" is in the Trash. Restore it, or delete it permanently, before creating another under the same code.`,
+        )
+      : AppError.conflict(
+          `A carrier with the code "${input.code}" already exists`,
+        );
   }
 
   const last = await prisma.mailCarrier.findFirst({
@@ -442,7 +466,7 @@ export async function updateCarrier(
   code: string,
   input: UpdateCarrierInput,
 ): Promise<CarrierView> {
-  const existing = await prisma.mailCarrier.findUnique({ where: { code } });
+  const existing = await prisma.mailCarrier.findFirst({ where: { code, ...LIVE } });
   if (!existing) throw AppError.notFound('Carrier not found');
 
   const carrier = await prisma.mailCarrier.update({
@@ -467,45 +491,17 @@ export async function updateCarrier(
   return carrierView(carrier, { shipments });
 }
 
-export async function deleteCarrier(
-  actor: AuthContext,
-  code: string,
-): Promise<{ code: string }> {
-  const existing = await prisma.mailCarrier.findUnique({ where: { code } });
-  if (!existing) throw AppError.notFound('Carrier not found');
-
-  const shipments = (await carrierUsage()).get(code) ?? 0;
-
-  /*
-   * No foreign key would stop this — the carrier is stored as text — which is
-   * exactly why the check is here. Deleting a carrier parcels shipped with would
-   * leave those requests printing a bare code where a name used to be.
-   */
-  if (shipments > 0) {
-    throw AppError.businessRule(
-      `"${existing.label}" has shipped ${shipments} request${shipments === 1 ? '' : 's'}, so it cannot be deleted. Turn it off instead — past shipments keep its name and it disappears from the forwarding form.`,
-      { code, shipments },
-    );
-  }
-
-  await prisma.mailCarrier.delete({ where: { code } });
-
-  void record({
-    actor,
-    action: AuditAction.CARRIER_DELETED,
-    entityType: 'MailCarrier',
-    entityId: code,
-    metadata: { code },
-  });
-
-  return { code };
-}
+// Deleting a carrier goes through `modules/admin/trash`, exactly as a location
+// does — the "nothing has shipped with it" rule now lives on the `carrier`
+// descriptor there, and `carrierUsage` above still feeds this screen's shipment
+// count and its `canDelete` flag.
 
 export async function reorderCarriers(
   actor: AuthContext,
   input: ReorderCarriersInput,
 ): Promise<{ carriers: CarrierView[] }> {
   const known = await prisma.mailCarrier.findMany({
+    where: LIVE,
     orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
     select: { code: true },
   });

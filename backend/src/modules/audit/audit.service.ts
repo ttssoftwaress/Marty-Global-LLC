@@ -251,6 +251,32 @@ export const AuditAction = {
   ACCOUNT_BANNED: 'auth.account_banned',
   ACCOUNT_UNBANNED: 'auth.account_unbanned',
   SESSIONS_REVOKED: 'auth.sessions_revoked',
+  /*
+   * Trash & restore — the generic delete every admin table now routes through
+   * (modules/admin/trash).
+   *
+   * Three verbs rather than one, because they are three different decisions and
+   * only the third is irreversible. TRASHED is a row leaving every screen with
+   * a way back; RESTORED is that way back being taken; PURGED is the row ceasing
+   * to exist, and it is the entry that has to survive the record it describes —
+   * after a purge this trail is the only thing left that says the record was
+   * ever here.
+   *
+   * The metadata carries the entity type, the id, and how many rows the cascade
+   * took — never the label, which is a customer's name or a company's, and never
+   * any field off the record (AGENTS.md, Security & PII).
+   *
+   * PURGED is written by the nightly sweep with a null actor, and by an
+   * administrator emptying the bin early with theirs. The two are told apart by
+   * the actor, not by a fourth verb.
+   */
+  RECORD_TRASHED: 'trash.record_trashed',
+  RECORD_RESTORED: 'trash.record_restored',
+  RECORD_PURGED: 'trash.record_purged',
+  // How long a deletion stays reversible, and whether the sweep runs at all.
+  // Audited with the same weight as the payment settings: shortening the window
+  // decides when data an admin still thought recoverable stops being so.
+  TRASH_SETTINGS_UPDATED: 'settings.trash_settings_updated',
 } as const;
 
 export type AuditAction = (typeof AuditAction)[keyof typeof AuditAction];

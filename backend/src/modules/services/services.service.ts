@@ -284,6 +284,11 @@ async function loadRegistry(
   // Archived definitions are still resolved: a live service referencing one must
   // keep rendering it. Archiving removes a field from the PICKER, not from the
   // forms that already use it.
+  //
+  // Nor does the Trash, and for the same reason this stays unfiltered: a field
+  // can only be trashed when nothing references it, so a form reaching one is
+  // already impossible — and if it somehow were not, a filter here would drop the
+  // question silently, which is worse than rendering a retired one.
   const definitions = await prisma.fieldDefinition.findMany({
     where: { key: { in: keys } },
   });

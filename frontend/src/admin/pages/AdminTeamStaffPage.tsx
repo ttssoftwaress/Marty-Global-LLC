@@ -3,8 +3,10 @@ import { useNavigate } from 'react-router-dom';
 
 import { ApiError } from '@/services/api';
 import { AdminLayout } from '../components/AdminLayout';
+import { ConfirmDeleteDialog } from '../components/ConfirmDeleteDialog';
 import { DataErrorState } from '../components/DataErrorState';
 import { FormDialog } from '../components/FormDialog';
+import { SelectionBar } from '../components/SelectionBar';
 import {
   AddStaffForm,
   DeleteStaffDialog,
@@ -25,6 +27,7 @@ import {
   useUpdateTeamMember,
 } from '../features/team';
 import { RolesPanel } from '../features/roles';
+import { useBulkDelete } from '../features/trash';
 import { useAdminShell } from '../hooks/useAdminShell';
 import { useCursorPageWindow } from '../hooks/useCursorPageWindow';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
@@ -138,6 +141,23 @@ export function AdminTeamStaffPage() {
     isFetchingNextPage: team.isFetchingNextPage,
     fetchNextPage: team.fetchNextPage,
     resetKey: `${status}|${role}|${debouncedSearch}`,
+  });
+
+  /*
+   * Removing several staff accounts at once. `useBulkDelete` gates the tick
+   * column on `data.delete`, and the backend narrows further to an administrator
+   * for this entity — so a staff member with the grant still gets nothing here,
+   * which is why the bar and the column only appear once the delete would
+   * actually succeed.
+   *
+   * The three refusals are the backend's and are shown in the dialog: you cannot
+   * delete your own account, you cannot remove the last active admin, and an
+   * account that owns customer records is revoked rather than removed.
+   */
+  const bulk = useBulkDelete({
+    entityType: 'staff-member',
+    visibleIds: windowMembers.map((member) => member.id),
+    resetKey: `${status}|${role}|${debouncedSearch}|${page}`,
   });
 
   const onLoadMore = () => {
@@ -408,6 +428,17 @@ export function AdminTeamStaffPage() {
             />
           ) : (
             <>
+              {bulk.canDelete ? (
+                <SelectionBar
+                  count={bulk.selection.count}
+                  noun="staff accounts"
+                  singularNoun="staff account"
+                  onDelete={bulk.openDialog}
+                  onClear={bulk.selection.clear}
+                  isDeleting={bulk.isDeleting}
+                />
+              ) : null}
+
               {/* Mobile — cards on the page background, no surrounding frame. */}
               {isEmpty ? null : (
                 <TeamCardList
@@ -431,6 +462,8 @@ export function AdminTeamStaffPage() {
                     onEdit={onEdit}
                     onToggleActive={onToggleActive}
                     onDelete={setPendingDelete}
+                    selection={bulk.selection}
+                    selectable={bulk.canDelete}
                   />
                 )}
               </div>
@@ -551,6 +584,18 @@ export function AdminTeamStaffPage() {
         error={deleteError}
         onCancel={closeDeleteDialog}
         onConfirm={onConfirmDelete}
+      />
+
+      <ConfirmDeleteDialog
+        open={bulk.isDialogOpen}
+        count={bulk.selection.count}
+        singularNoun="staff account"
+        pluralNoun="staff accounts"
+        retentionDays={bulk.retentionDays}
+        isDeleting={bulk.isDeleting}
+        error={bulk.error}
+        onConfirm={bulk.confirm}
+        onClose={bulk.closeDialog}
       />
     </AdminLayout>
   );

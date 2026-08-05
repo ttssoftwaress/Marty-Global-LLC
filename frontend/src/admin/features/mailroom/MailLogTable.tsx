@@ -1,6 +1,20 @@
+import { Fragment } from 'react';
+
+import {
+  DetailRow,
+  ExpandChevronCell,
+  detailPanelId,
+  expandRowProps,
+  expandedRowClass,
+  stopRowToggle,
+  useExpandedRow,
+} from '../../components/ExpandableRow';
+import { RowCheckbox } from '../../components/RowCheckbox';
+import type { RowSelection } from '../../hooks/useRowSelection';
 import { formatOrderDate } from '../../lib/format';
 import type { MailLogRow } from '../../types/mailroom';
 import { MailLogActionBadge } from './MailLogActionBadge';
+import { MailLogDetails } from './MailLogDetails';
 import { MailOpsCustomerAvatar } from './MailOpsCustomerAvatar';
 
 /*
@@ -27,22 +41,53 @@ import { MailOpsCustomerAvatar } from './MailOpsCustomerAvatar';
  * The desktop link zebra-stripes alternate rows. That reads as banding rather
  * than a state, but it fights the hover tint every other admin table uses, so
  * the rows are plain white with a real hover tint here (logged as a deviation).
+ *
+ * Clicking a row opens the question the log is actually read to answer — why
+ * this post left the building: the item's own state, and every request the
+ * customer raised against it. Fetched on expand (MailLogDetails), one row open
+ * at a time. The View button keeps its own job and stops its own click.
  */
 
 type MailLogTableProps = {
   entries: MailLogRow[];
   onView: (entry: MailLogRow) => void;
+  selection: RowSelection;
+  // False when the signed-in member may not delete here — the column is dropped
+  // rather than drawn disabled, so nobody ticks rows they cannot act on.
+  selectable: boolean;
 };
 
-export function MailLogTable({ entries, onView }: MailLogTableProps) {
+export function MailLogTable({
+  entries,
+  onView,
+  selection,
+  selectable,
+}: MailLogTableProps) {
+  const { expandedId, toggle } = useExpandedRow();
+
   return (
     <div className="table-scroll hidden md:block">
       <table className="data-table min-w-[45rem] table-fixed lg:min-w-[60rem]">
         <thead>
           <tr className="h-12">
+            {selectable ? (
+              <th scope="col" className="w-10 pl-4 pr-2 lg:pl-5">
+                <RowCheckbox
+                  checked={selection.allVisibleSelected}
+                  indeterminate={selection.someVisibleSelected}
+                  onChange={selection.toggleAllVisible}
+                  label="Select all log entries on this page"
+                />
+              </th>
+            ) : null}
+
             <th
               scope="col"
-              className="w-[11.25rem] pl-4 pr-3 lg:w-[13.5rem] lg:pl-5 lg:pr-4"
+              className={
+                selectable
+                  ? 'w-[11.25rem] pr-3 lg:w-[13.5rem] lg:pr-4'
+                  : 'w-[11.25rem] pl-4 pr-3 lg:w-[13.5rem] lg:pl-5 lg:pr-4'
+              }
             >
               Customer
             </th>
@@ -72,20 +117,43 @@ export function MailLogTable({ entries, onView }: MailLogTableProps) {
 
             <th
               scope="col"
-              className="w-[5rem] pr-4 text-right lg:w-[6.25rem] lg:pr-5"
+              className="w-[5rem] pr-3 text-right lg:w-[6.25rem] lg:pr-4"
             >
               <span className="inline-block w-full text-right">Action</span>
+            </th>
+            <th scope="col" className="w-[4rem] pr-4 lg:pr-5">
+              <span className="sr-only">Details</span>
             </th>
           </tr>
         </thead>
 
         <tbody>
-          {entries.map((entry) => (
-            <tr
-              key={entry.id}
-              className="h-[3.75rem] transition-colors hover:bg-gray-50 lg:h-table-row"
-            >
-              <td className="py-2 pl-4 pr-3 lg:pl-5 lg:pr-4">
+          {entries.map((entry) => {
+            const isExpanded = entry.id === expandedId;
+            const panelId = detailPanelId('mail-log', entry.id);
+
+            return (
+              <Fragment key={entry.id}>
+                <tr
+                  {...expandRowProps({
+                    isExpanded,
+                    panelId,
+                    onToggle: () => toggle(entry.id),
+                    label: `${isExpanded ? 'Hide' : 'Show'} history for ${entry.mailItem}`,
+                  })}
+                  className={`h-[3.75rem] lg:h-table-row ${expandedRowClass(isExpanded)}`}
+                >
+              {selectable ? (
+                <td className="py-2 pl-4 pr-2 lg:pl-5" onClick={stopRowToggle}>
+                  <RowCheckbox
+                    checked={selection.isSelected(entry.id)}
+                    onChange={() => selection.toggle(entry.id)}
+                    label={`Select the log entry for ${entry.mailItem}`}
+                  />
+                </td>
+              ) : null}
+
+              <td className={`py-2 pr-3 lg:pr-4 ${selectable ? '' : 'pl-4 lg:pl-5'}`}>
                 <div className="flex items-center gap-2 lg:gap-2.5">
                   <MailOpsCustomerAvatar
                     id={entry.customer.id}
@@ -148,7 +216,10 @@ export function MailLogTable({ entries, onView }: MailLogTableProps) {
                 </span>
               </td>
 
-              <td className="py-2 pl-2 pr-4 lg:pr-5">
+              <td
+                className="py-2 pl-2 pr-3 lg:pr-4"
+                onClick={stopRowToggle}
+              >
                 <div className="flex justify-end">
                   <button
                     type="button"
@@ -160,8 +231,21 @@ export function MailLogTable({ entries, onView }: MailLogTableProps) {
                   </button>
                 </div>
               </td>
-            </tr>
-          ))}
+
+                  <ExpandChevronCell
+                    isExpanded={isExpanded}
+                    className="py-2 pr-4 lg:pr-5"
+                  />
+                </tr>
+
+                {isExpanded ? (
+                  <DetailRow panelId={panelId} colSpan={selectable ? 8 : 7}>
+                    <MailLogDetails entry={entry} />
+                  </DetailRow>
+                ) : null}
+              </Fragment>
+            );
+          })}
         </tbody>
       </table>
     </div>

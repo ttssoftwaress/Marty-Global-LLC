@@ -126,6 +126,7 @@ export async function getSummary(): Promise<AdminTeamSummary> {
     prisma.staffProfile.count({ where: ACTIVE_PROFILES }),
     prisma.staffProfile.count({ where: { ...ACTIVE_PROFILES, status: StaffStatus.ACTIVE } }),
     prisma.staffRole.findMany({
+      where: { deletedAt: null },
       orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
       select: roleSelect,
     }),
@@ -348,6 +349,7 @@ function toDetail(
 // The dropdown's options, in the order the roles screen lists them.
 function listRoleOptions() {
   return prisma.staffRole.findMany({
+    where: { deletedAt: null },
     orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
     select: { key: true, label: true },
   });
@@ -386,8 +388,8 @@ export async function createTeamMember(
   actor: AuthContext,
   input: CreateTeamMemberInput,
 ): Promise<AdminTeamMemberDetail> {
-  const role = await prisma.staffRole.findUnique({
-    where: { key: input.role },
+  const role = await prisma.staffRole.findFirst({
+    where: { key: input.role, deletedAt: null },
     select: roleSelect,
   });
 
@@ -513,7 +515,13 @@ export async function updateTeamMember(
   const roleChanged = roleKey !== profile.roleKey;
 
   const role = roleChanged
-    ? await prisma.staffRole.findUnique({ where: { key: roleKey }, select: roleSelect })
+    ? await prisma.staffRole.findFirst({
+        // A submitted key, so a trashed role must be refused rather than
+        // assigned — the member would otherwise hold a role nobody can see or
+        // edit, and a restore would silently re-expose it.
+        where: { key: roleKey, deletedAt: null },
+        select: roleSelect,
+      })
     : profile.role;
 
   if (!role) {
@@ -660,146 +668,29 @@ export async function updateTeamMember(
 // --- Delete --------------------------------------------------------------
 
 /*
- * Delete a staff account.
+ * --- Delete ---------------------------------------------------------------
  *
- * The user row itself is removed from the database, not stamped with
- * `deletedAt`. A soft delete left the credential alive: neither Better Auth nor
- * the guards read `deletedAt`, so a "deleted" member could sign in again with
- * the password they already had. Deleting the row is what actually ends the
- * account — the profile, the sessions, and the credential go with it by cascade.
+ * Not here any more. A staff account is deleted through `modules/admin/trash`,
+ * and every rule that used to live in this file moved with it, onto the
+ * `staff-member` descriptor in `trash.registry.ts`:
  *
- * The work they did stays. Order activity, chat messages, and settled payments
- * snapshot the author's name onto their own row and hold the user id without a
- * foreign key, and the audit log deliberately has no FK either ("a deleted user
- * must not erase what they did"). Every staff-side link that *is* a foreign key
- * — order/conversation/request assignee, mail processor, payment settler,
- * transfer resolver — is `onDelete: SetNull`, so the history reads correctly
- * with the pointer gone.
+ *   - You cannot delete your own account. There is no undo through the portal
+ *     for locking yourself out, and the Trash is not one — the restore button is
+ *     behind the access the delete would remove.
+ *   - You cannot remove the last active admin (`assertNotLastAdmin` below is
+ *     still the definition; the guard calls the same question).
+ *   - An account that owns customer records is revoked, never dropped. Those
+ *     foreign keys cascade from `user`, so deleting the row would take orders,
+ *     quotes, and payments with it — records AGENTS.md puts under retention.
+ *     That check is now a `purgeGuard`, asked at the end of the retention window
+ *     rather than at the start of it.
  *
- * The one thing a hard delete would destroy is the customer-owned side of a
- * user: orders, quotes, payments, companies, mail rooms and delivered results
- * all cascade from `user`. Those carry regulatory retention (AGENTS.md), so an
- * account holding any of them keeps its row and has its access revoked instead —
- * banned, signed out, and stripped of its credential, which ends the login just
- * as firmly without deleting a filing or a payment.
+ * What the descriptor does differently, deliberately: the credential `Account`
+ * row survives the soft delete. Access still ends immediately — the ban and the
+ * dropped sessions see to that — but destroying the password on the way in would
+ * make a restore return somebody who cannot sign in, which is not the "as it was
+ * before" the feature promises. The credential goes at purge, with the row.
  */
-export async function deleteTeamMember(
-  actor: AuthContext,
-  userId: string,
-): Promise<{ id: string }> {
-  const profile = await prisma.staffProfile.findFirst({
-    where: { userId, ...ACTIVE_PROFILES },
-    select: {
-      roleKey: true,
-      status: true,
-      permissions: true,
-      role: { select: { authRole: true } },
-    },
-  });
-
-  if (!profile) throw AppError.notFound('Team member not found');
-
-  // Same reasoning as the update guard: an admin deleting their own account is
-  // the fastest way to strand the org, and there is no undo through the portal.
-  if (userId === actor.userId) {
-    throw AppError.businessRule('You cannot delete your own account');
-  }
-
-  if (profile.role.authRole === Role.ADMIN) {
-    await assertNotLastAdmin(userId);
-  }
-
-  const retained = await hasRetainedRecords(userId);
-
-  if (retained) {
-    await revokeAccount(userId);
-  } else {
-    // Cascades take the staff profile, the sessions, and the credential account.
-    await prisma.user.delete({ where: { id: userId } });
-  }
-
-  void record({
-    actor,
-    action: AuditAction.STAFF_DELETED,
-    entityType: 'StaffProfile',
-    entityId: userId,
-    metadata: {
-      role: profile.roleKey,
-      status: profile.status,
-      permissions: profile.permissions,
-      // Which of the two paths ran — the row is gone in one and revoked in the
-      // other, and this entry is the only place that still says so.
-      userRowRemoved: !retained,
-    },
-  });
-
-  return { id: userId };
-}
-
-/*
- * Does this account own records that a delete would cascade away?
- *
- * Only the customer-owned relations are checked: those are the ones whose
- * foreign keys cascade from `user`, and the ones AGENTS.md puts under retention.
- * A normal staff login — provisioned by an admin, never a customer — has none of
- * them, so the ordinary case deletes outright.
- */
-async function hasRetainedRecords(userId: string): Promise<boolean> {
-  const owned = await prisma.user.findUnique({
-    where: { id: userId },
-    select: {
-      // One-to-one, so it has no `_count` entry of its own.
-      company: { select: { id: true } },
-      _count: {
-        select: {
-          orders: true,
-          quotes: true,
-          payments: true,
-          mailRooms: true,
-          serviceResults: true,
-          serviceRequests: true,
-          conversations: true,
-        },
-      },
-    },
-  });
-
-  if (!owned) return false;
-
-  return (
-    owned.company !== null ||
-    Object.values(owned._count).some((count) => count > 0)
-  );
-}
-
-/*
- * End every way into an account whose row has to stay.
- *
- * Three separate locks, because each closes a different door: the ban is what
- * Better Auth checks on sign-in (and `require-auth.ts` re-checks per request),
- * dropping the credential account leaves no password to sign in with or reset,
- * and deleting the sessions revokes the cookies already issued. `deletedAt` on
- * both rows is what removes the member from the admin screens.
- */
-async function revokeAccount(userId: string): Promise<void> {
-  const deletedAt = new Date();
-
-  await prisma.$transaction(async (tx) => {
-    await tx.staffProfile.update({ where: { userId }, data: { deletedAt } });
-    await tx.user.update({
-      where: { id: userId },
-      data: {
-        deletedAt,
-        banned: true,
-        banReason: 'Account deleted',
-        // Permanent — an expiring ban would let the account back in.
-        banExpires: null,
-      },
-    });
-    await tx.session.deleteMany({ where: { userId } });
-    await tx.account.deleteMany({ where: { userId } });
-  });
-}
 
 // --- Shared rules --------------------------------------------------------
 

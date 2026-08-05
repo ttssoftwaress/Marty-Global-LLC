@@ -1,13 +1,19 @@
+import { Fragment } from 'react';
 import { Link } from 'react-router-dom';
 
+import {
+  DetailRow,
+  ExpandChevronCell,
+  detailPanelId,
+  expandRowProps,
+  expandedRowClass,
+  stopRowToggle,
+  useExpandedRow,
+} from '../../components/ExpandableRow';
 import { formatOrderDate } from '../../lib/format';
 import type { CustomerOrderRow } from '../../types/customer-detail';
+import { OrderRowDetails } from '../orders/OrderRowDetails';
 import { OrderStatusChip } from '../orders/OrderStatusChip';
-import {
-  ROW_FOCUS_CLASS,
-  stopRowClick,
-  useOrderRowProps,
-} from '../orders/rowNavigation';
 
 /*
  * The customer's orders as a table — the tablet and desktop presentation (mobile
@@ -27,11 +33,11 @@ import {
  * sum of the fixed columns plus a readable service column, so nothing is ever
  * scaled below what it needs — the frame scrolls instead.
  *
- * The whole row opens the order, the same as the main queue's — the two tables
- * list the same records, so they must not disagree about whether a row is
- * clickable. The action link stops the click itself so it is not handled twice.
- * The row carries the shared row props, so it is a tab stop that Enter/Space
- * opens as well.
+ * The whole row expands, the same as the main queue's — the two tables list the
+ * same records and open the identical panel, so they must not disagree about
+ * what clicking a row does. The panel is fetched on expand and one row is open
+ * at a time; the "View order" link stops its own click, so opening the order is
+ * still one press away.
  */
 
 type CustomerOrdersTableProps = {
@@ -39,7 +45,7 @@ type CustomerOrdersTableProps = {
 };
 
 export function CustomerOrdersTable({ orders }: CustomerOrdersTableProps) {
-  const rowProps = useOrderRowProps();
+  const { expandedId, toggle } = useExpandedRow();
 
   return (
     <div className="table-scroll hidden md:block">
@@ -62,67 +68,92 @@ export function CustomerOrdersTable({ orders }: CustomerOrdersTableProps) {
             </th>
             <th
               scope="col"
-              className="w-[6.875rem] pr-5 text-right lg:w-[7.5rem] lg:pr-card"
+              className="w-[6.875rem] pr-4 text-right lg:w-[7.5rem]"
             >
               <span className="inline-block w-full text-right">Action</span>
+            </th>
+            <th scope="col" className="w-[4rem] pr-5 lg:pr-card">
+              <span className="sr-only">Details</span>
             </th>
           </tr>
         </thead>
 
         <tbody>
-          {orders.map((order) => (
-            <tr
-              key={order.id}
-              {...rowProps(order.to)}
-              className={`cursor-pointer transition-colors hover:bg-gray-50 active:bg-gray-100 ${ROW_FOCUS_CLASS}`}
-            >
-              <td className="h-16 py-3 pl-5 pr-4 lg:h-table-row lg:pl-card">
-                <span
-                  className="block truncate font-medium"
-                  title={order.service}
+          {orders.map((order) => {
+            const isExpanded = order.id === expandedId;
+            const panelId = detailPanelId('customer-order', order.id);
+
+            return (
+              <Fragment key={order.id}>
+                <tr
+                  {...expandRowProps({
+                    isExpanded,
+                    panelId,
+                    onToggle: () => toggle(order.id),
+                    label: `${isExpanded ? 'Hide' : 'Show'} details for order ${order.reference}`,
+                  })}
+                  className={expandedRowClass(isExpanded)}
                 >
-                  {order.service}
-                </span>
-              </td>
+                  <td className="h-16 py-3 pl-5 pr-4 lg:h-table-row lg:pl-card">
+                    <span
+                      className="block truncate font-medium"
+                      title={order.service}
+                    >
+                      {order.service}
+                    </span>
+                  </td>
 
-              <td className="py-3 pr-4">
-                <span
-                  className="block truncate font-medium text-text-secondary lg:text-gray-600"
-                  title={order.reference}
-                >
-                  {order.reference}
-                </span>
-                {/* Tablet folds the date under the reference; `lg` has its own
-                    column for it. */}
-                <span className="block truncate text-caption text-gray-400 lg:hidden">
-                  {formatOrderDate(order.submittedAt)}
-                </span>
-              </td>
+                  <td className="py-3 pr-4">
+                    <span
+                      className="block truncate font-medium text-text-secondary lg:text-gray-600"
+                      title={order.reference}
+                    >
+                      {order.reference}
+                    </span>
+                    {/* Tablet folds the date under the reference; `lg` has its
+                        own column for it. */}
+                    <span className="block truncate text-caption text-gray-400 lg:hidden">
+                      {formatOrderDate(order.submittedAt)}
+                    </span>
+                  </td>
 
-              <td className="hidden py-3 pr-4 lg:table-cell">
-                <span className="whitespace-nowrap text-gray-500">
-                  {formatOrderDate(order.submittedAt)}
-                </span>
-              </td>
+                  <td className="hidden py-3 pr-4 lg:table-cell">
+                    <span className="whitespace-nowrap text-gray-500">
+                      {formatOrderDate(order.submittedAt)}
+                    </span>
+                  </td>
 
-              <td className="py-3 pr-4">
-                <OrderStatusChip
-                  status={order.status}
-                  label={order.statusLabel}
-                />
-              </td>
+                  <td className="py-3 pr-4">
+                    <OrderStatusChip
+                      status={order.status}
+                      label={order.statusLabel}
+                    />
+                  </td>
 
-              <td className="py-3 pl-2 pr-5 text-right lg:pr-card">
-                <Link
-                  to={order.to}
-                  onClick={stopRowClick}
-                  className="inline-flex h-9 items-center justify-center whitespace-nowrap rounded-input border border-primary bg-white px-3.5 text-[0.8125rem] font-semibold text-primary transition-colors hover:bg-primary-light"
-                >
-                  View order
-                </Link>
-              </td>
-            </tr>
-          ))}
+                  <td className="py-3 pl-2 pr-4 text-right">
+                    <Link
+                      to={order.to}
+                      onClick={stopRowToggle}
+                      className="inline-flex h-9 items-center justify-center whitespace-nowrap rounded-input border border-primary bg-white px-3.5 text-[0.8125rem] font-semibold text-primary transition-colors hover:bg-primary-light"
+                    >
+                      View order
+                    </Link>
+                  </td>
+
+                  <ExpandChevronCell
+                    isExpanded={isExpanded}
+                    className="pr-5 lg:pr-card"
+                  />
+                </tr>
+
+                {isExpanded ? (
+                  <DetailRow panelId={panelId} colSpan={6}>
+                    <OrderRowDetails orderId={order.id} to={order.to} />
+                  </DetailRow>
+                ) : null}
+              </Fragment>
+            );
+          })}
         </tbody>
       </table>
     </div>

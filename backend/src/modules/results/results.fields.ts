@@ -211,6 +211,9 @@ export async function loadResultRegistry(
 
   if (keys.size === 0) return new Map();
 
+  // Unfiltered on `deletedAt` deliberately — the mirror of the request registry's
+  // resolver: this answers "what is this fact called", for records that already
+  // hold a value under the key, and a delivered record must never render blank.
   const definitions = await prisma.resultFieldDefinition.findMany({
     where: { key: { in: [...keys] } },
   });

@@ -1,5 +1,6 @@
 import type { Prisma } from '@prisma/client';
 
+import { AppError } from '../../../lib/app-error.js';
 import { toInitials } from '../../../lib/initials.js';
 import { cursorArgs, takePage, totalPages } from '../../../lib/pagination.js';
 import { prisma } from '../../../lib/prisma.js';
@@ -100,6 +101,17 @@ export type AdminAuditActor = {
   roleLabel: string | null;
 };
 
+/*
+ * The row.
+ *
+ * `metadata` is deliberately absent. It is the one column here whose size is
+ * unbounded and unknowable — it is whatever the recording layer chose to keep
+ * for that action — and a page of the trail was shipping every entry's full
+ * blob to render a two-value preview line. The preview is computed here
+ * instead, and the blob is served by `getEntry` when a reader opens the row.
+ * The caller's IP goes with it for the same reason: it is only ever read while
+ * looking closely at one entry.
+ */
 export type AdminAuditRow = {
   id: string;
   action: string;
@@ -109,9 +121,15 @@ export type AdminAuditRow = {
   actor: AdminAuditActor;
   entityType: string;
   entityId: string;
+  /** The first two metadata values, for the collapsed row. */
+  metadataPreview: string | null;
+  createdAt: string;
+};
+
+/** The expanded row: everything the list left out. */
+export type AdminAuditEntry = AdminAuditRow & {
   metadata: Prisma.JsonValue | null;
   ipAddress: string | null;
-  createdAt: string;
 };
 
 export type AdminAuditPage = {
@@ -214,6 +232,50 @@ function unresolvedActor(actorId: string): AdminAuditActor {
   };
 }
 
+/*
+ * The row's one-line summary of its metadata.
+ *
+ * Computed here rather than in the browser because the browser no longer
+ * receives the blob it would compute it from. Two values is what fits beside a
+ * severity chip at the tablet width; the rest is in the expanded panel, which
+ * renders the raw object generically and needs no help from this.
+ *
+ * Deliberately dumb about shape: keys are printed as written (the recording
+ * layer writes readable camelCase) and anything that is not a scalar is dropped
+ * rather than stringified — a nested object reads as noise on one line, and the
+ * panel shows it properly a click away.
+ */
+const PREVIEW_VALUES = 2;
+const PREVIEW_VALUE_LENGTH = 40;
+
+function previewValue(value: unknown): string | null {
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (typeof value === 'number') return String(value);
+  if (typeof value !== 'string' || value.length === 0) return null;
+
+  return value.length > PREVIEW_VALUE_LENGTH
+    ? `${value.slice(0, PREVIEW_VALUE_LENGTH)}…`
+    : value;
+}
+
+function metadataPreview(metadata: Prisma.JsonValue | null): string | null {
+  if (typeof metadata !== 'object' || metadata === null || Array.isArray(metadata)) {
+    return null;
+  }
+
+  const parts: string[] = [];
+
+  for (const [key, value] of Object.entries(metadata)) {
+    const printable = previewValue(value);
+    if (printable === null) continue;
+
+    parts.push(`${key}: ${printable}`);
+    if (parts.length === PREVIEW_VALUES) break;
+  }
+
+  return parts.length > 0 ? parts.join(' · ') : null;
+}
+
 function buildWhere(query: ListAuditQuery): Prisma.AuditLogWhereInput {
   const where: Prisma.AuditLogWhereInput = {};
 
@@ -308,8 +370,7 @@ export async function listAudit(query: ListAuditQuery): Promise<AdminAuditPage> 
             : SYSTEM_ACTOR,
         entityType: row.entityType,
         entityId: row.entityId,
-        metadata: row.metadata,
-        ipAddress: row.ipAddress,
+        metadataPreview: metadataPreview(row.metadata),
         createdAt: iso(row.createdAt),
       };
     }),
@@ -317,5 +378,45 @@ export async function listAudit(query: ListAuditQuery): Promise<AdminAuditPage> 
     page: query.cursor ? 0 : 1,
     totalPages: totalPages(totalResults, query.limit),
     totalResults,
+  };
+}
+
+// --- One entry -----------------------------------------------------------
+
+/*
+ * The expanded row: the same entry, plus the two fields the list withholds.
+ *
+ * Fetched per row rather than shipped with the page, which is what lets the
+ * list stay a fixed size regardless of what any single action recorded. Read
+ * only, like everything else in this module.
+ *
+ * No `AppError.notFound` guard beyond the lookup: an audit id either exists or
+ * it does not, and there is no scope to check — holding the `audit` area means
+ * reading all of it (see the router's note on why there is no `audit.all`).
+ */
+export async function getEntry(id: string): Promise<AdminAuditEntry> {
+  const row = await prisma.auditLog.findUnique({ where: { id } });
+  if (!row) throw AppError.notFound('Audit entry not found');
+
+  const described = describe(row.action);
+  const actors = await resolveActors(row.actorId ? [row.actorId] : []);
+
+  return {
+    id: row.id,
+    action: row.action,
+    actionLabel: described.label,
+    category: described.category,
+    severity: described.severity,
+    actor: row.actorId
+      ? (actors.get(row.actorId) ?? unresolvedActor(row.actorId))
+      : row.entityId === UNKNOWN_ENTITY_ID
+        ? ANONYMOUS_ACTOR
+        : SYSTEM_ACTOR,
+    entityType: row.entityType,
+    entityId: row.entityId,
+    metadataPreview: metadataPreview(row.metadata),
+    metadata: row.metadata,
+    ipAddress: row.ipAddress,
+    createdAt: iso(row.createdAt),
   };
 }

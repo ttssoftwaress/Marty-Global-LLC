@@ -3,6 +3,7 @@ import type { NextFunction, Request, Response } from 'express';
 import { getAuth } from '../../../guards/index.js';
 import { AppError } from '../../../lib/app-error.js';
 import { pathParam } from '../../../lib/params.js';
+import { trashRows } from '../trash/trash.service.js';
 import * as service from './catalog.service.js';
 import {
   createServiceSchema,
@@ -95,17 +96,25 @@ export async function updateService(
   }
 }
 
+/*
+ * Removing a service from the catalog. Routed through the Trash like every other
+ * admin delete: the row is soft-deleted, a restorable entry is filed, and the
+ * "it is on customer records, deactivate it instead" rule now lives once on the
+ * `service` descriptor in `trash.registry.ts`.
+ *
+ * The response shape is unchanged, so the catalog screen calling this did not
+ * have to move.
+ */
 export async function deleteService(
   req: Request,
   res: Response,
   next: NextFunction,
 ) {
   try {
-    const deleted = await service.deleteService(
-      getAuth(req),
-      pathParam(req, 'serviceId'),
-    );
-    res.json({ data: deleted });
+    const id = pathParam(req, 'serviceId');
+    await trashRows(getAuth(req), 'service', [id]);
+
+    res.json({ data: { id } });
   } catch (error) {
     next(error);
   }

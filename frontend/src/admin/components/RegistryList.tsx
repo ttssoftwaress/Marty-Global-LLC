@@ -1,6 +1,18 @@
-import type { ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import { Archive, Pencil, type LucideIcon } from 'lucide-react';
 
+import {
+  DetailField,
+  DetailGrid,
+  DetailPanel,
+  DetailRow,
+  ExpandChevronCell,
+  detailPanelId,
+  expandRowProps,
+  expandedRowClass,
+  stopRowToggle,
+  useExpandedRow,
+} from './ExpandableRow';
 import { RowActions } from './RowActions';
 import { formatFieldDate, formatUsage } from '../lib/field-registry';
 
@@ -24,6 +36,13 @@ import { formatFieldDate, formatUsage } from '../lib/field-registry';
  * API and is false as soon as anything references the key, because a field a
  * service uses — or that a record holds a value for — is archived instead. A
  * greyed-out button would invite a click that can only ever be refused.
+ *
+ * Clicking a row opens the consequence of editing it: how many services point
+ * at the key, and, in words, why Delete is or is not available. That reasoning
+ * is the decision the screen exists for and it does not belong in a table cell.
+ * The panel does not fetch — a registry is a short configuration list and the
+ * row already carries its record, so a per-row read would ask the server for
+ * what the browser is holding. One row is open at a time.
  */
 
 export type RegistryListItem = {
@@ -61,6 +80,8 @@ export function RegistryList<T extends RegistryListItem>({
   onDelete,
   deletingId,
 }: RegistryListProps<T>) {
+  const { expandedId, toggle } = useExpandedRow();
+
   return (
     <>
       {/* Table — md and up */}
@@ -74,12 +95,28 @@ export function RegistryList<T extends RegistryListItem>({
               <Th>{usageHeading}</Th>
               <Th>Updated</Th>
               <th className="w-px px-4" />
+              <th className="w-[4rem] px-4">
+                <span className="sr-only">Details</span>
+              </th>
             </tr>
           </thead>
 
           <tbody>
-            {fields.map((field) => (
-              <tr key={field.id} className="hover:bg-gray-50">
+            {fields.map((field) => {
+              const isExpanded = field.id === expandedId;
+              const panelId = detailPanelId('registry', field.id);
+
+              return (
+              <Fragment key={field.id}>
+              <tr
+                {...expandRowProps({
+                  isExpanded,
+                  panelId,
+                  onToggle: () => toggle(field.id),
+                  label: `${isExpanded ? 'Hide' : 'Show'} what references ${field.label}`,
+                })}
+                className={expandedRowClass(isExpanded)}
+              >
                 <td className="px-4 py-3">
                   <div className="flex flex-col gap-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -115,7 +152,7 @@ export function RegistryList<T extends RegistryListItem>({
                   {formatFieldDate(field.updatedAt)}
                 </td>
 
-                <td className="px-4 py-3">
+                <td className="px-4 py-3" onClick={stopRowToggle}>
                   {field.canDelete ? (
                     <RowActions
                       name={field.label}
@@ -130,8 +167,18 @@ export function RegistryList<T extends RegistryListItem>({
                     </div>
                   )}
                 </td>
+
+                <ExpandChevronCell isExpanded={isExpanded} className="px-4" />
               </tr>
-            ))}
+
+              {isExpanded ? (
+                <DetailRow panelId={panelId} colSpan={7}>
+                  <FieldDetails field={field} usageHeading={usageHeading} />
+                </DetailRow>
+              ) : null}
+              </Fragment>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -182,6 +229,46 @@ export function RegistryList<T extends RegistryListItem>({
         ))}
       </ul>
     </>
+  );
+}
+
+/*
+ * What editing this key would touch, and what may be done with it.
+ *
+ * The usage figure is the blast radius of an edit, which is why it is also a
+ * column — but the sentence under it is the part that answers the question a
+ * reader actually has, and a table cell cannot hold a sentence.
+ */
+function FieldDetails<T extends RegistryListItem>({
+  field,
+  usageHeading,
+}: {
+  field: T;
+  usageHeading: string;
+}) {
+  return (
+    <DetailPanel>
+      <DetailGrid>
+        <DetailField label="Key" mono>
+          {field.key}
+        </DetailField>
+        <DetailField label="Group">{field.category}</DetailField>
+        <DetailField label={usageHeading}>
+          {formatUsage(field.usageCount)}
+        </DetailField>
+        <DetailField label="Last updated">
+          {formatFieldDate(field.updatedAt)}
+        </DetailField>
+      </DetailGrid>
+
+      <p className="text-body text-text-secondary">
+        {field.archived
+          ? 'Archived, so it no longer appears in the picker. Records that already hold a value under this key keep it.'
+          : field.canDelete
+            ? 'Nothing references this key yet, so it can still be deleted outright.'
+            : 'Delete is unavailable because something already points at this key. Archive it instead — that removes it from the picker while leaving the answers already given under it intact.'}
+      </p>
+    </DetailPanel>
   );
 }
 

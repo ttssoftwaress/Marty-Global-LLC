@@ -1,6 +1,7 @@
 import { PaymentProvider, PaymentStatus, Prisma, QuoteStatus } from '@prisma/client';
 
 import { getAuth } from '../../guards/index.js';
+import { AppError } from '../../lib/app-error.js';
 import { logger } from '../../lib/logger.js';
 import { prisma } from '../../lib/prisma.js';
 import { presignObject } from '../../lib/storage.js';
@@ -158,7 +159,10 @@ async function loadBillingRows(
  * both the KPIs and the quote list so a quote can never be owed on one and
  * expired on the other.
  */
-function isPayable(quote: BillingQuoteRow, now: Date): boolean {
+function isPayable(
+  quote: Pick<BillingQuoteRow, 'status' | 'validUntil'>,
+  now: Date,
+): boolean {
   return quote.status === QuoteStatus.PENDING && quote.validUntil > now;
 }
 
@@ -216,7 +220,60 @@ export type PaymentRecordView = {
   /** How it was collected, as the row prints it: "USDT (TRC-20)". */
   method: string;
   status: 'paid' | 'failed';
-  invoiceHref?: string;
+  /*
+   * Whether an invoice exists, NOT a link to it.
+   *
+   * The link is a short-TTL presigned URL, and minting one per row meant the
+   * history signed a URL for every payment on the page so the customer could
+   * download at most one of them — and the TTL started ticking on all of them at
+   * page load, so the button on a row read twenty minutes later was already
+   * expired. The URL is minted by `getPayment` when a row is opened, which is
+   * both later and once (AGENTS.md, Security & PII — presigned after the
+   * ownership check, which that read repeats).
+   */
+  hasInvoice: boolean;
+};
+
+/*
+ * The expanded row: what the customer asks about one payment once they have
+ * found it — what exactly was billed, against which quote and order, how the
+ * money was sent, and the invoice.
+ */
+export type PaymentRecordDetail = PaymentRecordView & {
+  createdAt: string;
+  reference: string | null;
+  /** The tx hash for USDT, or the bank's reference for a wire. */
+  providerRef: string | null;
+  failureReason: string | null;
+  items: { id: string; label: string; amount: Money }[];
+  quote: {
+    id: string;
+    reference: string;
+    subtotal: Money;
+    discount: Money;
+    tax: Money;
+    total: Money;
+    issuedAt: string;
+    validUntil: string;
+  } | null;
+  order: { id: string; reference: string; to: string } | null;
+  invoiceHref: string | null;
+};
+
+/*
+ * One quote in full — what the "awaiting payment" list's expanded row reads.
+ *
+ * The overview deliberately carries no line items: it is loaded on the billing
+ * screen AND on the dashboard's billing card, and itemising every open quote on
+ * both to render a breakdown nobody has opened is the cost this split removes.
+ */
+export type BillingQuoteDetail = BillingQuoteView & {
+  reference: string;
+  subtotal: Money;
+  discount: Money;
+  tax: Money;
+  items: { id: string; label: string; amount: Money }[];
+  order: { id: string; reference: string; to: string } | null;
 };
 
 /*
@@ -300,29 +357,152 @@ export async function listPayments(
   const hasMore = rows.length > query.limit;
   const pageRows = hasMore ? rows.slice(0, query.limit) : rows;
 
-  // Presigned in parallel rather than one after another: this is a list, so a
-  // serial await here would add one signature round of latency per row.
-  const payments = await Promise.all(
-    pageRows.map(async (payment) => ({
-      id: payment.id,
-      // A failed attempt never got a paidAt; the row still needs a date, so it
-      // falls back to when the attempt was made.
-      paidAt: (payment.paidAt ?? payment.createdAt).toISOString(),
-      serviceName: payment.quote?.serviceName ?? 'Payment',
-      amount: { amount: payment.amount, currency: payment.currency },
-      method: METHOD_LABEL[payment.provider],
-      status: STATUS_TO_VIEW[payment.status] ?? 'failed',
-      // Short-TTL presigned URL, minted after the ownership check above
-      // (AGENTS.md, Security & PII); absent until the invoice exists.
-      invoiceHref: await presignObject(payment.invoiceObjectKey),
-    })),
-  );
+  const payments: PaymentRecordView[] = pageRows.map((payment) => ({
+    id: payment.id,
+    // A failed attempt never got a paidAt; the row still needs a date, so it
+    // falls back to when the attempt was made.
+    paidAt: (payment.paidAt ?? payment.createdAt).toISOString(),
+    serviceName: payment.quote?.serviceName ?? 'Payment',
+    amount: { amount: payment.amount, currency: payment.currency },
+    method: METHOD_LABEL[payment.provider],
+    status: STATUS_TO_VIEW[payment.status] ?? 'failed',
+    hasInvoice: payment.invoiceObjectKey !== null,
+  }));
 
   return {
     payments,
     totalPages: Math.max(1, Math.ceil(totalCount / query.limit)),
     totalCount,
     nextCursor: hasMore ? pageRows.at(-1)?.id ?? null : null,
+  };
+}
+
+/*
+ * One payment in full, plus its invoice link.
+ *
+ * The ownership check is the `customerId` in the where clause, exactly as the
+ * list's is — a customer reads their own payments and nothing else, and the
+ * presigned URL is minted only after that clause has matched (AGENTS.md).
+ */
+export async function getPayment(
+  req: Parameters<typeof getAuth>[0],
+  paymentId: string,
+): Promise<PaymentRecordDetail> {
+  const auth = getAuth(req);
+
+  const payment = await prisma.payment.findFirst({
+    where: { id: paymentId, customerId: auth.userId, deletedAt: null },
+    include: {
+      quote: {
+        select: {
+          id: true,
+          reference: true,
+          serviceName: true,
+          subtotal: true,
+          discount: true,
+          tax: true,
+          total: true,
+          currency: true,
+          issuedAt: true,
+          validUntil: true,
+          lineItems: { orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] },
+          order: { select: { id: true, reference: true } },
+        },
+      },
+    },
+  });
+
+  if (!payment) throw AppError.notFound('Payment not found');
+
+  const quote = payment.quote;
+  const order = quote?.order ?? null;
+
+  return {
+    id: payment.id,
+    paidAt: (payment.paidAt ?? payment.createdAt).toISOString(),
+    serviceName: quote?.serviceName ?? 'Payment',
+    amount: { amount: payment.amount, currency: payment.currency },
+    method: METHOD_LABEL[payment.provider],
+    status: STATUS_TO_VIEW[payment.status] ?? 'failed',
+    hasInvoice: payment.invoiceObjectKey !== null,
+    createdAt: payment.createdAt.toISOString(),
+    reference: quote?.reference ?? null,
+    providerRef: payment.providerRef,
+    failureReason: payment.failureReason,
+    items: (quote?.lineItems ?? []).map((item) => ({
+      id: item.id,
+      label: item.label,
+      amount: { amount: item.amount, currency: quote?.currency ?? 'USD' },
+    })),
+    quote: quote
+      ? {
+          id: quote.id,
+          reference: quote.reference,
+          subtotal: { amount: quote.subtotal, currency: quote.currency },
+          discount: { amount: quote.discount, currency: quote.currency },
+          tax: { amount: quote.tax, currency: quote.currency },
+          total: { amount: quote.total, currency: quote.currency },
+          issuedAt: quote.issuedAt.toISOString(),
+          validUntil: quote.validUntil.toISOString(),
+        }
+      : null,
+    order: order
+      ? {
+          id: order.id,
+          reference: order.reference,
+          to: `/app/orders/${order.id}`,
+        }
+      : null,
+    invoiceHref: (await presignObject(payment.invoiceObjectKey)) ?? null,
+  };
+}
+
+/*
+ * One open quote in full — the itemised breakdown behind an amount the customer
+ * is being asked to pay. Off the overview for the reason recorded on
+ * `BillingQuoteDetail`: that payload is loaded by two screens.
+ */
+export async function getQuote(
+  req: Parameters<typeof getAuth>[0],
+  quoteId: string,
+): Promise<BillingQuoteDetail> {
+  const auth = getAuth(req);
+
+  const quote = await prisma.quote.findFirst({
+    where: { id: quoteId, customerId: auth.userId, deletedAt: null },
+    include: {
+      lineItems: { orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] },
+      order: { select: { id: true, reference: true } },
+    },
+  });
+
+  if (!quote) throw AppError.notFound('Quote not found');
+
+  return {
+    id: quote.id,
+    serviceName: quote.serviceName,
+    amount: { amount: quote.total, currency: quote.currency },
+    issuedAt: quote.issuedAt.toISOString(),
+    validUntil: quote.validUntil.toISOString(),
+    // The same "payable right now" rule the overview applies, so a quote cannot
+    // read as pending in the list and expired in its own panel.
+    status: isPayable(quote, new Date()) ? 'pending' : 'expired',
+    reference: quote.reference,
+    subtotal: { amount: quote.subtotal, currency: quote.currency },
+    discount: { amount: quote.discount, currency: quote.currency },
+    tax: { amount: quote.tax, currency: quote.currency },
+    items: quote.lineItems.map((item) => ({
+      id: item.id,
+      label: item.label,
+      amount: { amount: item.amount, currency: quote.currency },
+    })),
+    order: quote.order
+      ? {
+          id: quote.order.id,
+          reference: quote.order.reference,
+          to: `/app/orders/${quote.order.id}`,
+        }
+      : null,
   };
 }
 

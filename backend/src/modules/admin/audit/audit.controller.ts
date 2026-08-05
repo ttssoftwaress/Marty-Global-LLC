@@ -30,3 +30,16 @@ export async function listAudit(req: Request, res: Response, next: NextFunction)
     next(error);
   }
 }
+
+export async function getEntry(req: Request, res: Response, next: NextFunction) {
+  try {
+    const id = req.params.id;
+    if (typeof id !== 'string' || !id) {
+      throw AppError.validation('Audit entry id is required');
+    }
+
+    res.json({ data: await service.getEntry(id) });
+  } catch (error) {
+    next(error);
+  }
+}

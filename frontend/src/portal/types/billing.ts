@@ -57,9 +57,59 @@ export type PaymentRecord = {
   // How it was collected, already phrased by the backend: "USDT (TRC-20)".
   method: string;
   status: PaymentStatus;
-  // The invoice PDF is a short-TTL presigned URL the backend hands out after an
-  // ownership check (AGENTS.md, Security & PII); absent until it is ready.
-  invoiceHref?: string;
+  /*
+   * Whether an invoice exists — NOT a link to it.
+   *
+   * The link is a short-TTL presigned URL (AGENTS.md, Security & PII), so
+   * minting one per row meant signing twenty URLs to serve at most one, with
+   * every TTL starting at page load: the button on a row read twenty minutes
+   * later was already expired. The URL comes down with `PaymentRecordDetail`
+   * when the row is opened, which is both later and once.
+   */
+  hasInvoice: boolean;
+};
+
+/*
+ * One payment in full — what the history's expanded row reads: exactly what was
+ * billed, against which quote and order, how the money was sent, and the
+ * invoice link.
+ */
+export type PaymentRecordDetail = PaymentRecord & {
+  createdAt: string;
+  reference: string | null;
+  /** The tx hash for USDT, or the bank's reference for a wire. */
+  providerRef: string | null;
+  failureReason: string | null;
+  items: { id: string; label: string; amount: Money }[];
+  quote: {
+    id: string;
+    reference: string;
+    subtotal: Money;
+    discount: Money;
+    tax: Money;
+    total: Money;
+    issuedAt: string;
+    validUntil: string;
+  } | null;
+  order: { id: string; reference: string; to: string } | null;
+  invoiceHref: string | null;
+};
+
+/*
+ * One open quote in full — the itemised breakdown behind an amount the customer
+ * is being asked to pay.
+ *
+ * Off the overview because that payload is loaded by two screens (billing and
+ * the dashboard's billing card), so itemising every open quote on it costs
+ * twice to render a breakdown nobody has opened.
+ */
+export type BillingQuoteDetail = BillingQuote & {
+  reference: string;
+  subtotal: Money;
+  discount: Money;
+  tax: Money;
+  items: { id: string; label: string; amount: Money }[];
+  order: { id: string; reference: string; to: string } | null;
 };
 
 /*

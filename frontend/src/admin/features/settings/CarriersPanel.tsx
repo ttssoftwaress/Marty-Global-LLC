@@ -1,12 +1,22 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 
 import { ApiError } from '@/services/api';
+import {
+  DetailRow,
+  ExpandChevronCell,
+  detailPanelId,
+  expandRowProps,
+  expandedRowClass,
+  stopRowToggle,
+  useExpandedRow,
+} from '../../components/ExpandableRow';
 import { formatCarrierUsage, moveInList } from '../../lib/settings';
 import type { AdminCarrier } from '../../types/settings';
 import { ToggleSwitch } from '../catalog/detail/ToggleSwitch';
 import { CarrierFormDialog } from './CarrierFormDialog';
 import { ReorderButtons, RowActions } from './LocationsPanel';
 import { ActiveChip, SettingsPanel, SettingsTh } from './SettingsPanel';
+import { CarrierDetails } from './SettingsRowDetails';
 import {
   useAdminCarriers,
   useCreateCarrier,
@@ -37,6 +47,8 @@ export function CarriersPanel({ canWrite }: { canWrite: boolean }) {
   const reorderCarriers = useReorderCarriers();
 
   const [editing, setEditing] = useState<AdminCarrier | 'new' | null>(null);
+
+  const { expandedId, toggle } = useExpandedRow();
 
   const rows = carriers.data ?? [];
 
@@ -116,14 +128,30 @@ export function CarriersPanel({ canWrite }: { canWrite: boolean }) {
                 <SettingsTh>Used by</SettingsTh>
                 <SettingsTh>{canWrite ? 'Offered' : 'Status'}</SettingsTh>
                 <th className="w-px px-4" />
+                <th className="w-[4rem] px-4">
+                  <span className="sr-only">Details</span>
+                </th>
               </tr>
             </thead>
 
             <tbody>
-              {rows.map((carrier, index) => (
-                <tr key={carrier.code} className="hover:bg-gray-50">
+              {rows.map((carrier, index) => {
+                const isExpanded = carrier.code === expandedId;
+                const panelId = detailPanelId('carrier', carrier.code);
+
+                return (
+                <Fragment key={carrier.code}>
+                <tr
+                  {...expandRowProps({
+                    isExpanded,
+                    panelId,
+                    onToggle: () => toggle(carrier.code),
+                    label: `${isExpanded ? 'Hide' : 'Show'} what references ${carrier.label}`,
+                  })}
+                  className={expandedRowClass(isExpanded)}
+                >
                   {canWrite && (
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3" onClick={stopRowToggle}>
                       <ReorderButtons
                         label={carrier.label}
                         isFirst={index === 0}
@@ -146,7 +174,7 @@ export function CarriersPanel({ canWrite }: { canWrite: boolean }) {
                     {formatCarrierUsage(carrier)}
                   </td>
 
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3" onClick={stopRowToggle}>
                     {canWrite ? (
                       <ToggleSwitch
                         checked={carrier.active}
@@ -159,7 +187,7 @@ export function CarriersPanel({ canWrite }: { canWrite: boolean }) {
                     )}
                   </td>
 
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3" onClick={stopRowToggle}>
                     {canWrite && (
                       <RowActions
                         name={carrier.label}
@@ -173,8 +201,18 @@ export function CarriersPanel({ canWrite }: { canWrite: boolean }) {
                       />
                     )}
                   </td>
+
+                  <ExpandChevronCell isExpanded={isExpanded} className="px-4" />
                 </tr>
-              ))}
+
+                {isExpanded ? (
+                  <DetailRow panelId={panelId} colSpan={canWrite ? 7 : 6}>
+                    <CarrierDetails carrier={carrier} />
+                  </DetailRow>
+                ) : null}
+                </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>

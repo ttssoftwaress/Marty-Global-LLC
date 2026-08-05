@@ -107,7 +107,7 @@ export async function getSummary(actor: AuthContext): Promise<MailOpsSummary> {
         status: { in: [...OPEN_REQUEST_STATUSES] },
       },
     }),
-    prisma.mailActionLog.count({ where: logWhere }),
+    prisma.mailActionLog.count({ where: { ...logWhere, deletedAt: null } }),
   ]);
 
   return {
@@ -905,7 +905,7 @@ export async function getRequest(
   if (!request) throw AppError.notFound('Request not found');
 
   const carriers = await prisma.mailCarrier.findMany({
-    where: { active: true },
+    where: { active: true, deletedAt: null },
     orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
     select: { code: true, label: true },
   });
@@ -1106,6 +1106,13 @@ export async function resolveRequest(
    * it, so this is the one mail event they are most owed. Queued, preference-
    * gated, and never awaited — settling the request already succeeded.
    */
+  /*
+   * Deliberately unfiltered on `deletedAt`: this resolves a label for a carrier
+   * the parcel has ALREADY shipped with. A carrier cannot be trashed while it
+   * has shipments, but a rename or a later restore must not turn this line into
+   * a bare code — the question here is "what is this called", not "may we still
+   * ship with it".
+   */
   const carrierLabel = input.carrier
     ? (
         await prisma.mailCarrier.findUnique({
@@ -1181,6 +1188,7 @@ export async function listLog(
 
   const where: Prisma.MailActionLogWhereInput = {
     ...(await mailLogScope(actor)),
+    deletedAt: null,
     ...(action ? { action } : {}),
     ...(cutoff ? { closedAt: { gte: cutoff } } : {}),
     ...(query.search
@@ -1228,5 +1236,130 @@ export async function listLog(
     page: query.cursor ? 0 : 1,
     totalResults,
     totalPages: totalPages(totalResults, query.limit),
+  };
+}
+
+/*
+ * One log entry in full — what the log's expanded row reads.
+ *
+ * The row answers "who, what, when, by whom", which is what the log is scanned
+ * for. Everything here is the second question a reader asks about one entry:
+ * the state the item was in, and the requests that led to it being closed. It
+ * is three joins deep, which is exactly why it is not on the list — the log is
+ * the longest table in the admin area.
+ */
+export type MailLogEntryDetail = MailLogPage['entries'][number] & {
+  mailItemId: string;
+  item: {
+    sender: string;
+    status: string;
+    statusLabel: string;
+    receivedAt: string;
+    storageExpiresAt: string;
+    scanReady: boolean;
+    note: string | null;
+    pageCount: number;
+  };
+  requests: {
+    id: string;
+    type: MailRequestRow['type'];
+    typeLabel: string;
+    status: MailRequestRow['status'];
+    statusLabel: string;
+    requestedAt: string;
+    processedAt: string | null;
+    processedBy: string | null;
+    shippingAddress: string | null;
+    carrier: string | null;
+    trackingNumber: string | null;
+    notes: string | null;
+  }[];
+};
+
+const ITEM_STATUS_LABEL: Record<MailItemStatus, string> = {
+  [MailItemStatus.NEW]: 'New',
+  [MailItemStatus.VIEWED]: 'Viewed',
+  [MailItemStatus.ACTION_REQUESTED]: 'Action requested',
+  [MailItemStatus.FORWARDED]: 'Forwarded',
+  // The enum value predates the wording; the mail room shreds, it does not
+  // archive, and the log is read by the people who do it.
+  [MailItemStatus.ARCHIVED]: 'Shredded',
+};
+
+export async function getLogEntry(
+  actor: AuthContext,
+  entryId: string,
+): Promise<MailLogEntryDetail> {
+  const entry = await prisma.mailActionLog.findFirst({
+    // The same scope the list applied. A row a member cannot see in the log must
+    // not become readable by asking for its detail directly.
+    where: { id: entryId, ...(await mailLogScope(actor)) },
+    include: {
+      mailItem: {
+        select: {
+          id: true,
+          sender: true,
+          status: true,
+          receivedAt: true,
+          storageExpiresAt: true,
+          scanReady: true,
+          note: true,
+          room: {
+            select: { id: true, name: true, customer: { select: customerSelect } },
+          },
+          _count: { select: { pages: true } },
+          requests: {
+            where: { deletedAt: null },
+            orderBy: { requestedAt: 'asc' },
+          },
+        },
+      },
+    },
+  });
+
+  if (!entry) throw AppError.notFound('Log entry not found');
+
+  const item = entry.mailItem;
+
+  return {
+    id: entry.id,
+    customer: toCustomer(item.room.customer),
+    room: { id: item.room.id, name: item.room.name },
+    mailItem: entry.mailItemLabel,
+    action: LOG_ACTION_VIEW[entry.action],
+    actionLabel: LOG_ACTION_LABEL[entry.action],
+    closedAt: iso(entry.closedAt),
+    processedBy: entry.processedByName,
+    mailItemId: item.id,
+    item: {
+      sender: item.sender,
+      status: item.status,
+      statusLabel: ITEM_STATUS_LABEL[item.status],
+      receivedAt: iso(item.receivedAt),
+      storageExpiresAt: iso(item.storageExpiresAt),
+      scanReady: item.scanReady,
+      note: item.note,
+      pageCount: item._count.pages,
+    },
+    /*
+     * Every request raised against the item, not only the one that closed it.
+     * A forwarding that follows a scan request is the usual sequence, and the
+     * question this panel is opened to answer — "why did this leave the
+     * building?" — is answered by the sequence rather than by the last row.
+     */
+    requests: item.requests.map((request) => ({
+      id: request.id,
+      type: TYPE_VIEW[request.type],
+      typeLabel: TYPE_LABEL[request.type],
+      status: REQUEST_STATUS_VIEW[request.status],
+      statusLabel: REQUEST_STATUS_LABEL[request.status],
+      requestedAt: iso(request.requestedAt),
+      processedAt: request.processedAt ? iso(request.processedAt) : null,
+      processedBy: request.processedByName,
+      shippingAddress: request.shippingAddress,
+      carrier: request.carrier,
+      trackingNumber: request.trackingNumber,
+      notes: request.notes,
+    })),
   };
 }

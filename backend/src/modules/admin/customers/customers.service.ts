@@ -159,7 +159,7 @@ export async function getSummary(
       ),
     ),
     prisma.region.findMany({
-      where: { active: true },
+      where: { active: true, deletedAt: null },
       orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }],
       select: { code: true, label: true },
     }),

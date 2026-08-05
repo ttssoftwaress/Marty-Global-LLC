@@ -3,6 +3,7 @@ import type { NextFunction, Request, Response } from 'express';
 import { getAuth } from '../../../guards/index.js';
 import { AppError } from '../../../lib/app-error.js';
 import { pathParam } from '../../../lib/params.js';
+import { trashRows } from '../trash/trash.service.js';
 import * as service from './fields.service.js';
 import {
   createFieldSchema,
@@ -69,17 +70,22 @@ export async function updateField(
   }
 }
 
+/*
+ * Removing a registered question. To the Trash, not gone — the registry's own
+ * "anything has ever referenced this key" rule still decides whether it may go
+ * at all (`fieldDeletionBlocker`, called from the `field` descriptor), and a
+ * field that fails it is archived instead exactly as before.
+ */
 export async function deleteField(
   req: Request,
   res: Response,
   next: NextFunction,
 ) {
   try {
-    const deleted = await service.deleteField(
-      getAuth(req),
-      pathParam(req, 'fieldId'),
-    );
-    res.json({ data: deleted });
+    const id = pathParam(req, 'fieldId');
+    await trashRows(getAuth(req), 'field', [id]);
+
+    res.json({ data: { id } });
   } catch (error) {
     next(error);
   }

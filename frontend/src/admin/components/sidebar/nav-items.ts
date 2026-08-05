@@ -12,6 +12,7 @@ import {
   MessagesSquare,
   ScrollText,
   Settings,
+  Trash2,
   ShoppingBag,
   UserCheck,
   Users,
@@ -164,6 +165,17 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
    * this item simply is not there.
    */
   { label: 'Audit log', to: '/admin/audit', icon: ScrollText, permission: 'audit' },
+  /*
+   * Everything deleted across every section above, and the way back. Last,
+   * beside the audit log, for the same reason that one is: both are read ABOUT
+   * the other sections rather than used to do work of their own.
+   *
+   * Its own area rather than folding into each section's grant, because it is
+   * one screen holding rows from all of them — a mail operator with `mailroom`
+   * alone would otherwise get a bin listing customers and staff accounts. What
+   * is actually on the list is scoped server-side to the areas the reader holds.
+   */
+  { label: 'Trash', to: '/admin/trash', icon: Trash2, permission: 'trash' },
 ];
 
 /*
